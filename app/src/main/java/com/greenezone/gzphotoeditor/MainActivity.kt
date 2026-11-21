@@ -2,6 +2,8 @@ package com.greenezone.gzphotoeditor
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -10,11 +12,11 @@ import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         super.onCreate(savedInstanceState)
-        @Suppress("DEPRECATION")
-        window.statusBarColor = android.graphics.Color.rgb(15, 19, 25)
-        @Suppress("DEPRECATION")
-        window.navigationBarColor = android.graphics.Color.rgb(15, 19, 25)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Color(0xFF9BE7C4),

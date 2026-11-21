@@ -42,8 +42,8 @@ class ToneMathTest {
 
     @Test fun allFiftyThreeControlsHaveUniqueNamesAndNeutralZeros() {
         val all = ControlCatalog.all
-        assertEquals(53, all.size)
-        assertEquals(53, all.map { it.name }.toSet().size)
+        assertEquals(56, all.size)
+        assertEquals(56, all.map { it.name }.toSet().size)
         assertEquals(8, ColorBand.entries.size)
         assertEquals(24, ControlCatalog.mixer.values.sumOf { it.size })
         assertTrue(all.all { it.min <= 0f && it.max >= 0f })

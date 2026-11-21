@@ -192,7 +192,7 @@ object ToneMath {
             }
         }
 
-        val detail = (grade.clarity * .48f + grade.sharpen * .9f) * localDelta
+        val detail = localDelta
         r += detail
         g += detail
         b += detail

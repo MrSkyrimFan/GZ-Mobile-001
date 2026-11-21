@@ -103,6 +103,9 @@ fun MaskPanel(
         OutlinedButton(onClick = { onAdd(MaskKind.LINEAR) }, enabled = masks.size < 4) {
             Text("+ Linear")
         }
+        OutlinedButton(onClick = { onAdd(MaskKind.BRUSH) }, enabled = masks.size < 4) {
+            Text("+ Brush")
+        }
         if (masks.isNotEmpty()) TextButton(onClick = onDelete) { Text("Delete mask") }
     }
     Text("Local masks stay editable and work on the full-resolution export.")
@@ -121,14 +124,43 @@ fun MaskPanel(
         Text("Add a radial mask for a local adjustment, or a linear graduated mask.")
         return
     }
-    MaskSlider(if (mask.kind == MaskKind.RADIAL) "Center X" else "Tilt",
-        mask.centerX, 0f, 1f, { onMaskChange(mask.copy(centerX = it)) }, onChangeFinished)
-    MaskSlider("Center Y", mask.centerY, 0f, 1f, { onMaskChange(mask.copy(centerY = it)) }, onChangeFinished)
-    MaskSlider(if (mask.kind == MaskKind.RADIAL) "Size" else "Spread",
-        mask.radius, .02f, .8f, { onMaskChange(mask.copy(radius = it)) }, onChangeFinished)
-    if (mask.kind == MaskKind.RADIAL) {
-        MaskSlider("Feather", mask.feather, .01f, 1f,
-            { onMaskChange(mask.copy(feather = it)) }, onChangeFinished)
+    when (mask.kind) {
+        MaskKind.RADIAL -> {
+            MaskSlider("Center X", mask.centerX, 0f, 1f,
+                { onMaskChange(mask.copy(centerX = it)) }, onChangeFinished)
+            MaskSlider("Center Y", mask.centerY, 0f, 1f,
+                { onMaskChange(mask.copy(centerY = it)) }, onChangeFinished)
+            MaskSlider("Radius", mask.radius, .02f, .8f,
+                { onMaskChange(mask.copy(radius = it)) }, onChangeFinished)
+            MaskSlider("Feather", mask.feather, .01f, 1f,
+                { onMaskChange(mask.copy(feather = it)) }, onChangeFinished)
+        }
+        MaskKind.LINEAR -> {
+            MaskSlider("Tilt", mask.centerX, 0f, 1f,
+                { onMaskChange(mask.copy(centerX = it)) }, onChangeFinished)
+            MaskSlider("Center Y", mask.centerY, 0f, 1f,
+                { onMaskChange(mask.copy(centerY = it)) }, onChangeFinished)
+            MaskSlider("Spread", mask.radius, .02f, .8f,
+                { onMaskChange(mask.copy(radius = it)) }, onChangeFinished)
+        }
+        MaskKind.BRUSH -> {
+            Text("Drag a finger over the photo to paint. Fit zoom first. Up to 640 points per mask.")
+            MaskSlider("Brush size", mask.radius, .005f, .20f,
+                { onMaskChange(mask.copy(radius = it)) }, onChangeFinished)
+            MaskSlider("Soft edge", mask.feather, .01f, 1f,
+                { onMaskChange(mask.copy(feather = it)) }, onChangeFinished)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = mask.strokes.isNotEmpty(), onClick = {
+                    onMaskChange(mask.copy(strokes = mask.strokes.dropLast(1)))
+                    onChangeFinished()
+                }) { Text("Undo brush stroke") }
+                TextButton(enabled = mask.strokes.isNotEmpty(), onClick = {
+                    onMaskChange(mask.copy(strokes = emptyList()))
+                    onChangeFinished()
+                }) { Text("Clear brush") }
+            }
+            Text("${mask.strokes.size} strokes")
+        }
     }
     MaskSlider("Exposure", mask.exposure, -1.5f, 1.5f,
         { onMaskChange(mask.copy(exposure = it)) }, onChangeFinished)

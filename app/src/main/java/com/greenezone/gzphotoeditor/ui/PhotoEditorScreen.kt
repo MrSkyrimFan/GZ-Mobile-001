@@ -1,6 +1,9 @@
 package com.greenezone.gzphotoeditor.ui
 
 import android.graphics.Bitmap
+import android.app.ActivityManager
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -60,6 +64,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenezone.gzphotoeditor.editor.ColorBand
+import com.greenezone.gzphotoeditor.editor.BrushPoint
+import com.greenezone.gzphotoeditor.editor.BrushStroke
+import com.greenezone.gzphotoeditor.editor.AutoEnhanceMath
+import com.greenezone.gzphotoeditor.editor.GeometryMath
+import com.greenezone.gzphotoeditor.editor.ProjectStore
+import com.greenezone.gzphotoeditor.editor.SavedProject
 import com.greenezone.gzphotoeditor.editor.CurveChannel
 import com.greenezone.gzphotoeditor.editor.CurveMath
 import com.greenezone.gzphotoeditor.editor.LocalMask
@@ -116,6 +126,13 @@ fun PhotoEditorScreen() {
     var saveLookDialog by remember { mutableStateOf(false) }
     var deleteLookDialog by remember { mutableStateOf(false) }
     var newLookName by remember { mutableStateOf("") }
+    var savedProjects by remember { mutableStateOf(ProjectStore.load(context)) }
+    var saveProjectDialog by remember { mutableStateOf(false) }
+    var projectListDialog by remember { mutableStateOf(false) }
+    var projectName by remember { mutableStateOf("") }
+    var selectedProject by remember { mutableStateOf<String?>(null) }
+    var loadingToken by remember { mutableIntStateOf(0) }
+    var histogram by remember { mutableStateOf(IntArray(64)) }
 
     fun commit(next: EditDocument) {
         history = history.checkpoint(document, next)
@@ -123,29 +140,44 @@ fun PhotoEditorScreen() {
         dragStart = null
     }
 
-    fun loadPhoto(uri: Uri) {
+    fun loadPhoto(uri: Uri, restored: EditDocument? = null) {
+        val request = ++loadingToken
         scope.launch {
             busy = true
             message = "Loading photo…"
             try {
+                try {
+                    resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: SecurityException) {
+                    // Some providers offer a non-persistable grant; opening a saved project may fail after restart.
+                }
                 val loaded = withContext(Dispatchers.IO) {
                     ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L)
                 }
-                sourceUri = uri
-                original = loaded
-                document = EditDocument()
-                history = EditHistory()
-                processed = loaded
-                dragStart = null
-                compare = false
-                zoom = 1f
-                panX = 0f
-                panY = 0f
-                message = "Photo loaded • " + loaded.width + " × " + loaded.height + " preview"
+                if (request == loadingToken) {
+                    sourceUri = uri
+                    original = loaded
+                    document = restored ?: EditDocument()
+                    history = EditHistory()
+                    processed = loaded
+                    dragStart = null
+                    compare = false
+                    selectedMaskIndex = 0
+                    zoom = 1f; panX = 0f; panY = 0f
+                    message = "Photo loaded • " + loaded.width + " × " + loaded.height +
+                        " preview" + (if (restored != null) " • saved project restored" else "")
+                } else {
+                    loaded.recycle()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
-                message = "Could not open photo: " + (error.message ?: "unsupported format")
+                if (request == loadingToken) {
+                    message = "Could not open photo: " + (error.message ?: "permission or unsupported file") +
+                        ". Re-select the original if the provider revoked access."
+                }
             } finally {
-                busy = false
+                if (request == loadingToken) busy = false
             }
         }
     }
@@ -153,27 +185,57 @@ fun PhotoEditorScreen() {
     fun exportImage(output: Uri, format: Bitmap.CompressFormat, quality: Int) {
         val source = sourceUri ?: return
         val edits = document
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val maxPixels = GeometryMath.safeExportPixels(manager.memoryClass)
+        if (output == source) {
+            message = "Refusing to export over the source image."
+            return
+        }
         scope.launch {
             exporting = true
             showExport = false
-            message = "Rendering high-resolution image…"
+            message = "Rendering full-quality photo locally…"
             try {
-                val size = withContext(Dispatchers.Default) {
-                    val originalFull = ImagePipeline.decode(
-                        resolver, source, 12_000, ImagePipeline.MAX_EXPORT_PIXELS
-                    )
-                    val image = ImagePipeline.render(originalFull, edits)
-                    val written = withContext(Dispatchers.IO) {
-                        resolver.openOutputStream(output, "w")?.use { stream ->
-                            image.compress(format, if (format == Bitmap.CompressFormat.JPEG) quality else 100, stream)
-                        } ?: throw IOException("Cannot open chosen output file")
+                val dimensions = withContext(Dispatchers.Default) {
+                    var decoded: Bitmap? = null
+                    var rendered: Bitmap? = null
+                    var flattened: Bitmap? = null
+                    try {
+                        val decodedImage = ImagePipeline.decode(resolver, source, 12_000, maxPixels)
+                        decoded = decodedImage
+                        val renderedImage = ImagePipeline.render(decodedImage, edits) { ensureActive() }
+                        rendered = renderedImage
+                        val writable = if (format == Bitmap.CompressFormat.JPEG && renderedImage.hasAlpha()) {
+                            ImagePipeline.compositeWhite(renderedImage).also { flattened = it }
+                        } else renderedImage
+                        val completed = withContext(Dispatchers.IO) {
+                            resolver.openOutputStream(output, "wt")?.use { stream ->
+                                writable.compress(format, quality, stream)
+                            } ?: throw IOException("Document provider did not open an output stream")
+                        }
+                        if (!completed) throw IOException("Image encoder rejected the output")
+                        writable.width.toString() + " × " + writable.height
+                    } finally {
+                        flattened?.let { temporary ->
+                            if (temporary !== rendered && !temporary.isRecycled) temporary.recycle()
+                        }
+                        rendered?.let { temporary ->
+                            if (temporary !== decoded && !temporary.isRecycled) temporary.recycle()
+                        }
+                        decoded?.let { temporary ->
+                            if (!temporary.isRecycled) temporary.recycle()
+                        }
                     }
-                    if (!written) throw IOException("Image encoder reported a failure")
-                    image.width.toString() + " × " + image.height
                 }
-                message = "Exported " + size + " • source image unchanged"
+                message = "Saved " + dimensions + " • source image unchanged."
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: OutOfMemoryError) {
+                message = "Not enough memory for this export. Close other apps, then retry."
+                try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } catch (error: Exception) {
                 message = "Export failed: " + (error.message ?: "unknown error")
+                try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } finally {
                 exporting = false
             }
@@ -212,13 +274,16 @@ fun PhotoEditorScreen() {
     val compared = remember(original, document.quarterTurns, document.mirrored, document.flipVertical, document.crop) {
         original?.let { ImagePipeline.geometry(it, document) }
     }
-    val histogram = remember(processed) {
-        processed?.let { ImagePipeline.luminanceHistogram(it) } ?: IntArray(64)
+    LaunchedEffect(processed, showHistogram) {
+        val image = processed
+        histogram = if (image != null && showHistogram) {
+            withContext(Dispatchers.Default) { ImagePipeline.luminanceHistogram(image) }
+        } else IntArray(64)
     }
 
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 14.dp)
+            .safeDrawingPadding().padding(horizontal = 14.dp)
     ) {
         Spacer(Modifier.height(8.dp))
         Row(
@@ -251,6 +316,57 @@ fun PhotoEditorScreen() {
                 enabled = !busy && !exporting,
                 onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
             ) { Text("Open photo") }
+            OutlinedButton(
+                enabled = original != null && !busy && !exporting,
+                onClick = {
+                    val photo = original
+                    if (photo != null) scope.launch {
+                        busy = true
+                        try {
+                            val suggestion = withContext(Dispatchers.Default) {
+                                AutoEnhanceMath.autoTone(ImagePipeline.luminanceHistogram(photo))
+                            }
+                            commit(document.copy(grade = document.grade.copy(
+                                exposure = suggestion.exposure,
+                                contrast = suggestion.contrast,
+                                shadows = suggestion.shadows,
+                                highlights = suggestion.highlights
+                            )))
+                            message = "Auto tone applied. Fine-tune with Light sliders."
+                        } catch (error: Exception) {
+                            message = "Auto tone failed: " + (error.message ?: "unexpected error")
+                        } finally { busy = false }
+                    }
+                }
+            ) { Text("Auto tone") }
+            OutlinedButton(
+                enabled = original != null && !busy && !exporting,
+                onClick = {
+                    val photo = original
+                    if (photo != null) scope.launch {
+                        busy = true
+                        try {
+                            val value = withContext(Dispatchers.Default) {
+                                AutoEnhanceMath.whiteBalance(photo)
+                            }
+                            commit(document.copy(grade = document.grade.copy(
+                                temperature = value.temperature, tint = value.tint
+                            )))
+                            message = "Auto white balance applied."
+                        } catch (error: Exception) {
+                            message = "White balance failed: " + (error.message ?: "unexpected error")
+                        } finally { busy = false }
+                    }
+                }
+            ) { Text("Auto WB") }
+            OutlinedButton(
+                enabled = original != null && !busy && !exporting,
+                onClick = { projectName = ""; saveProjectDialog = true }
+            ) { Text("Save project") }
+            TextButton(enabled = !busy && !exporting, onClick = {
+                savedProjects = ProjectStore.load(context)
+                projectListDialog = true
+            }) { Text("Projects") }
             OutlinedButton(
                 enabled = original != null && !busy && !exporting,
                 onClick = { compare = !compare }
@@ -305,6 +421,55 @@ fun PhotoEditorScreen() {
                             translationY = panY
                         }
                 )
+                val brush = if (selectedPanel == Panel.MASKS && !compare &&
+                    zoom <= 1.001f && !busy && !exporting
+                ) document.masks.getOrNull(selectedMaskIndex)?.takeIf { it.kind == MaskKind.BRUSH }
+                else null
+                if (brush != null) {
+                    BrushOverlay(
+                        bitmapWidth = bitmap.width, bitmapHeight = bitmap.height,
+                        mask = brush, enabled = true,
+                        onStart = { point ->
+                            val index = selectedMaskIndex
+                            val current = document.masks.getOrNull(index)
+                            if (current != null &&
+                                current.strokes.size < 40 &&
+                                current.strokes.sumOf { it.points.size } < 640
+                            ) {
+                                dragStart = document
+                                val all = document.masks.toMutableList()
+                                all[index] = current.copy(strokes =
+                                    current.strokes + BrushStroke(listOf(point)))
+                                document = document.copy(masks = all)
+                            } else {
+                                message = "Brush capacity reached. Use Undo brush stroke or another mask."
+                            }
+                        },
+                        onContinue = { point ->
+                            val index = selectedMaskIndex
+                            val current = document.masks.getOrNull(index)
+                            val stroke = current?.strokes?.lastOrNull()
+                            if (dragStart != null && current != null && stroke != null &&
+                                current.strokes.sumOf { it.points.size } < 640
+                            ) {
+                                val previous = stroke.points.last()
+                                val dx = point.x - previous.x
+                                val dy = point.y - previous.y
+                                if (dx * dx + dy * dy >= .000012f) {
+                                    val updatedStroke = stroke.copy(points = stroke.points + point)
+                                    val updated = current.strokes.dropLast(1) + updatedStroke
+                                    val all = document.masks.toMutableList()
+                                    all[index] = current.copy(strokes = updated)
+                                    document = document.copy(masks = all)
+                                }
+                            }
+                        },
+                        onFinish = {
+                            dragStart?.let { start -> history = history.checkpoint(start, document) }
+                            dragStart = null
+                        }
+                    )
+                }
                 if (zoom > 1f) {
                     TextButton(
                         onClick = { zoom = 1f; panX = 0f; panY = 0f },
@@ -369,7 +534,10 @@ fun PhotoEditorScreen() {
                 Panel.entries.forEach { panel ->
                     FilterChip(
                         selected = panel == selectedPanel,
-                        onClick = { selectedPanel = panel },
+                        onClick = {
+                            selectedPanel = panel
+                            if (panel == Panel.MASKS) { zoom = 1f; panX = 0f; panY = 0f }
+                        },
                         label = { Text(panel.title) }
                     )
                 }
@@ -423,7 +591,11 @@ fun PhotoEditorScreen() {
                         onAdd = { kind ->
                             if (document.masks.size < 4) {
                                 selectedMaskIndex = document.masks.size
-                                commit(document.copy(masks = document.masks + LocalMask(kind = kind)))
+                                val mask = if (kind == MaskKind.BRUSH) {
+                                    LocalMask(kind = kind, radius = .045f, feather = .45f, exposure = .55f)
+                                } else LocalMask(kind = kind)
+                                commit(document.copy(masks = document.masks + mask))
+                                if (kind == MaskKind.BRUSH) { zoom = 1f; panX = 0f; panY = 0f }
                             }
                         },
                         onDelete = {
@@ -468,7 +640,7 @@ fun PhotoEditorScreen() {
                             dragStart?.let { start -> history = history.checkpoint(start, document) }
                             dragStart = null
                         },
-                        modifier = Modifier.fillMaxWidth().height(36.dp)
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
                     )
                 }
                 HorizontalDivider(color = Frame, modifier = Modifier.padding(vertical = 8.dp))
@@ -488,6 +660,26 @@ fun PhotoEditorScreen() {
                         commit(document.copy(flipVertical = !document.flipVertical))
                     }) { Text("Flip V") }
                 }
+                Text("STRAIGHTEN", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(String.format(Locale.US, "%+.1f°", document.straightenDegrees),
+                        color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        commit(document.copy(straightenDegrees = 0f))
+                    }) { Text("Level reset") }
+                }
+                Slider(
+                    value = document.straightenDegrees,
+                    valueRange = -15f..15f,
+                    onValueChange = { value ->
+                        if (dragStart == null) dragStart = document
+                        document = document.copy(straightenDegrees = value)
+                    },
+                    onValueChangeFinished = {
+                        dragStart?.let { start -> history = history.checkpoint(start, document) }
+                        dragStart = null
+                    }
+                )
                 Text("CENTER CROP", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -499,13 +691,40 @@ fun PhotoEditorScreen() {
                         )
                     }
                 }
+                if (document.crop != CropRatio.ORIGINAL) {
+                    Text("Reframe horizontal")
+                    Slider(
+                        value = document.cropCenterX, valueRange = 0f..1f,
+                        onValueChange = {
+                            if (dragStart == null) dragStart = document
+                            document = document.copy(cropCenterX = it)
+                        },
+                        onValueChangeFinished = {
+                            dragStart?.let { start -> history = history.checkpoint(start, document) }
+                            dragStart = null
+                        }
+                    )
+                    Text("Reframe vertical")
+                    Slider(
+                        value = document.cropCenterY, valueRange = 0f..1f,
+                        onValueChange = {
+                            if (dragStart == null) dragStart = document
+                            document = document.copy(cropCenterY = it)
+                        },
+                        onValueChangeFinished = {
+                            dragStart?.let { start -> history = history.checkpoint(start, document) }
+                            dragStart = null
+                        }
+                    )
+                }
             }
 
             if (showExport) {
                 Card(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("Save a NEW image", fontWeight = FontWeight.Bold)
-                        Text("Maximum 24 MP, sRGB output. Existing photo is never overwritten.",
+                        Text("Adaptive export limit based on device memory (up to 24 MP). " +
+                            "New file only, original unchanged.",
                             color = Muted, fontSize = 12.sp)
                         Text("JPEG quality", fontSize = 12.sp)
                         Row(Modifier.horizontalScroll(rememberScrollState()),
@@ -539,6 +758,81 @@ fun PhotoEditorScreen() {
                 fontSize = 11.sp, color = Muted, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 15.dp))
         }
+    }
+
+    if (saveProjectDialog) {
+        AlertDialog(
+            onDismissRequest = { saveProjectDialog = false },
+            title = { Text("Save editable project") },
+            text = {
+                Column {
+                    Text("Stores edit settings and a reference to the original photo locally. " +
+                        "The photo is not duplicated.")
+                    TextField(
+                        value = projectName,
+                        onValueChange = { projectName = it.take(28) },
+                        singleLine = true, label = { Text("Project name") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val current = sourceUri
+                    if (current != null && ProjectStore.save(context, projectName, current, document)) {
+                        savedProjects = ProjectStore.load(context)
+                        saveProjectDialog = false
+                        message = "Project saved. Keep the original photo accessible on this device."
+                    } else {
+                        message = "Could not save project (enter a name; 12 projects maximum)."
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { saveProjectDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (projectListDialog) {
+        AlertDialog(
+            onDismissRequest = { projectListDialog = false },
+            title = { Text("My editable projects") },
+            text = {
+                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                    Text("Local only. Saved projects require the original photo to remain accessible.")
+                    if (savedProjects.isEmpty()) Text("No saved projects yet.")
+                    savedProjects.forEach { entry ->
+                        FilterChip(
+                            selected = selectedProject == entry.name,
+                            onClick = { selectedProject = entry.name },
+                            label = { Text(entry.name) }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = savedProjects.any { it.name == selectedProject },
+                    onClick = {
+                        savedProjects.firstOrNull { it.name == selectedProject }?.let { entry ->
+                            loadPhoto(entry.image, entry.document)
+                        }
+                        projectListDialog = false
+                    }
+                ) { Text("Open") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(enabled = selectedProject != null, onClick = {
+                        selectedProject?.let { ProjectStore.delete(context, it) }
+                        savedProjects = ProjectStore.load(context)
+                        selectedProject = null
+                        message = "Saved project entry deleted. Original photo left untouched."
+                    }) { Text("Delete") }
+                    TextButton(onClick = { projectListDialog = false }) { Text("Close") }
+                }
+            }
+        )
     }
 
     if (saveLookDialog) {

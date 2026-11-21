@@ -36,7 +36,10 @@ object ControlCatalog {
         ),
         Panel.DETAIL to listOf(
             Control("Clarity", -1f, 1f, { it.clarity }) { g, v -> g.copy(clarity = v) },
-            Control("Sharpen", 0f, 1f, { it.sharpen }) { g, v -> g.copy(sharpen = v) }
+            Control("Texture", -1f, 1f, { it.texture }) { g, v -> g.copy(texture = v) },
+            Control("Sharpen", 0f, 1f, { it.sharpen }) { g, v -> g.copy(sharpen = v) },
+            Control("Sharpen threshold", 0f, 1f, { it.sharpenThreshold }) { g, v -> g.copy(sharpenThreshold = v) },
+            Control("Noise reduction", 0f, 1f, { it.denoise }) { g, v -> g.copy(denoise = v) }
         ),
         Panel.FILM to listOf(
             Control("Fade", 0f, 1f, { it.fade }) { g, v -> g.copy(fade = v) },
