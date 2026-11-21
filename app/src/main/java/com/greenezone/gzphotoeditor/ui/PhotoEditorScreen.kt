@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -282,7 +283,7 @@ fun PhotoEditorScreen() {
 
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 14.dp)
+            .safeDrawingPadding().padding(horizontal = 14.dp)
     ) {
         Spacer(Modifier.height(8.dp))
         Row(
@@ -639,7 +640,7 @@ fun PhotoEditorScreen() {
                             dragStart?.let { start -> history = history.checkpoint(start, document) }
                             dragStart = null
                         },
-                        modifier = Modifier.fillMaxWidth().height(36.dp)
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
                     )
                 }
                 HorizontalDivider(color = Frame, modifier = Modifier.padding(vertical = 8.dp))
