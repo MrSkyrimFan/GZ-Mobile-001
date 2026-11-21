@@ -1,6 +1,6 @@
 # GZ Photo Editor Pro 0.3.0 — ONE integrated phone test
 
-**Build:** Open the successful **merged-main** Android CI run and download its artifact **gz-photo-editor-pro-debug**. This is an unsigned/debug test APK, not the Google Play release. Because the package ID changed, Android may install it alongside the old prototype. Do not treat the old app as the current candidate.
+**Build:** Open the successful **merged-main** Android CI run and download its artifact **gz-photo-editor-pro-debug**. This is an debug-signed test APK, not the Google Play release. Because the package ID changed, Android may install it alongside the old prototype. Do not treat the old app as the current candidate.
 
 **Prepare:** Four photos: (1) sunny outdoor scene with green/blue, (2) portrait with skin tones, (3) night/dark scene with lights, (4) 12–24 MP photo plus optional >24 MP panorama, and a transparent PNG if available.
 

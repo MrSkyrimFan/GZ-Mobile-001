@@ -429,7 +429,7 @@ fun PhotoEditorScreen() {
                         onDelete = {
                             if (selectedMaskIndex in document.masks.indices) {
                                 commit(document.copy(masks = document.masks.filterIndexed { i, _ -> i != selectedMaskIndex }))
-                                selectedMaskIndex = selectedMaskIndex.coerceAtMost(document.masks.lastIndex - 1).coerceAtLeast(0)
+                                selectedMaskIndex = selectedMaskIndex.coerceAtMost(document.masks.lastIndex).coerceAtLeast(0)
                             }
                         },
                         onMaskChange = { changed ->

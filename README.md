@@ -21,7 +21,7 @@
 
 Kotlin + Jetpack Compose, min SDK 29 (Android 10), compile/target SDK 36, Gradle 9.6, AGP 9.4, JDK 17.
 
-Package/application ID: `com.greenezone.gzphotoeditor`. GitHub workflow: `GZ Photo Editor Pro Android CI`. Workflow artifact: `gz-photo-editor-pro-debug`. This is an unsigned/debug testing APK only. No signed release AAB or commercial listing exists.
+Package/application ID: `com.greenezone.gzphotoeditor`. GitHub workflow: `GZ Photo Editor Pro Android CI`. Workflow artifact: `gz-photo-editor-pro-debug`. This is an debug-signed testing APK only. No signed release AAB or commercial listing exists.
 
 ```sh
 gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug

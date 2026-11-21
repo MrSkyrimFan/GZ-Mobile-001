@@ -31,7 +31,7 @@ jobs:
           gradle-version: '9.6.0'
       - name: Verify brand and no forbidden permissions
         run: |
-          ! grep -R -nE 'ChromaVale|com[.]greenezone[.]chromavale' app/src/main app/build.gradle.kts settings.gradle.kts
+          ! grep -R -nE 'ChromaVale|Focavera|com[.]greenezone[.](chromavale|focavera)' app/src/main app/build.gradle.kts settings.gradle.kts
           ! grep -R -nE 'android[.]permission[.](INTERNET|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE)' app/src/main
       - name: Test and assemble
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
