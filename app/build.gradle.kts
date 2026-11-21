@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.greenezone.focavera"
+    namespace = "com.greenezone.gzphotoeditor"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.greenezone.focavera"
+        applicationId = "com.greenezone.gzphotoeditor"
         minSdk = 29
         targetSdk = 36
         versionCode = 2

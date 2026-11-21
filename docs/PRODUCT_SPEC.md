@@ -1,8 +1,8 @@
-# Focavera Photo Studio — product specification
+# GZ Photo Editor Pro Photo Studio — product specification
 
 **Owner:** Greenezone Software LLC
 **Product class:** one-time-purchase native Android image editor
-**Development branch:** feature/focavera-premium-wave-2
+**Development branch:** feature/gzphotoeditor-premium-wave-2
 **Product state:** engineering test candidate; no public release.
 
 ## Permanent rules

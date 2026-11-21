@@ -1,4 +1,4 @@
-package com.greenezone.focavera.editor
+package com.greenezone.gzphotoeditor.editor
 
 import android.content.Context
 import org.json.JSONObject
@@ -8,7 +8,7 @@ import org.json.JSONObject
  * are saved, never image files, URI paths, EXIF data, or account identifiers.
  */
 object SavedLooks {
-    private const val PREFS = "focavera.saved_looks.v1"
+    private const val PREFS = "gzphotoeditor.saved_looks.v1"
     private const val LIMIT = 20
 
     fun load(context: Context): List<Look> {

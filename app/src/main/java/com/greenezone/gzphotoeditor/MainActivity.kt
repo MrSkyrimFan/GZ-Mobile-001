@@ -1,4 +1,4 @@
-package com.greenezone.focavera
+package com.greenezone.gzphotoeditor
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
-import com.greenezone.focavera.ui.PhotoEditorScreen
+import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

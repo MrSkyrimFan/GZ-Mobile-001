@@ -1,4 +1,4 @@
-package com.greenezone.focavera.ui
+package com.greenezone.gzphotoeditor.ui
 
 import android.graphics.Bitmap
 import android.net.Uri
@@ -59,16 +59,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.greenezone.focavera.editor.ColorBand
-import com.greenezone.focavera.editor.ControlCatalog
-import com.greenezone.focavera.editor.CropRatio
-import com.greenezone.focavera.editor.EditDocument
-import com.greenezone.focavera.editor.EditHistory
-import com.greenezone.focavera.editor.ImagePipeline
-import com.greenezone.focavera.editor.Look
-import com.greenezone.focavera.editor.Looks
-import com.greenezone.focavera.editor.Panel
-import com.greenezone.focavera.editor.SavedLooks
+import com.greenezone.gzphotoeditor.editor.ColorBand
+import com.greenezone.gzphotoeditor.editor.ControlCatalog
+import com.greenezone.gzphotoeditor.editor.CropRatio
+import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.EditHistory
+import com.greenezone.gzphotoeditor.editor.ImagePipeline
+import com.greenezone.gzphotoeditor.editor.Look
+import com.greenezone.gzphotoeditor.editor.Looks
+import com.greenezone.gzphotoeditor.editor.Panel
+import com.greenezone.gzphotoeditor.editor.SavedLooks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -217,7 +217,7 @@ fun PhotoEditorScreen() {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text("FOCAVERA", letterSpacing = 2.sp, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                Text("GZ PHOTO EDITOR PRO", letterSpacing = 2.sp, fontWeight = FontWeight.Black, fontSize = 20.sp)
                 Text("PHOTO STUDIO  •  OFFLINE", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -460,8 +460,8 @@ fun PhotoEditorScreen() {
                         }
                         Row(Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { jpeg.launch("Focavera_Edit.jpg") }) { Text("Save JPEG") }
-                            OutlinedButton(onClick = { png.launch("Focavera_Edit.png") }) { Text("Save PNG") }
+                            Button(onClick = { jpeg.launch("GZPhotoEditorPro_Edit.jpg") }) { Text("Save JPEG") }
+                            OutlinedButton(onClick = { png.launch("GZPhotoEditorPro_Edit.png") }) { Text("Save PNG") }
                             TextButton(onClick = { showExport = false }) { Text("Cancel") }
                         }
                     }

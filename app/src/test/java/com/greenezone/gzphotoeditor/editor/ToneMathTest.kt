@@ -1,4 +1,4 @@
-package com.greenezone.focavera.editor
+package com.greenezone.gzphotoeditor.editor
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

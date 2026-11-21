@@ -1,4 +1,4 @@
-# Release gate — Focavera 0.2.0 engineering candidate
+# Release gate — GZ Photo Editor Pro 0.2.0 engineering candidate
 
 ## CI and code
 - [ ] Feature-branch Android CI green: JVM unit tests + debug APK assembled
@@ -21,7 +21,7 @@
 - [ ] Report performance and color artifacts on actual photos
 
 ## Commercial readiness
-- [ ] Focavera word mark, visually/phonetic similar marks, common-law usage and logo cleared; no definitive legal clearance claimed
+- [ ] GZ Photo Editor Pro word mark, visually/phonetic similar marks, common-law usage and logo cleared; no definitive legal clearance claimed
 - [ ] Legal privacy policy posted at the eventual Greenezone official website; site is NOT created/modified by this repo
 - [ ] Verify publisher organization, D-U-N-S where applicable, official website and Play policy obligations
 - [ ] Accessibility and Google Play requirements rechecked at time of release

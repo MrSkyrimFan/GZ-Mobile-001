@@ -1,4 +1,4 @@
-package com.greenezone.focavera.editor
+package com.greenezone.gzphotoeditor.editor
 
 data class Control(
     val name: String,

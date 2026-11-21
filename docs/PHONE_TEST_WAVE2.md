@@ -1,6 +1,6 @@
-# Focavera 0.2.0 — one-pass Android phone test
+# GZ Photo Editor Pro 0.2.0 — one-pass Android phone test
 
-Install the APK artifact named `focavera-android-debug` from the successful merged-main GitHub Actions run. This is a debug **test** build, not the Play Store release. For a new package ID, Android treats this as a different app from the older ChromaVale test APK. You may need to enable your device's install-unknown-apps setting for the browser or file manager used.
+Install the APK artifact named `gz-photo-editor-pro-debug` from the successful merged-main GitHub Actions run. This is a debug **test** build, not the Play Store release. For a new package ID, Android treats this as a different app from the older ChromaVale test APK. You may need to enable your device's install-unknown-apps setting for the browser or file manager used.
 
 ## Prepare 4 images
 1. A normal bright outdoor color photo with sky and grass.
@@ -9,7 +9,7 @@ Install the APK artifact named `focavera-android-debug` from the successful merg
 4. A high-resolution photo (ideally 12–24 MP) and optionally a PNG with transparency.
 
 ## One combined field session
-1. Open **Focavera Photo Studio**, use **Open photo**, pick the outdoor photo.
+1. Open **GZ Photo Editor Pro Photo Studio**, use **Open photo**, pick the outdoor photo.
 2. In **Light**, change Exposure, Highlights, Shadows, Contrast, Blacks. Each should produce a visibly different preview; press ↺ on one slider, then undo and redo.
 3. In **Color**, test Temperature, Tint, Saturation, Vibrance and Hue. In **Color grade**, add blue to Shadows and red to Highlights and compare the result. The effect should be concentrated in those tonal regions.
 4. In **Color mixer**, pick Green and change Hue, Saturation, Luminance. Grass should change more than sky. Try Blue on sky, Orange on skin in a portrait. Test each band's three controls.

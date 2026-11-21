@@ -1,4 +1,4 @@
-package com.greenezone.focavera.editor
+package com.greenezone.gzphotoeditor.editor
 
 import android.content.ContentResolver
 import android.graphics.Bitmap

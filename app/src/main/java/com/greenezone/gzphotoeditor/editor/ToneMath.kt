@@ -1,4 +1,4 @@
-package com.greenezone.focavera.editor
+package com.greenezone.gzphotoeditor.editor
 
 import kotlin.math.PI
 import kotlin.math.abs

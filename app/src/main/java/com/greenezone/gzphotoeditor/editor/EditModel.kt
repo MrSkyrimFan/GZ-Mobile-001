@@ -1,4 +1,4 @@
-package com.greenezone.focavera.editor
+package com.greenezone.gzphotoeditor.editor
 
 /** All edits remain parameters. Source image bytes are never overwritten. */
 data class ColorMix(

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FocaveraPhotoStudio"
+rootProject.name = "GZPhotoEditorPro"
 include(":app")

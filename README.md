@@ -1,9 +1,9 @@
-# Focavera Photo Studio
+# GZ Photo Editor Pro Photo Studio
 
 Native, offline Android photo editing by **Greenezone Software LLC**.
 
 > **Status: engineering test candidate, NOT published or production-qualified.**
-> Focavera is the development brand following public-web screening. Full USPTO/state/common-law clearance and owner approval remain required before publication.
+> GZ Photo Editor Pro is the development brand following public-web screening. Full USPTO/state/common-law clearance and owner approval remain required before publication.
 
 ## Product contract
 
@@ -19,13 +19,13 @@ Native, offline Android photo editing by **Greenezone Software LLC**.
 
 ## Technology
 
-Kotlin + Jetpack Compose, JDK 17, Gradle 9.6, AGP 9.4, compile/target SDK 36, min SDK 29 (Android 10). Package/namespace: `com.greenezone.focavera`.
+Kotlin + Jetpack Compose, JDK 17, Gradle 9.6, AGP 9.4, compile/target SDK 36, min SDK 29 (Android 10). Package/namespace: `com.greenezone.gzphotoeditor`.
 
 Previous dinosaur prototype was deleted in PR #1. This is not a Godot project. There is no relationship to the XForge/GZFX/Beside-Me source trees or the future Greenezone corporate site.
 
 ## Build and field test
 
-GitHub Actions `Focavera Android CI` runs JVM unit tests and assembles the unsigned/debug test APK, artifact `focavera-android-debug`. It **does not** produce a paid Google Play release AAB or sign production packages. Download the APK from the completed CI run's **Artifacts** section, install on Android and follow `docs/PHONE_TEST_WAVE2.md`. A local build requires JDK 17, Gradle 9.6 and Android SDK 36:
+GitHub Actions `GZ Photo Editor Pro Android CI` runs JVM unit tests and assembles the unsigned/debug test APK, artifact `gz-photo-editor-pro-debug`. It **does not** produce a paid Google Play release AAB or sign production packages. Download the APK from the completed CI run's **Artifacts** section, install on Android and follow `docs/PHONE_TEST_WAVE2.md`. A local build requires JDK 17, Gradle 9.6 and Android SDK 36:
 
 ```shell
 gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
