@@ -1,0 +1,27 @@
+# Godot editor cache (not project source)
+.godot/
+
+# Local proprietary AI-editor add-on, never redistribute in this public repo
+addons/ziva_agent/
+
+# Local Ziva context/session data (if present)
+.ziva/
+
+# Android/CI build products and private signing credentials
+/android/
+/build/
+/dist/
+*.apk
+*.aab
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.key
+*.pem
+
+# OS/editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
