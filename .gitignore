@@ -1,27 +1,27 @@
-# Godot editor cache (not project source)
-.godot/
+# Gradle and Android Studio
+.gradle/
+.idea/
+local.properties
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.iml
+.DS_Store
+Thumbs.db
 
-# Local proprietary AI-editor add-on, never redistribute in this public repo
-addons/ziva_agent/
-
-# Local Ziva context/session data (if present)
-.ziva/
-
-# Android/CI build products and private signing credentials
-/android/
-/build/
-/dist/
+# Android build/signing output and secrets
 *.apk
 *.aab
 *.keystore
 *.jks
 *.p12
 *.pfx
-*.key
 *.pem
+*.key
+release.properties
 
-# OS/editor artifacts
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+# Original Godot and Ziva-local files are not part of this project
+.godot/
+addons/ziva_agent/
+.ziva/

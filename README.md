@@ -1,19 +1,31 @@
-# GZ-Mobile-001
+# ChromaVale Photo Studio (working title)
 
-Greenezone Software LLC's independent Android game project.
+Offline, AI-free photo editing for Android by **Greenezone Software LLC**.
 
-## Setup
+> **Status: Native Android engineering in progress. Not a finished/published app.**
+> The name is provisional. Do not publish until branding/trademark clearance, build, QA and Play policy checks are complete.
 
-- Engine: Godot 4.7.x (existing Windows/Steam installation; local recorded version 4.7.2)
-- Language: GDScript / Godot 2D
-- Remote source: this repository
-- Development scope: a colorful, offline 2D side-scrolling dinosaur game; final design and title are still under discussion
-- Separate from all XForge and Beside Me projects
+## Product contract
 
-## Local editor
+- $1.99 one-time Google Play purchase, no ads, AI features, subscriptions, IAP, account, analytics, tracking or network dependency.
+- Source images stay on the device. Select a photo using Android's system photo picker.
+- Non-destructive adjustments, export to a **new** JPEG (95 quality) or PNG file through the system document picker. Never overwrite the input.
+- Fifteen+ tonal, color, detail and film controls; a set of looks; compare, reset, undo/redo, rotation/flipping, aspect-ratio crops.
+- Shared image mathematics for preview and export, with a bounded preview-size render and original-resolution export subject to a safety pixel cap.
+- XForge and GZFX source, budgets and accounts are outside this repository. This repository replaces the earlier empty Godot prototype.
 
-Clone this repository with GitHub Desktop and import its `project.godot` into the Godot Project Manager.
+## Project
 
-Ziva is optional editor-only tooling. Install Ziva locally under `addons/ziva_agent/`; this directory is deliberately excluded from Git so its proprietary files are not redistributed from this public repository. Do not commit tokens, credentials, chat history, or signing keys.
+Native **Kotlin + Jetpack Compose**; Gradle 9.6 / Android Gradle Plugin 9.4, compile SDK 36 and target SDK 36. Android Studio is the recommended local IDE. The former `project.godot` file has been removed.
 
-No gameplay source code or release artifacts have been authorized by this initialization.
+## Build
+
+Run `gradle :app:testDebugUnitTest :app:assembleDebug` with Gradle 9.6, Android SDK 36, JDK 17, or use the GitHub Actions Android workflow.
+No keystore or secrets are committed. GitHub Actions builds **unsigned debug/testing APK only**, not a paid Play Store release.
+See `docs/PRODUCT_SPEC.md` and `docs/RELEASE_GATE.md`.
+
+## Privacy
+
+No requested camera, external-storage-wide, INTERNET, media-library-wide, or location permissions. System pickers grant the selected input/output file access. The app processes images entirely on device.
+
+Copyright (c) 2026 Greenezone Software LLC. All rights reserved. No open-source license is granted.
