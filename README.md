@@ -16,11 +16,11 @@ Offline, AI-free photo editing for Android by **Greenezone Software LLC**.
 
 ## Project
 
-Native **Kotlin + Jetpack Compose**; Gradle 9.6 / Android Gradle Plugin 9.4, compile SDK 37 and target SDK 36. Android Studio is the recommended local IDE. The former `project.godot` file has been removed.
+Native **Kotlin + Jetpack Compose**; Gradle 9.6 / Android Gradle Plugin 9.4, compile SDK 36 and target SDK 36. Android Studio is the recommended local IDE. The former `project.godot` file has been removed.
 
 ## Build
 
-Run `gradle :app:testDebugUnitTest :app:assembleDebug` with Gradle 9.6, Android SDK 37, JDK 17, or use the GitHub Actions Android workflow.
+Run `gradle :app:testDebugUnitTest :app:assembleDebug` with Gradle 9.6, Android SDK 36, JDK 17, or use the GitHub Actions Android workflow.
 No keystore or secrets are committed. GitHub Actions builds **unsigned debug/testing APK only**, not a paid Play Store release.
 See `docs/PRODUCT_SPEC.md` and `docs/RELEASE_GATE.md`.
 
