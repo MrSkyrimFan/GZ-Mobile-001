@@ -1,4 +1,4 @@
-name: Android editor CI
+name: GZ Photo Editor Pro Android CI
 on:
   push:
     branches: [main, "feature/**"]
@@ -29,6 +29,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.0'
+      - name: Verify brand and no forbidden permissions
+        run: |
+          ! grep -R -nE 'ChromaVale|Focavera|com[.]greenezone[.](chromavale|focavera)' app/src/main app/build.gradle.kts settings.gradle.kts
+          ! grep -R -nE 'android[.]permission[.](INTERNET|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE)' app/src/main
       - name: Test and assemble
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
       - name: Verify testing package
@@ -37,6 +41,6 @@ jobs:
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q 'classes.dex'
       - uses: actions/upload-artifact@v4
         with:
-          name: chromavale-android-debug
+          name: gz-photo-editor-pro-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

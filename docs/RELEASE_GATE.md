@@ -1,17 +1,32 @@
-# Release gate — 0.1.0 engineering candidate
+# GZ Photo Editor Pro — 0.3.0 engineering release gates
 
-- [ ] First GitHub Actions workflow `Android editor CI` passes.
-- [ ] APK installed and tested on a physical Android device.
-- [ ] Photo picker works with photos from Photos/Gallery/Documents.
-- [ ] Undo/redo, Reset, presets and 16+ actual controls visibly operate.
-- [ ] Compare shows source pixels, preview uses correct rotation/crop.
-- [ ] JPEG and PNG exports both open correctly; export never modifies source.
-- [ ] Real photos at 12 MP, 24 MP and oversized panorama tested for bounded memory.
-- [ ] Output quality, color behavior, sRGB assumptions and EXIF orientation reviewed.
-- [ ] UI usability/accessibility, small phones, large displays and dark mode tested.
-- [ ] No INTERNET, ads, SDK analytics, trackers, IAP, accounts or AI.
-- [ ] Brand name, package name, icon and trade dress cleared before publication.
-- [ ] Public privacy policy, store assets, business registration and signed release AAB.
-- [ ] Google Play listing compliance and owner approval.
+## A. CI/source
+- [ ] Feature-branch CI succeeds, JVM math/history tests and debug APK build
+- [ ] Pull request CI succeeds, code review and verified merge, main CI succeeds
+- [ ] Brand strings, package ID, app label, artifact names show only approved GZ Photo Editor Pro
+- [ ] No INTERNET, broad media/storage, camera, location, accounts, ads, analytics, IAP, AI
+- [ ] No accidental changes to Greenezone corporate website or other project repositories
 
-Status: **ENGINEERING IN PROGRESS**. Not Play-ready; do not advertise as finished.
+## B. One comprehensive Android phone field test
+- [ ] Install/open APK on actual Android phone, identify Android version
+- [ ] Test photo picker with JPEG, PNG and high-resolution images
+- [ ] Exercise light/color/detail/film, color grading, all eight HSL bands
+- [ ] Master/R/G/B five-knot curves produce smooth predictable changes; Reset and undo work
+- [ ] Add radial and linear masks, position/feather/tilt each, test local exposure/contrast/saturation
+- [ ] Confirm max four masks, remove, undo/redo, and compare view shows unchanged original pixels
+- [ ] Test saved looks including curves after app restart; inspect deletion and default looks
+- [ ] Check histogram, pinch/zoom/drag/fit, transformations and all crop ratios
+- [ ] JPEG 85/95/100 and PNG export, actual gallery open, untouched source and correct dimensions
+- [ ] At least a 12MP photo, 24MP photo, >24MP image and low-memory test
+- [ ] Fast slider swipes, rotation while editing, app background/resume, repeated exports, UI on small screens
+
+## C. Production
+- [ ] Trademark: live USPTO similar/exact marks, state/common-law usage, logo and owner signoff
+- [ ] Visual quality/precision vs raw reference and sRGB color targets, no unacceptable banding/artifacts
+- [ ] Performance, memory, stability and device coverage acceptable
+- [ ] App accessibility / touch targets / dynamic color / insets / user data review
+- [ ] Official Greenezone privacy policy published at approved website (outside this app repo)
+- [ ] Google Play organization verification, title/listing/policy reviews and target API compliant
+- [ ] Signed production AAB, Play prelaunch tests, screenshots, store listing and owner approval
+
+Do NOT label this release-ready or a superior commercial app solely from source compile/test.

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ChromaValePhotoStudio"
+rootProject.name = "GZPhotoEditorPro"
 include(":app")

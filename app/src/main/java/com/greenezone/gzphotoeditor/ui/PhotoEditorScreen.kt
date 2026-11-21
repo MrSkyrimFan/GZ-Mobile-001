@@ -1,0 +1,608 @@
+package com.greenezone.gzphotoeditor.ui
+
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.greenezone.gzphotoeditor.editor.ColorBand
+import com.greenezone.gzphotoeditor.editor.CurveChannel
+import com.greenezone.gzphotoeditor.editor.CurveMath
+import com.greenezone.gzphotoeditor.editor.LocalMask
+import com.greenezone.gzphotoeditor.editor.MaskKind
+import com.greenezone.gzphotoeditor.editor.ControlCatalog
+import com.greenezone.gzphotoeditor.editor.CropRatio
+import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.EditHistory
+import com.greenezone.gzphotoeditor.editor.ImagePipeline
+import com.greenezone.gzphotoeditor.editor.Look
+import com.greenezone.gzphotoeditor.editor.Looks
+import com.greenezone.gzphotoeditor.editor.Panel
+import com.greenezone.gzphotoeditor.editor.SavedLooks
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.util.Locale
+
+private val Muted = Color(0xFF9DAFB3)
+private val Frame = Color(0xFF29353D)
+
+@Composable
+fun PhotoEditorScreen() {
+    val context = LocalContext.current
+    val resolver = context.contentResolver
+    val scope = rememberCoroutineScope()
+
+    var sourceUri by remember { mutableStateOf<Uri?>(null) }
+    var original by remember { mutableStateOf<Bitmap?>(null) }
+    var processed by remember { mutableStateOf<Bitmap?>(null) }
+    var document by remember { mutableStateOf(EditDocument()) }
+    var history by remember { mutableStateOf(EditHistory()) }
+    var dragStart by remember { mutableStateOf<EditDocument?>(null) }
+    var selectedPanel by remember { mutableStateOf(Panel.LIGHT) }
+    var selectedColor by remember { mutableStateOf(ColorBand.RED) }
+    var selectedCurve by remember { mutableStateOf(CurveChannel.MASTER) }
+    var selectedMaskIndex by remember { mutableIntStateOf(0) }
+    var compare by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("Open a photo to begin editing.") }
+    var busy by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
+    var showExport by remember { mutableStateOf(false) }
+    var jpegQuality by remember { mutableIntStateOf(95) }
+    var showHistogram by remember { mutableStateOf(false) }
+    var zoom by remember { mutableFloatStateOf(1f) }
+    var panX by remember { mutableFloatStateOf(0f) }
+    var panY by remember { mutableFloatStateOf(0f) }
+    var savedLooks by remember { mutableStateOf(SavedLooks.load(context)) }
+    var selectedSavedLook by remember { mutableStateOf<String?>(null) }
+    var saveLookDialog by remember { mutableStateOf(false) }
+    var deleteLookDialog by remember { mutableStateOf(false) }
+    var newLookName by remember { mutableStateOf("") }
+
+    fun commit(next: EditDocument) {
+        history = history.checkpoint(document, next)
+        document = next
+        dragStart = null
+    }
+
+    fun loadPhoto(uri: Uri) {
+        scope.launch {
+            busy = true
+            message = "Loading photo…"
+            try {
+                val loaded = withContext(Dispatchers.IO) {
+                    ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L)
+                }
+                sourceUri = uri
+                original = loaded
+                document = EditDocument()
+                history = EditHistory()
+                processed = loaded
+                dragStart = null
+                compare = false
+                zoom = 1f
+                panX = 0f
+                panY = 0f
+                message = "Photo loaded • " + loaded.width + " × " + loaded.height + " preview"
+            } catch (error: Exception) {
+                message = "Could not open photo: " + (error.message ?: "unsupported format")
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    fun exportImage(output: Uri, format: Bitmap.CompressFormat, quality: Int) {
+        val source = sourceUri ?: return
+        val edits = document
+        scope.launch {
+            exporting = true
+            showExport = false
+            message = "Rendering high-resolution image…"
+            try {
+                val size = withContext(Dispatchers.Default) {
+                    val originalFull = ImagePipeline.decode(
+                        resolver, source, 12_000, ImagePipeline.MAX_EXPORT_PIXELS
+                    )
+                    val image = ImagePipeline.render(originalFull, edits)
+                    val written = withContext(Dispatchers.IO) {
+                        resolver.openOutputStream(output, "w")?.use { stream ->
+                            image.compress(format, if (format == Bitmap.CompressFormat.JPEG) quality else 100, stream)
+                        } ?: throw IOException("Cannot open chosen output file")
+                    }
+                    if (!written) throw IOException("Image encoder reported a failure")
+                    image.width.toString() + " × " + image.height
+                }
+                message = "Exported " + size + " • source image unchanged"
+            } catch (error: Exception) {
+                message = "Export failed: " + (error.message ?: "unknown error")
+            } finally {
+                exporting = false
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri -> if (uri != null) loadPhoto(uri) }
+    val jpeg = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/jpeg")
+    ) { uri -> if (uri != null) exportImage(uri, Bitmap.CompressFormat.JPEG, jpegQuality) }
+    val png = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png")
+    ) { uri -> if (uri != null) exportImage(uri, Bitmap.CompressFormat.PNG, 100) }
+
+    LaunchedEffect(original, document) {
+        val src = original
+        if (src == null) {
+            processed = null
+        } else {
+            delay(110L)
+            try {
+                val result = withContext(Dispatchers.Default) {
+                    ImagePipeline.render(src, document) { ensureActive() }
+                }
+                processed = result
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                message = "Preview error: " + (error.message ?: "unknown error")
+            }
+        }
+    }
+
+    val compared = remember(original, document.quarterTurns, document.mirrored, document.flipVertical, document.crop) {
+        original?.let { ImagePipeline.geometry(it, document) }
+    }
+    val histogram = remember(processed) {
+        processed?.let { ImagePipeline.luminanceHistogram(it) } ?: IntArray(64)
+    }
+
+    Column(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 14.dp)
+    ) {
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("GZ PHOTO", letterSpacing = 1.4.sp, fontWeight = FontWeight.Black, fontSize = 19.sp)
+                Text("EDITOR PRO  •  OFFLINE", color = Muted, fontSize = 10.sp, letterSpacing = 0.6.sp)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    enabled = original != null && history.undo.isNotEmpty() && !busy && !exporting,
+                    onClick = { history.undo(document)?.let { (d, h) -> document = d; history = h } }
+                ) { Text("↶", fontSize = 24.sp) }
+                TextButton(
+                    enabled = original != null && history.redo.isNotEmpty() && !busy && !exporting,
+                    onClick = { history.redo(document)?.let { (d, h) -> document = d; history = h } }
+                ) { Text("↷", fontSize = 24.sp) }
+            }
+        }
+
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                enabled = !busy && !exporting,
+                onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+            ) { Text("Open photo") }
+            OutlinedButton(
+                enabled = original != null && !busy && !exporting,
+                onClick = { compare = !compare }
+            ) { Text(if (compare) "Show edit" else "Compare") }
+            OutlinedButton(
+                enabled = original != null && !busy && !exporting,
+                onClick = { commit(EditDocument()) }
+            ) { Text("Reset edits") }
+            TextButton(
+                enabled = original != null,
+                onClick = { showHistogram = !showHistogram }
+            ) { Text(if (showHistogram) "Hide histogram" else "Histogram") }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds()
+                .background(Color(0xFF0A0E12)).border(1.dp, Frame),
+            contentAlignment = Alignment.Center
+        ) {
+            val bitmap = if (compare) compared else processed
+            if (bitmap == null) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(20.dp)
+                ) {
+                    Text("◈", color = MaterialTheme.colorScheme.primary, fontSize = 48.sp)
+                    Text("Your photo, your vision.", fontWeight = FontWeight.Medium, fontSize = 18.sp)
+                    Text("Advanced curves, selective masks.\nNo ads. No AI. No cloud.",
+                        color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
+                }
+            } else {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = if (compare) "Original photo comparison" else "Edited photo preview",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                        .pointerInput(bitmap) {
+                            detectTransformGestures { _, pan, change, _ ->
+                                zoom = (zoom * change).coerceIn(1f, 5f)
+                                val maxX = size.width * (zoom - 1f) / 2f
+                                val maxY = size.height * (zoom - 1f) / 2f
+                                panX = (panX + pan.x).coerceIn(-maxX, maxX)
+                                panY = (panY + pan.y).coerceIn(-maxY, maxY)
+                            }
+                        }
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = panX
+                            translationY = panY
+                        }
+                )
+                if (zoom > 1f) {
+                    TextButton(
+                        onClick = { zoom = 1f; panX = 0f; panY = 0f },
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) { Text("Fit • " + String.format(Locale.US, "%.1fx", zoom)) }
+                }
+            }
+        }
+        if (showHistogram && original != null) {
+            Histogram(histogram)
+        }
+        Text(message, fontSize = 11.sp, color = Muted, maxLines = 2,
+            modifier = Modifier.padding(top = 7.dp, bottom = 7.dp))
+        HorizontalDivider(color = Frame)
+
+        if (original != null) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("LOOKS", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+                TextButton(enabled = !busy && !exporting, onClick = { newLookName = ""; saveLookDialog = true }) {
+                    Text("Save current look")
+                }
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Looks.all.forEach { look ->
+                    AssistChip(
+                        onClick = {
+                            selectedSavedLook = null
+                            commit(document.copy(grade = look.grade))
+                        },
+                        label = { Text(look.name) }, enabled = !busy && !exporting
+                    )
+                }
+            }
+            if (savedLooks.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("MY LOOKS", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+                    TextButton(enabled = selectedSavedLook != null, onClick = { deleteLookDialog = true }) {
+                        Text("Delete selected")
+                    }
+                }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    savedLooks.forEach { look ->
+                        FilterChip(
+                            selected = selectedSavedLook == look.name,
+                            onClick = {
+                                selectedSavedLook = look.name
+                                commit(document.copy(grade = look.grade))
+                            },
+                            label = { Text(look.name) },
+                            enabled = !busy && !exporting
+                        )
+                    }
+                }
+            }
+
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Panel.entries.forEach { panel ->
+                    FilterChip(
+                        selected = panel == selectedPanel,
+                        onClick = { selectedPanel = panel },
+                        label = { Text(panel.title) }
+                    )
+                }
+            }
+
+            if (selectedPanel == Panel.HSL) {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ColorBand.entries.forEach { band ->
+                        FilterChip(
+                            selected = band == selectedColor,
+                            onClick = { selectedColor = band },
+                            label = { Text(band.label) }
+                        )
+                    }
+                }
+            }
+
+            val activeControls = if (selectedPanel == Panel.HSL) {
+                ControlCatalog.mixer.getValue(selectedColor)
+            } else {
+                ControlCatalog.groups.getValue(selectedPanel)
+            }
+
+            Column(Modifier.heightIn(max = 235.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (selectedPanel == Panel.CURVES) {
+                    CurvePanel(
+                        selectedChannel = selectedCurve,
+                        onSelectChannel = { selectedCurve = it },
+                        points = CurveMath.get(document.grade, selectedCurve),
+                        onValueChange = { index, value ->
+                            if (dragStart == null) dragStart = document
+                            val nextCurve = CurveMath.get(document.grade, selectedCurve).change(index, value)
+                            document = document.copy(grade = CurveMath.put(document.grade, selectedCurve, nextCurve))
+                        },
+                        onValueChangeFinished = {
+                            dragStart?.let { start -> history = history.checkpoint(start, document) }
+                            dragStart = null
+                        },
+                        onReset = {
+                            commit(document.copy(grade = CurveMath.put(document.grade, selectedCurve, CurveMath.identity)))
+                        }
+                    )
+                }
+                if (selectedPanel == Panel.MASKS) {
+                    MaskPanel(
+                        masks = document.masks,
+                        selectedIndex = selectedMaskIndex,
+                        onSelect = { selectedMaskIndex = it },
+                        onAdd = { kind ->
+                            if (document.masks.size < 4) {
+                                selectedMaskIndex = document.masks.size
+                                commit(document.copy(masks = document.masks + LocalMask(kind = kind)))
+                            }
+                        },
+                        onDelete = {
+                            if (selectedMaskIndex in document.masks.indices) {
+                                commit(document.copy(masks = document.masks.filterIndexed { i, _ -> i != selectedMaskIndex }))
+                                selectedMaskIndex = selectedMaskIndex.coerceAtMost(document.masks.lastIndex).coerceAtLeast(0)
+                            }
+                        },
+                        onMaskChange = { changed ->
+                            if (selectedMaskIndex in document.masks.indices) {
+                                if (dragStart == null) dragStart = document
+                                val copy = document.masks.toMutableList()
+                                copy[selectedMaskIndex] = changed
+                                document = document.copy(masks = copy)
+                            }
+                        },
+                        onChangeFinished = {
+                            dragStart?.let { start -> history = history.checkpoint(start, document) }
+                            dragStart = null
+                        }
+                    )
+                }
+                activeControls.forEach { control ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(control.name, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text(String.format(Locale.US, "%+.2f", control.read(document.grade)),
+                            color = Muted, fontSize = 11.sp)
+                        TextButton(
+                            enabled = !busy && !exporting && control.read(document.grade) != 0f,
+                            onClick = { commit(document.copy(grade = control.write(document.grade, 0f))) }
+                        ) { Text("↺") }
+                    }
+                    Slider(
+                        value = control.read(document.grade),
+                        valueRange = control.min..control.max,
+                        enabled = !busy && !exporting,
+                        onValueChange = { value ->
+                            if (dragStart == null) dragStart = document
+                            document = document.copy(grade = control.write(document.grade, value))
+                        },
+                        onValueChangeFinished = {
+                            dragStart?.let { start -> history = history.checkpoint(start, document) }
+                            dragStart = null
+                        },
+                        modifier = Modifier.fillMaxWidth().height(36.dp)
+                    )
+                }
+                HorizontalDivider(color = Frame, modifier = Modifier.padding(vertical = 8.dp))
+                Text("TRANSFORM", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        commit(document.copy(quarterTurns = (document.quarterTurns + 3) % 4))
+                    }) { Text("↶ 90°") }
+                    OutlinedButton(onClick = {
+                        commit(document.copy(quarterTurns = (document.quarterTurns + 1) % 4))
+                    }) { Text("↷ 90°") }
+                    OutlinedButton(onClick = {
+                        commit(document.copy(mirrored = !document.mirrored))
+                    }) { Text("Flip H") }
+                    OutlinedButton(onClick = {
+                        commit(document.copy(flipVertical = !document.flipVertical))
+                    }) { Text("Flip V") }
+                }
+                Text("CENTER CROP", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CropRatio.entries.forEach { ratio ->
+                        FilterChip(
+                            selected = document.crop == ratio,
+                            onClick = { commit(document.copy(crop = ratio)) },
+                            label = { Text(ratio.label) }
+                        )
+                    }
+                }
+            }
+
+            if (showExport) {
+                Card(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Save a NEW image", fontWeight = FontWeight.Bold)
+                        Text("Maximum 24 MP, sRGB output. Existing photo is never overwritten.",
+                            color = Muted, fontSize = 12.sp)
+                        Text("JPEG quality", fontSize = 12.sp)
+                        Row(Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(85, 90, 95, 100).forEach { quality ->
+                                FilterChip(
+                                    selected = jpegQuality == quality,
+                                    onClick = { jpegQuality = quality },
+                                    label = { Text(quality.toString()) }
+                                )
+                            }
+                        }
+                        Row(Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { jpeg.launch("GZPhotoEditorPro_Edit.jpg") }) { Text("Save JPEG") }
+                            OutlinedButton(onClick = { png.launch("GZPhotoEditorPro_Edit.png") }) { Text("Save PNG") }
+                            TextButton(onClick = { showExport = false }) { Text("Cancel") }
+                        }
+                    }
+                }
+            } else {
+                Button(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
+                    enabled = !busy && !exporting,
+                    onClick = { showExport = true }
+                ) { Text(if (exporting) "Exporting…" else "EXPORT PHOTO") }
+            }
+        } else {
+            Spacer(Modifier.height(12.dp))
+            Text("Greenezone Software LLC • One-time purchase • Your images stay on your phone",
+                fontSize = 11.sp, color = Muted, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 15.dp))
+        }
+    }
+
+    if (saveLookDialog) {
+        AlertDialog(
+            onDismissRequest = { saveLookDialog = false },
+            title = { Text("Save custom look") },
+            text = {
+                Column {
+                    Text("Save the current color adjustments for any photo. Crop and rotation are not saved.")
+                    TextField(
+                        value = newLookName,
+                        onValueChange = { newLookName = it.take(28) },
+                        label = { Text("Look name") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (SavedLooks.save(context, newLookName, document.grade)) {
+                        savedLooks = SavedLooks.load(context)
+                        selectedSavedLook = newLookName.trim().replace(Regex("\\s+"), " ").take(28)
+                        saveLookDialog = false
+                        message = "Custom look saved on this device."
+                    } else {
+                        message = "Could not save look. Enter a name (up to 20 looks)."
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { saveLookDialog = false }) { Text("Cancel") } }
+        )
+    }
+
+    if (deleteLookDialog) {
+        AlertDialog(
+            onDismissRequest = { deleteLookDialog = false },
+            title = { Text("Delete saved look?") },
+            text = { Text("This removes the saved preset, not your photo or current edits.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedSavedLook?.let { SavedLooks.remove(context, it) }
+                    savedLooks = SavedLooks.load(context)
+                    selectedSavedLook = null
+                    deleteLookDialog = false
+                    message = "Saved look removed."
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deleteLookDialog = false }) { Text("Cancel") } }
+        )
+    }
+}
+
+@Composable
+private fun Histogram(bins: IntArray) {
+    val peak = maxOf(1, bins.maxOrNull() ?: 1)
+    Canvas(Modifier.fillMaxWidth().height(48.dp).background(Color(0xFF0A0E12))) {
+        val width = size.width / bins.size
+        bins.forEachIndexed { i, count ->
+            val h = size.height * count.toFloat() / peak
+            drawRect(
+                color = Color(0xFF9BE7C4),
+                topLeft = Offset(i * width, size.height - h),
+                size = Size(maxOf(1f, width - 1f), h)
+            )
+        }
+    }
+}

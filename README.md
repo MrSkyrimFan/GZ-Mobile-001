@@ -1,31 +1,38 @@
-# ChromaVale Photo Studio (working title)
+# GZ Photo Editor Pro
 
-Offline, AI-free photo editing for Android by **Greenezone Software LLC**.
+**Greenezone Software LLC** · Native Android · All editing on-device
 
-> **Status: Native Android engineering in progress. Not a finished/published app.**
-> The name is provisional. Do not publish until branding/trademark clearance, build, QA and Play policy checks are complete.
+**Engineering status:** Version 0.3.0 development candidate. NOT released or qualified as a professional commercial product. The owner approved the working product name **GZ Photo Editor Pro**. Formal trademark clearance is still a release gate.
 
-## Product contract
+## Value proposition
 
-- $1.99 one-time Google Play purchase, no ads, AI features, subscriptions, IAP, account, analytics, tracking or network dependency.
-- Source images stay on the device. Select a photo using Android's system photo picker.
-- Non-destructive adjustments, export to a **new** JPEG (95 quality) or PNG file through the system document picker. Never overwrite the input.
-- Fifteen+ tonal, color, detail and film controls; a set of looks; compare, reset, undo/redo, rotation/flipping, aspect-ratio crops.
-- Shared image mathematics for preview and export, with a bounded preview-size render and original-resolution export subject to a safety pixel cap.
-- XForge and GZFX source, budgets and accounts are outside this repository. This repository replaces the earlier empty Godot prototype.
+- Intended Google Play price: **$1.99 once**. No AI, ads, subscriptions, in-app purchases, logins, telemetry, account or internet.
+- Source images remain unmodified. Android's photo picker imports one photo; Android's system CreateDocument saves a **new** JPEG or PNG.
+- Non-destructive edits and 40-entry undo/redo history.
+- **53 conventional parametric controls:** 20 tonal/color/detail/film controls, 9 RGB tonal color-grade channels, 24 selective HSL controls across eight color bands.
+- **4-channel curves** (master RGB and individual red/green/blue) using five adjustable points per channel; 256-level sampled output.
+- **Radial and graduated linear masks**, up to four per image, each with positioning, exposure, contrast and saturation.
+- 12 built-in looks and up to 20 user-created local looks; custom looks persist adjustable global grades and curve shapes, but not mask geometry.
+- Preview zoom/pan, before/after comparison, optional brightness histogram, rotate both ways, horizontal/vertical flip, nine center-crop ratios, individual slider reset and full reset.
+- Export JPEG with quality 85/90/95/100 or PNG. CPU software pipeline shares pixel operations between preview and export.
+- Row-buffered processing reduces temporary pixel-array allocations. Preview bounded to 1400px / 2MP; export decode bounded to 12,000px/24MP.
 
-## Project
+## Technology / build
 
-Native **Kotlin + Jetpack Compose**; Gradle 9.6 / Android Gradle Plugin 9.4, compile SDK 36 and target SDK 36. Android Studio is the recommended local IDE. The former `project.godot` file has been removed.
+Kotlin + Jetpack Compose, min SDK 29 (Android 10), compile/target SDK 36, Gradle 9.6, AGP 9.4, JDK 17.
 
-## Build
+Package/application ID: `com.greenezone.gzphotoeditor`. GitHub workflow: `GZ Photo Editor Pro Android CI`. Workflow artifact: `gz-photo-editor-pro-debug`. This is an debug-signed testing APK only. No signed release AAB or commercial listing exists.
 
-Run `gradle :app:testDebugUnitTest :app:assembleDebug` with Gradle 9.6, Android SDK 36, JDK 17, or use the GitHub Actions Android workflow.
-No keystore or secrets are committed. GitHub Actions builds **unsigned debug/testing APK only**, not a paid Play Store release.
-See `docs/PRODUCT_SPEC.md` and `docs/RELEASE_GATE.md`.
+```sh
+gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+```
 
-## Privacy
+## Honest feature boundary
 
-No requested camera, external-storage-wide, INTERNET, media-library-wide, or location permissions. System pickers grant the selected input/output file access. The app processes images entirely on device.
+No paintbrush masking, clone/heal, portrait retouch, perspective correction, interactive crop handles, DNG/RAW processing, 16-bit HDR/wide-gamut color management, ICC profile preservation, batch export, multilayer retouching, GPU renderer or full-resolution tiled pipeline **yet**. An Android CI pass proves source build and JVM tests, not color fidelity or phone stability.
 
-Copyright (c) 2026 Greenezone Software LLC. All rights reserved. No open-source license is granted.
+The project is independent from **XForge, GZFX, Beside-Me and the deferred Greenezone corporate website**. Do not adjust corporate domain, DNS, business accounts or website infrastructure as part of this app repository.
+
+For exact limits, source of truth and handset test process see `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`, `docs/CONTINUITY.md` and `docs/PHONE_TEST_WAVE2.md`.
+
+Copyright © 2026 Greenezone Software LLC. All rights reserved. No open-source license granted.
