@@ -19,6 +19,33 @@ enum class ColorBand(val label: String, val centerHue: Float) {
 }
 
 /** A neutral grade is the default for every slider. */
+/** Five fixed x-coordinates, editable y-values. Endpoints are editable as well. */
+data class CurvePoints(val values: List<Float> = listOf(0f, .25f, .5f, .75f, 1f)) {
+    init { require(values.size == 5 && values.all { it.isFinite() && it in 0f..1f }) }
+    fun change(index: Int, value: Float): CurvePoints {
+        require(index in 0..4)
+        return CurvePoints(values.toMutableList().also { it[index] = value.coerceIn(0f, 1f) })
+    }
+}
+
+enum class CurveChannel(val title: String) {
+    MASTER("RGB"), RED("Red"), GREEN("Green"), BLUE("Blue")
+}
+
+enum class MaskKind(val title: String) { RADIAL("Radial"), LINEAR("Linear") }
+
+/** Local geometry coordinates are proportional to the final cropped/rotated image. */
+data class LocalMask(
+    val kind: MaskKind = MaskKind.RADIAL,
+    val centerX: Float = .5f,
+    val centerY: Float = .5f,
+    val radius: Float = .35f,
+    val feather: Float = .35f,
+    val exposure: Float = 0f,
+    val saturation: Float = 0f,
+    val contrast: Float = 0f
+)
+
 data class Grade(
     val exposure: Float = 0f,
     val contrast: Float = 0f,
@@ -49,7 +76,11 @@ data class Grade(
     val highlightRed: Float = 0f,
     val highlightGreen: Float = 0f,
     val highlightBlue: Float = 0f,
-    val colorMix: List<ColorMix> = List(ColorBand.entries.size) { ColorMix() }
+    val colorMix: List<ColorMix> = List(ColorBand.entries.size) { ColorMix() },
+    val masterCurve: CurvePoints = CurvePoints(),
+    val redCurve: CurvePoints = CurvePoints(),
+    val greenCurve: CurvePoints = CurvePoints(),
+    val blueCurve: CurvePoints = CurvePoints()
 )
 
 enum class CropRatio(val label: String, val ratio: Float?) {
@@ -69,7 +100,8 @@ data class EditDocument(
     val quarterTurns: Int = 0,
     val mirrored: Boolean = false,
     val flipVertical: Boolean = false,
-    val crop: CropRatio = CropRatio.ORIGINAL
+    val crop: CropRatio = CropRatio.ORIGINAL,
+    val masks: List<LocalMask> = emptyList()
 )
 
 data class Look(val name: String, val grade: Grade)

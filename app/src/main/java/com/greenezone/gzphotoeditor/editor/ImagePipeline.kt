@@ -75,10 +75,11 @@ object ImagePipeline {
      * Four small scanline buffers instead of two full-frame IntArrays.
      * Large photo export peak memory is now primarily the input/output Bitmaps.
      */
-    fun render(input: Bitmap, document: EditDocument): Bitmap {
+    fun render(input: Bitmap, document: EditDocument, cancelCheck: (() -> Unit)? = null): Bitmap {
         val source = geometry(input, document)
         val prepared = ToneMath.prepare(document.grade)
-        if (prepared.isNeutral) return source
+        val masks = MaskMath.prepare(document.masks)
+        if (prepared.isNeutral && masks.isEmpty()) return source
 
         val width = source.width
         val height = source.height
@@ -95,6 +96,7 @@ object ImagePipeline {
 
         val hasDetail = document.grade.clarity != 0f || document.grade.sharpen != 0f
         for (y in 0 until height) {
+            if (y % 16 == 0) cancelCheck?.invoke()
             for (x in 0 until width) {
                 var delta = 0f
                 if (hasDetail) {
@@ -105,7 +107,8 @@ object ImagePipeline {
                     val down = luminance(below[x])
                     delta = (here - (left + right + up + down) * .25f).coerceIn(-1f, 1f)
                 }
-                rendered[x] = ToneMath.adjustPrepared(current[x], prepared, x, y, width, height, delta)
+                val base = ToneMath.adjustPrepared(current[x], prepared, x, y, width, height, delta)
+                rendered[x] = MaskMath.adjust(base, masks, x, y, width, height)
             }
             output.setPixels(rendered, 0, width, 0, y, width, 1)
             if (y + 1 < height) {

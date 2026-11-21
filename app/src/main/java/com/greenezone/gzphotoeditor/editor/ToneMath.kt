@@ -26,7 +26,8 @@ object ToneMath {
         val gammaExponent: Double,
         val contrastFactor: Float,
         val hasMixer: Boolean,
-        val hasColorGrade: Boolean
+        val hasColorGrade: Boolean,
+        val curves: CurveMath.Tables
     )
 
     fun prepare(grade: Grade): Prepared = Prepared(
@@ -38,7 +39,8 @@ object ToneMath {
         hasMixer = grade.colorMix.any { it.hue != 0f || it.saturation != 0f || it.luminance != 0f },
         hasColorGrade = grade.shadowRed != 0f || grade.shadowGreen != 0f || grade.shadowBlue != 0f ||
             grade.midRed != 0f || grade.midGreen != 0f || grade.midBlue != 0f ||
-            grade.highlightRed != 0f || grade.highlightGreen != 0f || grade.highlightBlue != 0f
+            grade.highlightRed != 0f || grade.highlightGreen != 0f || grade.highlightBlue != 0f,
+        curves = CurveMath.prepare(grade)
     )
 
     /** localDelta is current luminance minus a four-neighbor average, in [-1,+1]. */
@@ -200,9 +202,10 @@ object ToneMath {
             g += noise
             b += noise
         }
-        return (a shl 24) or
+        val rgb = (a shl 24) or
             ((clip(r) * 255f + .5f).toInt() shl 16) or
             ((clip(g) * 255f + .5f).toInt() shl 8) or
             (clip(b) * 255f + .5f).toInt()
+        return prepared.curves.apply(rgb)
     }
 }

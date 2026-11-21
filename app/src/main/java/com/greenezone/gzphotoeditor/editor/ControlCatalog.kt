@@ -10,7 +10,7 @@ data class Control(
 
 enum class Panel(val title: String) {
     LIGHT("Light"), COLOR("Color"), DETAIL("Detail"), FILM("Film"),
-    GRADE("Color grade"), HSL("Color mixer")
+    GRADE("Color grade"), HSL("Color mixer"), CURVES("Curves"), MASKS("Masks")
 }
 
 object ControlCatalog {
@@ -54,7 +54,9 @@ object ControlCatalog {
             Control("Highlight green", -1f, 1f, { it.highlightGreen }) { g, v -> g.copy(highlightGreen = v) },
             Control("Highlight blue", -1f, 1f, { it.highlightBlue }) { g, v -> g.copy(highlightBlue = v) }
         ),
-        Panel.HSL to emptyList()
+        Panel.HSL to emptyList(),
+        Panel.CURVES to emptyList(),
+        Panel.MASKS to emptyList()
     )
 
     val mixer: Map<ColorBand, List<Control>> = ColorBand.entries.associateWith { band ->

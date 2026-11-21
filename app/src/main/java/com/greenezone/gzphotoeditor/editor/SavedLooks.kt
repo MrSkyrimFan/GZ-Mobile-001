@@ -1,6 +1,7 @@
 package com.greenezone.gzphotoeditor.editor
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -21,7 +22,16 @@ object SavedLooks {
                     val value = if (raw.isFinite()) raw.coerceIn(control.min, control.max) else 0f
                     control.write(current, value)
                 }
-                Look(name, grade)
+                var restored = grade
+                for (channel in CurveChannel.entries) {
+                    val array = data.optJSONArray("curve." + channel.name) ?: continue
+                    if (array.length() != 5) continue
+                    val values = (0..4).map { i -> array.optDouble(i, Double.NaN).toFloat() }
+                    if (values.all { it.isFinite() && it in 0f..1f }) {
+                        restored = CurveMath.put(restored, channel, CurvePoints(values))
+                    }
+                }
+                Look(name, restored)
             } catch (_: Exception) {
                 null
             }
@@ -35,6 +45,11 @@ object SavedLooks {
         if (!prefs.contains(name) && prefs.all.size >= LIMIT) return false
         val data = JSONObject()
         for (control in ControlCatalog.all) data.put(control.name, control.read(grade).toDouble())
+        for (channel in CurveChannel.entries) {
+            val arr = JSONArray()
+            CurveMath.get(grade, channel).values.forEach { arr.put(it.toDouble()) }
+            data.put("curve." + channel.name, arr)
+        }
         prefs.edit().putString(name, data.toString()).apply()
         return true
     }

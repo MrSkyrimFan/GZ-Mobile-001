@@ -1,30 +1,32 @@
-# Release gate — GZ Photo Editor Pro 0.2.0 engineering candidate
+# GZ Photo Editor Pro — 0.3.0 engineering release gates
 
-## CI and code
-- [ ] Feature-branch Android CI green: JVM unit tests + debug APK assembled
-- [ ] Pull-request Android CI green, PR reviewed, merged without overriding someone else's branch
-- [ ] Merged-main Android CI green and testing artifact verified
-- [ ] Confirm old ChromaVale name/package absent from compiled app
-- [ ] Confirm no INTERNET, broad storage/gallery, camera or location permissions
+## A. CI/source
+- [ ] Feature-branch CI succeeds, JVM math/history tests and debug APK build
+- [ ] Pull request CI succeeds, code review and verified merge, main CI succeeds
+- [ ] Brand strings, package ID, app label, artifact names show only approved GZ Photo Editor Pro
+- [ ] No INTERNET, broad media/storage, camera, location, accounts, ads, analytics, IAP, AI
+- [ ] No accidental changes to Greenezone corporate website or other project repositories
 
-## Physical phone acceptance
-- [ ] Pick sources from system Photos, Gallery or Files where supported
-- [ ] Exercise 20 original sliders, 9 three-zone sliders, all 24 HSL color-mixer sliders and visual effects
-- [ ] Undo/redo, default looks, user-saved look survives app restart, and delete saved look
-- [ ] Reset whole edit and one specific slider to neutral
-- [ ] Compare, pinch/pan/fit, toggle histogram
-- [ ] Rotate both directions, horizontal/vertical flip, and all nine crop ratios
-- [ ] Export JPEG 85, 95 and 100, plus PNG; inspect file dimensions, alpha behavior and content
-- [ ] Verify source bytes stay unchanged and exported file exists under user-picked path
-- [ ] Test 12MP, 24MP, >24MP panorama, portrait EXIF, PNG transparency, and unusual photos
-- [ ] Small Android phone; large Android display; background/resume; repeated export; low-memory test
-- [ ] Report performance and color artifacts on actual photos
+## B. One comprehensive Android phone field test
+- [ ] Install/open APK on actual Android phone, identify Android version
+- [ ] Test photo picker with JPEG, PNG and high-resolution images
+- [ ] Exercise light/color/detail/film, color grading, all eight HSL bands
+- [ ] Master/R/G/B five-knot curves produce smooth predictable changes; Reset and undo work
+- [ ] Add radial and linear masks, position/feather/tilt each, test local exposure/contrast/saturation
+- [ ] Confirm max four masks, remove, undo/redo, and compare view shows unchanged original pixels
+- [ ] Test saved looks including curves after app restart; inspect deletion and default looks
+- [ ] Check histogram, pinch/zoom/drag/fit, transformations and all crop ratios
+- [ ] JPEG 85/95/100 and PNG export, actual gallery open, untouched source and correct dimensions
+- [ ] At least a 12MP photo, 24MP photo, >24MP image and low-memory test
+- [ ] Fast slider swipes, rotation while editing, app background/resume, repeated exports, UI on small screens
 
-## Commercial readiness
-- [ ] GZ Photo Editor Pro word mark, visually/phonetic similar marks, common-law usage and logo cleared; no definitive legal clearance claimed
-- [ ] Legal privacy policy posted at the eventual Greenezone official website; site is NOT created/modified by this repo
-- [ ] Verify publisher organization, D-U-N-S where applicable, official website and Play policy obligations
-- [ ] Accessibility and Google Play requirements rechecked at time of release
-- [ ] Signed release AAB, store screenshots/listing, device prelaunch report, owner signoff
+## C. Production
+- [ ] Trademark: live USPTO similar/exact marks, state/common-law usage, logo and owner signoff
+- [ ] Visual quality/precision vs raw reference and sRGB color targets, no unacceptable banding/artifacts
+- [ ] Performance, memory, stability and device coverage acceptable
+- [ ] App accessibility / touch targets / dynamic color / insets / user data review
+- [ ] Official Greenezone privacy policy published at approved website (outside this app repo)
+- [ ] Google Play organization verification, title/listing/policy reviews and target API compliant
+- [ ] Signed production AAB, Play prelaunch tests, screenshots, store listing and owner approval
 
-Status: **NOT READY FOR GOOGLE PLAY**. CI is necessary but is not hardware QA.
+Do NOT label this release-ready or a superior commercial app solely from source compile/test.

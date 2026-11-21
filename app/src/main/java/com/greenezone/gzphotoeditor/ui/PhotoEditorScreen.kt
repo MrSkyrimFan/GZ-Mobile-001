@@ -60,6 +60,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenezone.gzphotoeditor.editor.ColorBand
+import com.greenezone.gzphotoeditor.editor.CurveChannel
+import com.greenezone.gzphotoeditor.editor.CurveMath
+import com.greenezone.gzphotoeditor.editor.LocalMask
+import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.ControlCatalog
 import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.EditDocument
@@ -70,6 +74,8 @@ import com.greenezone.gzphotoeditor.editor.Looks
 import com.greenezone.gzphotoeditor.editor.Panel
 import com.greenezone.gzphotoeditor.editor.SavedLooks
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -93,6 +99,8 @@ fun PhotoEditorScreen() {
     var dragStart by remember { mutableStateOf<EditDocument?>(null) }
     var selectedPanel by remember { mutableStateOf(Panel.LIGHT) }
     var selectedColor by remember { mutableStateOf(ColorBand.RED) }
+    var selectedCurve by remember { mutableStateOf(CurveChannel.MASTER) }
+    var selectedMaskIndex by remember { mutableIntStateOf(0) }
     var compare by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("Open a photo to begin editing.") }
     var busy by remember { mutableStateOf(false) }
@@ -190,9 +198,11 @@ fun PhotoEditorScreen() {
             delay(110L)
             try {
                 val result = withContext(Dispatchers.Default) {
-                    ImagePipeline.render(src, document)
+                    ImagePipeline.render(src, document) { ensureActive() }
                 }
                 processed = result
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 message = "Preview error: " + (error.message ?: "unknown error")
             }
@@ -217,8 +227,8 @@ fun PhotoEditorScreen() {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text("GZ PHOTO EDITOR PRO", letterSpacing = 2.sp, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                Text("PHOTO STUDIO  •  OFFLINE", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
+                Text("GZ PHOTO", letterSpacing = 1.4.sp, fontWeight = FontWeight.Black, fontSize = 19.sp)
+                Text("EDITOR PRO  •  OFFLINE", color = Muted, fontSize = 10.sp, letterSpacing = 0.6.sp)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(
@@ -270,7 +280,7 @@ fun PhotoEditorScreen() {
                 ) {
                     Text("◈", color = MaterialTheme.colorScheme.primary, fontSize = 48.sp)
                     Text("Your photo, your vision.", fontWeight = FontWeight.Medium, fontSize = 18.sp)
-                    Text("53 adjustments. Twelve looks. Custom looks.\nNo ads. No AI. No cloud.",
+                    Text("Advanced curves, selective masks.\nNo ads. No AI. No cloud.",
                         color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
                 }
             } else {
@@ -386,6 +396,56 @@ fun PhotoEditorScreen() {
 
             Column(Modifier.heightIn(max = 235.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (selectedPanel == Panel.CURVES) {
+                    CurvePanel(
+                        selectedChannel = selectedCurve,
+                        onSelectChannel = { selectedCurve = it },
+                        points = CurveMath.get(document.grade, selectedCurve),
+                        onValueChange = { index, value ->
+                            if (dragStart == null) dragStart = document
+                            val nextCurve = CurveMath.get(document.grade, selectedCurve).change(index, value)
+                            document = document.copy(grade = CurveMath.put(document.grade, selectedCurve, nextCurve))
+                        },
+                        onValueChangeFinished = {
+                            dragStart?.let { start -> history = history.checkpoint(start, document) }
+                            dragStart = null
+                        },
+                        onReset = {
+                            commit(document.copy(grade = CurveMath.put(document.grade, selectedCurve, CurveMath.identity)))
+                        }
+                    )
+                }
+                if (selectedPanel == Panel.MASKS) {
+                    MaskPanel(
+                        masks = document.masks,
+                        selectedIndex = selectedMaskIndex,
+                        onSelect = { selectedMaskIndex = it },
+                        onAdd = { kind ->
+                            if (document.masks.size < 4) {
+                                selectedMaskIndex = document.masks.size
+                                commit(document.copy(masks = document.masks + LocalMask(kind = kind)))
+                            }
+                        },
+                        onDelete = {
+                            if (selectedMaskIndex in document.masks.indices) {
+                                commit(document.copy(masks = document.masks.filterIndexed { i, _ -> i != selectedMaskIndex }))
+                                selectedMaskIndex = selectedMaskIndex.coerceAtMost(document.masks.lastIndex - 1).coerceAtLeast(0)
+                            }
+                        },
+                        onMaskChange = { changed ->
+                            if (selectedMaskIndex in document.masks.indices) {
+                                if (dragStart == null) dragStart = document
+                                val copy = document.masks.toMutableList()
+                                copy[selectedMaskIndex] = changed
+                                document = document.copy(masks = copy)
+                            }
+                        },
+                        onChangeFinished = {
+                            dragStart?.let { start -> history = history.checkpoint(start, document) }
+                            dragStart = null
+                        }
+                    )
+                }
                 activeControls.forEach { control ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(control.name, fontSize = 13.sp, modifier = Modifier.weight(1f))

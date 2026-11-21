@@ -1,40 +1,38 @@
-# GZ Photo Editor Pro Photo Studio
+# GZ Photo Editor Pro
 
-Native, offline Android photo editing by **Greenezone Software LLC**.
+**Greenezone Software LLC** · Native Android · All editing on-device
 
-> **Status: engineering test candidate, NOT published or production-qualified.**
-> GZ Photo Editor Pro is the development brand following public-web screening. Full USPTO/state/common-law clearance and owner approval remain required before publication.
+**Engineering status:** Version 0.3.0 development candidate. NOT released or qualified as a professional commercial product. The owner approved the working product name **GZ Photo Editor Pro**. Formal trademark clearance is still a release gate.
 
-## Product contract
+## Value proposition
 
-- Planned **$1.99 single purchase** on Google Play. No ads, AI, in-app purchases, subscriptions, accounts, trackers, telemetry, or remote API.
-- Choose a source via Android's system photo picker. Use Android's create-document flow for a **new** JPEG or PNG export. Never overwrite a source.
-- Non-destructive snapshots: grade, rotation, horizontal/vertical mirror and center-crop ratio.
-- **53 real parametric controls**: existing 20 light/color/detail/film controls, nine three-zone RGB color-grade controls, 24 eight-band HSL mixer controls.
-- **12 built-in looks** and up to 20 app-private custom looks, with undo/redo and reset.
-- Pinch/drag preview, optional luminance histogram, compare view, one-control reset and up to 40 undo snapshots.
-- JPEG quality 85/90/95/100, PNG, scaled preview and a 24 MP export decode cap. Both paths use the same rendering logic.
-- Row-buffered CPU rendering avoids two full-frame `IntArray` allocations in previous 0.1.0 code.
-- All edits run locally; network access is not requested.
+- Intended Google Play price: **$1.99 once**. No AI, ads, subscriptions, in-app purchases, logins, telemetry, account or internet.
+- Source images remain unmodified. Android's photo picker imports one photo; Android's system CreateDocument saves a **new** JPEG or PNG.
+- Non-destructive edits and 40-entry undo/redo history.
+- **53 conventional parametric controls:** 20 tonal/color/detail/film controls, 9 RGB tonal color-grade channels, 24 selective HSL controls across eight color bands.
+- **4-channel curves** (master RGB and individual red/green/blue) using five adjustable points per channel; 256-level sampled output.
+- **Radial and graduated linear masks**, up to four per image, each with positioning, exposure, contrast and saturation.
+- 12 built-in looks and up to 20 user-created local looks; custom looks persist adjustable global grades and curve shapes, but not mask geometry.
+- Preview zoom/pan, before/after comparison, optional brightness histogram, rotate both ways, horizontal/vertical flip, nine center-crop ratios, individual slider reset and full reset.
+- Export JPEG with quality 85/90/95/100 or PNG. CPU software pipeline shares pixel operations between preview and export.
+- Row-buffered processing reduces temporary pixel-array allocations. Preview bounded to 1400px / 2MP; export decode bounded to 12,000px/24MP.
 
-## Technology
+## Technology / build
 
-Kotlin + Jetpack Compose, JDK 17, Gradle 9.6, AGP 9.4, compile/target SDK 36, min SDK 29 (Android 10). Package/namespace: `com.greenezone.gzphotoeditor`.
+Kotlin + Jetpack Compose, min SDK 29 (Android 10), compile/target SDK 36, Gradle 9.6, AGP 9.4, JDK 17.
 
-Previous dinosaur prototype was deleted in PR #1. This is not a Godot project. There is no relationship to the XForge/GZFX/Beside-Me source trees or the future Greenezone corporate site.
+Package/application ID: `com.greenezone.gzphotoeditor`. GitHub workflow: `GZ Photo Editor Pro Android CI`. Workflow artifact: `gz-photo-editor-pro-debug`. This is an unsigned/debug testing APK only. No signed release AAB or commercial listing exists.
 
-## Build and field test
-
-GitHub Actions `GZ Photo Editor Pro Android CI` runs JVM unit tests and assembles the unsigned/debug test APK, artifact `gz-photo-editor-pro-debug`. It **does not** produce a paid Google Play release AAB or sign production packages. Download the APK from the completed CI run's **Artifacts** section, install on Android and follow `docs/PHONE_TEST_WAVE2.md`. A local build requires JDK 17, Gradle 9.6 and Android SDK 36:
-
-```shell
+```sh
 gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-See `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md` and `docs/CONTINUITY.md`.
+## Honest feature boundary
 
-## Privacy
+No paintbrush masking, clone/heal, portrait retouch, perspective correction, interactive crop handles, DNG/RAW processing, 16-bit HDR/wide-gamut color management, ICC profile preservation, batch export, multilayer retouching, GPU renderer or full-resolution tiled pipeline **yet**. An Android CI pass proves source build and JVM tests, not color fidelity or phone stability.
 
-No camera, INTERNET, broad media permissions or location permissions. Custom looks store only parameter numbers and user-chosen look names in app-private preferences, never your images. Android's system picker provides temporary scoped file access. Exports contain edited pixels; no separate EXIF/metadata-copy feature exists.
+The project is independent from **XForge, GZFX, Beside-Me and the deferred Greenezone corporate website**. Do not adjust corporate domain, DNS, business accounts or website infrastructure as part of this app repository.
+
+For exact limits, source of truth and handset test process see `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`, `docs/CONTINUITY.md` and `docs/PHONE_TEST_WAVE2.md`.
 
 Copyright © 2026 Greenezone Software LLC. All rights reserved. No open-source license granted.
