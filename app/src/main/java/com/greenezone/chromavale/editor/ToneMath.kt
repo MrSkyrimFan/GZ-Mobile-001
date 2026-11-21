@@ -8,6 +8,7 @@ import kotlin.math.sqrt
 
 /** Deterministic, device-independent sRGB adjustment mathematics for preview and export. */
 object ToneMath {
+    private val neutral = Grade()
     private fun clip(x: Float): Float = x.coerceIn(0f, 1f)
     private fun smooth(a: Float, b: Float, v: Float): Float {
         val t = ((v - a) / (b - a)).coerceIn(0f, 1f)
@@ -21,7 +22,7 @@ object ToneMath {
      * in [-1,+1]. For most pixels it is zero, keeping the fast path inexpensive.
      */
     fun adjust(argb: Int, grade: Grade, x: Int, y: Int, width: Int, height: Int, localDelta: Float = 0f): Int {
-        if (grade == Grade()) return argb
+        if (grade == neutral) return argb
         val a = (argb ushr 24) and 255
         var r = ((argb ushr 16) and 255) / 255f
         var g = ((argb ushr 8) and 255) / 255f
