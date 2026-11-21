@@ -1,13 +1,17 @@
-# GZ Photo Editor Pro — continuity / custody
+# GZ Photo Editor Pro — exact continuity (2026-11-21)
 
-**Current decision:** The owner expressly chose the simple name **GZ Photo Editor Pro** (Nov 21, 2026). This overrides and rejects the earlier **ChromaVale** prototype name, the intervening **Focavera** suggestion and other brainstormed brands. Name clearance still requires a trademark/release review. Do not reintroduce old labels, package IDs or artifact names.
+## Business and name
+**Owner-approved:** GZ Photo Editor Pro. ChromaVale and Focavera were rejected. Greenezone Software LLC owns product. Price target $1.99 one-time. Strictly no runtime AI, ads, accounts, microtransactions, subscription, analytics or internet.
 
-**Repo:** `MrSkyrimFan/GZ-Mobile-001`, public, currently separate from the corporate website. Initial native Android baseline was merged via PR #1 at commit `136e4458c5aec9dbb29c3276298f6f8ee14a6e06`. Previous rejected-brand 53-control work was preserved on PR #2 but should not be merged. This follow-on branch contains the approved brand and upgraded feature work. Use the approved-brand PR as the only new merge candidate.
+## Code custody
+Main baseline after PR #3 merged: `618c220a48c9ba42d8b06d659a52e5fce5e49761`.
+Current integration work: `feature/pro-quality-wave-04`. Source proof must include both math unit tests and actual Android emulator bitmap/Activity tests. After PR approval, verify main workflow and explicit debug APK artifact. Do not call untested code production-ready.
 
-**Engineering method:** Verify upstream repo head, exact edits, source/build tests, branch CI, PR CI and merged-main CI. Perform large integrated waves followed by one full actual Android phone test, not repetitive one-feature cycles. Preserve non-destructive source files and no-network product contract. On release do not confuse a debug APK with a signed AAB.
+### 0.4 engineering wave
+56 global controls, sharpen threshold, texture and edge-aware noise reduction. New direct finger-painted local BRUSH alongside radial/linear masks. Versioned deterministic edit codec and named local project library. Safe crop/straightening/reframe, conservative Auto Tone/Auto WB, device-memory-aware export limit, input URI persistence attempts, transparent JPEG white compositing, temporary Bitmap cleanup and export failure cleanup. Run emulator tests and a consolidated **one-time phone field session**.
 
-**Website boundary:** Corporate Greenezone website discussed separately as one expandable official site (About, Contact, Privacy, future Products), launch deferred. The exact hosting, domain, registrar, DNS and account details are **not independently established by this repository**. Never assume or alter them. Do not modify XForge, GZFX, Beside-Me, other repos, budgets or unrelated apps.
+## Critical boundaries
+Official Greenezone corporate website was deferred. Existing goals were About/Contact/Privacy/future Products; actual live DNS/hosting/registrar setup must NOT be guessed or modified from this Android repo. XForge, GZFX, Beside-Me, other repos and accounts are out of scope. Keep offline/no INTERNET security stance.
 
-**Price / product:** $1.99 once, no AI runtime, no ads, subscriptions, IAP, cloud, account, tracking or network access. Product must become a seriously capable photo editor, not merely present sliders. Commercial release blocked pending real-device performance/quality, advanced features and Play legal/policy qualifications.
-
-**Features:** Initial 20-control/7-look architecture → 53 controls/12 looks/HSL and tonal color-grade/custom looks/scanline renderer → added four-channel 5-knot curves and bounded radial/linear local masks. All claims require real-image field verification.
+## Working practice
+One substantial coherent engineering batch, source and unit tests, emulator tests, final merged-main verification, then one complete phone test. Avoid repetitive micro APKs. Report failures and factual uncertainty honestly, especially Android phone/picker memory behaviors. Save continuity files in this repo.

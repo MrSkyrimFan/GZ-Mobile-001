@@ -1,32 +1,30 @@
-# GZ Photo Editor Pro — 0.3.0 engineering release gates
+# GZ Photo Editor Pro — release gates (v0.4.0 candidate)
 
-## A. CI/source
-- [ ] Feature-branch CI succeeds, JVM math/history tests and debug APK build
-- [ ] Pull request CI succeeds, code review and verified merge, main CI succeeds
-- [ ] Brand strings, package ID, app label, artifact names show only approved GZ Photo Editor Pro
-- [ ] No INTERNET, broad media/storage, camera, location, accounts, ads, analytics, IAP, AI
-- [ ] No accidental changes to Greenezone corporate website or other project repositories
+## Automated
+- [ ] Branch CI: compile, JVM unit tests, APK artifact, no permissions/brand drift
+- [ ] Android 15 emulator bitmap tests: rotation/crop, safe straighten, preview/export pixel parity, JPEG alpha flattening, project roundtrip, Activity starts
+- [ ] PR CI green, source diff reviewed, merge with expected commit
+- [ ] Merged-main CI green, artifact available for download
+- [ ] Confirm manifest no INTERNET, CAMERA, broad media library, location or billing permission
 
-## B. One comprehensive Android phone field test
-- [ ] Install/open APK on actual Android phone, identify Android version
-- [ ] Test photo picker with JPEG, PNG and high-resolution images
-- [ ] Exercise light/color/detail/film, color grading, all eight HSL bands
-- [ ] Master/R/G/B five-knot curves produce smooth predictable changes; Reset and undo work
-- [ ] Add radial and linear masks, position/feather/tilt each, test local exposure/contrast/saturation
-- [ ] Confirm max four masks, remove, undo/redo, and compare view shows unchanged original pixels
-- [ ] Test saved looks including curves after app restart; inspect deletion and default looks
-- [ ] Check histogram, pinch/zoom/drag/fit, transformations and all crop ratios
-- [ ] JPEG 85/95/100 and PNG export, actual gallery open, untouched source and correct dimensions
-- [ ] At least a 12MP photo, 24MP photo, >24MP image and low-memory test
-- [ ] Fast slider swipes, rotation while editing, app background/resume, repeated exports, UI on small screens
+## ONE real Android phone qualification session
+- [ ] Launch and open photos from Gallery/Photos/Files
+- [ ] Global tonal, color-grade/HSL, detail denoise/texture, film controls
+- [ ] Auto tone and white balance, compare, undo/redo/reset
+- [ ] RGB/master curves, histogram
+- [ ] Radial, linear, and finger-painted BRUSH masks with resizing/softening and local edits
+- [ ] Straighten, center/reposition crop, 90° rotates, flips, zoom/pan and Fit
+- [ ] Save local named project, kill and restart app, reload settings and original; preset save/delete
+- [ ] Export 4 JPEG/PNG variants and open output files; compare against source; test transparency
+- [ ] 12MP, 24MP, >24MP images and long-session memory; note output resolution caps
+- [ ] No crashes, stale previews, bad banding/darkness, poor speed or broken output
 
-## C. Production
-- [ ] Trademark: live USPTO similar/exact marks, state/common-law usage, logo and owner signoff
-- [ ] Visual quality/precision vs raw reference and sRGB color targets, no unacceptable banding/artifacts
-- [ ] Performance, memory, stability and device coverage acceptable
-- [ ] App accessibility / touch targets / dynamic color / insets / user data review
-- [ ] Official Greenezone privacy policy published at approved website (outside this app repo)
-- [ ] Google Play organization verification, title/listing/policy reviews and target API compliant
-- [ ] Signed production AAB, Play prelaunch tests, screenshots, store listing and owner approval
+## Before commercial release (all currently unclaimed)
+- [ ] Name/brand trademark clearance and formal owner approval
+- [ ] Real photo quality evaluation, mobile UI accessibility, dynamic text/insets, multiple devices/API levels
+- [ ] Better performance for demanding file sizes, modern high-bit-depth color profile and RAW assessment
+- [ ] Privacy policy published on official Greenezone website, without changing that site blindly
+- [ ] Play organization account verification, store listing, current policy, required target SDK
+- [ ] Production signing, release AAB, store prelaunch checks, app ownership and license review
 
-Do NOT label this release-ready or a superior commercial app solely from source compile/test.
+A green CI verifies tests and debug build, **not premium market parity**.

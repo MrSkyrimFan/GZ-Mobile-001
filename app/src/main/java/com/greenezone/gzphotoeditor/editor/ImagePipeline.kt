@@ -6,31 +6,71 @@ import android.graphics.ColorSpace
 import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.net.Uri
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.math.sqrt
 
+/** Pure geometry and conservative device-memory budget calculations. */
+object GeometryMath {
+    /** Centered rectangle inside a rotated image, excluding transparent corners. */
+    fun safeStraightenCrop(width: Int, height: Int, angle: Float): Pair<Int, Int> {
+        require(width > 0 && height > 0)
+        if (abs(angle) < .001f) return width to height
+        val radians = abs(angle.toDouble()) * PI / 180.0
+        val c = abs(cos(radians))
+        val s = abs(sin(radians))
+        val aspect = width.toDouble() / height
+        val maxHeight = min(
+            width / (aspect * c + s),
+            height / (aspect * s + c)
+        ).coerceAtLeast(1.0)
+        return ((maxHeight * aspect).toInt().coerceIn(1, width)) to
+            (maxHeight.toInt().coerceIn(1, height))
+    }
+
+    fun cropOrigin(fullWidth: Int, fullHeight: Int, w: Int, h: Int, x: Float, y: Float): Pair<Int, Int> {
+        require(w > 0 && h > 0 && fullWidth >= w && fullHeight >= h)
+        val roomX = fullWidth - w
+        val roomY = fullHeight - h
+        val cx = if (x.isFinite()) x.coerceIn(0f, 1f) else .5f
+        val cy = if (y.isFinite()) y.coerceIn(0f, 1f) else .5f
+        return (roomX * cx).roundToInt().coerceIn(0, roomX) to
+            (roomY * cy).roundToInt().coerceIn(0, roomY)
+    }
+
+    /** Allows extra decode/render/transform/canvas buffers and app overhead. */
+    fun safeExportPixels(memoryClassMB: Int): Long {
+        val available = (memoryClassMB - 64).coerceAtLeast(40).toLong() * 1024 * 1024
+        return (available / 20L).coerceIn(2_000_000L, 24_000_000L)
+    }
+}
+
 /**
- * Entirely local software sRGB pipeline. No input URI writes.
- * Call decode/render from a background dispatcher, not the UI thread.
+ * All bitmap work is software sRGB, caller runs on Dispatchers.Default/IO.
+ * No network and no writes to the source URI.
  */
 object ImagePipeline {
     const val PREVIEW_MAX_EDGE = 1400
     const val MAX_EXPORT_PIXELS = 24_000_000L
 
     fun decode(resolver: ContentResolver, uri: Uri, maxEdge: Int, maxPixels: Long): Bitmap {
-        require(maxEdge > 0 && maxPixels > 0) { "Invalid decode budget" }
+        require(maxEdge > 0 && maxPixels > 0) { "Invalid image decode budget" }
         val src = ImageDecoder.createSource(resolver, uri)
         return ImageDecoder.decodeBitmap(src) { decoder, info, _ ->
-            val w = info.size.width.toLong()
-            val h = info.size.height.toLong()
-            require(w > 0 && h > 0) { "Invalid image dimensions." }
-            val sideScale = minOf(1.0, maxEdge.toDouble() / maxOf(w, h))
-            val pixelScale = minOf(1.0, sqrt(maxPixels.toDouble() / (w * h).toDouble()))
-            val scale = minOf(sideScale, pixelScale)
+            val width = info.size.width.toLong()
+            val height = info.size.height.toLong()
+            require(width > 0 && height > 0) { "Invalid image dimensions" }
+            val sideScale = min(1.0, maxEdge.toDouble() / maxOf(width, height))
+            val pixelScale = min(1.0, sqrt(maxPixels.toDouble() / (width * height)))
+            val scale = min(sideScale, pixelScale)
             if (scale < 1.0) {
                 decoder.setTargetSize(
-                    maxOf(1, (w * scale).roundToInt()),
-                    maxOf(1, (h * scale).roundToInt())
+                    maxOf(1, (width * scale).roundToInt()),
+                    maxOf(1, (height * scale).roundToInt())
                 )
             }
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
@@ -49,94 +89,160 @@ object ImagePipeline {
         }
     }
 
+    /**
+     * Each result owns its new cropped/rotated bitmaps; borrowed input is never recycled.
+     * Straightening produces a transparent-cornered intermediate, then a conservative
+     * centered safe crop before the regular aspect/position crop.
+     */
     fun geometry(input: Bitmap, document: EditDocument): Bitmap {
-        val turns = ((document.quarterTurns % 4) + 4) % 4
-        val oriented = if (turns == 0 && !document.mirrored && !document.flipVertical) {
-            input
-        } else {
-            val transform = Matrix()
-            if (document.mirrored || document.flipVertical) {
-                transform.postScale(
-                    if (document.mirrored) -1f else 1f,
-                    if (document.flipVertical) -1f else 1f,
-                    input.width / 2f,
-                    input.height / 2f
+        var working = input
+        try {
+            val quarter = ((document.quarterTurns % 4) + 4) % 4
+            if (quarter != 0 || document.mirrored || document.flipVertical) {
+                val transform = Matrix()
+                if (document.mirrored || document.flipVertical) {
+                    transform.postScale(
+                        if (document.mirrored) -1f else 1f,
+                        if (document.flipVertical) -1f else 1f,
+                        working.width / 2f, working.height / 2f
+                    )
+                }
+                if (quarter != 0) transform.postRotate(
+                    quarter * 90f, working.width / 2f, working.height / 2f
                 )
+                val oriented = Bitmap.createBitmap(
+                    working, 0, 0, working.width, working.height, transform, true
+                )
+                if (working !== input && working !== oriented) working.recycle()
+                working = oriented
             }
-            if (turns != 0) transform.postRotate(turns * 90f, input.width / 2f, input.height / 2f)
-            Bitmap.createBitmap(input, 0, 0, input.width, input.height, transform, true)
+
+            val angle = document.straightenDegrees.coerceIn(-15f, 15f)
+            if (abs(angle) > .001f) {
+                val beforeWidth = working.width
+                val beforeHeight = working.height
+                val matrix = Matrix().apply { postRotate(angle) }
+                val spun = Bitmap.createBitmap(
+                    working, 0, 0, beforeWidth, beforeHeight, matrix, true
+                )
+                if (working !== input && working !== spun) working.recycle()
+                working = spun
+                val (safeW, safeH) = GeometryMath.safeStraightenCrop(beforeWidth, beforeHeight, angle)
+                val safeWidth = safeW.coerceAtMost(working.width)
+                val safeHeight = safeH.coerceAtMost(working.height)
+                if (safeWidth < working.width || safeHeight < working.height) {
+                    val centered = Bitmap.createBitmap(
+                        working, (working.width - safeWidth) / 2, (working.height - safeHeight) / 2,
+                        safeWidth, safeHeight
+                    )
+                    if (working !== input && working !== centered) working.recycle()
+                    working = centered
+                }
+            }
+
+            val (cropW, cropH) = centerCropSize(working.width, working.height, document.crop)
+            if (cropW < working.width || cropH < working.height) {
+                val (x, y) = GeometryMath.cropOrigin(
+                    working.width, working.height, cropW, cropH,
+                    document.cropCenterX, document.cropCenterY
+                )
+                val crop = Bitmap.createBitmap(working, x, y, cropW, cropH)
+                if (working !== input && working !== crop) working.recycle()
+                working = crop
+            }
+            return working
+        } catch (error: Throwable) {
+            if (working !== input && !working.isRecycled) working.recycle()
+            throw error
         }
-        val (w, h) = centerCropSize(oriented.width, oriented.height, document.crop)
-        return if (w == oriented.width && h == oriented.height) oriented
-        else Bitmap.createBitmap(oriented, (oriented.width - w) / 2, (oriented.height - h) / 2, w, h)
     }
 
     /**
-     * Four small scanline buffers instead of two full-frame IntArrays.
-     * Large photo export peak memory is now primarily the input/output Bitmaps.
+     * Five sliding source rows and one rendered row. Does not allocate frame-sized
+     * pixel IntArrays. Detail, curves and masks share one final-resolution render.
      */
     fun render(input: Bitmap, document: EditDocument, cancelCheck: (() -> Unit)? = null): Bitmap {
         val source = geometry(input, document)
-        val prepared = ToneMath.prepare(document.grade)
-        val masks = MaskMath.prepare(document.masks)
-        if (prepared.isNeutral && masks.isEmpty()) return source
+        var output: Bitmap? = null
+        var returnedGeometry = false
+        try {
+            val prepared = ToneMath.prepare(document.grade)
+            val masks = MaskMath.prepare(document.masks)
+            if (prepared.isNeutral && masks.isEmpty()) {
+                returnedGeometry = true
+                return source
+            }
 
-        val width = source.width
-        val height = source.height
-        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        var above = IntArray(width)
-        var current = IntArray(width)
-        var below = IntArray(width)
-        val rendered = IntArray(width)
+            val width = source.width
+            val height = source.height
+            val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            result.setHasAlpha(source.hasAlpha())
+            output = result
+            val rows = Array(5) { IntArray(width) }
+            val rendered = IntArray(width)
+            for (i in 0..4) {
+                val y = (i - 2).coerceIn(0, height - 1)
+                source.getPixels(rows[i], 0, width, 0, y, width, 1)
+            }
+            val hasDenoise = document.grade.denoise > 0f
+            val hasDetail = document.grade.sharpen != 0f || document.grade.texture != 0f ||
+                document.grade.clarity != 0f
 
-        source.getPixels(current, 0, width, 0, 0, width, 1)
-        current.copyInto(above)
-        if (height > 1) source.getPixels(below, 0, width, 0, 1, width, 1)
-        else current.copyInto(below)
-
-        val hasDetail = document.grade.clarity != 0f || document.grade.sharpen != 0f
-        for (y in 0 until height) {
-            if (y % 16 == 0) cancelCheck?.invoke()
-            for (x in 0 until width) {
-                var delta = 0f
-                if (hasDetail) {
-                    val here = luminance(current[x])
-                    val left = luminance(current[maxOf(0, x - 1)])
-                    val right = luminance(current[minOf(width - 1, x + 1)])
-                    val up = luminance(above[x])
-                    val down = luminance(below[x])
-                    delta = (here - (left + right + up + down) * .25f).coerceIn(-1f, 1f)
+            for (y in 0 until height) {
+                if (y % 16 == 0) cancelCheck?.invoke()
+                for (x in 0 until width) {
+                    val sourcePixel = if (hasDenoise) {
+                        DetailMath.denoise(rows, x, document.grade.denoise)
+                    } else rows[2][x]
+                    val detail = if (hasDetail) {
+                        DetailMath.detailDelta(rows, x, document.grade)
+                    } else 0f
+                    val base = ToneMath.adjustPrepared(sourcePixel, prepared, x, y, width, height, detail)
+                    rendered[x] = MaskMath.adjust(base, masks, x, y, width, height)
                 }
-                val base = ToneMath.adjustPrepared(current[x], prepared, x, y, width, height, delta)
-                rendered[x] = MaskMath.adjust(base, masks, x, y, width, height)
+                result.setPixels(rendered, 0, width, 0, y, width, 1)
+                if (y < height - 1) {
+                    val reusable = rows[0]
+                    for (i in 0..3) rows[i] = rows[i + 1]
+                    rows[4] = reusable
+                    source.getPixels(rows[4], 0, width, 0, min(y + 3, height - 1), width, 1)
+                }
             }
-            output.setPixels(rendered, 0, width, 0, y, width, 1)
-            if (y + 1 < height) {
-                val reusable = above
-                above = current
-                current = below
-                below = reusable
-                source.getPixels(below, 0, width, 0, minOf(y + 2, height - 1), width, 1)
-            }
+            output = null
+            return result
+        } catch (error: Throwable) {
+            if (output != null && !output.isRecycled) output.recycle()
+            throw error
+        } finally {
+            if (!returnedGeometry && source !== input && !source.isRecycled) source.recycle()
         }
-        return output
     }
 
-    /** Downsampled histogram; uses a bounded number of samples and no frame-sized arrays. */
+    /** Histogram reads at most about 12,000 sampled pixels. Run off UI thread. */
     fun luminanceHistogram(image: Bitmap, buckets: Int = 64): IntArray {
+        require(buckets > 1)
         val counts = IntArray(buckets)
-        val total = image.width.toLong() * image.height.toLong()
+        val total = image.width.toLong() * image.height
         val stride = maxOf(1, sqrt(total / 12000.0).roundToInt())
         for (y in 0 until image.height step stride) {
             for (x in 0 until image.width step stride) {
-                val bucket = (luminance(image.getPixel(x, y)) * (buckets - 1)).roundToInt()
-                    .coerceIn(0, buckets - 1)
-                counts[bucket]++
+                val light = DetailMath.luminance(image.getPixel(x, y))
+                counts[(light * (buckets - 1)).roundToInt().coerceIn(0, buckets - 1)]++
             }
         }
         return counts
     }
 
-    private fun luminance(c: Int): Float =
-        (.2126f * ((c ushr 16) and 255) + .7152f * ((c ushr 8) and 255) + .0722f * (c and 255)) / 255f
+    /**
+     * Only needed when converting transparency to JPEG. JPEG has no alpha.
+     * Caller owns and recycles returned temporary.
+     */
+    fun compositeWhite(source: Bitmap): Bitmap {
+        val opaque = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        opaque.setHasAlpha(false)
+        val canvas = android.graphics.Canvas(opaque)
+        canvas.drawColor(android.graphics.Color.WHITE)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        return opaque
+    }
 }

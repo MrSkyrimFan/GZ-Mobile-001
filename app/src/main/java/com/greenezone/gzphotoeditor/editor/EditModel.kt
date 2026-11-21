@@ -32,7 +32,11 @@ enum class CurveChannel(val title: String) {
     MASTER("RGB"), RED("Red"), GREEN("Green"), BLUE("Blue")
 }
 
-enum class MaskKind(val title: String) { RADIAL("Radial"), LINEAR("Linear") }
+enum class MaskKind(val title: String) { RADIAL("Radial"), LINEAR("Linear"), BRUSH("Brush") }
+
+data class BrushPoint(val x: Float, val y: Float)
+data class BrushStroke(val points: List<BrushPoint>)
+
 
 /** Local geometry coordinates are proportional to the final cropped/rotated image. */
 data class LocalMask(
@@ -43,7 +47,8 @@ data class LocalMask(
     val feather: Float = .35f,
     val exposure: Float = 0f,
     val saturation: Float = 0f,
-    val contrast: Float = 0f
+    val contrast: Float = 0f,
+    val strokes: List<BrushStroke> = emptyList()
 )
 
 data class Grade(
@@ -65,6 +70,9 @@ data class Grade(
     val fade: Float = 0f,
     val clarity: Float = 0f,
     val sharpen: Float = 0f,
+    val texture: Float = 0f,
+    val denoise: Float = 0f,
+    val sharpenThreshold: Float = 0f,
     val vignette: Float = 0f,
     val grain: Float = 0f,
     val shadowRed: Float = 0f,
@@ -101,6 +109,9 @@ data class EditDocument(
     val mirrored: Boolean = false,
     val flipVertical: Boolean = false,
     val crop: CropRatio = CropRatio.ORIGINAL,
+    val cropCenterX: Float = .5f,
+    val cropCenterY: Float = .5f,
+    val straightenDegrees: Float = 0f,
     val masks: List<LocalMask> = emptyList()
 )
 
