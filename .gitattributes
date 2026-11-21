@@ -3,6 +3,8 @@
 *.webp binary
 *.jpg binary
 *.jpeg binary
-*.ogg binary
-*.wav binary
-*.mp3 binary
+*.gif binary
+*.ico binary
+*.jar binary
+*.apk binary
+*.aab binary
