@@ -180,32 +180,64 @@ object ImagePipeline {
             output = result
             val rows = Array(5) { IntArray(width) }
             val rendered = IntArray(width)
-            for (i in 0..4) {
-                val y = (i - 2).coerceIn(0, height - 1)
-                source.getPixels(rows[i], 0, width, 0, y, width, 1)
-            }
             val hasDenoise = document.grade.denoise > 0f
             val hasDetail = document.grade.sharpen != 0f || document.grade.texture != 0f ||
                 document.grade.clarity != 0f
+            val lightRows = if (hasDetail) Array(5) { FloatArray(width) } else null
+            val vertical3 = if (hasDetail) FloatArray(width) else null
+            val vertical5 = if (hasDetail) FloatArray(width) else null
+
+            fun readRow(index: Int, row: Int) {
+                source.getPixels(rows[index], 0, width, 0, row.coerceIn(0, height - 1), width, 1)
+                val lights = lightRows?.get(index)
+                if (lights != null) for (x in 0 until width) {
+                    lights[x] = DetailMath.luminance(rows[index][x])
+                }
+            }
+            for (i in 0..4) readRow(i, i - 2)
 
             for (y in 0 until height) {
                 if (y % 16 == 0) cancelCheck?.invoke()
+                var horizontal3 = 0f
+                var horizontal5 = 0f
+                if (lightRows != null && vertical3 != null && vertical5 != null) {
+                    for (x in 0 until width) {
+                        vertical3[x] = lightRows[1][x] + lightRows[2][x] + lightRows[3][x]
+                        vertical5[x] = vertical3[x] + lightRows[0][x] + lightRows[4][x]
+                    }
+                    horizontal3 = vertical3[0] * 2f + vertical3[min(1, width - 1)]
+                    horizontal5 = vertical5[0] * 3f + vertical5[min(1, width - 1)] +
+                        vertical5[min(2, width - 1)]
+                }
                 for (x in 0 until width) {
                     val sourcePixel = if (hasDenoise) {
                         DetailMath.denoise(rows, x, document.grade.denoise)
                     } else rows[2][x]
-                    val detail = if (hasDetail) {
-                        DetailMath.detailDelta(rows, x, document.grade)
+                    val detail = if (lightRows != null) {
+                        DetailMath.detailDeltaFromAverages(
+                            lightRows[2][x], horizontal3 / 9f, horizontal5 / 25f, document.grade
+                        )
                     } else 0f
                     val base = ToneMath.adjustPrepared(sourcePixel, prepared, x, y, width, height, detail)
                     rendered[x] = MaskMath.adjust(base, masks, x, y, width, height)
+                    if (vertical3 != null && vertical5 != null) {
+                        horizontal3 += vertical3[min(width - 1, x + 2)] -
+                            vertical3[maxOf(0, x - 1)]
+                        horizontal5 += vertical5[min(width - 1, x + 3)] -
+                            vertical5[maxOf(0, x - 2)]
+                    }
                 }
                 result.setPixels(rendered, 0, width, 0, y, width, 1)
                 if (y < height - 1) {
                     val reusable = rows[0]
                     for (i in 0..3) rows[i] = rows[i + 1]
                     rows[4] = reusable
-                    source.getPixels(rows[4], 0, width, 0, min(y + 3, height - 1), width, 1)
+                    if (lightRows != null) {
+                        val old = lightRows[0]
+                        for (i in 0..3) lightRows[i] = lightRows[i + 1]
+                        lightRows[4] = old
+                    }
+                    readRow(4, min(y + 3, height - 1))
                 }
             }
             output = null

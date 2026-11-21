@@ -12,8 +12,8 @@ object EditDocumentCodec {
     fun encode(document: EditDocument): String {
         val fields = sortedMapOf<String, String>()
         fields["version"] = VERSION
-        ControlCatalog.all.forEachIndexed { index, control ->
-            fields["control.$index"] = control.read(document.grade).toString()
+        ControlCatalog.all.forEach { control ->
+            fields["control." + control.name] = control.read(document.grade).toString()
         }
         for (channel in CurveChannel.entries) {
             fields["curve." + channel.name] = CurveMath.get(document.grade, channel).values.joinToString(",")
@@ -61,8 +61,8 @@ object EditDocumentCodec {
         fun count(key: String, max: Int): Int =
             (fields[key]?.toIntOrNull() ?: 0).coerceIn(0, max)
         var grade = Grade()
-        ControlCatalog.all.forEachIndexed { index, control ->
-            val value = numeric("control.$index", 0f, control.min, control.max)
+        ControlCatalog.all.forEach { control ->
+            val value = numeric("control." + control.name, 0f, control.min, control.max)
             grade = control.write(grade, value)
         }
         for (channel in CurveChannel.entries) {

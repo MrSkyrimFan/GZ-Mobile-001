@@ -16,7 +16,7 @@
 - Undo/redo (40 checkpoints), compare, image zoom and pan, reset, sampled histogram, rotate left/right, horizontal/vertical flip, 9 aspect crop options and repositioning, ±15° straighten with safe inset.
 - Conservative **Auto tone** and **Auto WB** controls for rapid starting adjustments, always overridable by manual edits.
 - JPEG output at quality 85/90/95/100 and PNG. Transparent pixels are composited over white when saving JPEG; PNG retains alpha. System creates a new destination file.
-- Software sRGB (8-bit) render pipeline, cancellable sliding-row CPU processing, separate sharpening/texture/denoise math, sampled gamma LUT, precomputed color hue and local mask transforms.
+- Software sRGB (8-bit) render pipeline, cancellable sliding-row CPU processing with rolling O(1) detail box filters, separate sharpening/texture/denoise math, sampled gamma LUT, precomputed color hue and local mask transforms.
 - Preview target up to 1400px/2MP. Export limit **adapts to device memory**, maximum 24MP. This is for crash resistance; huge photographs may be downsampled.
 
 ## Engineering stack and validation

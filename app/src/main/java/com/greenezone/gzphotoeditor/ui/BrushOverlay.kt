@@ -98,7 +98,7 @@ fun BrushOverlay(
                 drawPath(path, Color(0xFF46CDAF).copy(alpha = .27f),
                     style = Stroke(width = strokeWidth,
                         cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                        join = androidx.compose.ui.graphics.PathJoin.Round))
+                        join = androidx.compose.ui.graphics.StrokeJoin.Round))
             }
         }
     }

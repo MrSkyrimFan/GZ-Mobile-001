@@ -71,6 +71,12 @@ object DetailMath {
         }
         val local3 = sum3 / 9f
         val local5 = sum5 / 25f
+        return detailDeltaFromAverages(center, local3, local5, grade)
+    }
+
+    /** O(1) per pixel when callers supply two rolling local averages. */
+    fun detailDeltaFromAverages(center: Float, local3: Float, local5: Float, grade: Grade): Float {
+        if (grade.sharpen == 0f && grade.texture == 0f && grade.clarity == 0f) return 0f
         val threshold = grade.sharpenThreshold.coerceIn(0f, 1f) * .12f
         val high = center - local3
         val effectiveHigh = if (abs(high) <= threshold) 0f

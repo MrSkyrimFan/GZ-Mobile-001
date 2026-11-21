@@ -69,6 +69,31 @@ class ProductionWaveMathTest {
         assertEquals(0f, guarded, 0.00001f)
     }
 
+    @Test fun acceleratedDetailMathMatchesFiveRowReferenceAtEveryPixel() {
+        val width = 17
+        val grade = Grade(sharpen = .76f, texture = .28f, clarity = .4f, sharpenThreshold = .07f)
+        val rows = Array(5) { row ->
+            IntArray(width) { x ->
+                val value = (20 + (x * x * 3 + row * 41) % 220).coerceIn(0, 255)
+                pixel(value, (value + 40).coerceAtMost(255), (value / 2))
+            }
+        }
+        val luma = Array(5) { row -> FloatArray(width) { x -> DetailMath.luminance(rows[row][x]) } }
+        val v3 = FloatArray(width) { x -> luma[1][x] + luma[2][x] + luma[3][x] }
+        val v5 = FloatArray(width) { x -> v3[x] + luma[0][x] + luma[4][x] }
+        var h3 = v3[0] * 2f + v3[1]
+        var h5 = v5[0] * 3f + v5[1] + v5[2]
+        for (x in 0 until width) {
+            val reference = DetailMath.detailDelta(rows, x, grade)
+            val accelerated = DetailMath.detailDeltaFromAverages(
+                luma[2][x], h3 / 9f, h5 / 25f, grade
+            )
+            assertEquals("detail x=$x", reference, accelerated, .000015f)
+            h3 += v3[minOf(width - 1, x + 2)] - v3[maxOf(0, x - 1)]
+            h5 += v5[minOf(width - 1, x + 3)] - v5[maxOf(0, x - 2)]
+        }
+    }
+
     @Test fun cropOriginRespectsUserCenterAndBounds() {
         assertEquals(0 to 50, GeometryMath.cropOrigin(150, 100, 100, 50, 0f, 1f))
         assertEquals(25 to 25, GeometryMath.cropOrigin(150, 100, 100, 50, .5f, .5f))

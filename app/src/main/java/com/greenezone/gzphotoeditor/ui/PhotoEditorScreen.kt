@@ -215,9 +215,15 @@ fun PhotoEditorScreen() {
                         if (!completed) throw IOException("Image encoder rejected the output")
                         writable.width.toString() + " × " + writable.height
                     } finally {
-                        if (flattened != null && flattened !== rendered) flattened.recycle()
-                        if (rendered != null && rendered !== decoded) rendered.recycle()
-                        decoded?.recycle()
+                        flattened?.let { temporary ->
+                            if (temporary !== rendered && !temporary.isRecycled) temporary.recycle()
+                        }
+                        rendered?.let { temporary ->
+                            if (temporary !== decoded && !temporary.isRecycled) temporary.recycle()
+                        }
+                        decoded?.let { temporary ->
+                            if (!temporary.isRecycled) temporary.recycle()
+                        }
                     }
                 }
                 message = "Saved " + dimensions + " • source image unchanged."
