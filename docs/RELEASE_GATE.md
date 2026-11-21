@@ -1,17 +1,30 @@
-# Release gate — 0.1.0 engineering candidate
+# Release gate — Focavera 0.2.0 engineering candidate
 
-- [ ] First GitHub Actions workflow `Android editor CI` passes.
-- [ ] APK installed and tested on a physical Android device.
-- [ ] Photo picker works with photos from Photos/Gallery/Documents.
-- [ ] Undo/redo, Reset, presets and 16+ actual controls visibly operate.
-- [ ] Compare shows source pixels, preview uses correct rotation/crop.
-- [ ] JPEG and PNG exports both open correctly; export never modifies source.
-- [ ] Real photos at 12 MP, 24 MP and oversized panorama tested for bounded memory.
-- [ ] Output quality, color behavior, sRGB assumptions and EXIF orientation reviewed.
-- [ ] UI usability/accessibility, small phones, large displays and dark mode tested.
-- [ ] No INTERNET, ads, SDK analytics, trackers, IAP, accounts or AI.
-- [ ] Brand name, package name, icon and trade dress cleared before publication.
-- [ ] Public privacy policy, store assets, business registration and signed release AAB.
-- [ ] Google Play listing compliance and owner approval.
+## CI and code
+- [ ] Feature-branch Android CI green: JVM unit tests + debug APK assembled
+- [ ] Pull-request Android CI green, PR reviewed, merged without overriding someone else's branch
+- [ ] Merged-main Android CI green and testing artifact verified
+- [ ] Confirm old ChromaVale name/package absent from compiled app
+- [ ] Confirm no INTERNET, broad storage/gallery, camera or location permissions
 
-Status: **ENGINEERING IN PROGRESS**. Not Play-ready; do not advertise as finished.
+## Physical phone acceptance
+- [ ] Pick sources from system Photos, Gallery or Files where supported
+- [ ] Exercise 20 original sliders, 9 three-zone sliders, all 24 HSL color-mixer sliders and visual effects
+- [ ] Undo/redo, default looks, user-saved look survives app restart, and delete saved look
+- [ ] Reset whole edit and one specific slider to neutral
+- [ ] Compare, pinch/pan/fit, toggle histogram
+- [ ] Rotate both directions, horizontal/vertical flip, and all nine crop ratios
+- [ ] Export JPEG 85, 95 and 100, plus PNG; inspect file dimensions, alpha behavior and content
+- [ ] Verify source bytes stay unchanged and exported file exists under user-picked path
+- [ ] Test 12MP, 24MP, >24MP panorama, portrait EXIF, PNG transparency, and unusual photos
+- [ ] Small Android phone; large Android display; background/resume; repeated export; low-memory test
+- [ ] Report performance and color artifacts on actual photos
+
+## Commercial readiness
+- [ ] Focavera word mark, visually/phonetic similar marks, common-law usage and logo cleared; no definitive legal clearance claimed
+- [ ] Legal privacy policy posted at the eventual Greenezone official website; site is NOT created/modified by this repo
+- [ ] Verify publisher organization, D-U-N-S where applicable, official website and Play policy obligations
+- [ ] Accessibility and Google Play requirements rechecked at time of release
+- [ ] Signed release AAB, store screenshots/listing, device prelaunch report, owner signoff
+
+Status: **NOT READY FOR GOOGLE PLAY**. CI is necessary but is not hardware QA.

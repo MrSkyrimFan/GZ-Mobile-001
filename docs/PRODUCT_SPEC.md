@@ -1,40 +1,47 @@
-# ChromaVale Photo Studio — working product specification
+# Focavera Photo Studio — product specification
 
-**Owner:** Greenezone Software LLC.
-**Scope:** Separate from XForge/GZFX/Beside Me. Native Android photo editor.
+**Owner:** Greenezone Software LLC
+**Product class:** one-time-purchase native Android image editor
+**Development branch:** feature/focavera-premium-wave-2
+**Product state:** engineering test candidate; no public release.
 
-## Non-negotiables
+## Permanent rules
 
-- Offline, AI-free, advertisement-free, IAP-free and subscription-free.
-- One-time commercial price target $1.99; no login, telemetry or server calls.
-- Never silently replace source images. System picker for input and create-document for explicit output.
-- All edits are parametric and non-destructive, applied from the unmodified original source at export.
-- Preview and export must use the exact same edit settings and pixel math. Preview may be resized for responsiveness.
-- No broad media permissions, external storage permissions, Internet permission, or background services.
-- Full program ownership kept with Greenezone; third-party Android dependencies need license review at release.
+- AI-free, offline, no ads, subscriptions, microtransactions, IAP, accounts or analytics.
+- Target price: $1.99 on Google Play. No payment handling inside app.
+- No INTERNET permission, cloud processing, broad photo-library permissions, or silent writes to the source URI.
+- No changes in XForge, GZFX, Beside-Me or Greenezone corporate website repositories.
+- All changes are non-destructive; preview and export share image operations. Preview is scaled and may show slightly different neighborhood detail/grain due to resolution.
+- Everything is app-private except photos explicitly saved through Android SAF.
+- The new name is **screened for exact public-web conflicts but NOT formally trademark-cleared**.
 
-## First executable feature wave
+## Implemented in source (subject to CI and real-device QA)
 
-- Open photos with Android Photo Picker.
-- Adjust exposure, contrast, highlights, shadows, whites, blacks, gamma, saturation, vibrance, temperature, tint, RGB channels, fade, clarity, sharpening, vignette, film grain.
-- Curated original grading presets; each editable and undoable.
-- Rotate by 90 degrees, horizontal flip, center-crop aspect presets.
-- Before/after comparison, original restored with Reset, undo/redo up to 40 snapshots.
-- Quality JPEG 95 and PNG export through Android's SAF CreateDocument.
-- Scaled interactive preview and high-resolution export with explicit 24-megapixel safety cap.
-- Dark premium UI with touch-friendly controls.
-- Deterministic automated unit tests on color math, geometry math and snapshot history.
+### Light / global color / detail / film (20)
+Exposure, contrast, highlights, shadows, whites, blacks, gamma; saturation, vibrance, temperature, tint, global hue and RGB balance; clarity, sharpening, fade, vignette, film grain.
 
-## Beyond the first build (NOT yet implemented)
+### Tonal grade (9)
+Independent red, green and blue adjustment for shadow, midtone and highlight regions, with overlapping smooth tonal weights.
 
-Selective brush/mask edits, spline RGB/HSL curves, advanced local corrections, perspective,
-metadata tools, batch operations, custom user looks, RAW/DNG workflow, true 16-bit processing,
-wide-gamut pipeline, GPU-accelerated previews, large-image tiled decode and out-of-memory stress qualification.
-No feature may be advertised as shipped before working Android verification.
+### Eight-band color mixer (24)
+Red, orange, yellow, green, aqua, blue, purple and magenta; each has hue, saturation and luminance. Overlapping hue weights avoid hard segmentation.
 
-## Commercial release gates
+### Editing workflow
+12 built-in looks; up to 20 saved local grade-only looks; undo/redo 40 checkpoints; compare; reset all or one slider; JPEG 85/90/95/100 and PNG; rotate both directions; horizontal/vertical flips; 9 center-crop ratios; pinch zoom/pan preview; optional sampled luminance histogram.
 
-GitHub CI, Android 10–17 actual device testing, preview/export parity, memory-pressure and
-long-session stability, UX accessibility, app name trademark clearance, a public privacy policy,
-Google Play organization verification, Play target API compliance, store screenshots and signed AAB.
-The debug APK is NOT the release build.
+### Rendering
+Software sRGB preview capped at 1400px/2MP, export decode capped at 12000px/24MP. Streaming scanlines replace two full-frame pixel arrays. No third-party image SDK or remote backend. Full-resolution export is rasterized once, then encoded to new file.
+
+## Explicit limitations
+
+- Center-crop ratios only. Freehand/drag crop handles, content-aware crop, mask painting and layer editing are **not implemented**.
+- HSV band mixer is 8-bit sRGB, not an ICC/wide-gamut or RAW/linear 16-bit pipeline.
+- 24MP is a safety cap. Images over cap are downscaled on export; this is not full native-resolution output for arbitrarily huge sources.
+- JPEG alpha/matte and metadata output need device qualification; metadata is not automatically copied.
+- Presets are local to a single device. No cloud sync or account.
+- GPU acceleration, large-image tiled decoding, manual masking, RGB spline curves, RAW/DNG workflow, background batch export, histogram per-channel view and advanced optical effects are later engineering projects, not shipped features.
+- Local JVM tests do not replace Android handset testing, especially decode/encode, pinch gestures and low-memory stability.
+
+## Completion proof required
+
+Clean branch CI + PR CI + merge + merged-main CI + independently confirmed APK artifact + actual phone field report before commercial signing and store validation.

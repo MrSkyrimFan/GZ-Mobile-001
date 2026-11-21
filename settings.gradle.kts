@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ChromaValePhotoStudio"
+rootProject.name = "FocaveraPhotoStudio"
 include(":app")
