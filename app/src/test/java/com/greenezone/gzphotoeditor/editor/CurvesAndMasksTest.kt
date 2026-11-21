@@ -5,6 +5,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Test
+import kotlin.math.pow
 
 class CurvesAndMasksTest {
     private val gray = 0xFF686868.toInt()
@@ -85,6 +86,23 @@ class CurvesAndMasksTest {
         val many = List(8) { LocalMask(exposure = .3f) }
         assertEquals(4, MaskMath.prepare(many).size)
         assertEquals(gray, MaskMath.adjust(gray, emptyList(), 50, 50, 101, 101))
+    }
+
+    @Test fun gammaLookupMatchesAnalyticalPowerWithinTwoLevels() {
+        val samples = listOf(-.8f, -.3f, .35f, .9f)
+        for (gamma in samples) {
+            val prepared = ToneMath.prepare(Grade(gamma = gamma))
+            val exponent = 2.0.pow((-gamma * .6f).toDouble())
+            for (input in 0..255) {
+                val argb = 0xAF000000.toInt() or (input shl 16) or (input shl 8) or input
+                val actual = ToneMath.adjustPrepared(argb, prepared, 1, 1, 3, 3)
+                val expected = ((input / 255.0).pow(exponent) * 255.0 + .5).toInt()
+                val observed = actual and 255
+                assertTrue("gamma=$gamma input=$input output=$observed expected=$expected",
+                    kotlin.math.abs(observed - expected) <= 2)
+                assertEquals(0xAF, actual ushr 24)
+            }
+        }
     }
 
     @Test fun maskAndCurvesBothParticipateInDocumentHistory() {

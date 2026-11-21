@@ -6,11 +6,21 @@ import kotlin.math.sqrt
 
 /** Pure deterministic local adjustment engine, tested without Android. */
 object MaskMath {
-    data class Prepared(val mask: LocalMask, val exposureFactor: Float)
+    data class Prepared(
+        val mask: LocalMask, val exposureFactor: Float, val cosTilt: Float, val sinTilt: Float
+    )
+
+    private fun prep(mask: LocalMask): Prepared {
+        val radians = (mask.centerX - .5f) * 2.0 * PI / 3.0
+        return Prepared(
+            mask, 2.0.pow(mask.exposure.toDouble()).toFloat(),
+            kotlin.math.cos(radians).toFloat(), kotlin.math.sin(radians).toFloat()
+        )
+    }
 
     fun prepare(masks: List<LocalMask>): List<Prepared> =
         masks.take(4).filter { it.exposure != 0f || it.contrast != 0f || it.saturation != 0f }
-            .map { Prepared(it, 2.0.pow(it.exposure.toDouble()).toFloat()) }
+            .map(::prep)
 
     private fun smooth(x: Float): Float {
         val t = x.coerceIn(0f, 1f)
@@ -18,7 +28,11 @@ object MaskMath {
     }
 
     /** Weight 0..1, smoothly feathered in the final image's normalized space. */
-    fun coverage(mask: LocalMask, x: Int, y: Int, width: Int, height: Int): Float {
+    fun coverage(mask: LocalMask, x: Int, y: Int, width: Int, height: Int): Float =
+        coveragePrepared(prep(mask), x, y, width, height)
+
+    private fun coveragePrepared(item: Prepared, x: Int, y: Int, width: Int, height: Int): Float {
+        val mask = item.mask
         if (width <= 0 || height <= 0) return 0f
         val nx = (x + .5f) / width
         val ny = (y + .5f) / height
@@ -34,9 +48,8 @@ object MaskMath {
             MaskKind.LINEAR -> {
                 val breadth = mask.radius.coerceIn(.02f, .8f)
                 // Left-to-right position controls the gradient tilt (-60..+60 degrees).
-                val tilt = (mask.centerX - .5f) * 2.0 * PI / 3.0
-                val projection = ((ny - mask.centerY) * kotlin.math.cos(tilt) +
-                    (nx - .5f) * kotlin.math.sin(tilt)).toFloat()
+                val projection = (ny - mask.centerY) * item.cosTilt +
+                    (nx - .5f) * item.sinTilt
                 1f - smooth((projection + breadth) / (breadth * 2f))
             }
         }
@@ -50,7 +63,7 @@ object MaskMath {
         var b = (argb and 255) / 255f
         for (item in masks) {
             val mask = item.mask
-            val weight = coverage(mask, x, y, width, height)
+            val weight = coveragePrepared(item, x, y, width, height)
             if (weight <= .0001f) continue
             val exposure = 1f + (item.exposureFactor - 1f) * weight
             r *= exposure; g *= exposure; b *= exposure

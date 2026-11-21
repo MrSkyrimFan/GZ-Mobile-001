@@ -23,18 +23,30 @@ object ToneMath {
         val grade: Grade,
         val isNeutral: Boolean,
         val exposureFactor: Float,
-        val gammaExponent: Double,
+        val gammaLut: FloatArray?,
+        val hueCos: Double,
+        val hueSin: Double,
         val contrastFactor: Float,
         val hasMixer: Boolean,
         val hasColorGrade: Boolean,
         val curves: CurveMath.Tables
     )
 
+    /** Precompute a 12-bit gamma lookup once, rather than 3 costly power calls per pixel. */
+    private fun gammaTable(gamma: Float): FloatArray {
+        val exponent = 2.0.pow((-gamma * .6f).toDouble())
+        return FloatArray(4097) { index ->
+            (index.toDouble() / 4096.0).pow(exponent).toFloat()
+        }
+    }
+
     fun prepare(grade: Grade): Prepared = Prepared(
         grade = grade,
         isNeutral = grade == neutral,
         exposureFactor = 2.0.pow(grade.exposure.toDouble()).toFloat(),
-        gammaExponent = 2.0.pow((-grade.gamma * .6f).toDouble()),
+        gammaLut = if (grade.gamma == 0f) null else gammaTable(grade.gamma),
+        hueCos = cos(grade.hue * PI),
+        hueSin = sin(grade.hue * PI),
         contrastFactor = (1f + grade.contrast * .68f).coerceIn(.20f, 1.8f),
         hasMixer = grade.colorMix.any { it.hue != 0f || it.saturation != 0f || it.luminance != 0f },
         hasColorGrade = grade.shadowRed != 0f || grade.shadowGreen != 0f || grade.shadowBlue != 0f ||
@@ -79,9 +91,16 @@ object ToneMath {
         g = (g - .5f) * prepared.contrastFactor + .5f
         b = (b - .5f) * prepared.contrastFactor + .5f
 
-        r = clip(r).toDouble().pow(prepared.gammaExponent).toFloat()
-        g = clip(g).toDouble().pow(prepared.gammaExponent).toFloat()
-        b = clip(b).toDouble().pow(prepared.gammaExponent).toFloat()
+        val gammaLut = prepared.gammaLut
+        if (gammaLut == null) {
+            r = clip(r)
+            g = clip(g)
+            b = clip(b)
+        } else {
+            r = gammaLut[(clip(r) * 4096f + .5f).toInt()]
+            g = gammaLut[(clip(g) * 4096f + .5f).toInt()]
+            b = gammaLut[(clip(b) * 4096f + .5f).toInt()]
+        }
 
         r += grade.temperature * .12f
         b -= grade.temperature * .12f
@@ -93,9 +112,8 @@ object ToneMath {
             val yy = .299f * r + .587f * g + .114f * b
             val ii = .596f * r - .274f * g - .322f * b
             val qq = .211f * r - .523f * g + .312f * b
-            val angle = grade.hue * PI
-            val rotatedI = (ii * cos(angle) - qq * sin(angle)).toFloat()
-            val rotatedQ = (ii * sin(angle) + qq * cos(angle)).toFloat()
+            val rotatedI = (ii * prepared.hueCos - qq * prepared.hueSin).toFloat()
+            val rotatedQ = (ii * prepared.hueSin + qq * prepared.hueCos).toFloat()
             r = yy + .956f * rotatedI + .621f * rotatedQ
             g = yy - .272f * rotatedI - .647f * rotatedQ
             b = yy - 1.106f * rotatedI + 1.703f * rotatedQ
