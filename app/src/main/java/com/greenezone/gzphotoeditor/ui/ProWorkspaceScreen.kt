@@ -64,11 +64,12 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 
 private enum class ProSection(val title: String) {
-    LAYERS("Layers"), MOVE("Move & size"), STYLE("Text & shapes"),
-    PAINT("Draw"), TUNE("Adjustments"), BLEND("Blend"), CANVAS("Canvas")
+    LAYERS("Layers"), MOVE("Transform"), SELECT("Select & mask"),
+    RETOUCH("Clone & repair"), PAINT("Brush"), STYLE("Text & shapes"),
+    PIXEL("Layer effects"), BLEND("Blend"), CANVAS("Canvas")
 }
 private enum class ProTransform(val title: String) {
-    SIZE("Size"), OPACITY("Opacity"), HORIZONTAL("X"), VERTICAL("Y")
+    SIZE("Size"), OPACITY("Opacity"), HORIZONTAL("X"), VERTICAL("Y"), ROTATE("Rotate")
 }
 private val proColors = listOf(
     "White" to 0xFFFFFFFF.toInt(), "Black" to 0xFF000000.toInt(),
@@ -76,11 +77,6 @@ private val proColors = listOf(
     "Blue" to 0xFF368FFF.toInt(), "Yellow" to 0xFFFFD95E.toInt(),
     "Purple" to 0xFFA878FF.toInt()
 )
-private val proControls: List<Control> =
-    (ControlCatalog.groups[Panel.LIGHT] ?: emptyList()) +
-    (ControlCatalog.groups[Panel.COLOR] ?: emptyList()) +
-    (ControlCatalog.groups[Panel.DETAIL] ?: emptyList())
-
 /** True independently editable bitmap/vector/adjustment layer workspace. */
 @Composable
 fun ProWorkspaceScreen(
@@ -95,14 +91,19 @@ fun ProWorkspaceScreen(
     var selected by remember { mutableIntStateOf(0) }
     var section by remember { mutableStateOf(ProSection.LAYERS) }
     var transform by remember { mutableStateOf(ProTransform.SIZE) }
-    var controlName by remember { mutableStateOf("Exposure") }
     var history by remember { mutableStateOf(ProHistory()) }
     var sliderStart by remember { mutableStateOf<ProDocument?>(null) }
     var dragStart by remember { mutableStateOf<ProDocument?>(null) }
     var activeStroke by remember { mutableStateOf<InkStroke?>(null) }
     var brushColor by remember { mutableIntStateOf(0xFF96E5C2.toInt()) }
     var brushSize by remember { mutableFloatStateOf(.012f) }
-    var editingImage by remember { mutableIntStateOf(-1) }
+    var selectionKind by remember { mutableStateOf(ProSelectionKind.RECTANGLE) }
+    var selectionStart by remember { mutableStateOf<BrushPoint?>(null) }
+    var draftSelection by remember { mutableStateOf<ProSelection?>(null) }
+    var retouchSource by remember { mutableStateOf<BrushPoint?>(null) }
+    var retouchKind by remember { mutableStateOf(ProRetouchKind.CLONE) }
+    var retouchRadius by remember { mutableFloatStateOf(.04f) }
+    var retouchStrength by remember { mutableFloatStateOf(.85f) }
     var replacingImage by remember { mutableIntStateOf(-1) }
     var textOpen by remember { mutableStateOf(false) }
     var textDraft by remember { mutableStateOf("") }
@@ -155,7 +156,7 @@ fun ProWorkspaceScreen(
         section = when (layer.kind) {
             ProLayerKind.TEXT, ProLayerKind.SHAPE -> ProSection.STYLE
             ProLayerKind.DRAWING -> ProSection.PAINT
-            ProLayerKind.ADJUSTMENT -> ProSection.TUNE
+            ProLayerKind.ADJUSTMENT -> ProSection.PIXEL
             else -> ProSection.LAYERS
         }
     }
@@ -168,30 +169,14 @@ fun ProWorkspaceScreen(
                 shapes = listOf(ShapeOverlay(kind = ShapeKind.RECTANGLE, color = 0xFF111111.toInt()))))
             else -> EditDocument()
         }
-        addLayer(ProLayer(uri = "", kind = kind, edits = edits, name = label))
+        addLayer(ProLayer(uri = "", kind = kind, edits = edits, name = label,
+            effect = if (kind == ProLayerKind.ADJUSTMENT)
+                ProPixelEffect.GRAYSCALE else ProPixelEffect.NONE))
         showAdd = false
         if (kind == ProLayerKind.TEXT) {
             textDraft = "Your text"
             textOpen = true
         }
-    }
-
-    if (editingImage in document.layers.indices &&
-        document.layers[editingImage].kind == ProLayerKind.IMAGE) {
-        val idx = editingImage
-        val layer = document.layers[idx]
-        PhotoEditorScreen(
-            initialCollagePhoto = CollagePhoto(layer.uri, layer.edits),
-            onDoneCollagePhoto = { edited ->
-                val items = document.layers.toMutableList()
-                if (idx in items.indices) {
-                    items[idx] = items[idx].copy(uri = edited.uri, edits = edited.edits)
-                    commit(document.copy(layers = items))
-                }
-                editingImage = -1
-            }
-        )
-        return
     }
 
     BackHandler { if (!busy && !exporting) onBack() }
@@ -430,6 +415,56 @@ fun ProWorkspaceScreen(
                         }
                     )
                 }
+                if ((section == ProSection.SELECT || section == ProSection.RETOUCH) &&
+                    active?.kind == ProLayerKind.IMAGE && !busy && !exporting) {
+                    ProPrecisionOverlay(
+                        imageWidth = bitmap.width, imageHeight = bitmap.height,
+                        action = if (section == ProSection.SELECT)
+                            ProPrecisionAction.SELECT else ProPrecisionAction.RETOUCH,
+                        kind = selectionKind,
+                        draft = draftSelection,
+                        committed = active.mask,
+                        sourceMarker = retouchSource,
+                        onStartSelection = { point ->
+                            selectionStart = point
+                            draftSelection = if (selectionKind == ProSelectionKind.LASSO)
+                                ProSelection(ProSelectionKind.LASSO,
+                                    points = listOf(point, point, point))
+                            else ProToolMath.rectangle(point, point, selectionKind)
+                        },
+                        onMoveSelection = { point ->
+                            val start = selectionStart ?: point
+                            draftSelection = if (selectionKind == ProSelectionKind.LASSO) {
+                                val prior = draftSelection?.points ?: listOf(start,start,start)
+                                ProSelection(ProSelectionKind.LASSO,
+                                    points = (prior + point)
+                                        .take(ProToolMath.MAX_LASSO_POINTS))
+                            } else ProToolMath.rectangle(start, point, selectionKind)
+                        },
+                        onEndSelection = { selectionStart = null },
+                        onRetouchTap = { point ->
+                            val source = retouchSource
+                            if (source == null) {
+                                retouchSource = point
+                                notice = "Source set. Tap where to clone or repair."
+                            } else {
+                                if (active.retouches.size >= ProToolMath.MAX_RETOUCH) {
+                                    notice = "Maximum 80 retouch marks per image."
+                                } else {
+                                    val mark = ProRetouchMark(
+                                        retouchKind, source.x, source.y,
+                                        point.x, point.y,
+                                        radius = retouchRadius, strength = retouchStrength)
+                                    changeLayer { layer ->
+                                        layer.copy(retouches = layer.retouches + mark)
+                                    }
+                                    notice = "Retouch mark applied. Choose another source."
+                                }
+                                retouchSource = null
+                            }
+                        }
+                    )
+                }
             }
         }
 
@@ -493,6 +528,9 @@ fun ProWorkspaceScreen(
                             i == selected, enabled = !busy && !exporting) {
                             selected = i
                             section = ProSection.LAYERS
+                            draftSelection = null
+                            selectionStart = null
+                            retouchSource = null
                         }
                     }
                 }
@@ -501,6 +539,7 @@ fun ProWorkspaceScreen(
                     ProSection.entries.forEach { mode ->
                         DockChip(mode.title, section == mode, enabled = !busy && !exporting) {
                             section = mode
+                            retouchSource = null
                         }
                     }
                 }
@@ -515,9 +554,12 @@ fun ProWorkspaceScreen(
                             .padding(horizontal = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                             if (active.kind == ProLayerKind.IMAGE) {
-                                TextButton(onClick = { editingImage = selected }) {
-                                    Text("Edit photo", color = EditorMint)
-                                }
+                                TextButton(onClick = {
+                                    section = ProSection.SELECT
+                                }) { Text("Select / mask", color = EditorMint) }
+                                TextButton(onClick = {
+                                    section = ProSection.RETOUCH
+                                }) { Text("Clone / repair", color = EditorMint) }
                                 TextButton(onClick = {
                                     replacingImage = selected
                                     replacePicker.launch(PickVisualMediaRequest(
