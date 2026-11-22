@@ -484,7 +484,6 @@ fun ProWorkspaceScreen(
                                     notice = "Retouch applied. Choose another source."
                                 }
                                 retouchSource = null
-                            retouchSourceImage = null
                                 retouchSourceImage = null
                             }
                         }
