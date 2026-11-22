@@ -33,3 +33,16 @@ Refer also to `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md` for lawful original-cod
 - [ ] No new permission, dependency, AI, ad, account, watermark or network regressions.
 - [ ] Exact PR HEAD passed CI, merged main Android bitmap/Compose tests passed, expected APK artifact exists.
 - [ ] Combined physical phone check `PHONE_TEST_WAVE8.md` for 0.8 + 0.9; commercial release and professional/RAW/video work remain open.
+
+## v0.12.1 independent AAA audit — release gate remains OPEN
+- Source audit: `docs/AAA_RELEASE_AUDIT_013.md`. Owner requested complete AAA verification; **not achieved** at this stage.
+- [ ] API29 minimum-device and API35 full Android emulator tests green at identical source SHA.
+- [ ] Real GIF color-gradient and moving-transparent-object output decoded without ghosting or color damage.
+- [ ] GIF Save As works with a write-only document provider; original source and existing files remain unchanged.
+- [ ] GIF exports respect device free-space quota, cancel gracefully and clean up incomplete outputs.
+- [ ] Pro save/overwrite, interrupted AtomicFile recovery, fail-closed malformed input, Undo/Redo and source URI access revalidated.
+- [ ] Long-session, large-media, thermal/battery/ANR, wide color gamut/ICC and multiple real phones validated.
+- [ ] True Photoshop/GIMP parity: advanced layers/groups, masks, smart selections, retouching and production-scale tools.
+- [ ] Lightroom-class RAW/16-bit/float/ICC management, catalog, batch and device profiling.
+- [ ] Accessibility and complete tutorial onboarding, licensing/SBOM/commercial payments and production Play-signed App Bundle.
+- Signed side-by-side APK may be supplied only as *noncommercial QA* with explicit warnings; it is **not** an AAA or Play Store release.

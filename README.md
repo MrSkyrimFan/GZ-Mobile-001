@@ -2,7 +2,7 @@
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-**Status: version 0.12.0 engineering qualification candidate. Not published on Google Play.**
+**Status: version 0.12.1 QA hardening candidate. NOT AAA-certified or published on Google Play.**
 
 ## Core contract
 - Fully offline. No runtime AI, subscriptions, ads, account, telemetry, in-app purchases, watermarks or network permission.
@@ -10,6 +10,13 @@
 - All edits are parameters in saved local project snapshots; previous projects remain decodable.
 - Compact image-first interface: GZ Editor Pro top-left, Open media, Undo/Redo, Before, Export, swipeable bottom tool dock, tap to hide editing chrome, company copyright bottom-left on empty main page.
 - Preserve all prior 56 global adjustments, 50 Looks, HSL color mixer, grading, 4 curve channels, 3 adjustment-mask types, Blur & cover, crop/rotate/flip/straighten, project/preset storage, JPEG/PNG export and transparent output where supported.
+
+## v0.12.1 independent quality review and safeguards
+- Source and merged-main APK were audited. The prior v0.12.0 release **does not pass full AAA/commercial qualification**. The exact gaps, independent checks, and required signoff criteria are recorded in `docs/AAA_RELEASE_AUDIT_013.md`.
+- GIF output: no longer requires a new Android Save As destination to support read-before-write, which blocks some writable document providers. Android Save As guarantees it will create a distinct filename when a name is taken. Temporary output has a bounded device-storage ceiling with a 64 MiB safety margin and explicit error messages.
+- Pro project persistence: replaced a non-atomic copy fallback with Android `AtomicFile`, bounded reads, backup recovery and crash-safety tests.
+- Automation now verifies APK signing and runs separate real Android emulators at API29 (minimum supported) and API35. Synthetic color-gradient/transparent animated GIF and interrupted Pro project recovery tests add coverage. These are tests, **not proofs of universal device, color-management or feature completeness**.
+- No code from Regular Photo, Collage, Greenezone corporate website, XForge, GZFX or unrelated projects is changed.
 
 ## v0.12 GIF conversion and Pro canvas
 

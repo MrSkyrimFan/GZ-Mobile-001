@@ -45,7 +45,17 @@ examined at merge `9cd83f68267c2a488fa9d307ec4064df55df1617`.
   clear action-oriented disk-limit error. Tests verify writes fail before the
   forbidden data is copied.
 - Increase build version only for a separate 0.12.1 engineering candidate.
-- Continue qualification on Android API35 and Android API29 as feasible.
+- Replace Pro project's non-atomic save/copy fallback with `AtomicFile`
+  write-ahead backup semantics, bounded reads, backup-only discovery and delete.
+  Add emulator tests for overwrite, crash backup recovery and malformed isolation.
+- Run both Android API29 (advertised minimum) and API35 emulator suites, plus
+  signing verification. Add multicolor gradient and moving-alpha GIF tests.
+
+## Ship/no-ship decision
+Full AAA commercial launch: **NO-GO** while the open feature, performance,
+device matrix, source recovery, legal and production signing gates remain.
+An internal v0.12.1 phone-test APK, if automation passes, is a *QA candidate*
+only and cannot be marketed as complete Photoshop/GIMP/Lightroom parity.
 
 **Release discipline:** Green emulator tests are necessary but not sufficient.
 Do not issue an "AAA finished" promise until the missing professional
