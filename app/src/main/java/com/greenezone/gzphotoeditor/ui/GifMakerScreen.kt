@@ -46,6 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -150,6 +152,7 @@ internal fun GifMakerScreenContent(
     var notice by remember { mutableStateOf("") }
     var history by remember { mutableStateOf(session.photoHistory) }
     var timingStart by remember { mutableStateOf<GifDocument?>(null) }
+    var timingLatest by remember { mutableStateOf<GifDocument?>(null) }
     var pending by remember { mutableStateOf<GifDocument?>(null) }
     var saveOpen by remember { mutableStateOf(false) }
     var helpOpen by remember { mutableStateOf(false) }
@@ -162,6 +165,7 @@ internal fun GifMakerScreenContent(
     fun commit(next: GifDocument) {
         history = history.checkpoint(document, next)
         timingStart = null
+        timingLatest = null
         onDocument(next)
         index = index.coerceAtMost(next.frames.lastIndex).coerceAtLeast(0)
     }
@@ -194,9 +198,10 @@ internal fun GifMakerScreenContent(
 
     fun finishPhotoTiming() {
         timingStart?.let { start ->
-            history = history.checkpoint(start, document)
+            history = history.checkpoint(start, timingLatest ?: document)
         }
         timingStart = null
+        timingLatest = null
     }
 
     fun requestPhotoBack() {
@@ -428,13 +433,18 @@ internal fun GifMakerScreenContent(
                             enabled = !exporting,
                             onValueChange = { next ->
                                 if (timingStart == null) timingStart = document
-                                onDocument(document.copy(delayMs = (next.toInt() / 10) * 10))
+                                val changed = document.copy(
+                                    delayMs = (next.toInt() / 10) * 10
+                                )
+                                timingLatest = changed
+                                onDocument(changed)
                             },
-                            onValueChangeFinished = {
-                                timingStart?.let { history = history.checkpoint(it, document) }
-                                timingStart = null
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp))
+                            onValueChangeFinished = ::finishPhotoTiming,
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(horizontal = 14.dp)
+                                .semantics {
+                                    contentDescription = "Photo GIF frame duration"
+                                })
                         Row(Modifier.padding(start = 10.dp)) {
                             DockChip("Loop forever", document.forever, enabled = !exporting) {
                                 commit(document.copy(forever = true))

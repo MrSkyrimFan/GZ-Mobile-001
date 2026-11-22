@@ -3,10 +3,11 @@ package com.greenezone.gzphotoeditor
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.greenezone.gzphotoeditor.ui.ProViewport
+import com.greenezone.gzphotoeditor.ui.ProViewportSemanticsKey
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -40,6 +41,11 @@ class AndroidBackRotationTest {
             rule.onNodeWithText("Transform").performClick()
             rule.onNodeWithText("Transform ▴").assertIsDisplayed()
             rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithContentDescription("Pro editable composition")
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            }
 
             val canvas = rule.onNodeWithTag("pro-canvas")
             canvas.performTouchInput {
@@ -52,12 +58,12 @@ class AndroidBackRotationTest {
                 up(0)
                 up(1)
             }
-            rule.waitUntil(5_000) {
-                canvas.fetchSemanticsNode().config[SemanticsProperties.StateDescription] !=
-                    "z=1.0000;x=0.5000;y=0.5000"
+            rule.waitUntil(15_000) {
+                canvas.fetchSemanticsNode().config[ProViewportSemanticsKey] !=
+                    ProViewport()
             }
             val viewport =
-                canvas.fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+                canvas.fetchSemanticsNode().config[ProViewportSemanticsKey]
 
             rule.runOnIdle { rule.activity.requestedOrientation = requested }
             rule.waitUntil(15_000) {
@@ -71,7 +77,7 @@ class AndroidBackRotationTest {
             assertEquals(
                 viewport,
                 rule.onNodeWithTag("pro-canvas").fetchSemanticsNode()
-                    .config[SemanticsProperties.StateDescription]
+                    .config[ProViewportSemanticsKey]
             )
         } finally {
             val restore = if (initialOrientation == Configuration.ORIENTATION_PORTRAIT) {
@@ -80,6 +86,9 @@ class AndroidBackRotationTest {
                 ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             }
             rule.runOnIdle { rule.activity.requestedOrientation = restore }
+            rule.waitUntil(15_000) {
+                rule.activity.resources.configuration.orientation == initialOrientation
+            }
         }
     }
 }

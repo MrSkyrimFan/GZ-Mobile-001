@@ -17,7 +17,9 @@ This correction must preserve the existing dark image-first layout, top-right wo
 - Back preview is read-only; only a committed Back returns a new navigation value.
 - Keep all Regular, Pro, Collage and GIF documents in their existing owner. Workspace navigation moves no pixels and converts no document.
 - Retain each mounted workspace's stable session state in the host: Pro selected layer/tool/transform/viewport/history and tool preferences; Collage selected tile/control/history/tool visibility; GIF route/tool/frame or tab/playhead/history. Playback resumes paused. Preview bitmaps, pointer drafts, dialogs and jobs remain screen-local.
-- Finalize slider/timing history before a route pop, and report a meaningful notice instead of silently swallowing Back while Pro, Collage or GIF is busy/exporting.
+- Mark the first established Pro revision explicitly. An intentionally empty Pro document with Undo history is not mistaken for an unused slot and cannot be silently seeded from an unrelated Regular photo.
+- Finalize slider/timing history against the exact latest emitted document before a route pop, even when Back follows the last pointer value before recomposition. Report a meaningful notice instead of silently swallowing Back while Pro, Collage or GIF is busy/exporting.
+- Keep exact viewport test data under an internal typed semantics key. TalkBack receives the human description, never a machine-formatted test token.
 - A loaded clean Regular photo returns to the existing empty photo start instead of leaving the task.
 - Dirty Regular Back offers Save project, Discard or Keep editing. A successful project save establishes the new clean baseline before closing. A failed or dismissed save keeps the photo intact.
 - Embedded Collage tile Back is separate from Done. Its immutable entry `CollagePhoto` is the transaction baseline, so replacement-source loads and standalone project saves cannot make the tile falsely clean. Clean Back cancels without modifying the parent. Dirty Back offers Apply, Discard or Keep editing. Busy/exporting tile work keeps Back ownership and reports why it cannot leave.
@@ -43,8 +45,11 @@ The JVM route-policy suite must prove:
 
 The Android API 29 and API 35 suites must exercise a real system Back event and prove:
 
-- loaded Regular → Pro → GIF → Back → Pro → Back → the same loaded Regular, including Regular dirty history and Pro selected layer, active tool, non-default viewport and Undo history;
-- a video-backed GIF returns from Pro to the same active tab and playhead, with playback paused;
+- loaded Regular → Pro → GIF → Back → Pro → Back → the same loaded Regular, including Regular dirty history, Pro selected layer, active tool and non-default viewport, plus an Undo/Redo operation that changes the actual Pro document;
+- a video-backed GIF that was actively playing returns from Pro to the same active tab and a nonzero retained playhead, resumes paused, and Undo/Redo changes the actual Reverse state;
+- Collage host remount restores the Photos section, selected second tile and correct Undo owner; Undo changes the actual layout and the subsequent selected-tile edit changes only tile two;
+- photo-sequence GIF host remount restores its photo route, Timing tool, second frame and exact timing history; Undo restores the prior duration and the next frame command targets frame two;
+- an intentionally empty established Pro revision is not reseeded from a newly loaded Regular photo, and its Undo restores the prior Pro document;
 - a real orientation change retains the Pro route, selected layer, active tool, viewport and Undo history;
 - clean loaded Regular → empty photo start without modifying source bytes;
 - dirty loaded Regular supports Keep editing and Discard without modifying source bytes;
@@ -53,9 +58,11 @@ The Android API 29 and API 35 suites must exercise a real system Back event and 
 - dirty Collage tile Apply invokes Done exactly once;
 - replacing a tile source remains dirty relative to the entry tile;
 - replacement Discard leaves the real parent document unchanged, including its neighbor tile and layout;
-- Keep editing retains the replacement and a later Apply changes only the selected parent tile.
+- Keep editing retains the replacement and a later Apply changes only the selected parent tile;
+- visible Done commits exactly once to the selected real parent tile;
+- saving an independent Regular project does not make a dirty embedded tile clean, and Discard still leaves the parent unchanged.
 
-The complete pre-existing instrumentation suite remains required. With ten added Android tests, the expected suite count is 92 per emulator if no existing test is removed or skipped. The exact XML case list, failures, errors and skips must be inspected at the tested commit.
+The complete pre-existing instrumentation suite remains required. With fifteen added Android tests, the expected suite count is 97 per emulator if no existing test is removed or skipped. The exact XML case list, failures, errors and skips must be inspected at the tested commit.
 
 ## Evidence that remains open
 

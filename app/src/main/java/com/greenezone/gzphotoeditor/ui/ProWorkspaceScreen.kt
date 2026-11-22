@@ -70,6 +70,7 @@ internal enum class ProTransform(val title: String) {
 }
 
 internal data class ProWorkspaceSession(
+    val documentEstablished: Boolean = false,
     val selectedLayer: Int = 0,
     val section: ProSection = ProSection.LAYERS,
     val transform: ProTransform = ProTransform.SIZE,
@@ -257,6 +258,7 @@ internal fun ProWorkspaceScreenContent(
 
     fun persistSession() {
         onSession(ProWorkspaceSession(
+            documentEstablished = true,
             selectedLayer = selected.coerceIn(0, document.layers.lastIndex.coerceAtLeast(0)),
             section = section,
             transform = transform,
@@ -292,6 +294,10 @@ internal fun ProWorkspaceScreenContent(
         }
         if (draftSelection != null) {
             notice = "Apply or clear the current selection before leaving Photo Pro."
+            return true
+        }
+        if (retouchSource != null || retouchSourceImage != null) {
+            notice = "Finish or clear the current clone source before leaving Photo Pro."
             return true
         }
         return false

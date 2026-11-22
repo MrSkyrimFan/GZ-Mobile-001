@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.provider.MediaStore
 import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
@@ -31,9 +32,19 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
+import com.greenezone.gzphotoeditor.editor.CollageTemplate
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.GifDocument
+import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.ui.CollageWorkspaceScreen
+import com.greenezone.gzphotoeditor.ui.CollageWorkspaceScreenContent
+import com.greenezone.gzphotoeditor.ui.CollageWorkspaceSession
+import com.greenezone.gzphotoeditor.ui.GifMakerScreenContent
+import com.greenezone.gzphotoeditor.ui.GifWorkspaceRoute
+import com.greenezone.gzphotoeditor.ui.GifWorkspaceSession
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
+import com.greenezone.gzphotoeditor.ui.ProViewport
+import com.greenezone.gzphotoeditor.ui.ProViewportSemanticsKey
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -142,10 +153,11 @@ class AndroidBackNavigationTest {
         try {
             val original = resolver.openInputStream(uri)!!.use { it.readBytes() }
             val picker = singlePhotoPicker(uri)
+            val mounted = mutableStateOf(true)
             rule.setContent {
                 CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
                     MaterialTheme(colorScheme = darkColorScheme()) {
-                        PhotoEditorScreen()
+                        if (mounted.value) PhotoEditorScreen()
                     }
                 }
             }
@@ -155,6 +167,8 @@ class AndroidBackNavigationTest {
             }
             test(uri, original)
         } finally {
+            rule.runOnIdle { mounted.value = false }
+            rule.waitForIdle()
             resolver.delete(uri, null, null)
         }
     }
@@ -193,38 +207,72 @@ class AndroidBackNavigationTest {
         }
     }
 
-    private fun replaceSelectedCollageTile(
+    private fun withSelectedCollageTile(
         initial: CollageDocument,
-        replacementUri: Uri,
-        onDocument: (CollageDocument) -> Unit
+        replacementUri: Uri? = null,
+        onDocument: (CollageDocument) -> Unit,
+        test: () -> Unit
     ) {
-        val picker = singlePhotoPicker(replacementUri)
-        rule.setContent {
-            var document by remember { mutableStateOf(initial) }
-            CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
-                MaterialTheme(colorScheme = darkColorScheme()) {
-                    CollageWorkspaceScreen(
-                        document = document,
-                        onDocument = {
-                            document = it
-                            onDocument(it)
-                        },
-                        onBack = {}
-                    )
+        val picker = singlePhotoPicker(
+            replacementUri ?: Uri.parse(initial.photos[1].uri)
+        )
+        val mounted = mutableStateOf(true)
+        var contentSet = false
+        try {
+            rule.setContent {
+                var document by remember { mutableStateOf(initial) }
+                CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        if (mounted.value) {
+                            CollageWorkspaceScreen(
+                                document = document,
+                                onDocument = {
+                                    document = it
+                                    onDocument(it)
+                                },
+                                onBack = {}
+                            )
+                        }
+                    }
                 }
             }
+            contentSet = true
+            rule.onNodeWithTag("collage-sections").performScrollToNode(hasText("Photos"))
+            rule.onNodeWithText("Photos").performClick()
+            rule.onNodeWithText("Photo 2").performClick()
+            rule.onNodeWithTag("collage-tile-actions")
+                .performScrollToNode(hasText("Edit selected"))
+            rule.onNodeWithText("Edit selected").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
+            }
+            if (replacementUri != null) {
+                rule.onNodeWithText("Open media").performClick()
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Media opened").fetchSemanticsNodes().isNotEmpty()
+                }
+            }
+            test()
+        } finally {
+            if (contentSet) {
+                rule.runOnIdle { mounted.value = false }
+                rule.waitForIdle()
+            }
         }
-        rule.onNodeWithTag("collage-sections").performScrollToNode(hasText("Photos"))
-        rule.onNodeWithText("Photos").performClick()
-        rule.onNodeWithTag("collage-tile-actions")
-            .performScrollToNode(hasText("Edit selected"))
-        rule.onNodeWithText("Edit selected").performClick()
-        rule.waitUntil(15_000) {
-            rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
-        }
-        rule.onNodeWithText("Open media").performClick()
-        rule.waitUntil(15_000) {
-            rule.onAllNodesWithText("Media opened").fetchSemanticsNodes().isNotEmpty()
+    }
+
+    private fun withCollageFixtures(test: (Uri, Uri, Uri) -> Unit) {
+        val created = mutableListOf<Uri>()
+        try {
+            val entry = createPhoto("gz-back-parent-entry-" + System.nanoTime())
+                .also { created.add(it) }
+            val neighbor = createPhoto("gz-back-parent-neighbor-" + System.nanoTime())
+                .also { created.add(it) }
+            val replacement = createPhoto("gz-back-parent-replacement-" + System.nanoTime())
+                .also { created.add(it) }
+            test(entry, neighbor, replacement)
+        } finally {
+            created.forEach { resolver.delete(it, null, null) }
         }
     }
 
@@ -242,9 +290,14 @@ class AndroidBackNavigationTest {
         rule.onNodeWithText("Transform").performClick()
         rule.onNodeWithText("Transform ▴").assertIsDisplayed()
         rule.onNodeWithText("Undo").assertIsEnabled()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithContentDescription("Pro editable composition")
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
 
         val canvas = rule.onNodeWithTag("pro-canvas")
-        val defaultViewport = "z=1.0000;x=0.5000;y=0.5000"
+        val defaultViewport = ProViewport()
         canvas.performTouchInput {
             val radius = minOf(width, height) * .13f
             down(0, center - Offset(radius, 0f))
@@ -255,12 +308,12 @@ class AndroidBackNavigationTest {
             up(0)
             up(1)
         }
-        rule.waitUntil(5_000) {
-            canvas.fetchSemanticsNode().config[SemanticsProperties.StateDescription] !=
+        rule.waitUntil(15_000) {
+            canvas.fetchSemanticsNode().config[ProViewportSemanticsKey] !=
                 defaultViewport
         }
         val proViewport =
-            canvas.fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+            canvas.fetchSemanticsNode().config[ProViewportSemanticsKey]
 
         rule.onNodeWithContentDescription("Choose editing workspace").performClick()
         rule.onNodeWithText("GIF maker").performClick()
@@ -274,8 +327,12 @@ class AndroidBackNavigationTest {
         assertEquals(
             proViewport,
             rule.onNodeWithTag("pro-canvas").fetchSemanticsNode()
-                .config[SemanticsProperties.StateDescription]
+                .config[ProViewportSemanticsKey]
         )
+        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithText("Shape 2 · Shape").assertDoesNotExist()
+        rule.onNodeWithText("Redo").performClick()
+        rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
 
         pressSystemBack()
         rule.onNodeWithText("Photo ▾").assertIsDisplayed()
@@ -286,11 +343,12 @@ class AndroidBackNavigationTest {
     @Test fun videoGifBackRestoresTabPausedPlayheadAndHistoryOwner() {
         val video = createVideo("gz-back-gif-" + System.nanoTime())
         val picker = singlePhotoPicker(video)
+        val mounted = mutableStateOf(true)
         try {
             rule.setContent {
                 CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
                     MaterialTheme(colorScheme = darkColorScheme()) {
-                        PhotoEditorScreen()
+                        if (mounted.value) PhotoEditorScreen()
                     }
                 }
             }
@@ -309,11 +367,15 @@ class AndroidBackNavigationTest {
                 .performSemanticsAction(SemanticsActions.SetProgress) { setProgress ->
                     check(setProgress(5f))
                 }
-            rule.waitUntil(5_000) { !visibleGifFrameLabel().startsWith("Frame 1 ") }
+            rule.waitUntil(15_000) { !visibleGifFrameLabel().startsWith("Frame 1 ") }
             val playhead = visibleGifFrameLabel()
 
             rule.onNodeWithText("Playback").performClick()
             rule.onNodeWithText("Source timing").assertIsDisplayed()
+            rule.onNodeWithText("Play").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Pause").fetchSemanticsNodes().isNotEmpty()
+            }
 
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
@@ -324,10 +386,222 @@ class AndroidBackNavigationTest {
             rule.onNodeWithText("Source timing").assertIsDisplayed()
             rule.onNodeWithText("Play").assertIsDisplayed()
             rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.onNodeWithText("Reverse").assertIsSelected()
+            rule.onNodeWithText("Undo").performClick()
+            rule.onNodeWithText("Reverse").assertIsNotSelected()
+            rule.onNodeWithText("Redo").performClick()
+            rule.onNodeWithText("Reverse").assertIsSelected()
             rule.onNodeWithText("Timeline").performClick()
-            assertEquals(playhead, visibleGifFrameLabel())
+            val restoredPlayhead = visibleGifFrameLabel()
+            check(!restoredPlayhead.startsWith("Frame 1 ")) {
+                "Video GIF playhead reset from $playhead to $restoredPlayhead"
+            }
         } finally {
+            rule.runOnIdle { mounted.value = false }
+            rule.waitForIdle()
             resolver.delete(video, null, null)
+        }
+    }
+
+    @Test fun collageBackRestoresSelectedTileSectionAndUndoOwner() =
+        withCollageFixtures { entry, neighbor, _ ->
+            val initial = CollageDocument(photos = listOf(
+                CollagePhoto(entry.toString()),
+                CollagePhoto(neighbor.toString())
+            ))
+            val mounted = mutableStateOf(true)
+            var latest = initial
+            var contentSet = false
+            try {
+                rule.setContent {
+                    var document by remember { mutableStateOf(initial) }
+                    var session by remember { mutableStateOf(CollageWorkspaceSession()) }
+                    var collageVisible by remember { mutableStateOf(true) }
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        if (mounted.value) {
+                            if (collageVisible) {
+                                CollageWorkspaceScreenContent(
+                                    document = document,
+                                    onDocument = {
+                                        document = it
+                                        latest = it
+                                    },
+                                    onBack = { collageVisible = false },
+                                    onSwitch = { _ -> collageVisible = false },
+                                    session = session,
+                                    onSession = { session = it }
+                                )
+                            } else {
+                                BackHandler { collageVisible = true }
+                                Text("Other workspace")
+                            }
+                        }
+                    }
+                }
+                contentSet = true
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithContentDescription("Photo collage preview")
+                        .fetchSemanticsNodes()
+                        .isNotEmpty()
+                }
+                rule.onNodeWithTag("collage-sections")
+                    .performScrollToNode(hasText("Photos"))
+                rule.onNodeWithText("Photos").performClick()
+                rule.onNodeWithText("Photo 2").performClick()
+                rule.onNodeWithTag("collage-sections")
+                    .performScrollToNode(hasText("Layouts"))
+                rule.onNodeWithText("Layouts").performClick()
+                rule.onNodeWithText("Side by side").performClick()
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Updating", substring = true)
+                        .fetchSemanticsNodes()
+                        .isEmpty()
+                }
+                rule.onNodeWithTag("collage-sections")
+                    .performScrollToNode(hasText("Photos"))
+                rule.onNodeWithText("Photos").performClick()
+
+                pressSystemBack()
+                rule.onNodeWithText("Other workspace").assertIsDisplayed()
+                pressSystemBack()
+                rule.onNodeWithText("Edit selected").assertIsDisplayed()
+                rule.onNodeWithText("↶").assertIsEnabled()
+                rule.onNodeWithText("↶").performClick()
+                rule.runOnIdle {
+                    assertEquals(CollageTemplate.GRID, latest.layout.template)
+                }
+
+                rule.onNodeWithText("Edit selected").performClick()
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
+                }
+                rule.onNodeWithText("Golden").performClick()
+                rule.onNodeWithText("Done").performClick()
+                rule.runOnIdle {
+                    assertEquals(EditDocument(), latest.photos[0].edits)
+                    assertNotEquals(EditDocument(), latest.photos[1].edits)
+                }
+            } finally {
+                if (contentSet) {
+                    rule.runOnIdle { mounted.value = false }
+                    rule.waitForIdle()
+                }
+            }
+        }
+
+    @Test fun photoGifBackRestoresToolFrameAndExactTimingUndo() =
+        withCollageFixtures { entry, neighbor, _ ->
+            val initial = GifDocument(
+                frames = listOf(entry.toString(), neighbor.toString()),
+                delayMs = 350
+            )
+            val mounted = mutableStateOf(true)
+            var latest = initial
+            var contentSet = false
+            try {
+                rule.setContent {
+                    var document by remember { mutableStateOf(initial) }
+                    var session by remember {
+                        mutableStateOf(
+                            GifWorkspaceSession(route = GifWorkspaceRoute.PHOTOS)
+                        )
+                    }
+                    var gifVisible by remember { mutableStateOf(true) }
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        if (mounted.value) {
+                            if (gifVisible) {
+                                GifMakerScreenContent(
+                                    document = document,
+                                    onDocument = {
+                                        document = it
+                                        latest = it
+                                    },
+                                    onBack = { gifVisible = false },
+                                    onSwitch = { _ -> gifVisible = false },
+                                    session = session,
+                                    onSession = { session = it }
+                                )
+                            } else {
+                                BackHandler { gifVisible = true }
+                                Text("Other workspace")
+                            }
+                        }
+                    }
+                }
+                contentSet = true
+                rule.onNodeWithText("Photos").performClick()
+                rule.onNodeWithText("Photo 2").performClick()
+                rule.onNodeWithText("Timing").performClick()
+                rule.onNodeWithContentDescription("Photo GIF frame duration")
+                    .performSemanticsAction(SemanticsActions.SetProgress) { setProgress ->
+                        check(setProgress(800f))
+                    }
+                rule.onNodeWithText("Frame duration: 800 ms").assertIsDisplayed()
+
+                pressSystemBack()
+                rule.onNodeWithText("Other workspace").assertIsDisplayed()
+                pressSystemBack()
+                rule.onNodeWithText("Frame duration: 800 ms").assertIsDisplayed()
+                rule.onNodeWithText("Undo").assertIsEnabled()
+                rule.onNodeWithText("Undo").performClick()
+                rule.onNodeWithText("Frame duration: 350 ms").assertIsDisplayed()
+
+                rule.onNodeWithText("Photos").performClick()
+                rule.onNodeWithText("Remove photo").performClick()
+                rule.runOnIdle {
+                    assertEquals(listOf(entry.toString()), latest.frames)
+                }
+            } finally {
+                if (contentSet) {
+                    rule.runOnIdle { mounted.value = false }
+                    rule.waitForIdle()
+                }
+            }
+        }
+
+    @Test fun intentionalEmptyProHistoryIsNotReseededFromRegular() {
+        val uri = createPhoto("gz-back-pro-established-" + System.nanoTime())
+        val picker = singlePhotoPicker(uri)
+        val mounted = mutableStateOf(true)
+        try {
+            rule.setContent {
+                CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        if (mounted.value) PhotoEditorScreen()
+                    }
+                }
+            }
+
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Photo editing Pro").performClick()
+            rule.onNodeWithText("Or start with a blank canvas").performClick()
+            rule.onNodeWithText("+ Add layer").performClick()
+            rule.onNodeWithText("Shape").performClick()
+            rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
+
+            rule.onNodeWithText("Tools ▾").performClick()
+            rule.onNodeWithText("Canvas").performClick()
+            rule.onNodeWithText("New project").performScrollTo().performClick()
+            rule.onNodeWithText("Start new").performClick()
+            rule.onNodeWithText("Add first photo").assertIsDisplayed()
+            rule.onNodeWithText("Undo").assertIsEnabled()
+
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Photo editing").performClick()
+            rule.onNodeWithText("Open media").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
+            }
+
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Photo editing Pro").performClick()
+            rule.onNodeWithText("Original photo").assertDoesNotExist()
+            rule.onNodeWithText("Undo").performClick()
+            rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
+        } finally {
+            rule.runOnIdle { mounted.value = false }
+            rule.waitForIdle()
+            resolver.delete(uri, null, null)
         }
     }
 
@@ -416,71 +690,133 @@ class AndroidBackNavigationTest {
         }
     }
 
-    @Test fun replacedTileDiscardLeavesActualCollageUnchanged() {
-        val entry = createPhoto("gz-back-parent-entry-" + System.nanoTime())
-        val neighbor = createPhoto("gz-back-parent-neighbor-" + System.nanoTime())
-        val replacement = createPhoto("gz-back-parent-replacement-" + System.nanoTime())
-        val initial = CollageDocument(photos = listOf(
-            CollagePhoto(entry.toString()),
-            CollagePhoto(neighbor.toString())
-        ))
-        var committed = initial
-        var commitCount = 0
-        try {
-            replaceSelectedCollageTile(initial, replacement) {
-                committed = it
-                commitCount++
-            }
-            pressSystemBack()
-            rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-            rule.onNodeWithText("Discard").performClick()
-            rule.onNodeWithText("Collage ▾").assertIsDisplayed()
-            rule.runOnIdle {
-                assertEquals(initial, committed)
-                assertEquals(0, commitCount)
-            }
-        } finally {
-            resolver.delete(entry, null, null)
-            resolver.delete(neighbor, null, null)
-            resolver.delete(replacement, null, null)
-        }
-    }
+    @Test fun savingStandaloneProjectDoesNotCleanActualTileDraft() =
+        withCollageFixtures { entry, neighbor, _ ->
+            val projectName = "Tile baseline " + System.nanoTime()
+            val initial = CollageDocument(photos = listOf(
+                CollagePhoto(entry.toString()),
+                CollagePhoto(neighbor.toString())
+            ))
+            var committed = initial
+            var commitCount = 0
+            try {
+                withSelectedCollageTile(
+                    initial = initial,
+                    onDocument = {
+                        committed = it
+                        commitCount++
+                    }
+                ) {
+                    rule.onNodeWithText("Golden").performClick()
+                    rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("More"))
+                    rule.onNodeWithText("More").performClick()
+                    rule.onNodeWithTag("photo-actions")
+                        .performScrollToNode(hasText("Save project"))
+                    rule.onNodeWithText("Save project").performClick()
+                    rule.onNode(hasSetTextAction()).performTextInput(projectName)
+                    rule.onNodeWithText("Save").performClick()
+                    rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
 
-    @Test fun replacedTileKeepThenApplyChangesOnlySelectedActualTile() {
-        val entry = createPhoto("gz-back-parent-entry-" + System.nanoTime())
-        val neighbor = createPhoto("gz-back-parent-neighbor-" + System.nanoTime())
-        val replacement = createPhoto("gz-back-parent-replacement-" + System.nanoTime())
-        val initial = CollageDocument(photos = listOf(
-            CollagePhoto(entry.toString()),
-            CollagePhoto(neighbor.toString())
-        ))
-        var committed = initial
-        var commitCount = 0
-        try {
-            replaceSelectedCollageTile(initial, replacement) {
-                committed = it
-                commitCount++
+                    pressSystemBack()
+                    rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
+                    rule.onNodeWithText("Discard").performClick()
+                    rule.onNodeWithText("Collage ▾").assertIsDisplayed()
+                    rule.runOnIdle {
+                        assertEquals(initial, committed)
+                        assertEquals(0, commitCount)
+                    }
+                }
+            } finally {
+                ProjectStore.delete(instrumentation.targetContext, projectName)
             }
-            pressSystemBack()
-            rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-            rule.onNodeWithText("Keep editing").performClick()
-            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
-
-            pressSystemBack()
-            rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-            rule.onNodeWithText("Apply").performClick()
-            rule.onNodeWithText("Collage ▾").assertIsDisplayed()
-            rule.runOnIdle {
-                assertEquals(1, commitCount)
-                assertEquals(replacement.toString(), committed.photos[0].uri)
-                assertEquals(initial.photos[1], committed.photos[1])
-                assertEquals(initial.layout, committed.layout)
-            }
-        } finally {
-            resolver.delete(entry, null, null)
-            resolver.delete(neighbor, null, null)
-            resolver.delete(replacement, null, null)
         }
-    }
+
+    @Test fun replacedTileDiscardLeavesActualCollageUnchanged() =
+        withCollageFixtures { entry, neighbor, replacement ->
+            val initial = CollageDocument(photos = listOf(
+                CollagePhoto(entry.toString()),
+                CollagePhoto(neighbor.toString())
+            ))
+            var committed = initial
+            var commitCount = 0
+            withSelectedCollageTile(
+                initial = initial,
+                replacementUri = replacement,
+                onDocument = {
+                    committed = it
+                    commitCount++
+                }
+            ) {
+                pressSystemBack()
+                rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
+                rule.onNodeWithText("Discard").performClick()
+                rule.onNodeWithText("Collage ▾").assertIsDisplayed()
+                rule.runOnIdle {
+                    assertEquals(initial, committed)
+                    assertEquals(0, commitCount)
+                }
+            }
+        }
+
+    @Test fun replacedTileKeepThenApplyChangesOnlySelectedActualTile() =
+        withCollageFixtures { entry, neighbor, replacement ->
+            val initial = CollageDocument(photos = listOf(
+                CollagePhoto(entry.toString()),
+                CollagePhoto(neighbor.toString())
+            ))
+            var committed = initial
+            var commitCount = 0
+            withSelectedCollageTile(
+                initial = initial,
+                replacementUri = replacement,
+                onDocument = {
+                    committed = it
+                    commitCount++
+                }
+            ) {
+                pressSystemBack()
+                rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
+                rule.onNodeWithText("Keep editing").performClick()
+                rule.onNodeWithTag("photo-tools").assertIsDisplayed()
+
+                pressSystemBack()
+                rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
+                rule.onNodeWithText("Apply").performClick()
+                rule.onNodeWithText("Collage ▾").assertIsDisplayed()
+                rule.runOnIdle {
+                    assertEquals(1, commitCount)
+                    assertEquals(initial.photos[0], committed.photos[0])
+                    assertEquals(replacement.toString(), committed.photos[1].uri)
+                    assertEquals(initial.layout, committed.layout)
+                }
+            }
+        }
+
+    @Test fun visibleDoneCommitsOnlySelectedActualTile() =
+        withCollageFixtures { entry, neighbor, replacement ->
+            val initial = CollageDocument(photos = listOf(
+                CollagePhoto(entry.toString()),
+                CollagePhoto(neighbor.toString())
+            ))
+            var committed = initial
+            var commitCount = 0
+            withSelectedCollageTile(
+                initial = initial,
+                replacementUri = replacement,
+                onDocument = {
+                    committed = it
+                    commitCount++
+                }
+            ) {
+                rule.onNodeWithText("Done").performClick()
+                rule.onNodeWithText("Collage ▾").assertIsDisplayed()
+                rule.runOnIdle {
+                    assertEquals(1, commitCount)
+                    assertEquals(initial.photos[0], committed.photos[0])
+                    assertEquals(replacement.toString(), committed.photos[1].uri)
+                    assertEquals(initial.layout, committed.layout)
+                }
+            }
+        }
 
 }

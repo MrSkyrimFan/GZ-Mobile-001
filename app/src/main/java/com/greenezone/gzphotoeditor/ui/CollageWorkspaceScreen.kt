@@ -151,6 +151,7 @@ internal fun CollageWorkspaceScreenContent(
     }
     var history by remember { mutableStateOf(session.history) }
     var layoutGestureStart by remember { mutableStateOf<CollageDocument?>(null) }
+    var layoutGestureLatest by remember { mutableStateOf<CollageDocument?>(null) }
     var section by remember { mutableStateOf(session.section) }
     var control by remember { mutableStateOf(session.control) }
     var toolsVisible by remember { mutableStateOf(session.toolsVisible) }
@@ -173,6 +174,7 @@ internal fun CollageWorkspaceScreenContent(
         history = history.checkpoint(document, next)
         onDocument(next)
         layoutGestureStart = null
+        layoutGestureLatest = null
     }
 
     fun changeLayout(layout: CollageLayout) {
@@ -181,14 +183,17 @@ internal fun CollageWorkspaceScreenContent(
 
     fun slideLayout(layout: CollageLayout) {
         if (layoutGestureStart == null) layoutGestureStart = document
-        onDocument(document.copy(layout = layout))
+        val next = document.copy(layout = layout)
+        layoutGestureLatest = next
+        onDocument(next)
     }
 
     fun finishLayout() {
-        layoutGestureStart?.let {
-            history = history.checkpoint(it, document)
+        layoutGestureStart?.let { start ->
+            history = history.checkpoint(start, layoutGestureLatest ?: document)
         }
         layoutGestureStart = null
+        layoutGestureLatest = null
     }
 
     fun undoCollage() {
@@ -650,6 +655,7 @@ internal fun CollageWorkspaceScreenContent(
                     if (candidate != null) {
                         history = CollageHistory()
                         layoutGestureStart = null
+                        layoutGestureLatest = null
                         onDocument(candidate)
                         selected = 0
                         savedList = false
