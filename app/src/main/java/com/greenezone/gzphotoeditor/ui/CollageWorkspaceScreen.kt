@@ -127,6 +127,7 @@ fun CollageWorkspaceScreen(
     var exportSettings by remember { mutableStateOf(ExportSettings()) }
     var pending by remember { mutableStateOf<CollageExport?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var confirmNew by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf("") }
     var savedList by remember { mutableStateOf(false) }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -473,7 +474,8 @@ fun CollageWorkspaceScreen(
                                 .coerceAtLeast(0)
                         },
                         onSave = { naming = ""; saving = true },
-                        onOpen = { savedNames = CollageStore.names(context); savedList = true }
+                        onOpen = { savedNames = CollageStore.names(context); savedList = true },
+                        onNew = { confirmNew = true }
                     )
                 }
             }
@@ -495,6 +497,31 @@ fun CollageWorkspaceScreen(
         }
     }
 
+    if (confirmNew) {
+        AlertDialog(
+            onDismissRequest = { confirmNew = false },
+            title = { Text("Start another collage?", color = EditorWhite) },
+            text = {
+                Text("Save your current collage first if you want to reopen it. " +
+                    "You can also undo this change.",
+                    color = EditorMuted)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    commit(CollageDocument())
+                    selected = 0
+                    section = CollageSection.TEMPLATES
+                    confirmNew = false
+                    notice = "New collage"
+                }) { Text("Start new", color = EditorMint) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmNew = false }) {
+                    Text("Cancel", color = EditorMuted)
+                }
+            }
+        )
+    }
     if (showExport) {
         ExportDialog(
             settings = exportSettings,
@@ -513,7 +540,7 @@ fun CollageWorkspaceScreen(
                 if (CollageStore.save(context, naming, document)) {
                     saving = false
                     notice = "Collage project saved"
-                } else notice = "Unable to save collage (maximum 12 saved projects)."
+                } else notice = "Unable to save collage (limit 12 or project too large)."
             },
             onDismiss = { saving = false }
         )
@@ -583,7 +610,8 @@ private fun CollageControls(
     onRight: () -> Unit,
     onRemove: () -> Unit,
     onSave: () -> Unit,
-    onOpen: () -> Unit
+    onOpen: () -> Unit,
+    onNew: () -> Unit
 ) {
     val layout = document.layout
     when (section) {
@@ -689,6 +717,7 @@ private fun CollageControls(
                 item { DockChip("Remove", false, true, onRemove) }
                 item { DockChip("Save project", false, true, onSave) }
                 item { DockChip("Saved collages", false, true, onOpen) }
+                item { DockChip("New collage", false, true, onNew) }
             }
         }
         CollageSection.QUALITY -> {
