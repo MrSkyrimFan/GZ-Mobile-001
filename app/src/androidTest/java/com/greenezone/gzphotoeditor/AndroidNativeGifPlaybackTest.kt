@@ -4,6 +4,10 @@ import android.content.ContentValues
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -64,7 +68,8 @@ class AndroidNativeGifPlaybackTest {
                         onEnded = { ended.set(true); playing = false },
                         onError = { error.set(it); playing = false },
                         onReady = { ready.set(true) },
-                        onPlayer = {}
+                        onPlayer = {},
+                        modifier = Modifier.height(200.dp).fillMaxWidth()
                     )
                     Button(onClick = { playing = !playing }) {
                         Text(if (playing) "Pause" else "Play")
