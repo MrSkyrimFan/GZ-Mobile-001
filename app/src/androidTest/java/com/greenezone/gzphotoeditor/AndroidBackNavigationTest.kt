@@ -28,7 +28,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.core.app.ActivityOptionsCompat
-import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.CollageDocument
@@ -778,10 +777,14 @@ class AndroidBackNavigationTest {
                     rule.onNode(hasSetTextAction()).performTextInput(projectName)
                     rule.onNodeWithText("Save").performClick()
                     rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
-                    Espresso.closeSoftKeyboard()
-                    rule.waitForIdle()
 
+                    // Project naming may leave the IME owning the first system Back.
+                    // Send another only when the tile editor did not receive it.
                     pressSystemBack()
+                    if (rule.onAllNodesWithText("Apply tile changes?")
+                            .fetchSemanticsNodes().isEmpty()) {
+                        pressSystemBack()
+                    }
                     rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
                     rule.onNodeWithText("Discard").performClick()
                     rule.onNodeWithText("Collage ▾").assertIsDisplayed()
