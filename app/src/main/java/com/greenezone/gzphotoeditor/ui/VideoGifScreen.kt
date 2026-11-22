@@ -63,6 +63,7 @@ fun VideoGifScreen(
     var position by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
+    var committingExport by remember { mutableStateOf(false) }
     val enabled = !busy && !exporting
     var notice by remember { mutableStateOf("") }
     var progress by remember { mutableStateOf("") }
@@ -190,6 +191,7 @@ fun VideoGifScreen(
                     return@launch
                 }
                 require(dest.toString() != saved.video?.uri) { "Choose a new filename to keep the original." }
+                committingExport = true
                 progress = "Saving GIF…"
                 withContext(Dispatchers.IO) {
                     val job = currentCoroutineContext()
@@ -212,6 +214,7 @@ fun VideoGifScreen(
                 destinationRequest?.cancel()
                 destinationRequest = null
                 exporting = false
+                committingExport = false
                 exportJob = null
             }
         }
@@ -403,7 +406,13 @@ fun VideoGifScreen(
             horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(color = EditorMint)
             Text(if (exporting) progress else "Opening source…", color = EditorWhite)
-            if (exporting) TextButton(onClick = { exportJob?.cancel() }) { Text("Cancel export", color = EditorMint) }
+            if (exporting) {
+                TextButton(enabled = !committingExport, onClick = {
+                    if (!committingExport) exportJob?.cancel()
+                }) {
+                    Text("Cancel export", color = if (committingExport) EditorMuted else EditorMint)
+                }
+            }
         }
     }
     if (showHelp) GifHelpDialog { showHelp = false }

@@ -65,22 +65,27 @@ class StagedImageExportTest {
         assertTrue(cache.listFiles()!!.isEmpty())
     }
 
-    @Test fun cancellationDuringFinalCopyClosesTheProviderAndNeverReopensItForCleanup() {
+    @Test fun cancellationDuringFinalCopyStillWritesEveryByteAndClosesTheDestinationOnce() {
         val cache = folder.newFolder()
         val data = ByteArray(170_000) { (it % 127).toByte() }
         var opens = 0
-        var closed = false
+        var closes = 0
+        var cancelled = false
         val output = object : ByteArrayOutputStream() {
-            override fun close() { closed = true; super.close() }
+            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                super.write(bytes, offset, length)
+                cancelled = true
+            }
+
+            override fun close() { closes++; super.close() }
         }
-        assertThrows(CancellationException::class.java) {
-            writeStagedImage(cache, openDestination = { opens++; output }, checkActive = {
-                if (output.size() > 0) throw CancellationException("Stopped during copy")
-            }) { it.write(data); true }
-        }
+        writeStagedImage(cache, openDestination = { opens++; output }, checkActive = {
+            if (cancelled) throw CancellationException("Stopped after the first write")
+        }) { it.write(data); true }
+        assertTrue(cancelled)
         assertEquals(1, opens)
-        assertTrue(closed)
-        assertArrayEquals(data.copyOf(65_536), output.toByteArray())
+        assertEquals(1, closes)
+        assertArrayEquals(data, output.toByteArray())
         assertTrue(cache.listFiles()!!.isEmpty())
     }
 }

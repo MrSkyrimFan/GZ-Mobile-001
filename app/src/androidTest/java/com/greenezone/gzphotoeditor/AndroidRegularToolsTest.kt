@@ -48,7 +48,8 @@ import org.junit.runner.RunWith
 class AndroidRegularToolsTest {
     @get:Rule val rule = createComposeRule()
 
-    private fun withRegularPhoto(destination: Uri? = null, test: (Uri) -> Unit) {
+    private fun withRegularPhoto(destination: Uri? = null, removeSourceAfterOpen: Boolean = false,
+        test: () -> Unit) {
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
         val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             ContentValues().apply {
@@ -56,6 +57,7 @@ class AndroidRegularToolsTest {
                 put(MediaStore.Images.Media.MIME_TYPE, "image/png")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }))
+        var removed = false
         try {
             val size = 256
             val pixels = IntArray(size * size) { if (it % size < size / 2) Color.BLACK else Color.WHITE }
@@ -84,8 +86,14 @@ class AndroidRegularToolsTest {
             }
             rule.onNodeWithText("Open media").performClick()
             rule.waitUntil(15_000) { rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty() }
-            test(uri)
-        } finally { resolver.delete(uri, null, null) }
+            if (removeSourceAfterOpen) {
+                assertEquals(1, resolver.delete(uri, null, null))
+                removed = true
+            }
+            test()
+        } finally {
+            if (!removed) resolver.delete(uri, null, null)
+        }
     }
 
     @Test fun regularCaptionSurvivesProjectReopenAndPngExport() {
@@ -165,8 +173,7 @@ class AndroidRegularToolsTest {
         val existing = byteArrayOf(0x38, 0x27, 0x16)
         try {
             resolver.openOutputStream(destination, "wt")!!.use { it.write(existing) }
-            withRegularPhoto(destination) { source ->
-                resolver.delete(source, null, null)
+            withRegularPhoto(destination, removeSourceAfterOpen = true) {
                 rule.onNodeWithText("Export").performClick()
                 rule.onNodeWithText("Save JPG").performClick()
                 rule.waitUntil(15_000) {

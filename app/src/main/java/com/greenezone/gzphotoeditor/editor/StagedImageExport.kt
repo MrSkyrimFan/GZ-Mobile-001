@@ -33,10 +33,11 @@ internal fun copyStagedImage(
         var count = input.read(buffer)
         if (count < 0) throw IOException("The staged image is empty")
         checkActive()
+        // Opening "wt" can truncate an existing document. Finish this copy even if the
+        // caller is cancelled after that point. A write-only provider cannot roll it back.
         val destination = openDestination() ?: throw IOException("Export destination unavailable")
         destination.use { output ->
             while (count >= 0) {
-                checkActive()
                 output.write(buffer, 0, count)
                 count = input.read(buffer)
             }
