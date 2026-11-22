@@ -66,3 +66,18 @@ complete and witnessed.
 - Requested FPS previously silently clamped to 150,000 frames on long clips,
   reducing user-requested frame rate. The new scheduler rejects unsupported
   long-clip FPS and disables that option in the UI instead of changing it secretly.
+
+## Android 10 red-team failure and diagnosis
+- First complete API29 run: 65 Android tests, three failures. The Pro
+  malformed-document test provoked a genuine OutOfMemoryError in `ProStore.load`
+  before size rejection. Added pre-open file-length and max-heap size bound,
+  with a streamed stress fixture.
+- GIF transparency test reused an external Bitmap when calling Android
+  `Movie.draw`. That draw performs source-over blending and does not clear
+  prior external canvas pixels. Clear destination before drawing each decoded
+  animation frame, then verify the underlying GIF's own disposal.
+- GIF saved-file reopen in Compose timed out on low-memory API29. Stop
+  off-screen frame decoding and release the preview cache during source open
+  and export; require full requalification rather than increase test timeout.
+- No marketing or release certification until both API29 and API35 report
+  all tests green again after these corrections.

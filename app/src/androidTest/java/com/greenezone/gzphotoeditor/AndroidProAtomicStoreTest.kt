@@ -62,7 +62,12 @@ class AndroidProAtomicStoreTest {
         try {
             assertTrue(ProStore.save(context, otherName, project))
             assertTrue(ProStore.save(context, name, project))
-            file.writeText("x".repeat(3_000_050), Charsets.UTF_8)
+            // Stream oversize input rather than allocating a multi-MB String
+            // inside the deliberately small API29 instrumentation heap.
+            file.outputStream().buffered().use { out ->
+                val chunk = ByteArray(4096) { 'x'.code.toByte() }
+                repeat(1024) { out.write(chunk) }
+            }
             assertNull(ProStore.load(context, name))
             assertEquals(project, ProStore.load(context, otherName))
         } finally {

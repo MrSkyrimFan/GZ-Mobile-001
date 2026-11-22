@@ -290,10 +290,17 @@ fun VideoGifScreen(
                     TextButton(onClick = ::openProjects, enabled = enabled) { Text("Open saved GIF project", color = EditorMuted) }
                 }
             } else {
-                GifFramePreview(document, playing, seek, onFrame = { position = it },
-                    onEnd = { pauseAt(it) },
-                    onError = { playing = false; notice = "Preview unavailable. $it" },
-                    modifier = Modifier.weight(1f).fillMaxWidth())
+                if (busy || exporting) {
+                    // Suspend decoding, frame caches and thumbnail bitmaps while
+                    // replacing the source or encoding output, particularly on
+                    // low-memory Android 10 devices.
+                    Box(Modifier.weight(1f).fillMaxWidth())
+                } else {
+                    GifFramePreview(document, playing, seek, onFrame = { position = it },
+                        onEnd = { pauseAt(it) },
+                        onError = { playing = false; notice = "Preview unavailable. $it" },
+                        modifier = Modifier.weight(1f).fillMaxWidth())
+                }
                 Column(Modifier.fillMaxWidth().background(EditorSurface),
                     verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp),

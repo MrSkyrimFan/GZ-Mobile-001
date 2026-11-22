@@ -95,6 +95,10 @@ class AndroidGifColorQualityTest {
             movie.draw(canvas, 0f, 0f)
             assertEquals(Color.RED, result.getPixel(14, 16))
             assertEquals(0, Color.alpha(result.getPixel(46, 16)))
+            // Movie.draw() blends the decoded frame over its caller-owned canvas.
+            // Clear that *external* canvas first; otherwise our previous painted
+            // output remains even if GIF disposal correctly cleared decoder pixels.
+            result.eraseColor(Color.TRANSPARENT)
             movie.setTime(250)
             movie.draw(canvas, 0f, 0f)
             assertEquals(Color.RED, result.getPixel(46, 16))

@@ -202,7 +202,14 @@ object ProStore {
 
     @Synchronized fun load(context: Context, name: String): ProDocument? {
         val id = key(name) ?: return null
-        val atomic = AtomicFile(File(dir(context), "$id.gzpro"))
+        val base = File(dir(context), "$id.gzpro")
+        val backup = File(base.path + ".bak")
+        // Fail before allocating strings or reading hostile oversize projects.
+        // On legacy backup-only recovery AtomicFile will rename the backup to base.
+        val recoverable = if (backup.exists()) backup else base
+        val memoryBound = (Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(MAX_BYTES.toLong())
+        if (!recoverable.isFile || recoverable.length() > memoryBound) return null
+        val atomic = AtomicFile(base)
         return try {
             val data = atomic.openRead().bufferedReader(Charsets.UTF_8).use { reader ->
                 val text = StringBuilder()
