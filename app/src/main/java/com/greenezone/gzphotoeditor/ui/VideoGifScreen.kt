@@ -85,7 +85,8 @@ fun VideoGifScreen(
     document: GifDocument,
     onDocument: (GifDocument) -> Unit,
     onBack: () -> Unit,
-    onSwitch: (WorkspaceMode) -> Unit
+    onSwitch: (WorkspaceMode) -> Unit,
+    onOpenLegacyPhotoProject: (GifDocument) -> Unit
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -504,7 +505,10 @@ fun VideoGifScreen(
                         val restored = GifStore.load(context, name)
                         if (restored?.video != null) {
                             commit(restored); selectedFrame = 0; savedOpen = false
-                        } else notice = "This GIF maker accepts video projects. The previous photo-animation project is still saved."
+                        } else if (restored != null && restored.frames.size >= 2) {
+                            savedOpen = false
+                            onOpenLegacyPhotoProject(restored)
+                        } else notice = "This saved GIF project is unreadable."
                     }) { Text(name, color = EditorMint) }
                 }
             }

@@ -10,7 +10,7 @@
 - Android native media picker with video-only filter and source URI custody. Metadata inspected off UI thread.
 - MediaMetadataRetriever scaled decoded frames at selected millisecond timestamps. Bounded 0.5–12 second clip; 4/6/8/10 FPS and maximum 120 output frames. Native decoder's nearest-frame accuracy varies with source codec and device.
 - Clip start/end, timeline frame scrub, video preview, forward/reverse, speed options, loop, Fit/Fill, canvas ratio/size, local project save, Undo/Redo and GIF89a LZW export; frames processed one at a time rather than keeping all raw frames in memory. Original videos are never written to.
-- Existing photo-sequence GIFs remain available only as an optional secondary route. GIF cannot contain sound; photo/video+audio MP4 functionality waits for future video phase.
+- Existing saved photo-sequence GIF projects remain recoverable through **Open saved GIF project**, without putting photo-sequence creation on the main screen. GIF cannot contain sound; photo/video+audio MP4 functionality waits for the later video phase.
 - v2 GIF project format supports video-source settings and retains v1 photo-sequence compatibility. Synthetic local 2s H.264 test fixture exists solely for Android instrumentation decoding; no third-party runtime encoder or decoder added.
 
 ### Pro overhaul

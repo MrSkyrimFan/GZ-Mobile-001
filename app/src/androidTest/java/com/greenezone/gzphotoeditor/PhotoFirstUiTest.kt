@@ -55,7 +55,8 @@ class PhotoFirstUiTest {
                     document = com.greenezone.gzphotoeditor.editor.GifDocument(),
                     onDocument = {},
                     onBack = {},
-                    onSwitch = {}
+                    onSwitch = {},
+                    onOpenLegacyPhotoProject = {}
                 )
             }
         }

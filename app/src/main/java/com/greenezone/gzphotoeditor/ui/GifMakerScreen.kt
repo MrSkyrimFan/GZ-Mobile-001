@@ -84,7 +84,11 @@ fun GifMakerScreen(
             document = document,
             onDocument = onDocument,
             onBack = onBack,
-            onSwitch = onSwitch
+            onSwitch = onSwitch,
+            onOpenLegacyPhotoProject = { saved ->
+                onDocument(saved)
+                photoSequenceOnly = true
+            }
         )
         return
     }
