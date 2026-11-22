@@ -49,6 +49,7 @@ The Android API 29 and API 35 suites must exercise a real system Back event and 
 - a video-backed GIF that was actively playing returns from Pro to the same active tab and a nonzero retained playhead, resumes paused, and Undo/Redo changes the actual Reverse state;
 - Collage host remount restores the Photos section, selected second tile and correct Undo owner; Undo changes the actual layout and the subsequent selected-tile edit changes only tile two;
 - photo-sequence GIF host remount restores its photo route, Timing tool, second frame and exact timing history; Undo restores the prior duration and the next frame command targets frame two;
+- a no-op visit to empty Pro still allows a later loaded Regular photo to seed the first Pro revision;
 - an intentionally empty established Pro revision is not reseeded from a newly loaded Regular photo, and its Undo restores the prior Pro document;
 - a real orientation change retains the Pro route, selected layer, active tool, viewport and Undo history;
 - clean loaded Regular → empty photo start without modifying source bytes;
@@ -62,7 +63,7 @@ The Android API 29 and API 35 suites must exercise a real system Back event and 
 - visible Done commits exactly once to the selected real parent tile;
 - saving an independent Regular project does not make a dirty embedded tile clean, and Discard still leaves the parent unchanged.
 
-The complete pre-existing instrumentation suite remains required. With fifteen added Android tests, the expected suite count is 97 per emulator if no existing test is removed or skipped. The exact XML case list, failures, errors and skips must be inspected at the tested commit.
+The complete pre-existing instrumentation suite remains required. With sixteen added Android tests, the expected suite count is 98 per emulator if no existing test is removed or skipped. The exact XML case list, failures, errors and skips must be inspected at the tested commit.
 
 ## Evidence that remains open
 

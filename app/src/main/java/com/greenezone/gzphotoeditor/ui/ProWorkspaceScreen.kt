@@ -258,7 +258,10 @@ internal fun ProWorkspaceScreenContent(
 
     fun persistSession() {
         onSession(ProWorkspaceSession(
-            documentEstablished = true,
+            documentEstablished = session.documentEstablished ||
+                document.layers.isNotEmpty() ||
+                history.undo.isNotEmpty() ||
+                history.redo.isNotEmpty(),
             selectedLayer = selected.coerceIn(0, document.layers.lastIndex.coerceAtLeast(0)),
             section = section,
             transform = transform,

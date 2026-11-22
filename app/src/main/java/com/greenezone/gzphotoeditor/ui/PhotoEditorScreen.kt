@@ -329,17 +329,23 @@ fun PhotoEditorScreen(
         if (mode == WorkspaceMode.PRO &&
             workspaceNavigation.current != WorkspaceMode.PRO &&
             !proSession.documentEstablished) {
+            val sessionHasRevision = proDocument.layers.isNotEmpty() ||
+                proSession.history.undo.isNotEmpty() ||
+                proSession.history.redo.isNotEmpty()
             val current = sourceUri
-            if (proDocument.layers.isEmpty() && current != null) {
-                proDocument = ProDocument(layers = listOf(ProLayer(
-                    uri = current.toString(), edits = document, name = "Original photo",
-                    aspect = (processed ?: original)?.let { frame ->
-                        frame.width.toFloat() / frame.height.coerceAtLeast(1)
-                    }?.coerceIn(.1f, 10f) ?: 1f
-                )))
-                proSession = ProWorkspaceSession(documentEstablished = true)
-            } else {
-                proSession = proSession.copy(documentEstablished = true)
+            when {
+                sessionHasRevision -> {
+                    proSession = proSession.copy(documentEstablished = true)
+                }
+                current != null -> {
+                    proDocument = ProDocument(layers = listOf(ProLayer(
+                        uri = current.toString(), edits = document, name = "Original photo",
+                        aspect = (processed ?: original)?.let { frame ->
+                            frame.width.toFloat() / frame.height.coerceAtLeast(1)
+                        }?.coerceIn(.1f, 10f) ?: 1f
+                    )))
+                    proSession = ProWorkspaceSession(documentEstablished = true)
+                }
             }
         }
         workspaceNavigation = workspaceNavigation.open(mode)

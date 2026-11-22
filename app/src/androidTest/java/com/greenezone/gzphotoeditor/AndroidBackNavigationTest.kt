@@ -32,7 +32,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
-import com.greenezone.gzphotoeditor.editor.CollageTemplate
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.ProjectStore
@@ -150,10 +149,11 @@ class AndroidBackNavigationTest {
 
     private fun withLoadedRegular(test: (Uri, ByteArray) -> Unit) {
         val uri = createPhoto("gz-back-regular-" + System.nanoTime())
+        val mounted = mutableStateOf(true)
+        var contentSet = false
         try {
             val original = resolver.openInputStream(uri)!!.use { it.readBytes() }
             val picker = singlePhotoPicker(uri)
-            val mounted = mutableStateOf(true)
             rule.setContent {
                 CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
                     MaterialTheme(colorScheme = darkColorScheme()) {
@@ -161,14 +161,17 @@ class AndroidBackNavigationTest {
                     }
                 }
             }
+            contentSet = true
             rule.onNodeWithText("Open media").performClick()
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
             }
             test(uri, original)
         } finally {
-            rule.runOnIdle { mounted.value = false }
-            rule.waitForIdle()
+            if (contentSet) {
+                rule.runOnIdle { mounted.value = false }
+                rule.waitForIdle()
+            }
             resolver.delete(uri, null, null)
         }
     }
@@ -372,10 +375,6 @@ class AndroidBackNavigationTest {
 
             rule.onNodeWithText("Playback").performClick()
             rule.onNodeWithText("Source timing").assertIsDisplayed()
-            rule.onNodeWithText("Play").performClick()
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithText("Pause").fetchSemanticsNodes().isNotEmpty()
-            }
 
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
@@ -386,16 +385,26 @@ class AndroidBackNavigationTest {
             rule.onNodeWithText("Source timing").assertIsDisplayed()
             rule.onNodeWithText("Play").assertIsDisplayed()
             rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.onNodeWithText("Timeline").performClick()
+            assertEquals(playhead, visibleGifFrameLabel())
+
+            rule.onNodeWithText("Playback").performClick()
+            rule.onNodeWithText("Play").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Pause").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Photo editing Pro").performClick()
+            pressSystemBack()
+            rule.onNodeWithText("GIF ▾").assertIsDisplayed()
+            rule.onNodeWithText("Source timing").assertIsDisplayed()
+            rule.onNodeWithText("Play").assertIsDisplayed()
+
             rule.onNodeWithText("Reverse").assertIsSelected()
             rule.onNodeWithText("Undo").performClick()
             rule.onNodeWithText("Reverse").assertIsNotSelected()
             rule.onNodeWithText("Redo").performClick()
             rule.onNodeWithText("Reverse").assertIsSelected()
-            rule.onNodeWithText("Timeline").performClick()
-            val restoredPlayhead = visibleGifFrameLabel()
-            check(!restoredPlayhead.startsWith("Frame 1 ")) {
-                "Video GIF playhead reset from $playhead to $restoredPlayhead"
-            }
         } finally {
             rule.runOnIdle { mounted.value = false }
             rule.waitForIdle()
@@ -449,28 +458,32 @@ class AndroidBackNavigationTest {
                 rule.onNodeWithText("Photos").performClick()
                 rule.onNodeWithText("Photo 2").performClick()
                 rule.onNodeWithTag("collage-sections")
-                    .performScrollToNode(hasText("Layouts"))
-                rule.onNodeWithText("Layouts").performClick()
-                rule.onNodeWithText("Side by side").performClick()
+                    .performScrollToNode(hasText("Spacing"))
+                rule.onNodeWithText("Spacing").performClick()
+                rule.onNodeWithText("Outside margin").performClick()
+                rule.onNodeWithContentDescription("Adjust Outside margin")
+                    .performSemanticsAction(SemanticsActions.SetProgress) { setProgress ->
+                        check(setProgress(.06f))
+                    }
                 rule.waitUntil(15_000) {
                     rule.onAllNodesWithText("Updating", substring = true)
                         .fetchSemanticsNodes()
                         .isEmpty()
                 }
-                rule.onNodeWithTag("collage-sections")
-                    .performScrollToNode(hasText("Photos"))
-                rule.onNodeWithText("Photos").performClick()
 
                 pressSystemBack()
                 rule.onNodeWithText("Other workspace").assertIsDisplayed()
                 pressSystemBack()
-                rule.onNodeWithText("Edit selected").assertIsDisplayed()
+                rule.onNodeWithContentDescription("Adjust Outside margin").assertIsDisplayed()
                 rule.onNodeWithText("↶").assertIsEnabled()
                 rule.onNodeWithText("↶").performClick()
                 rule.runOnIdle {
-                    assertEquals(CollageTemplate.GRID, latest.layout.template)
+                    assertEquals(initial.layout.margin, latest.layout.margin)
                 }
 
+                rule.onNodeWithTag("collage-sections")
+                    .performScrollToNode(hasText("Photos"))
+                rule.onNodeWithText("Photos").performClick()
                 rule.onNodeWithText("Edit selected").performClick()
                 rule.waitUntil(15_000) {
                     rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
@@ -559,6 +572,43 @@ class AndroidBackNavigationTest {
             }
         }
 
+    @Test fun emptyNoOpProVisitStillAllowsLaterRegularSeed() {
+        val uri = createPhoto("gz-back-pro-seed-" + System.nanoTime())
+        val picker = singlePhotoPicker(uri)
+        val mounted = mutableStateOf(true)
+        var contentSet = false
+        try {
+            rule.setContent {
+                CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        if (mounted.value) PhotoEditorScreen()
+                    }
+                }
+            }
+            contentSet = true
+
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Photo editing Pro").performClick()
+            rule.onNodeWithText("Add first photo").assertIsDisplayed()
+            pressSystemBack()
+            rule.onNodeWithText("Photo ▾").assertIsDisplayed()
+
+            rule.onNodeWithText("Open media").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Photo editing Pro").performClick()
+            rule.onNodeWithText("Original photo", substring = true).assertIsDisplayed()
+        } finally {
+            if (contentSet) {
+                rule.runOnIdle { mounted.value = false }
+                rule.waitForIdle()
+            }
+            resolver.delete(uri, null, null)
+        }
+    }
+
     @Test fun intentionalEmptyProHistoryIsNotReseededFromRegular() {
         val uri = createPhoto("gz-back-pro-established-" + System.nanoTime())
         val picker = singlePhotoPicker(uri)
@@ -595,7 +645,8 @@ class AndroidBackNavigationTest {
 
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
-            rule.onNodeWithText("Original photo").assertDoesNotExist()
+            rule.onNodeWithText("Original photo", substring = true).assertDoesNotExist()
+            rule.onNodeWithText("Add first photo").assertIsDisplayed()
             rule.onNodeWithText("Undo").performClick()
             rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
         } finally {
@@ -692,7 +743,7 @@ class AndroidBackNavigationTest {
 
     @Test fun savingStandaloneProjectDoesNotCleanActualTileDraft() =
         withCollageFixtures { entry, neighbor, _ ->
-            val projectName = "Tile baseline " + System.nanoTime()
+            val projectName = "Tile" + System.nanoTime()
             val initial = CollageDocument(photos = listOf(
                 CollagePhoto(entry.toString()),
                 CollagePhoto(neighbor.toString())

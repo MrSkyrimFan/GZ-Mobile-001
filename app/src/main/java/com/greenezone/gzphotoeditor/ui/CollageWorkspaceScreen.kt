@@ -158,6 +158,7 @@ internal fun CollageWorkspaceScreenContent(
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var notice by remember { mutableStateOf("") }
     var rendering by remember { mutableStateOf(false) }
+    var renderGeneration by remember { mutableIntStateOf(0) }
     var exporting by remember { mutableStateOf(false) }
     var editingTile by remember { mutableIntStateOf(-1) }
     var showExport by remember { mutableStateOf(false) }
@@ -384,14 +385,17 @@ internal fun CollageWorkspaceScreenContent(
     }
 
     LaunchedEffect(document) {
+        renderGeneration += 1
+        val generation = renderGeneration
         if (document.photos.isEmpty()) {
             preview = null
+            rendering = false
             savedNames = withContext(Dispatchers.IO) { CollageStore.names(context) }
             return@LaunchedEffect
         }
-        delay(125L)
         rendering = true
         try {
+            delay(125L)
             val (width, height) = CollageMath.outputSize(document.layout, 960, 1_300_000L)
             val value = withContext(Dispatchers.Default) {
                 val job = currentCoroutineContext()
@@ -410,7 +414,7 @@ internal fun CollageWorkspaceScreenContent(
         } catch (error: Exception) {
             notice = "Cannot render collage: " + (error.message ?: "missing source photo")
         } finally {
-            rendering = false
+            if (renderGeneration == generation) rendering = false
         }
     }
 
