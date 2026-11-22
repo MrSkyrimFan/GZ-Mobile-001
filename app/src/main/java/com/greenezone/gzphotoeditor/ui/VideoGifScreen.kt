@@ -348,7 +348,11 @@ fun VideoGifScreen(
                                 VideoGifTab.PLAYBACK -> {
                                     GifOptions {
                                         GifVideoMath.FRAME_RATES.forEach { fps ->
-                                            DockChip(if (fps == 0) "Source timing" else "$fps FPS", clip.fps == fps, enabled) {
+                                            DockChip(
+                                                if (fps == 0) "Source timing" else "$fps FPS",
+                                                clip.fps == fps,
+                                                enabled && GifVideoMath.fitsFrameBudget(clip, fps)
+                                            ) {
                                                 commit(document.copy(video = clip.copy(fps = fps)), 0)
                                             }
                                         }

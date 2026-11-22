@@ -61,3 +61,8 @@ only and cannot be marketed as complete Photoshop/GIMP/Lightroom parity.
 Do not issue an "AAA finished" promise until the missing professional
 functionality, device/format corpus and commercial qualification are genuinely
 complete and witnessed.
+
+## Additional fidelity repair
+- Requested FPS previously silently clamped to 150,000 frames on long clips,
+  reducing user-requested frame rate. The new scheduler rejects unsupported
+  long-clip FPS and disables that option in the UI instead of changing it secretly.
