@@ -65,9 +65,29 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class ProTransform(val title: String) {
+internal enum class ProTransform(val title: String) {
     SIZE("Size"), OPACITY("Opacity"), HORIZONTAL("X"), VERTICAL("Y"), ROTATE("Rotate")
 }
+
+internal data class ProWorkspaceSession(
+    val selectedLayer: Int = 0,
+    val section: ProSection = ProSection.LAYERS,
+    val transform: ProTransform = ProTransform.SIZE,
+    val viewport: ProViewport = ProViewport(),
+    val viewportAspect: ProAspect = ProAspect.SQUARE,
+    val history: ProHistory = ProHistory(),
+    val chromeVisible: Boolean = true,
+    val panelExpanded: Boolean = true,
+    val brushColor: Int = 0xFF96E5C2.toInt(),
+    val brushSize: Float = .012f,
+    val brushOpacity: Float = 1f,
+    val eraserMode: Boolean = false,
+    val selectionKind: ProSelectionKind = ProSelectionKind.RECTANGLE,
+    val retouchKind: ProRetouchKind = ProRetouchKind.CLONE,
+    val retouchRadius: Float = .04f,
+    val retouchStrength: Float = 1f
+)
+
 /** True independently editable bitmap/vector/adjustment layer workspace. */
 @Composable
 fun ProWorkspaceScreen(
@@ -76,37 +96,66 @@ fun ProWorkspaceScreen(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit
 ) {
+    var session by remember { mutableStateOf(ProWorkspaceSession()) }
+    ProWorkspaceScreenContent(
+        document = document,
+        onDocument = onDocument,
+        onBack = onBack,
+        onSwitch = onSwitch,
+        session = session,
+        onSession = { session = it }
+    )
+}
+
+@Composable
+internal fun ProWorkspaceScreenContent(
+    document: ProDocument,
+    onDocument: (ProDocument) -> Unit,
+    onBack: () -> Unit,
+    onSwitch: (WorkspaceMode) -> Unit,
+    session: ProWorkspaceSession,
+    onSession: (ProWorkspaceSession) -> Unit
+) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
-    var selected by remember { mutableIntStateOf(0) }
-    var section by remember { mutableStateOf(ProSection.LAYERS) }
-    var transform by remember { mutableStateOf(ProTransform.SIZE) }
-    var chrome by remember { mutableStateOf(true) }
-    var expanded by remember { mutableStateOf(true) }
+    var selected by remember {
+        mutableIntStateOf(session.selectedLayer.coerceIn(
+            0, document.layers.lastIndex.coerceAtLeast(0)
+        ))
+    }
+    var section by remember { mutableStateOf(session.section) }
+    var transform by remember { mutableStateOf(session.transform) }
+    var chrome by remember { mutableStateOf(session.chromeVisible) }
+    var expanded by remember { mutableStateOf(session.panelExpanded) }
     var showTools by remember { mutableStateOf(false) }
     var showStack by remember { mutableStateOf(false) }
     var showFile by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<String?>(null) }
-    var viewport by remember(document.aspect) { mutableStateOf(ProViewport()) }
-    var history by remember { mutableStateOf(ProHistory()) }
+    var viewport by remember(document.aspect) {
+        mutableStateOf(
+            if (document.aspect == session.viewportAspect) session.viewport
+            else ProViewport()
+        )
+    }
+    var history by remember { mutableStateOf(session.history) }
     var sliderStart by remember { mutableStateOf<ProDocument?>(null) }
     var lastSliderValue by remember { mutableStateOf<ProDocument?>(null) }
     var lastDragValue by remember { mutableStateOf<ProDocument?>(null) }
     var dragStart by remember { mutableStateOf<ProDocument?>(null) }
     var activeStroke by remember { mutableStateOf<InkStroke?>(null) }
-    var brushColor by remember { mutableIntStateOf(0xFF96E5C2.toInt()) }
-    var brushSize by remember { mutableFloatStateOf(.012f) }
-    var brushOpacity by remember { mutableFloatStateOf(1f) }
-    var eraserMode by remember { mutableStateOf(false) }
-    var selectionKind by remember { mutableStateOf(ProSelectionKind.RECTANGLE) }
+    var brushColor by remember { mutableIntStateOf(session.brushColor) }
+    var brushSize by remember { mutableFloatStateOf(session.brushSize) }
+    var brushOpacity by remember { mutableFloatStateOf(session.brushOpacity) }
+    var eraserMode by remember { mutableStateOf(session.eraserMode) }
+    var selectionKind by remember { mutableStateOf(session.selectionKind) }
     var selectionStart by remember { mutableStateOf<BrushPoint?>(null) }
     var draftSelection by remember { mutableStateOf<ProSelection?>(null) }
     var retouchSource by remember { mutableStateOf<BrushPoint?>(null) }
     var retouchSourceImage by remember { mutableStateOf<BrushPoint?>(null) }
-    var retouchKind by remember { mutableStateOf(ProRetouchKind.CLONE) }
-    var retouchRadius by remember { mutableFloatStateOf(.04f) }
-    var retouchStrength by remember { mutableFloatStateOf(1f) }
+    var retouchKind by remember { mutableStateOf(session.retouchKind) }
+    var retouchRadius by remember { mutableFloatStateOf(session.retouchRadius) }
+    var retouchStrength by remember { mutableFloatStateOf(session.retouchStrength) }
     var replacingImage by remember { mutableIntStateOf(-1) }
     var textOpen by remember { mutableStateOf(false) }
     var textDraft by remember { mutableStateOf("") }
@@ -206,10 +255,75 @@ fun ProWorkspaceScreen(
         }
     }
 
-    BackHandler {
-        if (!chrome) chrome = true
-        else if (!busy && !exporting) onBack()
+    fun persistSession() {
+        onSession(ProWorkspaceSession(
+            selectedLayer = selected.coerceIn(0, document.layers.lastIndex.coerceAtLeast(0)),
+            section = section,
+            transform = transform,
+            viewport = viewport,
+            viewportAspect = document.aspect,
+            history = history,
+            chromeVisible = chrome,
+            panelExpanded = expanded,
+            brushColor = brushColor,
+            brushSize = brushSize,
+            brushOpacity = brushOpacity,
+            eraserMode = eraserMode,
+            selectionKind = selectionKind,
+            retouchKind = retouchKind,
+            retouchRadius = retouchRadius,
+            retouchStrength = retouchStrength
+        ))
     }
+
+    fun finishPendingHistory() {
+        finishSlider()
+        dragStart?.let { before ->
+            history = history.checkpoint(before, lastDragValue ?: document)
+        }
+        dragStart = null
+        lastDragValue = null
+    }
+
+    fun hasUnresolvedToolDraft(): Boolean {
+        if (activeStroke != null || selectionStart != null) {
+            notice = "Finish the current Pro gesture before leaving."
+            return true
+        }
+        if (draftSelection != null) {
+            notice = "Apply or clear the current selection before leaving Photo Pro."
+            return true
+        }
+        return false
+    }
+
+    fun requestBack() {
+        when {
+            !chrome -> chrome = true
+            busy -> notice = "Wait for the current Pro operation to finish."
+            exporting -> notice = "Finish the Pro export before leaving."
+            hasUnresolvedToolDraft() -> Unit
+            else -> {
+                finishPendingHistory()
+                persistSession()
+                onBack()
+            }
+        }
+    }
+
+    fun requestSwitch(mode: WorkspaceMode) {
+        if (busy || exporting) {
+            notice = if (exporting) "Finish the Pro export before switching workspaces."
+                else "Wait for the current Pro operation to finish."
+            return
+        }
+        if (hasUnresolvedToolDraft()) return
+        finishPendingHistory()
+        persistSession()
+        onSwitch(mode)
+    }
+
+    BackHandler { requestBack() }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(ProMath.MAX_LAYERS)
@@ -452,7 +566,7 @@ fun ProWorkspaceScreen(
                                 DropdownMenuItem(text = { Text("Pro help") }, onClick = {
                                     showFile = false; showHelp = true
                                 })
-                                DropdownMenuItem(text = { Text("Back") }, onClick = { showFile = false; onBack() })
+                                DropdownMenuItem(text = { Text("Back") }, onClick = { showFile = false; requestBack() })
                             }
                         }
                         TextButton(onClick = { showAdd = true }, enabled = available &&
@@ -470,7 +584,7 @@ fun ProWorkspaceScreen(
                             }
                         }) { Text("Redo") }
                     }
-                    WorkspaceModeMenu(WorkspaceMode.PRO, available, onSwitch)
+                    WorkspaceModeMenu(WorkspaceMode.PRO, available, ::requestSwitch)
                 }
                 if (notice.isNotBlank()) Text(notice, color = EditorMint, fontSize = 12.sp,
                     maxLines = 2, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))

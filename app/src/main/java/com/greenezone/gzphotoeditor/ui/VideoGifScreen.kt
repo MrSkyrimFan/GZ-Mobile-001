@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,7 +36,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
-private enum class VideoGifTab(val title: String) {
+internal enum class VideoGifTab(val title: String) {
     TIMELINE("Timeline"), PLAYBACK("Playback"), ADJUST("Adjust"), LOOKS("Looks"),
     CAPTION("Caption"), CANVAS("Canvas")
 }
@@ -53,21 +52,43 @@ fun VideoGifScreen(
     onSwitch: (WorkspaceMode) -> Unit,
     onOpenLegacyPhotoProject: (GifDocument) -> Unit
 ) {
+    var session by remember { mutableStateOf(GifWorkspaceSession()) }
+    VideoGifScreenContent(
+        document = document,
+        onDocument = onDocument,
+        onBack = onBack,
+        onSwitch = onSwitch,
+        onOpenLegacyPhotoProject = onOpenLegacyPhotoProject,
+        session = session,
+        onSession = { session = it }
+    )
+}
+
+@Composable
+internal fun VideoGifScreenContent(
+    document: GifDocument,
+    onDocument: (GifDocument) -> Unit,
+    onBack: () -> Unit,
+    onSwitch: (WorkspaceMode) -> Unit,
+    onOpenLegacyPhotoProject: (GifDocument) -> Unit,
+    session: GifWorkspaceSession,
+    onSession: (GifWorkspaceSession) -> Unit
+) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
     val clip = document.video
-    var tab by rememberSaveable { mutableStateOf(VideoGifTab.TIMELINE) }
+    var tab by remember { mutableStateOf(session.videoTab) }
     var playing by remember { mutableStateOf(false) }
-    var seek by remember { mutableIntStateOf(0) }
-    var position by remember { mutableIntStateOf(0) }
+    var seek by remember { mutableIntStateOf(session.videoSeek) }
+    var position by remember { mutableIntStateOf(session.videoPosition) }
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var committingExport by remember { mutableStateOf(false) }
     val enabled = !busy && !exporting
     var notice by remember { mutableStateOf("") }
     var progress by remember { mutableStateOf("") }
-    var history by remember { mutableStateOf(GifHistory()) }
+    var history by remember { mutableStateOf(session.videoHistory) }
     var dragStart by remember { mutableStateOf<GifDocument?>(null) }
     var dragLatest by remember { mutableStateOf<GifDocument?>(null) }
     var exportJob by remember { mutableStateOf<Job?>(null) }
@@ -79,7 +100,7 @@ fun VideoGifScreen(
     var showSaved by remember { mutableStateOf(false) }
     var savedNames by remember { mutableStateOf(emptyList<String>()) }
     var saveName by remember { mutableStateOf("") }
-    var collapsed by rememberSaveable { mutableStateOf(false) }
+    var collapsed by remember { mutableStateOf(session.videoCollapsed) }
 
     fun pauseAt(frame: Int) {
         playing = false
@@ -219,7 +240,50 @@ fun VideoGifScreen(
             }
         }
     }
-    BackHandler { if (enabled) onBack() }
+    fun persistVideoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.VIDEO) {
+        onSession(session.copy(
+            route = route,
+            videoTab = tab,
+            videoSeek = seek,
+            videoPosition = position,
+            videoHistory = history,
+            videoCollapsed = collapsed
+        ))
+    }
+
+    fun finishVideoRouteExit() {
+        finishSlide()
+        val frameCount = document.video?.let { GifVideoMath.frameCount(it) } ?: 0
+        pauseAt(position.coerceIn(0, (frameCount - 1).coerceAtLeast(0)))
+    }
+
+    fun requestBack() {
+        when {
+            committingExport -> notice = "Finish saving the GIF before leaving."
+            exporting -> notice = "Finish or cancel the GIF export before leaving."
+            busy -> notice = "Wait for the GIF source to finish opening."
+            else -> {
+                finishVideoRouteExit()
+                persistVideoSession()
+                onBack()
+            }
+        }
+    }
+
+    fun requestSwitch(mode: WorkspaceMode) {
+        when {
+            committingExport -> notice = "Finish saving the GIF before switching workspaces."
+            exporting -> notice = "Finish or cancel the GIF export before switching workspaces."
+            busy -> notice = "Wait for the GIF source to finish opening."
+            else -> {
+                finishVideoRouteExit()
+                persistVideoSession()
+                onSwitch(mode)
+            }
+        }
+    }
+
+    BackHandler { requestBack() }
 
     val count = remember(clip) { clip?.let { GifVideoMath.frameCount(it) } ?: 0 }
     val time = remember(clip) { clip?.let { GifVideoMath.frameTimesMs(it) }.orEmpty() }
@@ -234,7 +298,7 @@ fun VideoGifScreen(
             Row(Modifier.fillMaxWidth().background(EditorSurface),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onBack, enabled = enabled) { Text("‹ Back", color = EditorWhite) }
+                TextButton(onClick = ::requestBack) { Text("‹ Back", color = EditorWhite) }
                 TextButton(onClick = { pauseAt(position); showHelp = true }, enabled = enabled) {
                     Text("Help", color = EditorMint)
                 }
@@ -249,7 +313,7 @@ fun VideoGifScreen(
                         DropdownMenuItem(text = { Text("Open saved GIF project") }, onClick = { showMenu = false; openProjects() })
                     }
                 }
-                WorkspaceModeMenu(WorkspaceMode.GIF, enabled, onSwitch)
+                WorkspaceModeMenu(WorkspaceMode.GIF, enabled, ::requestSwitch)
             }
             if (notice.isNotBlank()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -438,7 +502,11 @@ fun VideoGifScreen(
                                 else if (saved.video != null) {
                                     commit(saved, 0)
                                     lastExport = null
-                                } else onOpenLegacyPhotoProject(saved)
+                                } else {
+                                    finishVideoRouteExit()
+                                    persistVideoSession(GifWorkspaceRoute.PHOTOS)
+                                    onOpenLegacyPhotoProject(saved)
+                                }
                             } finally { busy = false }
                         }
                     }) { Text(name) }

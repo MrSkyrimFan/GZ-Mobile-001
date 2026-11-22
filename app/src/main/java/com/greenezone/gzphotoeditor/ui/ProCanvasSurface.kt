@@ -20,10 +20,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.greenezone.gzphotoeditor.editor.*
+import java.util.Locale
 import kotlin.math.min
 
 internal data class ProViewport(val zoom: Float = 1f, val x: Float = .5f, val y: Float = .5f)
@@ -71,8 +74,11 @@ internal fun ProCanvasSurface(
     val bitmapPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG) }
     val toggleLabel = if (controlsVisible) "Hide controls" else "Show controls"
     val (width, height) = artboardSize
-    Canvas(modifier.semantics {
+    Canvas(modifier.testTag("pro-canvas").semantics {
         contentDescription = if (enabled) "Pro editable composition" else "Pro composition preview"
+        stateDescription = String.format(
+            Locale.US, "z=%.4f;x=%.4f;y=%.4f", view.zoom, view.x, view.y
+        )
         if (enabled) onClick(label = toggleLabel) { events.toggleControls(); true }
     }.pointerInput(section, enabled) {
         if (!enabled) return@pointerInput

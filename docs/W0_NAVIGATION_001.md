@@ -16,9 +16,11 @@ This correction must preserve the existing dark image-first layout, top-right wo
 - Opening the active workspace is a no-op. Disabled Video cannot enter the stack.
 - Back preview is read-only; only a committed Back returns a new navigation value.
 - Keep all Regular, Pro, Collage and GIF documents in their existing owner. Workspace navigation moves no pixels and converts no document.
+- Retain each mounted workspace's stable session state in the host: Pro selected layer/tool/transform/viewport/history and tool preferences; Collage selected tile/control/history/tool visibility; GIF route/tool/frame or tab/playhead/history. Playback resumes paused. Preview bitmaps, pointer drafts, dialogs and jobs remain screen-local.
+- Finalize slider/timing history before a route pop, and report a meaningful notice instead of silently swallowing Back while Pro, Collage or GIF is busy/exporting.
 - A loaded clean Regular photo returns to the existing empty photo start instead of leaving the task.
 - Dirty Regular Back offers Save project, Discard or Keep editing. A successful project save establishes the new clean baseline before closing. A failed or dismissed save keeps the photo intact.
-- Embedded Collage tile Back is separate from Done. Clean Back cancels without modifying the parent. Dirty Back offers Apply, Discard or Keep editing. Busy/exporting tile work keeps Back ownership and reports why it cannot leave.
+- Embedded Collage tile Back is separate from Done. Its immutable entry `CollagePhoto` is the transaction baseline, so replacement-source loads and standalone project saves cannot make the tile falsely clean. Clean Back cancels without modifying the parent. Dirty Back offers Apply, Discard or Keep editing. Busy/exporting tile work keeps Back ownership and reports why it cannot leave.
 - Collage-root system Back, visible Back and workspace switching use the same guard. Preview rendering or export cannot fall through and remove the workspace.
 - Pro hidden-chrome Back, Help article → topic list behavior, GIF export ownership, all render/persistence code and all existing project codecs remain unchanged.
 
@@ -41,17 +43,22 @@ The JVM route-policy suite must prove:
 
 The Android API 29 and API 35 suites must exercise a real system Back event and prove:
 
-- loaded Regular → Pro → GIF → Back → Pro → Back → the same loaded Regular;
+- loaded Regular → Pro → GIF → Back → Pro → Back → the same loaded Regular, including Regular dirty history and Pro selected layer, active tool, non-default viewport and Undo history;
+- a video-backed GIF returns from Pro to the same active tab and playhead, with playback paused;
+- a real orientation change retains the Pro route, selected layer, active tool, viewport and Undo history;
 - clean loaded Regular → empty photo start without modifying source bytes;
 - dirty loaded Regular supports Keep editing and Discard without modifying source bytes;
 - clean Collage tile Back cancels without Apply;
 - dirty Collage tile Discard does not invoke Done;
-- dirty Collage tile Apply invokes Done exactly once.
+- dirty Collage tile Apply invokes Done exactly once;
+- replacing a tile source remains dirty relative to the entry tile;
+- replacement Discard leaves the real parent document unchanged, including its neighbor tile and layout;
+- Keep editing retains the replacement and a later Apply changes only the selected parent tile.
 
-The complete pre-existing instrumentation suite remains required. With six added Android tests, the expected suite count is 88 per emulator if no existing test is removed or skipped. The exact XML case list, failures, errors and skips must be inspected at the tested commit.
+The complete pre-existing instrumentation suite remains required. With ten added Android tests, the expected suite count is 92 per emulator if no existing test is removed or skipped. The exact XML case list, failures, errors and skips must be inspected at the tested commit.
 
 ## Evidence that remains open
 
 Automated key events and a pure side-effect-free preview model do not prove a real predictive edge gesture. Physical-device qualification remains open for both gesture edges, half-cancel, one committed pop, rapid double Back, OEM picker/IME precedence, and Back during an irreversible document-provider copy. The first phone gate also needs matched protected-screen evidence. These items must not be reported as accepted from green CI alone.
 
-Process-death draft recovery, persistent Collage tile IDs, delayed picker/reorder targeting, GIF playhead restoration, explicit saved Regular ↔ Pro exchange and durable autosave are required following slices. They are not silently claimed by this bounded correction.
+Activity recreation/process-death draft recovery, persistent Collage tile IDs, delayed picker/reorder targeting, per-entry snapshots for repeated-mode cycles, explicit saved Regular ↔ Pro exchange and durable autosave are required following slices. The in-memory host sessions in this correction are not serialized into the saved-instance-state bundle. These items are not silently claimed by this bounded correction.

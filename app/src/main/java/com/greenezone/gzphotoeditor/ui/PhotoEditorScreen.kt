@@ -123,11 +123,17 @@ fun PhotoEditorScreen(
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
+    // The parent Collage record changes only through Apply or Done. Keep this
+    // entry snapshot immutable while the nested editor loads/saves other media.
+    val tileEntryBaseline = remember(initialCollagePhoto) { initialCollagePhoto }
 
     var workspaceNavigation by remember { mutableStateOf(WorkspaceNavigation()) }
     var collageDocument by remember { mutableStateOf(CollageDocument()) }
+    var collageSession by remember { mutableStateOf(CollageWorkspaceSession()) }
     var proDocument by remember { mutableStateOf(ProDocument()) }
+    var proSession by remember { mutableStateOf(ProWorkspaceSession()) }
     var gifDocument by remember { mutableStateOf(GifDocument()) }
+    var gifSession by remember { mutableStateOf(GifWorkspaceSession()) }
 
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
@@ -200,7 +206,11 @@ fun PhotoEditorScreen(
         activeLook = key
     }
 
-    fun loadPhoto(uri: Uri, restored: EditDocument? = null) {
+    fun loadPhoto(
+        uri: Uri,
+        restored: EditDocument? = null,
+        establishBaseline: Boolean = tileEntryBaseline == null
+    ) {
         val request = ++loadingToken
         scope.launch {
             busy = true
@@ -228,8 +238,10 @@ fun PhotoEditorScreen(
                 liveGesture = false
                 val loadedDocument = restored ?: EditDocument()
                 document = loadedDocument
-                baselineUri = uri.toString()
-                baselineDocument = loadedDocument
+                if (establishBaseline) {
+                    baselineUri = uri.toString()
+                    baselineDocument = loadedDocument
+                }
                 history = EditHistory()
                 gestureStart = null
                 selectedMask = 0
@@ -340,8 +352,14 @@ fun PhotoEditorScreen(
         onDoneCollagePhoto?.invoke(CollagePhoto(image, document))
     }
 
-    fun isPhotoDirty(): Boolean =
-        sourceUri?.toString() != baselineUri || document != baselineDocument
+    fun isPhotoDirty(): Boolean {
+        val tileEntry = tileEntryBaseline
+        if (tileEntry != null) {
+            val currentUri = sourceUri ?: return false
+            return currentUri.toString() != tileEntry.uri || document != tileEntry.edits
+        }
+        return sourceUri?.toString() != baselineUri || document != baselineDocument
+    }
 
     fun closeCurrentPhoto() {
         loadingToken += 1
@@ -864,29 +882,35 @@ fun PhotoEditorScreen(
     }
 
     if (workspaceNavigation.current == WorkspaceMode.PRO) {
-        ProWorkspaceScreen(
+        ProWorkspaceScreenContent(
             document = proDocument,
             onDocument = { proDocument = it },
             onBack = ::leaveWorkspace,
-            onSwitch = ::chooseWorkspace
+            onSwitch = ::chooseWorkspace,
+            session = proSession,
+            onSession = { proSession = it }
         )
         return
     }
     if (workspaceNavigation.current == WorkspaceMode.GIF) {
-        GifMakerScreen(
+        GifMakerScreenContent(
             document = gifDocument,
             onDocument = { gifDocument = it },
             onBack = ::leaveWorkspace,
-            onSwitch = ::chooseWorkspace
+            onSwitch = ::chooseWorkspace,
+            session = gifSession,
+            onSession = { gifSession = it }
         )
         return
     }
     if (workspaceNavigation.current == WorkspaceMode.COLLAGE) {
-        CollageWorkspaceScreen(
+        CollageWorkspaceScreenContent(
             document = collageDocument,
             onDocument = { collageDocument = it },
             onBack = ::leaveWorkspace,
-            onSwitch = ::chooseWorkspace
+            onSwitch = ::chooseWorkspace,
+            session = collageSession,
+            onSession = { collageSession = it }
         )
         return
     }
@@ -1304,8 +1328,10 @@ fun PhotoEditorScreen(
                 val uri = sourceUri
                 if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
                     savedProjects = ProjectStore.load(context)
-                    baselineUri = uri.toString()
-                    baselineDocument = document
+                    if (tileEntryBaseline == null) {
+                        baselineUri = uri.toString()
+                        baselineDocument = document
+                    }
                     val shouldClose = closeAfterProjectSave
                     closeAfterProjectSave = false
                     showSaveProject = false

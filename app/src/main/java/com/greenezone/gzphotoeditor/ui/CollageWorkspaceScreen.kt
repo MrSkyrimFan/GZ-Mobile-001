@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,17 +89,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.min
 
-private enum class CollageSection(val label: String) {
+internal enum class CollageSection(val label: String) {
     TEMPLATES("Layouts"), ASPECT("Aspect"), FRAME("Spacing"),
     BACKGROUND("Style"), TILES("Photos"), QUALITY("Quality")
 }
 
-private enum class FrameControl(val title: String, val low: Float, val high: Float) {
+internal enum class FrameControl(val title: String, val low: Float, val high: Float) {
     GAP("Spacing", 0f, .08f),
     MARGIN("Outside margin", 0f, .10f),
     ROUND("Corner roundness", 0f, .10f),
     BORDER("Border width", 0f, .025f)
 }
+
+internal data class CollageWorkspaceSession(
+    val selectedPhoto: Int = 0,
+    val history: CollageHistory = CollageHistory(),
+    val section: CollageSection = CollageSection.TEMPLATES,
+    val control: FrameControl = FrameControl.GAP,
+    val toolsVisible: Boolean = true
+)
 
 private data class CollageExport(
     val collage: CollageDocument,
@@ -112,15 +121,39 @@ fun CollageWorkspaceScreen(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit = {}
 ) {
+    var session by remember { mutableStateOf(CollageWorkspaceSession()) }
+    CollageWorkspaceScreenContent(
+        document = document,
+        onDocument = onDocument,
+        onBack = onBack,
+        onSwitch = onSwitch,
+        session = session,
+        onSession = { session = it }
+    )
+}
+
+@Composable
+internal fun CollageWorkspaceScreenContent(
+    document: CollageDocument,
+    onDocument: (CollageDocument) -> Unit,
+    onBack: () -> Unit,
+    onSwitch: (WorkspaceMode) -> Unit,
+    session: CollageWorkspaceSession,
+    onSession: (CollageWorkspaceSession) -> Unit
+) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
-    var selected by remember { mutableIntStateOf(0) }
-    var history by remember { mutableStateOf(CollageHistory()) }
+    var selected by remember {
+        mutableIntStateOf(session.selectedPhoto.coerceIn(
+            0, document.photos.lastIndex.coerceAtLeast(0)
+        ))
+    }
+    var history by remember { mutableStateOf(session.history) }
     var layoutGestureStart by remember { mutableStateOf<CollageDocument?>(null) }
-    var section by remember { mutableStateOf(CollageSection.TEMPLATES) }
-    var control by remember { mutableStateOf(FrameControl.GAP) }
-    var toolsVisible by remember { mutableStateOf(true) }
+    var section by remember { mutableStateOf(session.section) }
+    var control by remember { mutableStateOf(session.control) }
+    var toolsVisible by remember { mutableStateOf(session.toolsVisible) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var notice by remember { mutableStateOf("") }
     var rendering by remember { mutableStateOf(false) }
@@ -174,6 +207,16 @@ fun CollageWorkspaceScreen(
         }
     }
 
+    fun persistSession() {
+        onSession(CollageWorkspaceSession(
+            selectedPhoto = selected.coerceIn(0, document.photos.lastIndex.coerceAtLeast(0)),
+            history = history,
+            section = section,
+            control = control,
+            toolsVisible = toolsVisible
+        ))
+    }
+
     fun requestBack() {
         if (rendering || exporting) {
             notice = if (exporting) "Finish the collage export before leaving."
@@ -181,6 +224,7 @@ fun CollageWorkspaceScreen(
             return
         }
         finishLayout()
+        persistSession()
         onBack()
     }
 
@@ -191,6 +235,7 @@ fun CollageWorkspaceScreen(
             return
         }
         finishLayout()
+        persistSession()
         onSwitch(mode)
     }
 
@@ -744,7 +789,7 @@ private fun CollageControls(
                     }
                 }
             }
-            LazyRow(Modifier.fillMaxWidth().height(46.dp),
+            LazyRow(Modifier.fillMaxWidth().height(46.dp).testTag("collage-tile-actions"),
                 contentPadding = PaddingValues(horizontal = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 item { DockChip("+ Add", false,
@@ -775,7 +820,7 @@ private fun CollageControls(
         }
     }
 
-    LazyRow(Modifier.fillMaxWidth().height(47.dp),
+    LazyRow(Modifier.fillMaxWidth().height(47.dp).testTag("collage-sections"),
         contentPadding = PaddingValues(horizontal = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         items(CollageSection.entries) { item ->
