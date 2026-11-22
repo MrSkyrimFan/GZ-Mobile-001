@@ -105,6 +105,7 @@ fun VideoGifScreen(
     var history by remember { mutableStateOf(GifHistory()) }
     var dragStart by remember { mutableStateOf<GifDocument?>(null) }
     var outputSnapshot by remember { mutableStateOf<GifDocument?>(null) }
+    var lastExport by remember { mutableStateOf<Uri?>(null) }
     var askSave by remember { mutableStateOf(false) }
     var savedOpen by remember { mutableStateOf(false) }
     var askNew by remember { mutableStateOf(false) }
@@ -189,7 +190,8 @@ fun VideoGifScreen(
                                     })
                             } ?: throw IOException("Output file cannot be opened")
                         }
-                        notice = "GIF exported. Your original video was not changed."
+                        lastExport = dest
+                        notice = "GIF saved. Tap View saved GIF to inspect the animation."
                     } catch (cancelled: CancellationException) {
                         try { resolver.delete(dest, null, null) } catch (_: Exception) {}
                         throw cancelled
@@ -207,6 +209,7 @@ fun VideoGifScreen(
     fun startExport() {
         if (!GifMath.valid(document) || exporting || busy) return
         outputSnapshot = document
+        lastExport = null
         exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "image/gif"
@@ -368,6 +371,25 @@ fun VideoGifScreen(
                             containerColor = EditorMint,
                             contentColor = Color(0xFF0B1E18))) {
                         Text("Save GIF", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+                if (lastExport != null) {
+                    TextButton(onClick = {
+                        val target = lastExport
+                        if (target != null) {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(target, "image/gif")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } catch (_: Exception) {
+                                notice = "The GIF is saved in Files. Open it with a GIF viewer."
+                            }
+                        }
+                    }) {
+                        Text("View saved GIF", color = EditorMint,
+                            fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp),

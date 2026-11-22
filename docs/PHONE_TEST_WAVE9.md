@@ -22,3 +22,6 @@ Return **one** combined report with results for items 1–7 and screenshots only
 3. Pro: no Regular photo interface or Looks/Light sliders anywhere inside Pro. Test object layering, Center on canvas on an off-center object, rotation, rectangle/ellipse/freehand masks, invert/remove, pixel effect layers, Clone/Soft repair (tap source then target), drawing and erasing strokes, Undo/Redo and save/reopen.
 4. Photo and Collage regressions: two-photo collage edits and export, regular look/crop/black privacy bar, original source unchanged.
 5. Report responsiveness, gesture overlay hitboxes, any video codec that stalls, and crashes/Android version. The eventual full production-quality Pro toolset still needs further iterations; this build establishes functioning separated engines rather than asserting Photoshop feature parity.
+
+## Open the actual output
+After Save GIF completes, tap **View saved GIF**. Verify it opens a genuine moving animation with different frames, rather than a file that has only a GIF extension. If no installed viewer handles GIFs, use Files or another GIF-capable gallery; the app must still report the saved output location, not silently claim playback succeeded.
