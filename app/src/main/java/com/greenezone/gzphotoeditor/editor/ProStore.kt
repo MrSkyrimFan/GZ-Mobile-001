@@ -1,6 +1,7 @@
 package com.greenezone.gzphotoeditor.editor
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -166,38 +167,64 @@ object ProStore {
         return Base64.getUrlEncoder().withoutPadding()
             .encodeToString(cleaned.toByteArray(StandardCharsets.UTF_8))
     }
-    fun names(context: Context): List<String> =
+    @Synchronized fun names(context: Context): List<String> =
         dir(context).listFiles()?.mapNotNull {
-            if (!it.isFile || !it.name.endsWith(".gzpro")) return@mapNotNull null
+            if (!it.isFile) return@mapNotNull null
+            // AtomicFile can leave the legacy .bak file after an interrupted write.
+            val stem = when {
+                it.name.endsWith(".gzpro") -> it.name.removeSuffix(".gzpro")
+                it.name.endsWith(".gzpro.bak") -> it.name.removeSuffix(".gzpro.bak")
+                else -> return@mapNotNull null
+            }
             try {
-                String(Base64.getUrlDecoder().decode(it.name.removeSuffix(".gzpro")), Charsets.UTF_8)
+                String(Base64.getUrlDecoder().decode(stem), Charsets.UTF_8)
             } catch (_: Exception) { null }
-        }?.sortedBy { it.lowercase() } ?: emptyList()
+        }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
 
-    fun save(context: Context, name: String, document: ProDocument): Boolean {
+    @Synchronized fun save(context: Context, name: String, document: ProDocument): Boolean {
         val id = key(name) ?: return false
-        val folder = dir(context)
-        val file = File(folder, "$id.gzpro")
+        val file = File(dir(context), "$id.gzpro")
         if (!file.exists() && names(context).size >= MAX_SAVED) return false
         return try {
-            val payload = encode(document)
-            val tmp = File(folder, "$id.new")
-            tmp.writeText(payload, Charsets.UTF_8)
-            if (!tmp.renameTo(file)) {
-                tmp.copyTo(file, overwrite = true)
-                tmp.delete()
+            val payload = encode(document).toByteArray(StandardCharsets.UTF_8)
+            val atomic = AtomicFile(file)
+            val stream = atomic.startWrite()
+            try {
+                stream.write(payload)
+                atomic.finishWrite(stream)
+            } catch (failed: Throwable) {
+                atomic.failWrite(stream)
+                throw failed
             }
             true
         } catch (_: Exception) { false }
     }
-    fun load(context: Context, name: String): ProDocument? {
+
+    @Synchronized fun load(context: Context, name: String): ProDocument? {
         val id = key(name) ?: return null
-        val file = File(dir(context), "$id.gzpro")
-        if (!file.isFile || file.length() > MAX_BYTES) return null
-        return try { decode(file.readText(Charsets.UTF_8)) } catch (_: Exception) { null }
+        val atomic = AtomicFile(File(dir(context), "$id.gzpro"))
+        return try {
+            val data = atomic.openRead().bufferedReader(Charsets.UTF_8).use { reader ->
+                val text = StringBuilder()
+                val buf = CharArray(4096)
+                while (true) {
+                    val n = reader.read(buf)
+                    if (n < 0) break
+                    if (text.length + n > MAX_BYTES) return null
+                    text.append(buf, 0, n)
+                }
+                text.toString()
+            }
+            decode(data)
+        } catch (_: Exception) { null }
     }
-    fun delete(context: Context, name: String): Boolean {
+
+    @Synchronized fun delete(context: Context, name: String): Boolean {
         val id = key(name) ?: return false
-        return File(dir(context), "$id.gzpro").delete()
+        val file = File(dir(context), "$id.gzpro")
+        val existed = file.exists() || File(file.path + ".bak").exists() ||
+            File(file.path + ".new").exists()
+        AtomicFile(file).delete()
+        return existed
     }
 }
