@@ -157,6 +157,95 @@ class AndroidGifWorkspacePlaybackTest {
         }
     }
 
+    @Test fun sixtyFpsBFramesUseContinuousSampledPlaybackAndExportTwoSeconds() {
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-phone-60fps.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_phone_60fps_bframes.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val doc = VideoGifSource.document(context, uri)
+            val clip = requireNotNull(doc.video)
+            assertEquals(720 to 1280, clip.width to clip.height)
+            assertEquals(120, clip.sourceTimesMs.size)
+            val times = GifVideoMath.frameTimesMs(clip)
+            assertEquals(80, times.size)
+            show(doc)
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            val tag = "gif-scheduled-video"
+            rule.waitUntil(15_000) {
+                val node = rule.onAllNodesWithTag(tag).fetchSemanticsNodes().singleOrNull()
+                val label = if (node != null && SemanticsProperties.ContentDescription in node.config)
+                    node.config[SemanticsProperties.ContentDescription].singleOrNull() else null
+                (label?.substringAfterLast(' ')?.toIntOrNull() ?: 0) >= 5
+            }
+            // These patches remain cyan and blue through the moving test pattern.
+            // Their positions come from independently decoding the rotated MP4 fixture.
+            val visible = rule.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
+            assertTrue(visible.height > visible.width)
+            val cyan = visible.getPixel(visible.width / 5, visible.height / 10)
+            val blue = visible.getPixel(visible.width / 5, visible.height * 45 / 100)
+            assertTrue("rotated cyan patch = $cyan", Color.red(cyan) < 80 && Color.green(cyan) > 170 && Color.blue(cyan) > 170)
+            assertTrue("rotated blue patch = $blue", Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
+            rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
+            waitFrame(times.size)
+
+            val output = java.io.ByteArrayOutputStream()
+            VideoGifSource.write(context, doc.copy(size = GifSize.SMALL), output)
+            val encoded = GifSourceMetadata.read(output.toByteArray().inputStream(), "content://test/output")
+            assertEquals(2000L, encoded.durationMs)
+            assertEquals(80, encoded.sourceTimesMs.size)
+            assertEquals(180 to 320, encoded.width to encoded.height)
+            assertEquals(GifVideoMath.frameDelaysMs(clip), GifVideoMath.frameDelaysMs(encoded))
+        } finally { resolver.delete(uri, null, null) }
+    }
+
+    @Test fun longerAudioTrackDoesNotExtendVideoExportOrPlayback() {
+        // The fixture contains 16 video frames at 8 fps and a 5-second silent AAC track.
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-audio-tail.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_video_with_audio_tail.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val doc = VideoGifSource.document(context, uri)
+            val clip = requireNotNull(doc.video)
+            assertEquals(2000L, clip.durationMs)
+            val output = java.io.ByteArrayOutputStream()
+            VideoGifSource.write(context, doc, output)
+            val gif = GifSourceMetadata.read(output.toByteArray().inputStream(), "content://test/output")
+            assertEquals(2000L, gif.durationMs)
+            assertEquals(16, gif.sourceTimesMs.size)
+
+            // Reopen old projects that persisted the container end, including explicit trims.
+            val name = "Audio tail migration"
+            val key = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(name.toByteArray())
+            val folder = java.io.File(context.filesDir, "gz_gif_projects").apply { mkdirs() }
+            val file = java.io.File(folder, "$key.gzgif")
+            try {
+                for ((start, end, expectedEnd) in listOf(Triple(0L, 5000L, 2000L),
+                    Triple(250L, 1250L, 1250L), Triple(3000L, 4000L, 4000L))) {
+                    val old = doc.copy(video = clip.copy(durationMs = 5000, startMs = start, endMs = end,
+                        speedPercent = 50, reverse = true))
+                    file.writeText(org.json.JSONObject(GifStore.encode(old)).put("version", 3).toString())
+                    val restored = requireNotNull(GifStore.load(context, name)?.video)
+                    assertEquals(start, restored.startMs)
+                    assertEquals(expectedEnd, restored.endMs)
+                    assertEquals(50, restored.speedPercent)
+                    assertTrue(restored.reverse)
+                }
+            } finally { file.delete() }
+
+            show(doc)
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Pause").fetchSemanticsNodes().isNotEmpty() &&
+                    rule.onAllNodes(hasTestTag("gif-frame") and
+                        !hasContentDescription("GIF preview, frame 1")).fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
+            waitFrame(16)
+        } finally { resolver.delete(uri, null, null) }
+    }
+
     @Test fun mp4PlaysPausesAndSeeksThroughActualEditorControls() {
         val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-editor-preview.mp4", "video/mp4") { out ->
             instrument.context.assets.open("gif_sample_2sec_h264.mp4").use { it.copyTo(out) }

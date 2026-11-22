@@ -21,6 +21,7 @@ import com.greenezone.gzphotoeditor.editor.GifMath
 import com.greenezone.gzphotoeditor.editor.GifPreviewClock
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
+import com.greenezone.gzphotoeditor.editor.canPlayContinuousVideo
 import com.greenezone.gzphotoeditor.editor.canPlaySourceDirectly
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -57,9 +58,13 @@ internal fun GifFramePreview(
     }
     var nativeFailed by remember(clip.uri) { mutableStateOf(false) }
     var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
-    if (playing && !nativeFailed && remember(document) { document.canPlaySourceDirectly() }) {
-        NativeGifPlayback(clip, startFrame, document.loopCount, onFrame, onEnd,
-            onFailed = { resumeFrom = it; nativeFailed = true }, modifier = modifier)
+    if (playing && !nativeFailed && remember(document) { document.canPlayContinuousVideo() }) {
+        val fallback: (Int) -> Unit = { resumeFrom = it; nativeFailed = true }
+        if (remember(document) { document.canPlaySourceDirectly() }) {
+            NativeGifPlayback(clip, startFrame, document.loopCount, onFrame, onEnd, fallback, modifier)
+        } else {
+            ScheduledGifPlayback(clip, startFrame, document.loopCount, onFrame, onEnd, fallback, modifier)
+        }
         return
     }
     LaunchedEffect(document, playing) {

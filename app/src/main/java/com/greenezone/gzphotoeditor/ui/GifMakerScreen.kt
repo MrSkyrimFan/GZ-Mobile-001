@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenezone.gzphotoeditor.editor.GifAspect
 import com.greenezone.gzphotoeditor.editor.GifDocument
+import com.greenezone.gzphotoeditor.editor.writeStagedImage
 import com.greenezone.gzphotoeditor.editor.GifEncoder
 import com.greenezone.gzphotoeditor.editor.GifFit
 import com.greenezone.gzphotoeditor.editor.GifHistory
@@ -65,7 +66,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 private enum class GifTool(val label: String) {
     FRAMES("Photos"), TIMING("Timing"), SIZE("Canvas"), PROJECT("Projects")
@@ -159,23 +159,23 @@ fun GifMakerScreen(
             try {
                 withContext(Dispatchers.IO) {
                     val job = currentCoroutineContext()
-                    resolver.openOutputStream(uri, "wt")?.use { out ->
+                    writeStagedImage(context.cacheDir,
+                        openDestination = { resolver.openOutputStream(uri, "wt") },
+                        checkActive = { job.ensureActive() }) { out ->
                         GifEncoder.write(out, saved, cancel = { job.ensureActive() }) { i ->
                             ImagePipeline.decode(resolver, Uri.parse(saved.frames[i]),
                                 saved.size.maxEdge * 2, 1_100_000L)
                         }
-                    } ?: throw IOException("Could not open GIF destination")
+                        true
+                    }
                 }
                 notice = "GIF exported · " + saved.frames.size + " frames · no watermark"
             } catch (cancelled: CancellationException) {
-                try { resolver.delete(uri, null, null) } catch (_: Exception) {}
                 throw cancelled
             } catch (_: OutOfMemoryError) {
                 notice = "Not enough memory to encode GIF. Choose a smaller size."
-                try { resolver.delete(uri, null, null) } catch (_: Exception) {}
             } catch (failure: Exception) {
                 notice = "GIF export failed: " + (failure.message ?: "source missing")
-                try { resolver.delete(uri, null, null) } catch (_: Exception) {}
             } finally { exporting = false }
         }
     }

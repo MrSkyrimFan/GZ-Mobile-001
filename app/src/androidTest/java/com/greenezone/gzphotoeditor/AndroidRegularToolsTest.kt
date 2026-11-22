@@ -37,6 +37,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -47,7 +48,7 @@ import org.junit.runner.RunWith
 class AndroidRegularToolsTest {
     @get:Rule val rule = createComposeRule()
 
-    private fun withRegularPhoto(destination: Uri? = null, test: () -> Unit) {
+    private fun withRegularPhoto(destination: Uri? = null, test: (Uri) -> Unit) {
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
         val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             ContentValues().apply {
@@ -83,7 +84,7 @@ class AndroidRegularToolsTest {
             }
             rule.onNodeWithText("Open media").performClick()
             rule.waitUntil(15_000) { rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty() }
-            test()
+            test(uri)
         } finally { resolver.delete(uri, null, null) }
     }
 
@@ -151,6 +152,29 @@ class AndroidRegularToolsTest {
             ProjectStore.delete(context, name)
             resolver.delete(output, null, null)
         }
+    }
+
+    @Test fun failedSourceDecodePreservesExistingPhotoDestination() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val destination = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, "gz-existing-destination.jpg")
+                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }))
+        val existing = byteArrayOf(0x38, 0x27, 0x16)
+        try {
+            resolver.openOutputStream(destination, "wt")!!.use { it.write(existing) }
+            withRegularPhoto(destination) { source ->
+                resolver.delete(source, null, null)
+                rule.onNodeWithText("Export").performClick()
+                rule.onNodeWithText("Save JPG").performClick()
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Export failed", substring = true).fetchSemanticsNodes().isNotEmpty()
+                }
+                assertArrayEquals(existing, resolver.openInputStream(destination)!!.use { it.readBytes() })
+            }
+        } finally { resolver.delete(destination, null, null) }
     }
 
     @Test fun blurShowsRealPixelsDuringTheStrokeWithTheControlsHidden() = withRegularPhoto {

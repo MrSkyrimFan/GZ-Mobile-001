@@ -73,6 +73,7 @@ import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.ExportSettings
+import com.greenezone.gzphotoeditor.editor.writeStagedImage
 import com.greenezone.gzphotoeditor.editor.ImageExportWriter
 import com.greenezone.gzphotoeditor.editor.ExportSizing
 import com.greenezone.gzphotoeditor.editor.InkMath
@@ -102,7 +103,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.IOException
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -274,12 +274,11 @@ fun PhotoEditorScreen(
                         rendered = full
                         val photo = ExportSizing.layout(full, request.settings)
                         sized = photo
-                        val written = withContext(Dispatchers.IO) {
-                            resolver.openOutputStream(output, "wt")?.use { stream ->
-                                ImageExportWriter.write(photo, request.settings, stream)
-                            } ?: throw IOException("Export destination unavailable")
+                        withContext(Dispatchers.IO) {
+                            writeStagedImage(context.cacheDir,
+                                openDestination = { resolver.openOutputStream(output, "wt") },
+                                checkActive = { ensureActive() }) { stream -> ImageExportWriter.write(photo, request.settings, stream) }
                         }
-                        if (!written) throw IOException("Image encoder returned failure")
                         photo.width.toString() + " × " + photo.height
                     } finally {
                         sized?.let { if (it !== rendered && !it.isRecycled) it.recycle() }
@@ -292,10 +291,8 @@ fun PhotoEditorScreen(
                 throw cancelled
             } catch (_: OutOfMemoryError) {
                 notice = "Not enough memory to export. Choose a smaller size."
-                try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } catch (error: Exception) {
                 notice = "Export failed: " + (error.message ?: "unknown error")
-                try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } finally {
                 exporting = false
             }

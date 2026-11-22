@@ -45,6 +45,12 @@ internal fun NativeGifPlayback(
         view.setOnErrorListener { _, _, _ -> reportFailure(current); true }
         view.setOnPreparedListener { player ->
             activePlayer = player
+            if (player.duration.toLong() > clip.durationMs) {
+                // This player finishes with the longest track. Render the visual timeline
+                // instead when a silent audio tail would extend the last GIF frame.
+                reportFailure(initialFrame)
+                return@setOnPreparedListener
+            }
             player.setVolume(0f, 0f)
             player.isLooping = loopCount == 0
             if (initialFrame == 0) {

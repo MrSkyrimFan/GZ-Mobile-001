@@ -133,12 +133,16 @@ object VideoGifSource {
         try {
             reader.setDataSource(context, uri)
             fun meta(key: Int) = reader.extractMetadata(key)?.toLongOrNull() ?: 0L
-            val duration = meta(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            val containerDuration = meta(MediaMetadataRetriever.METADATA_KEY_DURATION)
             val w = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH).toInt()
             val h = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT).toInt()
-            require(w > 0 && h > 0 && duration > 0) { "This file has no readable video track" }
+            require(w > 0 && h > 0) { "This file has no readable video track" }
             val sideways = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION) % 180 != 0L
-            val times = sampleTimes(context, uri, duration)
+            val (duration, times) = withVideoTrack(context, uri) { extractor, format ->
+                val duration = durationMs(format) ?: containerDuration
+                require(duration > 0) { "This video has no readable duration" }
+                duration to sampleTimes(extractor, duration)
+            }
             val clip = GifVideoClip(uri.toString(), duration, width = if (sideways) h else w,
                 height = if (sideways) w else h, sourceTimesMs = times)
             require(GifVideoMath.valid(clip)) { "Video dimensions or duration are unsupported" }
@@ -146,7 +150,17 @@ object VideoGifSource {
         } finally { reader.release() }
     }
 
-    private fun sampleTimes(context: Context, uri: Uri, duration: Long): List<Long> {
+    // MediaMetadataRetriever reports the longest track in the container, including audio.
+    private fun durationMs(format: MediaFormat): Long? {
+        if (!format.containsKey(MediaFormat.KEY_DURATION)) return null
+        return ((format.getLong(MediaFormat.KEY_DURATION) + 500L) / 1000L).takeIf { it > 0L }
+    }
+
+    internal fun visualDurationMs(context: Context, uri: Uri): Long? =
+        withVideoTrack(context, uri) { _, format -> durationMs(format) }
+
+    private inline fun <T> withVideoTrack(context: Context, uri: Uri,
+        read: (MediaExtractor, MediaFormat) -> T): T {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, uri, null)
@@ -154,18 +168,22 @@ object VideoGifSource {
                 extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true
             } ?: throw IOException("No video track")
             extractor.selectTrack(track)
-            val times = ArrayList<Long>()
-            while (extractor.sampleTime >= 0L) {
-                val time = (extractor.sampleTime + 500L) / 1000L
-                if (time < duration) times.add(time)
-                require(times.size <= GifVideoMath.MAX_OUTPUT_FRAMES) { "Source exceeds 150,000 frames" }
-                if (!extractor.advance()) break
-            }
-            require(times.isNotEmpty()) { "The video has no readable frames" }
-            // Encoded packet order may differ from presentation order with B frames.
-            times.sort()
-            return times.distinct()
+            return read(extractor, extractor.getTrackFormat(track))
         } finally { extractor.release() }
+    }
+
+    private fun sampleTimes(extractor: MediaExtractor, duration: Long): List<Long> {
+        val times = ArrayList<Long>()
+        while (extractor.sampleTime >= 0L) {
+            val time = (extractor.sampleTime + 500L) / 1000L
+            if (time < duration) times.add(time)
+            require(times.size <= GifVideoMath.MAX_OUTPUT_FRAMES) { "Source exceeds 150,000 frames" }
+            if (!extractor.advance()) break
+        }
+        require(times.isNotEmpty()) { "The video has no readable frames" }
+        // Encoded packet order may differ from presentation order with B frames.
+        times.sort()
+        return times.distinct()
     }
 
     @Suppress("DEPRECATION")

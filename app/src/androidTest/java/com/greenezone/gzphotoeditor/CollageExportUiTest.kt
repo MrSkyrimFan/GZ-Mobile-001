@@ -135,6 +135,28 @@ class CollageExportUiTest {
         } finally { original.recycle() }
     }
 
+    @Test fun missingTilePreservesExistingCollageDestination() {
+        val missing = document("gz-invalid-tile.png", "image/png")
+        val photos = listOf(CollagePhoto(source(0, Color.BLUE).toString()), CollagePhoto(missing.toString()))
+        val destination = source(7, Color.MAGENTA)
+        val before = resolver.openInputStream(destination)!!.use { it.readBytes() }
+        val chooser = chooseDestination(destination, ImageExportFormat.JPEG)
+        rule.setContent {
+            CompositionLocalProvider(LocalActivityResultRegistryOwner provides chooser) {
+                CollageWorkspaceScreen(CollageDocument(photos), {}, {})
+            }
+        }
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Photo 2 is inaccessible", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithText("Export").performClick()
+        rule.onNodeWithText("Save JPG").performClick()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Export failed", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertArrayEquals(before, resolver.openInputStream(destination)!!.use { it.readBytes() })
+    }
+
     @Test fun savePngKeepsTwentyIndependentTilesAndTheSourcePhoto() {
         verifyExport(ImageExportFormat.PNG, columns = 5, rows = 4)
     }

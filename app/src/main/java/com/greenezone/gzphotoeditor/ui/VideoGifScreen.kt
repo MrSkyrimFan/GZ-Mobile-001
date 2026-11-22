@@ -193,31 +193,10 @@ fun VideoGifScreen(
                 progress = "Saving GIF…"
                 withContext(Dispatchers.IO) {
                     val job = currentCoroutineContext()
-                    // Android ACTION_CREATE_DOCUMENT creates a new document and does not
-                    // overwrite an existing filename. Some providers are write-only until
-                    // content is committed, so don't require openInputStream on a new URI.
-                    val output = resolver.openOutputStream(dest, "wt")
-                        ?: throw IOException("This provider cannot write the destination. Choose Files instead.")
-                    try {
-                        output.use { stream ->
-                            requireNotNull(temp).inputStream().use { input ->
-                                val buffer = ByteArray(65536)
-                                while (true) {
-                                    job.ensureActive()
-                                    val n = input.read(buffer)
-                                    if (n < 0) break
-                                    stream.write(buffer, 0, n)
-                                }
-                            }
-                        }
-                    } catch (failed: Throwable) {
-                        // ACTION_CREATE_DOCUMENT created a new document for this export.
-                        // Remove incomplete output if its provider supports deletion.
-                        val removed = runCatching { resolver.delete(dest, null, null) > 0 }
-                            .getOrDefault(false)
-                        if (!removed) runCatching { resolver.openOutputStream(dest, "wt")?.close() }
-                        throw failed
-                    }
+                    copyStagedImage(requireNotNull(temp), openDestination = {
+                        resolver.openOutputStream(dest, "wt")
+                            ?: throw IOException("This provider cannot write the destination. Choose Files instead.")
+                    }, checkActive = { job.ensureActive() })
                 }
                 lastExport = dest
                 notice = "GIF saved"
