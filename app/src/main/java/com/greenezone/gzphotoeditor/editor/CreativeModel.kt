@@ -12,8 +12,8 @@ enum class TextFont(val label: String, val family: String) {
     MONO("Typewriter", "monospace"),
     SCRIPT("Script", "cursive"),
     CONDENSED("Condensed", "sans-serif-condensed"),
-    SLAB("Slab", "serif"),
-    ROUNDED("Rounded", "sans-serif-medium"),
+    HANDWRITTEN("Handwritten", "casual"),
+    MEDIUM("Medium", "sans-serif-medium"),
     LIGHT("Light", "sans-serif-light"),
     HEAVY("Heavy", "sans-serif-black")
 }

@@ -726,6 +726,7 @@ fun PhotoEditorScreen() {
         contentAlignment = Alignment.Center
     ) {
         if (selectedImage != null) {
+            val stableCoordinates = beforeImage ?: selectedImage
             Image(
                 bitmap = selectedImage.asImageBitmap(),
                 contentDescription = "Photo editing canvas. Tap to hide or show tools.",
@@ -770,8 +771,8 @@ fun PhotoEditorScreen() {
                 } else document.masks.getOrNull(selectedMask)
                 if (active != null) {
                     BrushOverlay(
-                        bitmapWidth = selectedImage.width,
-                        bitmapHeight = selectedImage.height,
+                        bitmapWidth = stableCoordinates.width,
+                        bitmapHeight = stableCoordinates.height,
                         mask = active,
                         enabled = !busy,
                         onStart = ::startPaint,
@@ -784,8 +785,8 @@ fun PhotoEditorScreen() {
             }
             if (privacyRegionSelected && activePrivacy != null) {
                 PrivacyRegionOverlay(
-                    imageWidth = selectedImage.width,
-                    imageHeight = selectedImage.height,
+                    imageWidth = stableCoordinates.width,
+                    imageHeight = stableCoordinates.height,
                     mark = activePrivacy,
                     canMove = true,
                     showGuides = chromeVisible,
@@ -796,10 +797,10 @@ fun PhotoEditorScreen() {
             }
             if (cropEditing) {
                 CropFrameOverlay(
-                    imageWidth = selectedImage.width,
-                    imageHeight = selectedImage.height,
+                    imageWidth = stableCoordinates.width,
+                    imageHeight = stableCoordinates.height,
                     frame = document.cropFrame ?: CropMath.initial(
-                        selectedImage.width, selectedImage.height, document.crop
+                        stableCoordinates.width, stableCoordinates.height, document.crop
                     ),
                     aspectRatio = document.crop.ratio,
                     showGuides = chromeVisible,
@@ -811,8 +812,8 @@ fun PhotoEditorScreen() {
             if (textEditing) {
                 val layer = document.creative.text.getOrNull(creativeTools.textIndex)
                 if (layer != null) EditableObjectOverlay(
-                    imageWidth = selectedImage.width,
-                    imageHeight = selectedImage.height,
+                    imageWidth = stableCoordinates.width,
+                    imageHeight = stableCoordinates.height,
                     centerX = layer.x, centerY = layer.y,
                     width = layer.width, height = layer.height,
                     showGuides = chromeVisible,
@@ -824,8 +825,8 @@ fun PhotoEditorScreen() {
             if (shapeEditing) {
                 val layer = document.creative.shapes.getOrNull(creativeTools.shapeIndex)
                 if (layer != null) EditableObjectOverlay(
-                    imageWidth = selectedImage.width,
-                    imageHeight = selectedImage.height,
+                    imageWidth = stableCoordinates.width,
+                    imageHeight = stableCoordinates.height,
                     centerX = layer.x, centerY = layer.y,
                     width = layer.width, height = layer.height,
                     showGuides = chromeVisible,
@@ -836,8 +837,8 @@ fun PhotoEditorScreen() {
             }
             if (drawingActive) {
                 DrawTouchOverlay(
-                    imageWidth = selectedImage.width,
-                    imageHeight = selectedImage.height,
+                    imageWidth = stableCoordinates.width,
+                    imageHeight = stableCoordinates.height,
                     ink = currentInk,
                     onStart = ::startInk,
                     onMove = ::continueInk,
