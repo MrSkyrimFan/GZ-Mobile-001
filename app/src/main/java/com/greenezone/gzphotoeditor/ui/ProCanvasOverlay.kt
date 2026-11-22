@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -34,6 +36,7 @@ fun ProCanvasOverlay(
     onMove: (BrushPoint) -> Unit,
     onFinish: () -> Unit
 ) {
+    val currentSelection by rememberUpdatedState(selected)
     val interactive = if (action == ProCanvasAction.BRUSH)
         selected.kind == ProLayerKind.DRAWING
         else selected.kind != ProLayerKind.DRAWING &&
@@ -53,12 +56,12 @@ fun ProCanvasOverlay(
         )
         var dragX = 0f
         var dragY = 0f
-        var anchorX = selected.x
-        var anchorY = selected.y
+        var anchorX = currentSelection.x
+        var anchorY = currentSelection.y
         detectDragGestures(
             onDragStart = { at ->
                 dragX = 0f; dragY = 0f
-                anchorX = selected.x; anchorY = selected.y
+                anchorX = currentSelection.x; anchorY = currentSelection.y
                 onBegin(normalize(at))
             },
             onDrag = { change, amount ->
