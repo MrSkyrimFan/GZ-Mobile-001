@@ -46,8 +46,8 @@ The JVM route-policy suite must prove:
 The Android API 29 and API 35 suites must exercise a real system Back event and prove:
 
 - loaded Regular → Pro → GIF → Back → Pro → Back → the same loaded Regular, including Regular dirty history, Pro selected layer, active tool and non-default viewport, plus an Undo/Redo operation that changes the actual Pro document;
-- a video-backed GIF that was actively playing returns from Pro to the same active tab and a nonzero retained playhead, resumes paused, and Undo/Redo changes the actual Reverse state;
-- Collage host remount restores the Photos section, selected second tile and correct Undo owner; Undo changes the actual layout and the subsequent selected-tile edit changes only tile two;
+- a paused video-backed GIF returns from Pro to the same active tab and exact playhead; a separate actively playing round trip resumes paused, and Undo/Redo changes the actual Reverse state;
+- Collage host remount restores the Spacing control, selected second tile and exact slider Undo owner; Undo restores the prior layout and the subsequent selected-tile edit changes only tile two;
 - photo-sequence GIF host remount restores its photo route, Timing tool, second frame and exact timing history; Undo restores the prior duration and the next frame command targets frame two;
 - a no-op visit to empty Pro still allows a later loaded Regular photo to seed the first Pro revision;
 - an intentionally empty established Pro revision is not reseeded from a newly loaded Regular photo, and its Undo restores the prior Pro document;
