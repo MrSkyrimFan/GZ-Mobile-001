@@ -36,7 +36,7 @@ class ToneMathTest {
     }
 
     @Test fun allOriginalLooksHaveDifferentGrades() {
-        assertEquals(12, Looks.all.size)
+        assertEquals(50, Looks.all.size)
         assertEquals(Looks.all.size, Looks.all.map { it.grade }.toSet().size)
     }
 
@@ -103,8 +103,8 @@ class ToneMathTest {
         assertEquals(history, history.checkpoint(modified, modified))
     }
 
-    @Test fun neutralPresetIsActuallyNeutral() {
-        assertEquals(Grade(), Looks.all.first().grade)
+    @Test fun firstPresetIsAnActualAdjustment() {
+        assertNotEquals(Grade(), Looks.all.first().grade)
         assertNotEquals(Looks.all.first().grade, Looks.all.last().grade)
     }
 }

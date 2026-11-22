@@ -128,6 +128,11 @@ object MaskMath {
     fun coverage(mask: LocalMask, x: Int, y: Int, width: Int, height: Int): Float =
         coveragePrepared(prep(mask), x, y, width, height)
 
+    fun coverageForPrepared(prepared: Prepared, x: Int, y: Int, width: Int, height: Int): Float =
+        coveragePrepared(prepared, x, y, width, height)
+
+    fun prepareCoverage(mask: LocalMask): Prepared = prep(mask)
+
     private fun coveragePrepared(item: Prepared, x: Int, y: Int, width: Int, height: Int): Float {
         val mask = item.mask
         if (width <= 0 || height <= 0) return 0f

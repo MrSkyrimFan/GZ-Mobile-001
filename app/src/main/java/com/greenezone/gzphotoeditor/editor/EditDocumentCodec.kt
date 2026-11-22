@@ -44,12 +44,32 @@ object EditDocumentCodec {
                     stroke.points.take(MAX_POINTS).joinToString(";") { "${it.x},${it.y}" }
             }
         }
+        val privacy = document.privacy.take(PrivacyRaster.MAX_EDITS)
+        fields["privacy.count"] = privacy.size.toString()
+        for ((index, mark) in privacy.withIndex()) {
+            val prefix = "privacy.$index."
+            fields[prefix + "kind"] = mark.kind.name
+            fields[prefix + "x"] = mark.centerX.toString()
+            fields[prefix + "y"] = mark.centerY.toString()
+            fields[prefix + "width"] = mark.width.toString()
+            fields[prefix + "height"] = mark.height.toString()
+            fields[prefix + "strength"] = mark.strength.toString()
+            fields[prefix + "feather"] = mark.feather.toString()
+            fields[prefix + "brushSize"] = mark.brushSize.toString()
+            fields[prefix + "color"] = mark.color.toString()
+            val strokes = mark.strokes.take(MAX_STROKES)
+            fields[prefix + "stroke.count"] = strokes.size.toString()
+            strokes.forEachIndexed { i, stroke ->
+                fields[prefix + "stroke.$i"] =
+                    stroke.points.take(MAX_POINTS).joinToString(";") { "${it.x},${it.y}" }
+            }
+        }
         return fields.entries.joinToString("\n") { "${it.key}=${it.value}" }
     }
 
     fun decode(content: String): EditDocument? {
-        if (content.length > 500_000) return null
-        val fields = content.lineSequence().take(600).mapNotNull { line ->
+        if (content.length > 1_200_000) return null
+        val fields = content.lineSequence().take(1400).mapNotNull { line ->
             val index = line.indexOf('=')
             if (index <= 0) null else line.substring(0, index) to line.substring(index + 1)
         }.toMap()
@@ -105,6 +125,38 @@ object EditDocumentCodec {
                 strokes = strokes
             ))
         }
+        val privacy = ArrayList<PrivacyEdit>()
+        for (i in 0 until count("privacy.count", PrivacyRaster.MAX_EDITS)) {
+            val prefix = "privacy.$i."
+            val kind = PrivacyKind.entries.firstOrNull { it.name == fields[prefix + "kind"] }
+                ?: continue
+            val strokes = ArrayList<BrushStroke>()
+            for (j in 0 until count(prefix + "stroke.count", MAX_STROKES)) {
+                val pairs = fields[prefix + "stroke.$j"]?.split(';')?.take(MAX_POINTS) ?: continue
+                val points = pairs.mapNotNull { pair ->
+                    val coords = pair.split(',')
+                    if (coords.size != 2) return@mapNotNull null
+                    val x = coords[0].toFloatOrNull()
+                    val y = coords[1].toFloatOrNull()
+                    if (x == null || y == null || !x.isFinite() || !y.isFinite() ||
+                        x !in 0f..1f || y !in 0f..1f
+                    ) null else BrushPoint(x, y)
+                }
+                if (points.isNotEmpty()) strokes.add(BrushStroke(points))
+            }
+            privacy.add(PrivacyEdit(
+                kind = kind,
+                centerX = numeric(prefix + "x", .5f, 0f, 1f),
+                centerY = numeric(prefix + "y", .5f, 0f, 1f),
+                width = numeric(prefix + "width", .45f, .02f, 1f),
+                height = numeric(prefix + "height", .16f, .02f, 1f),
+                strength = numeric(prefix + "strength", .65f, 0f, 1f),
+                feather = numeric(prefix + "feather", .22f, 0f, .8f),
+                brushSize = numeric(prefix + "brushSize", .055f, .005f, .20f),
+                color = (fields[prefix + "color"]?.toIntOrNull() ?: -0x1000000) or -0x1000000,
+                strokes = strokes
+            ))
+        }
         return EditDocument(
             grade = grade,
             quarterTurns = (fields["rotation"]?.toIntOrNull() ?: 0).mod(4),
@@ -115,7 +167,8 @@ object EditDocumentCodec {
             cropCenterX = numeric("cropX", .5f, 0f, 1f),
             cropCenterY = numeric("cropY", .5f, 0f, 1f),
             straightenDegrees = numeric("straighten", 0f, -15f, 15f),
-            masks = masks
+            masks = masks,
+            privacy = privacy
         )
     }
 }

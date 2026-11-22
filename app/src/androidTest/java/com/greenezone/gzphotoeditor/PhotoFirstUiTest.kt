@@ -33,9 +33,10 @@ class PhotoFirstUiTest {
 
     @Test fun firstOpenExplainsHowToStartWithoutTinyPreview() {
         rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() } }
-        rule.onNodeWithText("Your photo deserves the whole screen.").assertIsDisplayed()
-        rule.onNodeWithText("Open photo").assertIsDisplayed()
+        rule.onNodeWithText("GZ Editor Pro").assertIsDisplayed()
+        rule.onNodeWithText("Open media").assertIsDisplayed()
         rule.onNodeWithText("Export").assertExists()
+        rule.onNodeWithText("© 2026 Greenezone Software LLC").assertExists()
     }
 
     @Test fun swipableLooksStartAtNoneAndSelectingGoldenChangesGrade() {
@@ -54,6 +55,12 @@ class PhotoFirstUiTest {
                     busy = false,
                     selectedMaskIndex = 0,
                     onSelectMask = {},
+                    selectedPrivacyIndex = 0,
+                    onSelectPrivacy = {},
+                    onAddPrivacy = {},
+                    onDeletePrivacy = {},
+                    onUndoPrivacyStroke = {},
+                    onClearPrivacy = {},
                     onCommit = {},
                     onSlide = {},
                     onSlideFinished = {},
@@ -79,6 +86,46 @@ class PhotoFirstUiTest {
         }
     }
 
+    @Test fun privacyPanelShowsBlurToolWithoutOpeningLongSliderList() {
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                EditorDock(
+                    tab = EditTab.PRIVACY,
+                    onTab = {},
+                    document = EditDocument(),
+                    original = null,
+                    thumbnails = emptyList(),
+                    savedLooks = emptyList(),
+                    activeLook = "none",
+                    busy = false,
+                    selectedMaskIndex = 0,
+                    onSelectMask = {},
+                    selectedPrivacyIndex = 0,
+                    onSelectPrivacy = {},
+                    onAddPrivacy = {},
+                    onDeletePrivacy = {},
+                    onUndoPrivacyStroke = {},
+                    onClearPrivacy = {},
+                    onCommit = {},
+                    onSlide = {},
+                    onSlideFinished = {},
+                    onSelectLook = { _, _ -> },
+                    onAddMask = {},
+                    onDeleteMask = {},
+                    onUndoBrush = {},
+                    onClearBrush = {},
+                    onAutoTone = {},
+                    onAutoWB = {},
+                    onSaveLook = {},
+                    onSaveProject = {},
+                    onProjects = {},
+                    onOpen = {}
+                )
+            }
+        }
+        rule.onNodeWithText("+ Blur").assertIsDisplayed()
+    }
+
     @Test fun selectingLightToolShowsOneSliderAtATime() {
         rule.setContent {
             var tab by remember { mutableStateOf(EditTab.LOOKS) }
@@ -95,6 +142,12 @@ class PhotoFirstUiTest {
                     busy = false,
                     selectedMaskIndex = 0,
                     onSelectMask = {},
+                    selectedPrivacyIndex = 0,
+                    onSelectPrivacy = {},
+                    onAddPrivacy = {},
+                    onDeletePrivacy = {},
+                    onUndoPrivacyStroke = {},
+                    onClearPrivacy = {},
                     onCommit = { edits = it },
                     onSlide = { edits = it },
                     onSlideFinished = {},
@@ -114,6 +167,7 @@ class PhotoFirstUiTest {
         }
         rule.onNodeWithText("Light").performClick()
         rule.onNodeWithContentDescription("Adjust Exposure").assertExists()
+        rule.onNodeWithText("Reset").assertIsDisplayed()
         rule.onNodeWithContentDescription("Adjust Contrast").assertDoesNotExist()
         rule.onAllNodesWithText("Contrast")[0].performClick()
         rule.onNodeWithContentDescription("Adjust Contrast").assertExists()

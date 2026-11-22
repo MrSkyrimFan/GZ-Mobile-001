@@ -67,6 +67,7 @@ import com.greenezone.gzphotoeditor.editor.Look
 import com.greenezone.gzphotoeditor.editor.Looks
 import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.Panel
+import com.greenezone.gzphotoeditor.editor.PrivacyKind
 import java.util.Locale
 
 internal val EditorMint = Color(0xFF96E5C2)
@@ -86,6 +87,7 @@ enum class EditTab(val title: String) {
     EFFECTS("Effects"),
     CURVES("Curves"),
     MASKS("Masks"),
+    PRIVACY("Blur & cover"),
     CROP("Crop"),
     MORE("More")
 }
@@ -106,6 +108,12 @@ fun EditorDock(
     busy: Boolean,
     selectedMaskIndex: Int,
     onSelectMask: (Int) -> Unit,
+    selectedPrivacyIndex: Int,
+    onSelectPrivacy: (Int) -> Unit,
+    onAddPrivacy: (PrivacyKind) -> Unit,
+    onDeletePrivacy: () -> Unit,
+    onUndoPrivacyStroke: () -> Unit,
+    onClearPrivacy: () -> Unit,
     onCommit: (EditDocument) -> Unit,
     onSlide: (EditDocument) -> Unit,
     onSlideFinished: () -> Unit,
@@ -144,6 +152,11 @@ fun EditorDock(
             EditTab.MASKS -> MaskDeck(
                 document, !busy, selectedMaskIndex, onSelectMask, onCommit,
                 onSlide, onSlideFinished, onAddMask, onDeleteMask, onUndoBrush, onClearBrush
+            )
+            EditTab.PRIVACY -> PrivacyDeck(
+                document, selectedPrivacyIndex, !busy, onSelectPrivacy, onAddPrivacy,
+                onDeletePrivacy, onUndoPrivacyStroke, onClearPrivacy,
+                onCommit, onSlide, onSlideFinished
             )
             EditTab.CROP -> CropDeck(document, !busy, onCommit, onSlide, onSlideFinished)
             EditTab.MORE -> MoreDeck(
@@ -691,7 +704,7 @@ private fun MoreDeck(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SingleAdjustment(
+internal fun SingleAdjustment(
     title: String,
     value: Float,
     low: Float,
@@ -705,7 +718,7 @@ private fun SingleAdjustment(
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(26.dp),
+            modifier = Modifier.fillMaxWidth().height(46.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -723,8 +736,13 @@ private fun SingleAdjustment(
                 color = EditorMint, fontWeight = FontWeight.Bold, fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 5.dp)
             )
-            TextButton(onClick = onReset, enabled = enabled) {
-                Text("Reset", color = EditorMint, fontSize = 12.sp)
+            TextButton(
+                onClick = onReset,
+                enabled = enabled,
+                modifier = Modifier.width(70.dp).height(44.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text("Reset", color = EditorMint, fontSize = 12.sp, maxLines = 1)
             }
         }
         Slider(

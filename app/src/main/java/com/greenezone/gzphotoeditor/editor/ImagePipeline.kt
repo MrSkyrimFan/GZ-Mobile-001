@@ -169,8 +169,11 @@ object ImagePipeline {
             val prepared = ToneMath.prepare(document.grade)
             val masks = MaskMath.prepare(document.masks)
             if (prepared.isNeutral && masks.isEmpty()) {
-                returnedGeometry = true
-                return source
+                if (document.privacy.isEmpty()) {
+                    returnedGeometry = true
+                    return source
+                }
+                return PrivacyRaster.apply(source, document.privacy, cancelCheck)
             }
 
             val width = source.width
@@ -239,6 +242,12 @@ object ImagePipeline {
                     }
                     readRow(4, min(y + 3, height - 1))
                 }
+            }
+            if (document.privacy.isNotEmpty()) {
+                val privacyResult = PrivacyRaster.apply(result, document.privacy, cancelCheck)
+                result.recycle()
+                output = null
+                return privacyResult
             }
             output = null
             return result
