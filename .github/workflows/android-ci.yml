@@ -78,4 +78,18 @@ jobs:
           profile: pixel_3a
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest
+          script: |
+            if ! gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest; then
+              echo "=== Android emulator test failure receipts ==="
+              find app/build/outputs/androidTest-results/connected -name '*.xml' -type f -print -exec sed -n '1,180p' {} \; || true
+              exit 1
+            fi
+      - name: Upload Android emulator test receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gz-editor-pro-emulator-receipts
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn
