@@ -97,6 +97,7 @@ fun ProWorkspaceScreen(
     var activeStroke by remember { mutableStateOf<InkStroke?>(null) }
     var brushColor by remember { mutableIntStateOf(0xFF96E5C2.toInt()) }
     var brushSize by remember { mutableFloatStateOf(.012f) }
+    var eraserMode by remember { mutableStateOf(false) }
     var selectionKind by remember { mutableStateOf(ProSelectionKind.RECTANGLE) }
     var selectionStart by remember { mutableStateOf<BrushPoint?>(null) }
     var draftSelection by remember { mutableStateOf<ProSelection?>(null) }
@@ -383,7 +384,8 @@ fun ProWorkspaceScreen(
                             if (canvasAction == ProCanvasAction.BRUSH &&
                                 active.kind == ProLayerKind.DRAWING) {
                                 activeStroke = InkStroke(listOf(point),
-                                    color = brushColor, thickness = brushSize)
+                                    color = brushColor, thickness = brushSize,
+                                    erase = eraserMode)
                             }
                         },
                         onMove = { point ->
@@ -739,7 +741,15 @@ fun ProWorkspaceScreen(
                     }
                     ProSection.PAINT -> {
                         if (active.kind == ProLayerKind.DRAWING) {
-                            Text("Drag on the picture to paint on this separate editable layer.",
+                            Row(Modifier.horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 9.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                DockChip("Paint", !eraserMode) { eraserMode = false }
+                                DockChip("Eraser", eraserMode) { eraserMode = true }
+                            }
+                            Text(if (eraserMode)
+                                "Drag to erase pixels from this drawing layer."
+                                else "Drag to paint on this independent drawing layer.",
                                 color = EditorMuted, fontSize = 12.sp,
                                 modifier = Modifier.padding(horizontal = 13.dp))
                             Row(Modifier.horizontalScroll(rememberScrollState())

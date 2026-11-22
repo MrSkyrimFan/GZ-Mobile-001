@@ -46,7 +46,8 @@ data class InkStroke(
     val points: List<BrushPoint>,
     val color: Int = -1,
     val thickness: Float = .012f,
-    val opacity: Float = 1f
+    val opacity: Float = 1f,
+    val erase: Boolean = false
 )
 
 enum class ShapeKind(val label: String) {

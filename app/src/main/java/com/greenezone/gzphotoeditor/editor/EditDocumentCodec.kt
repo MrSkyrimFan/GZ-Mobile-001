@@ -109,6 +109,7 @@ object EditDocumentCodec {
             fields[pre + "color"] = stroke.color.toString()
             fields[pre + "opacity"] = stroke.opacity.toString()
             fields[pre + "width"] = stroke.thickness.toString()
+            fields[pre + "erase"] = stroke.erase.toString()
             fields[pre + "points"] = stroke.points.take(MAX_POINTS).joinToString(";") {
                 it.x.toString() + "," + it.y.toString()
             }
@@ -279,7 +280,8 @@ object EditDocumentCodec {
                 points = positions,
                 color = color(pre + "color", -1),
                 thickness = numeric(pre + "width", .012f, .0015f, .16f),
-                opacity = numeric(pre + "opacity", 1f, 0f, 1f)
+                opacity = numeric(pre + "opacity", 1f, 0f, 1f),
+                erase = fields[pre + "erase"] == "true"
             ))
         }
 
