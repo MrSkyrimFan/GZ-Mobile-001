@@ -648,7 +648,6 @@ fun PhotoEditorScreen() {
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 modifier = Modifier.padding(horizontal = 28.dp)
             ) {
-                Text("GZ Editor Pro", color = EditorWhite, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 Button(
                     onClick = ::openPicker,
                     colors = ButtonDefaults.buttonColors(
@@ -668,7 +667,7 @@ fun PhotoEditorScreen() {
             )
         }
 
-        if (chromeVisible) {
+        if (chromeVisible && original != null) {
             Column(
                 Modifier.align(Alignment.TopCenter)
                     .fillMaxWidth()

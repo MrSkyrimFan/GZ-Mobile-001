@@ -33,9 +33,7 @@ class PhotoFirstUiTest {
 
     @Test fun firstOpenExplainsHowToStartWithoutTinyPreview() {
         rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() } }
-        rule.onNodeWithText("GZ Editor Pro").assertIsDisplayed()
         rule.onNodeWithText("Open media").assertIsDisplayed()
-        rule.onNodeWithText("Export").assertExists()
         rule.onNodeWithText("© 2026 Greenezone Software LLC").assertExists()
     }
 
