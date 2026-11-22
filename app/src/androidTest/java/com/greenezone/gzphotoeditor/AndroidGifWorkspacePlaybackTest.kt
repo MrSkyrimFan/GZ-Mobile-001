@@ -181,11 +181,14 @@ class AndroidGifWorkspacePlaybackTest {
             // These patches remain cyan and blue through the moving test pattern.
             // Their positions come from independently decoding the rotated MP4 fixture.
             val visible = rule.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
-            assertTrue(visible.height > visible.width)
-            val cyan = visible.getPixel(visible.width / 5, visible.height / 10)
-            val blue = visible.getPixel(visible.width / 5, visible.height * 45 / 100)
-            assertTrue("rotated cyan patch = $cyan", Color.red(cyan) < 80 && Color.green(cyan) > 170 && Color.blue(cyan) > 170)
-            assertTrue("rotated blue patch = $blue", Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
+            fun verifyPortraitPatches(image: Bitmap) {
+                assertTrue(image.height > image.width)
+                val cyan = image.getPixel(image.width / 5, image.height / 10)
+                val blue = image.getPixel(image.width / 5, image.height * 45 / 100)
+                assertTrue("rotated cyan patch = $cyan", Color.red(cyan) < 80 && Color.green(cyan) > 170 && Color.blue(cyan) > 170)
+                assertTrue("rotated blue patch = $blue", Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
+            }
+            verifyPortraitPatches(visible)
             rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
             waitFrame(times.size)
 
@@ -196,6 +199,14 @@ class AndroidGifWorkspacePlaybackTest {
             assertEquals(80, encoded.sourceTimesMs.size)
             assertEquals(180 to 320, encoded.width to encoded.height)
             assertEquals(GifVideoMath.frameDelaysMs(clip), GifVideoMath.frameDelaysMs(encoded))
+            val bytes = output.toByteArray()
+            val movie = requireNotNull(Movie.decodeByteArray(bytes, 0, bytes.size))
+            val final = Bitmap.createBitmap(encoded.width, encoded.height, Bitmap.Config.ARGB_8888)
+            try {
+                movie.setTime(movie.duration() - 5)
+                movie.draw(android.graphics.Canvas(final), 0f, 0f)
+                verifyPortraitPatches(final)
+            } finally { final.recycle() }
         } finally { resolver.delete(uri, null, null) }
     }
 
