@@ -192,9 +192,19 @@ class AndroidGifWorkspacePlaybackTest {
             rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
             waitFrame(times.size)
 
+            val small = doc.copy(size = GifSize.SMALL)
+            val baseline = java.io.ByteArrayOutputStream()
+            val baselineStart = SystemClock.elapsedRealtime()
+            VideoGifSource.writeVideoFrames(context, small, baseline, allowScaledBatches = false)
+            val baselineMs = SystemClock.elapsedRealtime() - baselineStart
             val output = java.io.ByteArrayOutputStream()
-            VideoGifSource.write(context, doc.copy(size = GifSize.SMALL), output)
+            val optimizedStart = SystemClock.elapsedRealtime()
+            VideoGifSource.write(context, small, output)
+            val optimizedMs = SystemClock.elapsedRealtime() - optimizedStart
+            Log.i("GzGifExportPerf", "720p60 long GOP to 180x320, 80 frames: timestamp=${baselineMs}ms batched=${optimizedMs}ms")
             val encoded = GifSourceMetadata.read(output.toByteArray().inputStream(), "content://test/output")
+            val reference = GifSourceMetadata.read(baseline.toByteArray().inputStream(), encoded.uri)
+            assertEquals(reference, encoded)
             assertEquals(2000L, encoded.durationMs)
             assertEquals(80, encoded.sourceTimesMs.size)
             assertEquals(180 to 320, encoded.width to encoded.height)
@@ -206,8 +216,51 @@ class AndroidGifWorkspacePlaybackTest {
                 movie.setTime(movie.duration() - 5)
                 movie.draw(android.graphics.Canvas(final), 0f, 0f)
                 verifyPortraitPatches(final)
+                val original = baseline.toByteArray()
+                val expected = requireNotNull(Movie.decodeByteArray(original, 0, original.size))
+                compareDecodedMotion(expected, movie, encoded.sourceTimesMs, GifVideoMath.frameDelaysMs(clip))
             } finally { final.recycle() }
         } finally { resolver.delete(uri, null, null) }
+    }
+
+    private fun compareDecodedMotion(expected: Movie, actual: Movie, starts: List<Long>, delays: List<Int>) {
+        val a = Bitmap.createBitmap(expected.width(), expected.height(), Bitmap.Config.ARGB_8888)
+        val b = Bitmap.createBitmap(actual.width(), actual.height(), Bitmap.Config.ARGB_8888)
+        val previous = IntArray(24 * 32)
+        var movingSamples = 0
+        var movingError = 0L
+        fun error(left: Int, right: Int): Int =
+            kotlin.math.abs(Color.red(left) - Color.red(right)) +
+                kotlin.math.abs(Color.green(left) - Color.green(right)) +
+                kotlin.math.abs(Color.blue(left) - Color.blue(right))
+        try {
+            starts.forEachIndexed { index, start ->
+                val t = start.toInt() + delays[index] / 2
+                expected.setTime(t)
+                actual.setTime(t)
+                expected.draw(android.graphics.Canvas(a), 0f, 0f)
+                actual.draw(android.graphics.Canvas(b), 0f, 0f)
+                var frameError = 0
+                for (row in 0 until 32) for (column in 0 until 24) {
+                    val x = (2 * column + 1) * a.width / 48
+                    val y = (2 * row + 1) * a.height / 64
+                    val color = a.getPixel(x, y)
+                    val delta = error(color, b.getPixel(x, y))
+                    frameError += delta
+                    val sample = row * 24 + column
+                    if (index > 0 && error(color, previous[sample]) >= 90) {
+                        movingSamples++
+                        movingError += delta
+                    }
+                    previous[sample] = color
+                }
+                assertTrue("Decoded frame $index differs from timestamp export: $frameError",
+                    frameError < previous.size * 3 * 10)
+            }
+            assertTrue("The fixture must exercise moving pixels", movingSamples > 200)
+            assertTrue("Color error at $movingSamples moving samples was $movingError",
+                movingError < movingSamples * 3L * 18)
+        } finally { a.recycle(); b.recycle() }
     }
 
     @Test fun longerAudioTrackDoesNotExtendVideoExportOrPlayback() {
