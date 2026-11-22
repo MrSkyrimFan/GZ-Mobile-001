@@ -235,6 +235,19 @@ class PhotoFirstUiTest {
         rule.onNodeWithText("Save PNG").assertExists()
     }
 
+    @Test fun homeScreenOpensAndClosesCollageWithoutChangingPhotoEditor() {
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                PhotoEditorScreen()
+            }
+        }
+        rule.onNodeWithText("Open media").assertIsDisplayed()
+        rule.onNodeWithText("Create collage").performClick()
+        rule.onNodeWithText("Collage").assertIsDisplayed()
+        rule.onNodeWithText("Back").performClick()
+        rule.onNodeWithText("Open media").assertIsDisplayed()
+    }
+
     @Test fun selectingLightToolShowsOneSliderAtATime() {
         rule.setContent {
             var tab by remember { mutableStateOf(EditTab.LOOKS) }
