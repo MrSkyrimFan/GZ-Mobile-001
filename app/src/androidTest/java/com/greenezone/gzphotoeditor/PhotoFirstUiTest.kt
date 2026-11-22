@@ -15,11 +15,17 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.CreativeDocument
+import com.greenezone.gzphotoeditor.editor.TextOverlay
+import com.greenezone.gzphotoeditor.editor.CropRatio
+import com.greenezone.gzphotoeditor.editor.ExportSettings
+import com.greenezone.gzphotoeditor.editor.ImageExportFormat
 import com.greenezone.gzphotoeditor.editor.Grade
 import com.greenezone.gzphotoeditor.editor.Look
 import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.ui.EditTab
 import com.greenezone.gzphotoeditor.ui.EditorDock
+import com.greenezone.gzphotoeditor.ui.ExportDialog
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -122,6 +128,111 @@ class PhotoFirstUiTest {
             }
         }
         rule.onNodeWithText("+ Blur").assertIsDisplayed()
+    }
+
+    @Composable
+    private fun Fixture(
+        tab: EditTab,
+        document: EditDocument = EditDocument(),
+        onCommit: (EditDocument) -> Unit = {},
+        onAddWords: () -> Unit = {}
+    ) {
+        EditorDock(
+            tab = tab,
+            onTab = {},
+            document = document,
+            original = null,
+            thumbnails = emptyList(),
+            savedLooks = emptyList(),
+            activeLook = "none",
+            busy = false,
+            selectedMaskIndex = 0,
+            onSelectMask = {},
+            selectedPrivacyIndex = 0,
+            onSelectPrivacy = {},
+            onAddPrivacy = {},
+            onDeletePrivacy = {},
+            onUndoPrivacyStroke = {},
+            onClearPrivacy = {},
+            onCommit = onCommit,
+            onSlide = {},
+            onSlideFinished = {},
+            onSelectLook = { _, _ -> },
+            onAddMask = {},
+            onDeleteMask = {},
+            onUndoBrush = {},
+            onClearBrush = {},
+            onAutoTone = {},
+            onAutoWB = {},
+            onSaveLook = {},
+            onSaveProject = {},
+            onProjects = {},
+            onOpen = {},
+            onNewText = onAddWords,
+            cropImageWidth = 1200,
+            cropImageHeight = 900
+        )
+    }
+
+    @Test fun textToolsExposeEditableFontsAndAddText() {
+        var created = false
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Fixture(
+                    EditTab.TEXT,
+                    EditDocument(creative = CreativeDocument(
+                        text = listOf(TextOverlay(content = "Test caption"))
+                    )),
+                    onAddWords = { created = true }
+                )
+            }
+        }
+        rule.onNodeWithText("+ Add text").performClick()
+        rule.onNodeWithText("Modern").assertIsDisplayed()
+        rule.runOnIdle { assertEquals(true, created) }
+    }
+
+    @Test fun drawingShowsBrushEraserAndShapeSelection() {
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Fixture(EditTab.DRAW)
+            }
+        }
+        rule.onNodeWithText("Brush").assertIsDisplayed()
+        rule.onNodeWithText("Eraser").performClick()
+        rule.onNodeWithText("Brush thickness").assertExists()
+    }
+
+    @Test fun manualCropPresetCreatesEditableAspectFrame() {
+        var value: EditDocument? = null
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Fixture(EditTab.CROP, onCommit = { value = it })
+            }
+        }
+        rule.onNodeWithText("1:1").performClick()
+        rule.runOnIdle {
+            val changed = value
+            assertEquals(CropRatio.SQUARE, changed?.crop)
+            assertEquals(true, changed?.cropFrame != null)
+        }
+    }
+
+    @Test fun exportHasSeparateFormatAndPlatformDropdowns() {
+        rule.setContent {
+            var settings by remember { mutableStateOf(ExportSettings()) }
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                ExportDialog(settings,
+                    onSettings = { settings = it },
+                    onSave = {},
+                    onDismiss = {})
+            }
+        }
+        rule.onNodeWithText("FILE FORMAT").assertIsDisplayed()
+        rule.onNodeWithText("SOCIAL PLATFORM / DIMENSIONS").assertIsDisplayed()
+        rule.onNodeWithText("JPEG · JPG  ▾").performClick()
+        rule.onNodeWithText("PNG · Lossless").performClick()
+        rule.onNodeWithText("Save PNG").assertExists()
     }
 
     @Test fun selectingLightToolShowsOneSliderAtATime() {

@@ -216,6 +216,108 @@ class AndroidBitmapValidationTest {
         }
     }
 
+    @Test fun freeformCropExportsExactlySelectedPixels() {
+        val photo = Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888)
+        for (y in 0 until 100) for (x in 0 until 200) {
+            photo.setPixel(x, y, if (x < 100) Color.RED else Color.BLUE)
+        }
+        val cropped = ImagePipeline.render(photo,
+            EditDocument(crop = com.greenezone.gzphotoeditor.editor.CropRatio.FREE,
+                cropFrame = com.greenezone.gzphotoeditor.editor.CropFrame(.5f, 0f, 1f, 1f)))
+        try {
+            assertEquals(100, cropped.width)
+            assertEquals(100, cropped.height)
+            assertEquals(Color.BLUE, cropped.getPixel(5, 50))
+            assertEquals(Color.RED, photo.getPixel(5, 50))
+        } finally { if (cropped !== photo) cropped.recycle(); photo.recycle() }
+    }
+
+    @Test fun typographyAndShapesAndInkActuallyRenderOnPixels() {
+        val photo = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.BLACK)
+        }
+        val graphic = com.greenezone.gzphotoeditor.editor.CreativeDocument(
+            text = listOf(com.greenezone.gzphotoeditor.editor.TextOverlay(
+                content = "TEST", y = .80f, width = .8f, height = .25f,
+                font = com.greenezone.gzphotoeditor.editor.TextFont.SERIF,
+                size = .19f, color = Color.WHITE
+            )),
+            shapes = listOf(com.greenezone.gzphotoeditor.editor.ShapeOverlay(
+                kind = com.greenezone.gzphotoeditor.editor.ShapeKind.RECTANGLE,
+                x = .5f, y = .5f, width = .4f, height = .2f,
+                color = Color.BLUE, filled = true
+            )),
+            strokes = listOf(com.greenezone.gzphotoeditor.editor.InkStroke(
+                points = listOf(
+                    BrushPoint(.1f, .2f), BrushPoint(.9f, .2f)),
+                color = Color.RED, thickness = .04f
+            ))
+        )
+        val result = ImagePipeline.render(photo, EditDocument(creative = graphic))
+        try {
+            assertEquals(Color.BLUE, result.getPixel(100, 100))
+            assertEquals(Color.RED, result.getPixel(100, 40))
+            assertEquals(Color.BLACK, photo.getPixel(100, 100))
+            var bright = 0
+            for (y in 136..185) for (x in 30..170) {
+                if (Color.red(result.getPixel(x, y)) > 200) bright++
+            }
+            assertTrue("Typed text must appear in the exported raster", bright > 40)
+        } finally { if (result !== photo) result.recycle(); photo.recycle() }
+    }
+
+    @Test fun fileEncodersProduceRealBmpTiffPdfAndWebpHeaders() {
+        val bitmap = checker(27, 19)
+        try {
+            fun bytes(format: com.greenezone.gzphotoeditor.editor.ImageExportFormat): ByteArray {
+                val result = ByteArrayOutputStream()
+                assertTrue(com.greenezone.gzphotoeditor.editor.ImageExportWriter.write(bitmap,
+                    com.greenezone.gzphotoeditor.editor.ExportSettings(format = format), result))
+                return result.toByteArray()
+            }
+            val bmp = bytes(com.greenezone.gzphotoeditor.editor.ImageExportFormat.BMP)
+            assertEquals('B'.code, bmp[0].toInt())
+            assertEquals('M'.code, bmp[1].toInt())
+            val tiff = bytes(com.greenezone.gzphotoeditor.editor.ImageExportFormat.TIFF)
+            assertEquals('I'.code, tiff[0].toInt())
+            assertEquals('I'.code, tiff[1].toInt())
+            assertEquals(42, tiff[2].toInt())
+            val pdf = bytes(com.greenezone.gzphotoeditor.editor.ImageExportFormat.PDF)
+            assertTrue(String(pdf.copyOfRange(0, 4)) == "%PDF")
+            val webp = bytes(com.greenezone.gzphotoeditor.editor.ImageExportFormat.WEBP)
+            assertTrue(String(webp.copyOfRange(0, 4)) == "RIFF")
+            val lossless = bytes(com.greenezone.gzphotoeditor.editor.ImageExportFormat.WEBP_LOSSLESS)
+            assertTrue(String(lossless.copyOfRange(0, 4)) == "RIFF")
+            val opened = BitmapFactory.decodeByteArray(lossless, 0, lossless.size)
+            assertTrue(opened != null && opened.width == 27 && opened.height == 19)
+            opened?.recycle()
+        } finally { bitmap.recycle() }
+    }
+
+    @Test fun socialLayoutFitsOrFillsWithoutChangingOriginal() {
+        val photo = Bitmap.createBitmap(80, 40, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.RED)
+        }
+        val fit = com.greenezone.gzphotoeditor.editor.ExportSizing.layout(photo,
+            com.greenezone.gzphotoeditor.editor.ExportSettings(
+                preset = com.greenezone.gzphotoeditor.editor.SocialPreset.INSTAGRAM_SQUARE,
+                placement = com.greenezone.gzphotoeditor.editor.ExportPlacement.FIT
+            ))
+        val fill = com.greenezone.gzphotoeditor.editor.ExportSizing.layout(photo,
+            com.greenezone.gzphotoeditor.editor.ExportSettings(
+                preset = com.greenezone.gzphotoeditor.editor.SocialPreset.INSTAGRAM_SQUARE,
+                placement = com.greenezone.gzphotoeditor.editor.ExportPlacement.FILL
+            ))
+        try {
+            assertEquals(1080, fit.width)
+            assertEquals(1080, fit.height)
+            assertEquals(Color.BLACK, fit.getPixel(5, 5))
+            assertEquals(Color.RED, fit.getPixel(540, 540))
+            assertEquals(Color.RED, fill.getPixel(5, 5))
+            assertEquals(Color.RED, photo.getPixel(0, 0))
+        } finally { fit.recycle(); fill.recycle(); photo.recycle() }
+    }
+
     @Test fun activityStartsWithoutAFirstFrameCrash() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->

@@ -1,39 +1,39 @@
 # GZ Editor Pro
 
-**Greenezone Software LLC** · Native Android photo editor · Target price **$1.99 once**
+**Greenezone Software LLC** · Android photo editing · Target **$1.99 one-time** purchase
 
-**Engineering status:** v0.6.0 test candidate. This is not a final commercial or Google Play release.
+**Status: version 0.7.0 engineering qualification candidate. Not published on Google Play.**
 
-## Product contract
-Offline and private: no runtime AI, advertisements, watermarks, subscriptions, microtransactions, accounts, telemetry, remote services, or INTERNET permission. All source photos stay unchanged. The app imports images with Android's photo picker and exports new files through Android's system document picker. The **Open media** button currently supports photos; video editing is not implemented.
+## Core contract
+- Fully offline. No runtime AI, subscriptions, ads, account, telemetry, in-app purchases, watermarks or network permission.
+- Imported photos never intentionally overwritten. Android system photo picker and save-as document provider.
+- All edits are parameters in saved local project snapshots; previous projects remain decodable.
+- Compact image-first interface: GZ Editor Pro top-left, Open media, Undo/Redo, Before, Export, swipeable bottom tool dock, tap to hide editing chrome, company copyright bottom-left on empty main page.
+- Preserve all prior 56 global adjustments, 50 Looks, HSL color mixer, grading, 4 curve channels, 3 adjustment-mask types, Blur & cover, crop/rotate/flip/straighten, project/preset storage, JPEG/PNG export and transparent output where supported.
 
-## What works in source (subject to CI and phone validation)
+## New editing capabilities
+- **Text:** editable typed captions (up to 500 characters each), 9 built-in Android font choices, colors, size, width, height, move/resize via on-image frame, rotation, bold, italic, alignment, outline/outline color, shadow, opacity and character spacing. Up to 32 text objects.
+- **Draw:** real colored vector drawing, adjustable brush thickness and opacity, 11 color presets, vector eraser and Undo/Clear. Up to 160 strokes, capped to 500 path points each in saved project data.
+- **Shapes:** rectangle, ellipse, line, arrow, triangle and star; position, resize, rotate, fill/stroke, color and opacity. Up to 64 objects.
+- **Manual crop:** draggable on-photo corner handles, move box, freeform crop and constrained aspect ratios; previous preset ratios and straighten preserved. New crop frame saved in editable project and respected by export; image stays uncropped while setting frame, then crops on exiting Crop.
+- **Export dropdowns:** one for **actual image file format** (JPEG, PNG, WebP lossy, WebP lossless, BMP, TIFF and one-page PDF) and another for **destination size**, including Instagram, Facebook, TikTok, YouTube, Pinterest, LinkedIn, X and Snapchat layout presets. Presets output exact requested pixels; Fit keeps the whole edited picture with optional borders, Fill crops edges. JPEG/WebP quality options.
+- BMP and TIFF use local streaming uncompressed writers. PDF uses Android's native PDF engine. No filename-extension spoofing.
+- All creative layers are composited in preview/export after privacy redaction; no branding, timestamp or watermark added to the exported photo.
 
-- Full-screen image-first editing, horizontally swipeable tool deck, tap picture to hide/show interface, pinch and pan, and visible Undo/Redo and Export.
-- **GZ Editor Pro** label, no home-screen marketing slogans; just **© 2026 Greenezone Software LLC** at bottom-left of main/empty screen.
-- **50 built-in Looks** with photo-based thumbnails, starting with **None**, plus saved local custom grades/curves.
-- **56 global adjustments** for exposure, color, details, HSL, tonal RGB and film; master/R/G/B tone curves.
-- Up to four local radial, linear and brush adjustment masks for exposure, contrast and saturation.
-- New **Blur & cover** deck with up to 12 independent privacy edits: blur rectangle, pixelate rectangle, black opaque censor bar, opaque solid-color cover, blur brush and black brush.
-- Privacy rectangles can be repositioned by dragging the photo; brushes paint by dragging **even when the editing UI is hidden**. Green stroke guides disappear with the controls, leaving the image visible.
-- Pixelated and blurred regions have adjustable strength; rectangles have width/height and soft-edge controls. For reliable concealment, use a fully opaque black bar or covering, **not blur/pixelation**. Brush coverage is not a substitute for solid bar redaction at soft edges.
-- Non-destructive privacy effects are applied to the **actual rendered image in preview and exported output**, after color grading. Existing undo/redo, named editable projects and JSON-like bounded local project codec persist these edits.
-- Reset no longer lives in a 26dp-high row: controls use a 46dp-high row and a bounded 70dp Reset button, fixing previous clipped text.
-- Two-stage preview: low-resolution fast render while moving controls, then full preview after the gesture. Brush painting no longer requests a full CPU render for every touch point.
-- JPEG quality 85/90/95/100 and PNG export, adaptive maximum 24MP output decode, original-file safety guard, no branding added to exported pixels.
+## Limits and safeguards
+- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36; package stays `com.greenezone.gzphotoeditor` to preserve installation/project continuity when signing keys agree.
+- Renderer uses 8-bit sRGB, not a RAW/16-bit managed photo pipeline. New TIFF is uncompressed 8-bit RGB, not 16-bit.
+- Social dimensions are practical composition presets, **not guarantees of platform acceptance**, safe-area rules or uploaded file size. Platforms may change their policies.
+- Export presets may upscale lower-resolution source photos; this cannot recover missing detail. Fit can add margins; Fill can crop. The user selects explicitly.
+- Drawing eraser splits vector strokes at erased points, not a pixel-based clone/heal tool. No video editing despite the button label Open media.
+- Very large photo output is limited by device memory. Custom-font file imports, movable individual crop-edge handles, text-on-path, arbitrary masking or PSD project import remain unimplemented.
+- Blur/pixelation are not secure redaction. Use a fully opaque black covering for sensitive material.
 
-## Tech and build
-Kotlin / Jetpack Compose, JDK17, AGP9.4, Gradle9.6, Android API29+ with target API36. **Important: application ID remains `com.greenezone.gzphotoeditor`** so existing saved projects can remain accessible when the APK updates with the same signing key. New app display name is **GZ Editor Pro**.
+## Build and test
+GitHub Actions **GZ Editor Pro Android CI** runs Android compilation, JVM geometry/codec tests, Android emulator image/format/Compose tests and uploads debug-signed artifact `gz-editor-pro-debug` containing `app-debug.apk`. A passing automated build does **not** establish physical-device usability, commercial readiness or professional color fidelity.
 
-```sh
-gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
-gradle --no-daemon :app:connectedDebugAndroidTest
-```
+See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`, `docs/PHONE_TEST_WAVE6.md`.
 
-GitHub Actions workflow: **GZ Editor Pro Android CI**. Artifact: **gz-editor-pro-debug** containing test APK `app-debug.apk`. Debug builds are not paid Play Store releases. See `docs/PHONE_TEST_WAVE5.md`, `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`.
-
-**Limits:** No real video support, RAW/DNG workflow, 16-bit ICC-managed editing, heal/clone/object removal, full batch export, secure automatic redaction audit, or verified app-store commercial quality yet. Blur/pixelate are cosmetic, not security guarantees. On-phone responsiveness and privacy export correctness require field testing.
-
-**Company boundary:** The future Greenezone official website, XForge, GZFX and Beside-Me are unrelated. Nothing in this app repository should change their code, hosting or DNS.
+**Boundaries:** do not change Greenezone corporate website, DNS, hosting, XForge, GZFX, Beside-Me or any unrelated repository.
 
 Copyright © 2026 Greenezone Software LLC. All rights reserved.

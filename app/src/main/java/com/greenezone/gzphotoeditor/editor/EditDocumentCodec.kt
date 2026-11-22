@@ -1,5 +1,8 @@
 package com.greenezone.gzphotoeditor.editor
 
+import java.nio.charset.StandardCharsets
+import java.util.Base64
+
 /**
  * Versioned, deterministic, bounded pure-Kotlin project format.
  * No external files, source photos, network identifiers or executable data.
@@ -7,7 +10,7 @@ package com.greenezone.gzphotoeditor.editor
 object EditDocumentCodec {
     private const val VERSION = "1"
     private const val MAX_STROKES = 40
-    private const val MAX_POINTS = 400
+    private const val MAX_POINTS = 500
 
     fun encode(document: EditDocument): String {
         val fields = sortedMapOf<String, String>()
@@ -64,12 +67,58 @@ object EditDocumentCodec {
                     stroke.points.take(MAX_POINTS).joinToString(";") { "${it.x},${it.y}" }
             }
         }
+        document.cropFrame?.let { f ->
+            fields["crop.frame"] = listOf(f.left, f.top, f.right, f.bottom).joinToString(",")
+        }
+        val creative = document.creative
+        fields["creative.text.count"] = creative.text.take(CreativeRaster.MAX_TEXT).size.toString()
+        creative.text.take(CreativeRaster.MAX_TEXT).forEachIndexed { i, layer ->
+            val pre = "creative.text." + i + "."
+            fields[pre + "content"] = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(layer.content.take(500).toByteArray(StandardCharsets.UTF_8))
+            fields[pre + "font"] = layer.font.name
+            fields[pre + "align"] = layer.align.name
+            fields[pre + "x"] = layer.x.toString(); fields[pre + "y"] = layer.y.toString()
+            fields[pre + "w"] = layer.width.toString(); fields[pre + "h"] = layer.height.toString()
+            fields[pre + "rotation"] = layer.rotation.toString()
+            fields[pre + "size"] = layer.size.toString()
+            fields[pre + "color"] = layer.color.toString()
+            fields[pre + "opacity"] = layer.opacity.toString()
+            fields[pre + "bold"] = layer.bold.toString()
+            fields[pre + "italic"] = layer.italic.toString()
+            fields[pre + "outline"] = layer.outline.toString()
+            fields[pre + "outlineColor"] = layer.outlineColor.toString()
+            fields[pre + "shadow"] = layer.shadow.toString()
+            fields[pre + "spacing"] = layer.letterSpacing.toString()
+        }
+        fields["creative.shape.count"] = creative.shapes.take(CreativeRaster.MAX_SHAPES).size.toString()
+        creative.shapes.take(CreativeRaster.MAX_SHAPES).forEachIndexed { i, shape ->
+            val pre = "creative.shape." + i + "."
+            fields[pre + "kind"] = shape.kind.name
+            fields[pre + "x"] = shape.x.toString(); fields[pre + "y"] = shape.y.toString()
+            fields[pre + "w"] = shape.width.toString(); fields[pre + "h"] = shape.height.toString()
+            fields[pre + "rotation"] = shape.rotation.toString()
+            fields[pre + "color"] = shape.color.toString()
+            fields[pre + "opacity"] = shape.opacity.toString()
+            fields[pre + "thickness"] = shape.thickness.toString()
+            fields[pre + "filled"] = shape.filled.toString()
+        }
+        fields["creative.ink.count"] = creative.strokes.take(CreativeRaster.MAX_INK).size.toString()
+        creative.strokes.take(CreativeRaster.MAX_INK).forEachIndexed { i, stroke ->
+            val pre = "creative.ink." + i + "."
+            fields[pre + "color"] = stroke.color.toString()
+            fields[pre + "opacity"] = stroke.opacity.toString()
+            fields[pre + "width"] = stroke.thickness.toString()
+            fields[pre + "points"] = stroke.points.take(MAX_POINTS).joinToString(";") {
+                it.x.toString() + "," + it.y.toString()
+            }
+        }
         return fields.entries.joinToString("\n") { "${it.key}=${it.value}" }
     }
 
     fun decode(content: String): EditDocument? {
-        if (content.length > 1_200_000) return null
-        val fields = content.lineSequence().take(1400).mapNotNull { line ->
+        if (content.length > 2_000_000) return null
+        val fields = content.lineSequence().take(6000).mapNotNull { line ->
             val index = line.indexOf('=')
             if (index <= 0) null else line.substring(0, index) to line.substring(index + 1)
         }.toMap()
@@ -157,6 +206,83 @@ object EditDocumentCodec {
                 strokes = strokes
             ))
         }
+        val frame = fields["crop.frame"]?.split(',')?.let { parts ->
+            if (parts.size != 4) null else {
+                val values = parts.mapNotNull { it.toFloatOrNull() }
+                if (values.size != 4 || values.any { !it.isFinite() }) null
+                else CropMath.sanitize(CropFrame(values[0], values[1], values[2], values[3]))
+            }
+        }
+        fun color(key: String, fallback: Int): Int = fields[key]?.toIntOrNull() ?: fallback
+        fun points(key: String): List<BrushPoint> =
+            fields[key]?.split(';')?.take(MAX_POINTS)?.mapNotNull { pair ->
+                val pieces = pair.split(',')
+                if (pieces.size != 2) return@mapNotNull null
+                val x = pieces[0].toFloatOrNull()
+                val y = pieces[1].toFloatOrNull()
+                if (x == null || y == null || !x.isFinite() || !y.isFinite() ||
+                    x !in 0f..1f || y !in 0f..1f) null else BrushPoint(x, y)
+            } ?: emptyList()
+
+        val texts = ArrayList<TextOverlay>()
+        for (i in 0 until count("creative.text.count", CreativeRaster.MAX_TEXT)) {
+            val pre = "creative.text." + i + "."
+            val title = try {
+                String(Base64.getUrlDecoder().decode(fields[pre + "content"] ?: ""),
+                    StandardCharsets.UTF_8).take(500)
+            } catch (_: IllegalArgumentException) { "" }
+            if (title.isBlank()) continue
+            texts.add(TextOverlay(
+                content = title,
+                font = TextFont.entries.firstOrNull { it.name == fields[pre + "font"] } ?: TextFont.SANS,
+                align = TextAlignment.entries.firstOrNull { it.name == fields[pre + "align"] } ?: TextAlignment.CENTER,
+                x = numeric(pre + "x", .5f, 0f, 1f),
+                y = numeric(pre + "y", .5f, 0f, 1f),
+                width = numeric(pre + "w", .7f, .07f, 1f),
+                height = numeric(pre + "h", .24f, .04f, 1f),
+                rotation = numeric(pre + "rotation", 0f, -180f, 180f),
+                size = numeric(pre + "size", .075f, .012f, .24f),
+                color = color(pre + "color", -1),
+                opacity = numeric(pre + "opacity", 1f, 0f, 1f),
+                bold = fields[pre + "bold"] == "true",
+                italic = fields[pre + "italic"] == "true",
+                outline = numeric(pre + "outline", 0f, 0f, 1f),
+                outlineColor = color(pre + "outlineColor", -0x1000000),
+                shadow = numeric(pre + "shadow", 0f, 0f, 1f),
+                letterSpacing = numeric(pre + "spacing", 0f, 0f, .3f)
+            ))
+        }
+        val shapes = ArrayList<ShapeOverlay>()
+        for (i in 0 until count("creative.shape.count", CreativeRaster.MAX_SHAPES)) {
+            val pre = "creative.shape." + i + "."
+            val kind = ShapeKind.entries.firstOrNull { it.name == fields[pre + "kind"] }
+                ?: continue
+            shapes.add(ShapeOverlay(
+                kind = kind,
+                x = numeric(pre + "x", .5f, 0f, 1f),
+                y = numeric(pre + "y", .5f, 0f, 1f),
+                width = numeric(pre + "w", .38f, .018f, 1f),
+                height = numeric(pre + "h", .25f, .018f, 1f),
+                rotation = numeric(pre + "rotation", 0f, -180f, 180f),
+                color = color(pre + "color", -1),
+                opacity = numeric(pre + "opacity", 1f, 0f, 1f),
+                thickness = numeric(pre + "thickness", .009f, .002f, .10f),
+                filled = fields[pre + "filled"] == "true"
+            ))
+        }
+        val ink = ArrayList<InkStroke>()
+        for (i in 0 until count("creative.ink.count", CreativeRaster.MAX_INK)) {
+            val pre = "creative.ink." + i + "."
+            val positions = points(pre + "points")
+            if (positions.isEmpty()) continue
+            ink.add(InkStroke(
+                points = positions,
+                color = color(pre + "color", -1),
+                thickness = numeric(pre + "width", .012f, .0015f, .16f),
+                opacity = numeric(pre + "opacity", 1f, 0f, 1f)
+            ))
+        }
+
         return EditDocument(
             grade = grade,
             quarterTurns = (fields["rotation"]?.toIntOrNull() ?: 0).mod(4),
@@ -168,7 +294,9 @@ object EditDocumentCodec {
             cropCenterY = numeric("cropY", .5f, 0f, 1f),
             straightenDegrees = numeric("straighten", 0f, -15f, 15f),
             masks = masks,
-            privacy = privacy
+            privacy = privacy,
+            cropFrame = frame,
+            creative = CreativeDocument(texts, ink, shapes)
         )
     }
 }

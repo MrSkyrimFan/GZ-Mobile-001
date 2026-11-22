@@ -6,7 +6,7 @@ import org.junit.Test
 
 class GeometryTest {
     @Test fun cropRatioNamesAreUnique() {
-        assertEquals(9, CropRatio.entries.size)
+        assertEquals(10, CropRatio.entries.size)
         assertEquals(CropRatio.entries.size, CropRatio.entries.map { it.label }.toSet().size)
         assertEquals(null, CropRatio.ORIGINAL.ratio)
         assertEquals(1f, CropRatio.SQUARE.ratio!!, 0f)

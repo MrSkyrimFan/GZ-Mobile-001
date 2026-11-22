@@ -1,23 +1,22 @@
-# GZ Editor Pro — canonical handoff, November 21, 2026
+# GZ Editor Pro — continuity / engineering custody
 
-## Locked decisions
-- Owner's current commercial name: **GZ Editor Pro**. Previous names ChromaVale, Focavera, GZ Photo Editor Pro are superseded for public branding.
-- Publisher: Greenezone Software LLC. Price target $1.99 once. No AI at runtime, ads, watermarks, subscriptions, IAP, accounts, telemetry or INTERNET.
-- On empty main screen: remove "GZ", "your photo deserves the whole screen" and "no cloud, no ads, no AI" messaging. Use title GZ Editor Pro, button **Open media**, and a small **© 2026 Greenezone Software LLC** at bottom left.
-- Privacy editing (blur, pixelate, black bars/covering, adjustable brush masking) is essential for creators who need to share edited images publicly. Blur is not guaranteed private; provide opaque censor bars.
-- Massive coherent engineering batches, substantial automated verification, and **one consolidated on-phone test**, not repeated tiny changes.
+## Most recent owner directive (2026-11-21)
+Preserve the existing easy photo-first UI and all working features. Put **GZ Editor Pro** at top left during editing. Show company **© 2026 Greenezone Software LLC** bottom-left on initial empty screen. Add real editable words/text in many fonts with width/height adjustment, freehand drawings/shapes, a manual draggable crop frame with freeform mode, more export file formats via dropdown, and a **separate** platform sizing dropdown for Instagram/Facebook/TikTok and other popular destinations. One large coherent implementation and test round, not endless microbuilds. User provided four screenshot references after GZ Editor Pro 0.6, verifying Blur & cover tools and opaque bar output. Existing UI must not be spoiled.
 
-## Actual field evidence
-The user uploaded FIVE Android photo editing screenshots after verifying 0.5: top shows GZ/Open/Undo/Redo/Before/Export; Reset is visibly cut off in Effects and Brush. Brush controls obscure the editing area; the green guide disappears when chrome hidden, but dark adjustment strokes remain. The owner wants brush editing to continue with controls hidden. User reports sluggish tool/slider reactions and wants far more Looks. This is first-hand user evidence; the screenshots alone cannot prove rendering correctness or speed.
+## Repos / identifiers
+- Single authorized repo: `MrSkyrimFan/GZ-Mobile-001`.
+- Baseline GZ Editor Pro 0.6 merge: `2a0f11b7eef2c5b42e5f569890b694a1dd7ba265`.
+- Engineering branch: `feature/gz-editor-pro-creation-export-07`.
+- Application ID unchanged: `com.greenezone.gzphotoeditor`; launcher name GZ Editor Pro. Target Android10+, compile/target SDK36.
+- Price target $1.99 one-time, no AI runtime, ads, watermarks, IAP, subscriptions, tracking, remote services. Open media currently supports **images only**.
 
-## Engineering custody
-- Repo `MrSkyrimFan/GZ-Mobile-001`; 0.5.0 baseline `81f17e227134a311e643d5fe60a6e7f5511756df`; new branch `feature/gz-editor-pro-privacy-ux-06`, PR #6.
-- No Java package rename. Keep `com.greenezone.gzphotoeditor` to preserve project data on successful in-place APK updates.
-- New `PrivacyEdit`, `PrivacyKind`, `PrivacyMath`, `PrivacyRaster` plus `PrivacyDeck` and `PrivacyRegionOverlay`. Extend codec while supporting existing v1 projects.
-- `ImagePipeline.render` applies privacy effects **after grading** in both scaled preview and original-file export, no watermarks.
-- Works with legacy Masks and new Privacy separately; painting remains active without chrome, but guide is hidden. Direct dragging positions privacy rectangles.
-- 50 Looks, two-stage low-res responsive preview then full-frame, Reset bounded size, new official company copyright on empty screen.
-- Verify PR, unit/Android emulator tests and main merge before sending link. Final commercial 1.0 not yet certified.
+## Architecture
+- Save source image only by content URI, edit non-destructively.
+- Grade + masks + privacy operations + creative overlays share preview/export pipeline; social export composition happens at the end.
+- Text/ink/shapes and normalized crop frame persisted in backwards-compatible project codec; regenerate from source at final resolution.
+- Export supports JPEG/PNG/WebP lossy/lossless/BMP/TIFF/PDF with matching MIME and real encoders.
+- Social presets use specified pixel dimensions with explicit Fit/Fill. Not automatic social upload or guaranteed platform acceptance.
+- The prior app UI, horizontal categories, 50 Looks, curves, colors, privacy masks, undo/redo all remain.
 
-## Strict project separation
-Greenezone official corporate website (deferred), website hosting, DNS, XForge, GZFX, Beside-Me, and all unrelated accounts/repositories are outside scope. The exact company website configuration remains unverified from this Android repo. Do not touch or invent it.
+## Hard rules
+Review source, test JVM and real Android bitmap/Compose, verify PR commit SHA, merged-main workflow and APK artifact. Don't claim final Play-ready app without physical phone and policy release gates. Do not change the Greenezone corporate website, registrar, DNS, XForge, GZFX, Beside-Me or unrelated repo settings.

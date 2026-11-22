@@ -140,13 +140,31 @@ object ImagePipeline {
                 }
             }
 
-            val (cropW, cropH) = centerCropSize(working.width, working.height, document.crop)
-            if (cropW < working.width || cropH < working.height) {
-                val (x, y) = GeometryMath.cropOrigin(
-                    working.width, working.height, cropW, cropH,
+            val cropRect = document.cropFrame?.let {
+                CropMath.pixelBounds(working.width, working.height, it)
+            }
+            val cropWidth: Int
+            val cropHeight: Int
+            val originX: Int
+            val originY: Int
+            if (cropRect != null) {
+                originX = cropRect[0]
+                originY = cropRect[1]
+                cropWidth = cropRect[2]
+                cropHeight = cropRect[3]
+            } else {
+                val (cw, ch) = centerCropSize(working.width, working.height, document.crop)
+                cropWidth = cw
+                cropHeight = ch
+                val (cx, cy) = GeometryMath.cropOrigin(
+                    working.width, working.height, cw, ch,
                     document.cropCenterX, document.cropCenterY
                 )
-                val crop = Bitmap.createBitmap(working, x, y, cropW, cropH)
+                originX = cx
+                originY = cy
+            }
+            if (cropWidth < working.width || cropHeight < working.height) {
+                val crop = Bitmap.createBitmap(working, originX, originY, cropWidth, cropHeight)
                 if (working !== input && working !== crop) working.recycle()
                 working = crop
             }
@@ -166,14 +184,34 @@ object ImagePipeline {
         var output: Bitmap? = null
         var returnedGeometry = false
         try {
+            fun composite(image: Bitmap, owned: Boolean): Bitmap {
+                if (CreativeRaster.isEmpty(document.creative)) return image
+                val target = if (owned && image.isMutable) image
+                    else image.copy(Bitmap.Config.ARGB_8888, true)
+                        ?: throw IllegalStateException("Cannot allocate drawing layer")
+                try {
+                    CreativeRaster.drawInto(target, document.creative, cancelCheck)
+                } catch (error: Throwable) {
+                    if (target !== image && !target.isRecycled) target.recycle()
+                    throw error
+                }
+                return target
+            }
             val prepared = ToneMath.prepare(document.grade)
             val masks = MaskMath.prepare(document.masks)
             if (prepared.isNeutral && masks.isEmpty()) {
-                if (document.privacy.isEmpty()) {
+                if (document.privacy.isEmpty() && CreativeRaster.isEmpty(document.creative)) {
                     returnedGeometry = true
                     return source
                 }
-                return PrivacyRaster.apply(source, document.privacy, cancelCheck)
+                val photo = if (document.privacy.isEmpty()) source
+                    else PrivacyRaster.apply(source, document.privacy, cancelCheck)
+                try {
+                    return composite(photo, photo !== source)
+                } catch (error: Throwable) {
+                    if (photo !== source && !photo.isRecycled) photo.recycle()
+                    throw error
+                }
             }
 
             val width = source.width
@@ -245,12 +283,12 @@ object ImagePipeline {
             }
             if (document.privacy.isNotEmpty()) {
                 val privacyResult = PrivacyRaster.apply(result, document.privacy, cancelCheck)
+                output = privacyResult
                 result.recycle()
-                output = null
-                return privacyResult
             }
+            val finalPhoto = composite(output ?: result, true)
             output = null
-            return result
+            return finalPhoto
         } catch (error: Throwable) {
             if (output != null && !output.isRecycled) output.recycle()
             throw error
