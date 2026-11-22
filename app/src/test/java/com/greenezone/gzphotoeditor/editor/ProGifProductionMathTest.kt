@@ -50,7 +50,7 @@ class ProGifProductionMathTest {
         assertTrue(GifVideoMath.valid(clip))
         assertEquals(5_000L, clip.endMs)
         assertEquals(40, GifVideoMath.frameCount(clip))
-        assertEquals(125, GifVideoMath.gifDelayMs(clip) + 5) // Rounded to 120ms.
+        assertEquals(130, GifVideoMath.gifDelayMs(clip)) // GIF stores 10-ms ticks.
         val times = GifVideoMath.frameTimesMs(clip)
         assertEquals(40, times.size)
         assertEquals(0L, times.first())

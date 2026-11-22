@@ -2,7 +2,7 @@
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-**Status: version 0.9.0 engineering qualification candidate. Not published on Google Play.**
+**Status: version 0.10.0 engineering qualification candidate. Not published on Google Play.**
 
 ## Core contract
 - Fully offline. No runtime AI, subscriptions, ads, account, telemetry, in-app purchases, watermarks or network permission.
@@ -10,6 +10,12 @@
 - All edits are parameters in saved local project snapshots; previous projects remain decodable.
 - Compact image-first interface: GZ Editor Pro top-left, Open media, Undo/Redo, Before, Export, swipeable bottom tool dock, tap to hide editing chrome, company copyright bottom-left on empty main page.
 - Preserve all prior 56 global adjustments, 50 Looks, HSL color mixer, grading, 4 curve channels, 3 adjustment-mask types, Blur & cover, crop/rotate/flip/straighten, project/preset storage, JPEG/PNG export and transparent output where supported.
+
+## Major production repair wave (v0.10)
+- **GIF is now video-first**: import an actual local video, preview and select a clip up to twelve seconds, choose 4/6/8/10 FPS, 50%/100%/200% speed, reverse or forward, trim/scrub, Fit/Fill, canvas output and loop. Android's MediaMetadataRetriever decodes timestamped video frames one by one; a genuine GIF89a file is exported. Photo-sequence animation remains optional and secondary. No audio is included in GIFs. This is *not* the full video editor, which remains a later phase.
+- **Photo Pro uses a typed layer stack**: bitmap, text, shape, vector brush and non-destructive global adjustment layers can be independently ordered, hidden, styled, drawn or edited. One selected layer at a time, with direct canvas gestures, grouped inspectors, controls for blending/opacity/transforms, local project persistence and quick help. Earlier v1 Pro projects are still decodable. No claim of Photoshop feature parity yet.
+- The existing regular photo editor and seven-layout collage were not redesigned. The complete user feedback and remaining professional-grade work are in `docs/PRODUCTION_REBUILD_010.md`.
+- Qualification requires exact branch/PR + merged-main JVM and Android instrumentation checks and a physical handset review. Android's native frame retrieval is timestamp-approximate and some hardware codecs may refuse particular HDR/protected videos. GIFs use an eight-bit fixed palette (not a professional true-color video format).
 
 ## Separate editing workspaces (v0.9)
 - **Top-right Photo ▾** selects Photo editing (regular), Photo editing Pro, Collage maker, GIF maker or Video editing (Coming soon and disabled). Each workspace owns its editing controls.
