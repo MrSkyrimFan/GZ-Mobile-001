@@ -652,9 +652,18 @@ fun ProWorkspaceScreen(
                                 }
                             }
                         } else {
-                            Text("Choose a Text or Shape layer to change fonts, shapes and colors.",
-                                color = EditorMuted, fontSize = 12.sp,
-                                modifier = Modifier.padding(horizontal = 14.dp))
+                            Row(Modifier.horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(enabled = document.layers.size < ProMath.MAX_LAYERS,
+                                    onClick = { addCreative(ProLayerKind.TEXT) }) {
+                                    Text("+ Text layer", color = EditorMint)
+                                }
+                                TextButton(enabled = document.layers.size < ProMath.MAX_LAYERS,
+                                    onClick = { addCreative(ProLayerKind.SHAPE) }) {
+                                    Text("+ Shape layer", color = EditorMint)
+                                }
+                            }
                         }
                         if (active.kind == ProLayerKind.TEXT || active.kind == ProLayerKind.SHAPE) {
                             val text = active.edits.creative.text.firstOrNull()
@@ -706,9 +715,10 @@ fun ProWorkspaceScreen(
                                         creative = item.edits.creative.copy(strokes = emptyList()))) }
                                 }
                             }
-                        } else Text("Add a Brush layer to draw non-destructively.",
-                            color = EditorMuted, fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 14.dp))
+                        } else TextButton(
+                            enabled = document.layers.size < ProMath.MAX_LAYERS,
+                            onClick = { addCreative(ProLayerKind.DRAWING) }
+                        ) { Text("+ Draw on new layer", color = EditorMint) }
                     }
                     ProSection.TUNE -> {
                         if (active.kind == ProLayerKind.ADJUSTMENT) {
@@ -731,13 +741,21 @@ fun ProWorkspaceScreen(
                                         grade = control.write(item.edits.grade,v))) }, true)
                                 }, onValueChangeFinished = ::finishSlider,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp))
-                        } else if (active.kind == ProLayerKind.IMAGE) {
-                            TextButton(onClick = { editingImage = selected }) {
-                                Text("Edit this image's full adjustments", color = EditorMint)
+                        } else {
+                            Row(Modifier.horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (active.kind == ProLayerKind.IMAGE) {
+                                    TextButton(onClick = { editingImage = selected }) {
+                                        Text("Edit this photo", color = EditorMint)
+                                    }
+                                }
+                                TextButton(enabled = document.layers.size < ProMath.MAX_LAYERS,
+                                    onClick = { addCreative(ProLayerKind.ADJUSTMENT) }) {
+                                    Text("+ Adjustment layer", color = EditorMint)
+                                }
                             }
-                        } else Text("Adjustment layers affect the composited picture below them.",
-                            color = EditorMuted, fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 14.dp))
+                        }
                     }
                     ProSection.BLEND -> {
                         Row(Modifier.horizontalScroll(rememberScrollState())
