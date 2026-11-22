@@ -167,7 +167,11 @@ fun VideoGifScreen(
                     val job = currentCoroutineContext()
                     val file = File.createTempFile("gz-gif-", ".tmp", context.cacheDir)
                     temp = file
-                    file.outputStream().buffered().use { stream ->
+                    val quota = GifExportGuard.maxTemporaryBytes(context.cacheDir.usableSpace)
+                    if (quota < GifExportGuard.MIN_EXPORT_BYTES) {
+                        throw IOException("Not enough free storage to safely create a GIF. Free at least 72 MB.")
+                    }
+                    GifExportGuard.limit(file.outputStream(), quota).buffered(65536).use { stream ->
                         VideoGifSource.write(context, saved, stream, cancel = { job.ensureActive() },
                             onProgress = { index, count ->
                                 if (index == count || index % 8 == 0) {
@@ -189,10 +193,11 @@ fun VideoGifScreen(
                 progress = "Saving GIF…"
                 withContext(Dispatchers.IO) {
                     val job = currentCoroutineContext()
-                    val firstByte = resolver.openInputStream(dest)?.use { it.read() }
-                        ?: throw IOException("Cannot verify the destination. Choose a new file in Files.")
-                    require(firstByte == -1) { "This file already has content. Save the GIF under a new name." }
-                    val output = resolver.openOutputStream(dest, "wt") ?: throw IOException("Cannot open the destination")
+                    // Android ACTION_CREATE_DOCUMENT creates a new document and does not
+                    // overwrite an existing filename. Some providers are write-only until
+                    // content is committed, so don't require openInputStream on a new URI.
+                    val output = resolver.openOutputStream(dest, "wt")
+                        ?: throw IOException("This provider cannot write the destination. Choose Files instead.")
                     try {
                         output.use { stream ->
                             requireNotNull(temp).inputStream().use { input ->
@@ -206,9 +211,11 @@ fun VideoGifScreen(
                             }
                         }
                     } catch (failed: Throwable) {
-                        // The destination was verified empty before opening. Restore that state,
-                        // retaining the document and its provider identity.
-                        runCatching { resolver.openOutputStream(dest, "wt")?.close() }
+                        // ACTION_CREATE_DOCUMENT created a new document for this export.
+                        // Remove incomplete output if its provider supports deletion.
+                        val removed = runCatching { resolver.delete(dest, null, null) > 0 }
+                            .getOrDefault(false)
+                        if (!removed) runCatching { resolver.openOutputStream(dest, "wt")?.close() }
                         throw failed
                     }
                 }
@@ -266,7 +273,9 @@ fun VideoGifScreen(
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(notice, color = EditorWhite, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    if (lastExport != null && notice == "GIF saved") TextButton(onClick = {
+                    // The success text is published before finally clears exporting.
+                    // Do not expose a clickable link until openSource() can accept it.
+                    if (enabled && lastExport != null && notice == "GIF saved") TextButton(onClick = {
                         lastExport?.let(::openSource)
                     }) { Text("Edit saved GIF", color = EditorMint) }
                     TextButton(onClick = { notice = "" }) { Text("Dismiss", color = EditorMuted) }
@@ -283,10 +292,17 @@ fun VideoGifScreen(
                     TextButton(onClick = ::openProjects, enabled = enabled) { Text("Open saved GIF project", color = EditorMuted) }
                 }
             } else {
-                GifFramePreview(document, playing, seek, onFrame = { position = it },
-                    onEnd = { pauseAt(it) },
-                    onError = { playing = false; notice = "Preview unavailable. $it" },
-                    modifier = Modifier.weight(1f).fillMaxWidth())
+                if (busy || exporting) {
+                    // Suspend decoding, frame caches and thumbnail bitmaps while
+                    // replacing the source or encoding output, particularly on
+                    // low-memory Android 10 devices.
+                    Box(Modifier.weight(1f).fillMaxWidth())
+                } else {
+                    GifFramePreview(document, playing, seek, onFrame = { position = it },
+                        onEnd = { pauseAt(it) },
+                        onError = { playing = false; notice = "Preview unavailable. $it" },
+                        modifier = Modifier.weight(1f).fillMaxWidth())
+                }
                 Column(Modifier.fillMaxWidth().background(EditorSurface),
                     verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp),
@@ -341,7 +357,11 @@ fun VideoGifScreen(
                                 VideoGifTab.PLAYBACK -> {
                                     GifOptions {
                                         GifVideoMath.FRAME_RATES.forEach { fps ->
-                                            DockChip(if (fps == 0) "Source timing" else "$fps FPS", clip.fps == fps, enabled) {
+                                            DockChip(
+                                                if (fps == 0) "Source timing" else "$fps FPS",
+                                                clip.fps == fps,
+                                                enabled && GifVideoMath.fitsFrameBudget(clip, fps)
+                                            ) {
                                                 commit(document.copy(video = clip.copy(fps = fps)), 0)
                                             }
                                         }

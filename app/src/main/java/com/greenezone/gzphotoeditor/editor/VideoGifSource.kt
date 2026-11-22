@@ -40,12 +40,21 @@ object GifVideoMath {
     val FRAME_RATES = listOf(0, 4, 6, 8, 10, 12, 15, 20, 24, 30)
     val SPEEDS = listOf(50, 100, 200)
 
+    /** Avoid secretly reducing requested FPS on long footage. */
+    fun fitsFrameBudget(clip: GifVideoClip, fps: Int = clip.fps): Boolean {
+        if (fps !in FRAME_RATES || clip.endMs <= clip.startMs) return false
+        if (fps == 0 && clip.sourceTimesMs.isNotEmpty()) return true
+        val effective = if (fps == 0) 24 else fps
+        return (clip.endMs - clip.startMs).toDouble() * effective / 1000.0 <= MAX_OUTPUT_FRAMES
+    }
+
     fun valid(clip: GifVideoClip): Boolean =
         clip.uri.startsWith("content://") && clip.uri.length <= 4096 &&
         clip.durationMs in 1..MAX_CLIP_MS && clip.startMs in 0 until clip.endMs &&
         clip.endMs <= clip.durationMs && clip.fps in FRAME_RATES && clip.speedPercent in SPEEDS &&
         clip.width in 1..65535 && clip.height in 1..65535 &&
-        clip.sourceTimesMs.size <= MAX_OUTPUT_FRAMES && clip.loopCount in -1..65535
+        clip.sourceTimesMs.size <= MAX_OUTPUT_FRAMES && clip.loopCount in -1..65535 &&
+        fitsFrameBudget(clip)
 
     internal fun schedule(clip: GifVideoClip): GifSchedule {
         require(valid(clip))
@@ -76,7 +85,10 @@ object GifVideoMath {
             while (i < source.size && source[i] < clip.endMs) accept(source[i++])
         } else {
             val fps = if (clip.fps == 0) 24 else clip.fps
-            val count = (span * fps / 1000.0).roundToInt().coerceIn(1, MAX_OUTPUT_FRAMES)
+            val count = (span * fps / 1000.0).roundToInt().coerceAtLeast(1)
+            require(count <= MAX_OUTPUT_FRAMES) {
+                "Clip is too long for this FPS. Trim the clip or lower FPS."
+            }
             for (i in 1 until count) accept(clip.startMs + span * i / count)
         }
         accept(clip.endMs, last = true)

@@ -45,6 +45,19 @@ class ProGifProductionMathTest {
         }), ProLayer(first, name = "Overflow")))
     }
 
+    @Test fun longClipNeverSilentlyLowersRequestedFps() {
+        val clip = GifVideoClip(
+            uri = "content://qa/long-video", durationMs = 12_000_000L,
+            width = 1920, height = 1080,
+            sourceTimesMs = listOf(0L, 1000L, 2000L)
+        )
+        assertTrue("Source timing is still allowed", GifVideoMath.valid(clip))
+        assertFalse("30fps on a long video cannot be silently reduced to 150K frames",
+            GifVideoMath.fitsFrameBudget(clip, 30))
+        assertFalse(GifVideoMath.valid(clip.copy(fps = 30)))
+        assertTrue(GifVideoMath.valid(clip.copy(fps = 10)))
+    }
+
     @Test fun sourceDurationAndVariableFrameHoldsSurviveTrimReverseAndSpeed() {
         val clip = GifVideoClip("content://example/video-1", 18_000L, width = 360, height = 640,
             sourceTimesMs = listOf(0L, 33L, 67L, 100L, 170L, 200L))

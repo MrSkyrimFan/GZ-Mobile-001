@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Movie
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -129,6 +130,16 @@ class AndroidGifWorkspacePlaybackTest {
             rule.waitUntil(25_000) {
                 rule.onAllNodesWithText("Edit saved GIF").fetchSemanticsNodes().isNotEmpty()
             }
+            // Verify the actual SAF output before attempting to reopen it.
+            // This catches fake success messages and malformed GIF bytes.
+            val stored = requireNotNull(resolver.openInputStream(destination)).use {
+                it.readBytes()
+            }
+            assertEquals("GIF89a", String(stored, 0, 6, Charsets.US_ASCII))
+            val movie = requireNotNull(Movie.decodeByteArray(stored, 0, stored.size))
+            assertTrue(movie.duration() > 0)
+            assertEquals(3, GifVideoMath.frameCount(
+                requireNotNull(VideoGifSource.document(context, destination).video)))
             // Reopen the bytes written by the actual Save GIF action.
             rule.onNodeWithText("Edit saved GIF").performClick()
             rule.waitUntil(15_000) { latest.video?.uri == destination.toString() }
