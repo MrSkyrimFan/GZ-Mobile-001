@@ -19,23 +19,43 @@ object GifStore {
     fun encode(doc: GifDocument): String {
         require(GifMath.valid(doc))
         return JSONObject().apply {
-            put("version", 1)
+            put("version", 2)
             put("delayMs", doc.delayMs)
             put("size", doc.size.name)
             put("fit", doc.fit.name)
             put("aspect", doc.aspect.name)
             put("forever", doc.forever)
             put("frames", JSONArray(doc.frames))
+            doc.video?.let { clip ->
+                put("video", JSONObject().apply {
+                    put("uri", clip.uri); put("durationMs", clip.durationMs)
+                    put("startMs", clip.startMs); put("endMs", clip.endMs)
+                    put("fps", clip.fps); put("speed", clip.speedPercent)
+                    put("reverse", clip.reverse)
+                })
+            }
         }.toString().also { require(it.length <= MAX_BYTES) }
     }
     fun decode(data: String): GifDocument? {
         if (data.length > MAX_BYTES) return null
         return try {
             val obj = JSONObject(data)
-            if (obj.optInt("version", 0) != 1) return null
+            if (obj.optInt("version", 0) !in 1..2) return null
             val array = obj.optJSONArray("frames") ?: return null
-            if (array.length() !in 2..GifMath.MAX_FRAMES) return null
+            if (array.length() > GifMath.MAX_FRAMES) return null
             val list = (0 until array.length()).map { array.optString(it, "") }
+            val v = obj.optJSONObject("video")
+            val clip = if (v != null && obj.optInt("version") == 2) {
+                GifVideoClip(
+                    uri = v.optString("uri", ""),
+                    durationMs = v.optLong("durationMs", 0),
+                    startMs = v.optLong("startMs", 0),
+                    endMs = v.optLong("endMs", 0),
+                    fps = v.optInt("fps", 8),
+                    speedPercent = v.optInt("speed", 100),
+                    reverse = v.optBoolean("reverse", false)
+                )
+            } else null
             fun <T : Enum<T>> find(items: Array<T>, key: String, fallback: T): T =
                 items.firstOrNull { it.name == obj.optString(key) } ?: fallback
             GifDocument(
@@ -43,7 +63,8 @@ object GifStore {
                 size = find(GifSize.entries.toTypedArray(), "size", GifSize.MEDIUM),
                 fit = find(GifFit.entries.toTypedArray(), "fit", GifFit.FIT),
                 aspect = find(GifAspect.entries.toTypedArray(), "aspect", GifAspect.SQUARE),
-                forever = obj.optBoolean("forever", true)
+                forever = obj.optBoolean("forever", true),
+                video = clip
             ).takeIf { GifMath.valid(it) }
         } catch (_: Exception) { null }
     }

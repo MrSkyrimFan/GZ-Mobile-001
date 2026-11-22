@@ -48,6 +48,53 @@ class PhotoFirstUiTest {
         rule.onNodeWithText("Add first photo").assertExists()
     }
 
+    @Test fun proLayerCreationIsReachableFromCleanCanvas() {
+        var lastDocument = com.greenezone.gzphotoeditor.editor.ProDocument()
+        rule.setContent {
+            var editable by remember {
+                mutableStateOf(com.greenezone.gzphotoeditor.editor.ProDocument())
+            }
+            lastDocument = editable
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                com.greenezone.gzphotoeditor.ui.ProWorkspaceScreen(
+                    document = editable,
+                    onDocument = { editable = it },
+                    onBack = {},
+                    onSwitch = {}
+                )
+            }
+        }
+        rule.onNodeWithText("Or start with a blank canvas").performClick()
+        rule.onNodeWithText("+ Add layer").performClick()
+        rule.onNodeWithText("Words / Text").performClick()
+        rule.onNodeWithText("Apply").performClick()
+        rule.runOnIdle {
+            assertEquals(2, lastDocument.layers.size)
+            assertEquals(com.greenezone.gzphotoeditor.editor.ProLayerKind.DRAWING,
+                lastDocument.layers[0].kind)
+            assertEquals(com.greenezone.gzphotoeditor.editor.ProLayerKind.TEXT,
+                lastDocument.layers[1].kind)
+        }
+    }
+
+    @Test fun videoGifLandingAsksOnlyForOneVideo() {
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                com.greenezone.gzphotoeditor.ui.VideoGifScreen(
+                    document = com.greenezone.gzphotoeditor.editor.GifDocument(),
+                    onDocument = {},
+                    onBack = {},
+                    onSwitch = {},
+                    onOpenLegacyPhotoProject = {}
+                )
+            }
+        }
+        rule.onNodeWithText("Select one video to turn into a GIF").assertIsDisplayed()
+        rule.onNodeWithText("Choose video").assertIsDisplayed()
+        rule.onNodeWithText("Open saved GIF project").assertExists()
+        rule.onNodeWithText("Instead: animate multiple photos").assertDoesNotExist()
+    }
+
     @Test fun firstOpenExplainsHowToStartWithoutTinyPreview() {
         rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() } }
         rule.onNodeWithText("Open media").assertIsDisplayed()

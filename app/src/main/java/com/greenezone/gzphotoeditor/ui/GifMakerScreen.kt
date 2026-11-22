@@ -78,6 +78,21 @@ fun GifMakerScreen(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit
 ) {
+    var photoSequenceOnly by remember { mutableStateOf(false) }
+    if (!photoSequenceOnly) {
+        VideoGifScreen(
+            document = document,
+            onDocument = onDocument,
+            onBack = onBack,
+            onSwitch = onSwitch,
+            onOpenLegacyPhotoProject = { saved ->
+                onDocument(saved)
+                photoSequenceOnly = true
+            }
+        )
+        return
+    }
+
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
@@ -233,7 +248,7 @@ fun GifMakerScreen(
         } else {
             Column(horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("GIF maker", color = EditorWhite, fontSize = 26.sp,
+                Text("Photo sequence", color = EditorWhite, fontSize = 26.sp,
                     fontWeight = FontWeight.Bold)
                 Text("Pick 2–20 photos to make an animated GIF.", color = EditorMuted,
                     fontSize = 13.sp)
@@ -251,7 +266,9 @@ fun GifMakerScreen(
                     Text("‹ Back", color = EditorWhite, fontSize = 13.sp)
                 }
                 Text("GIF maker", color = EditorWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                WorkspaceModeMenu(WorkspaceMode.GIF, !exporting, onSwitch)
+                TextButton(enabled = !exporting, onClick = { photoSequenceOnly = false }) {
+                    Text("Video → GIF", color = EditorMint, fontSize = 12.sp)
+                }
             }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -420,6 +437,7 @@ fun GifMakerScreen(
                         else {
                             playing = false; commit(restored); index = 0
                             projectsOpen = false; notice = "GIF project opened"
+                            if (restored.video != null) photoSequenceOnly = false
                         }
                     }) { Text(name, color = EditorMint) }
                 }

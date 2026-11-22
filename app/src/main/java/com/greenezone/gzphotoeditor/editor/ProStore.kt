@@ -9,7 +9,7 @@ import java.util.Base64
 
 /** Versioned private JSON holding photo URIs and editable layer settings, never source image bytes. */
 object ProStore {
-    private const val VERSION = 1
+    private const val VERSION = 2
     private const val MAX_BYTES = 3_000_000
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
@@ -23,6 +23,7 @@ object ProStore {
                 put("x", layer.x.toDouble()); put("y", layer.y.toDouble())
                 put("scale", layer.scale.toDouble()); put("opacity", layer.opacity.toDouble())
                 put("visible", layer.visible); put("blend", layer.blend.name)
+                put("kind", layer.kind.name); put("aspect", layer.aspect.toDouble())
                 put("edits", EditDocumentCodec.encode(layer.edits))
             })
         }
@@ -40,7 +41,7 @@ object ProStore {
         if (data.length > MAX_BYTES) return null
         return try {
             val obj = JSONObject(data)
-            if (obj.optInt("version", -1) != VERSION) return null
+            if (obj.optInt("version", -1) !in 1..VERSION) return null
             val array = obj.optJSONArray("layers") ?: return null
             if (array.length() !in 1..ProMath.MAX_LAYERS) return null
             fun unit(o: JSONObject, key: String, default: Double, lo: Float, hi: Float): Float {
@@ -51,7 +52,7 @@ object ProStore {
             val layers = (0 until array.length()).map { idx ->
                 val o = array.optJSONObject(idx) ?: return null
                 val uri = o.optString("uri", "")
-                if (!uri.startsWith("content://") || uri.length > 4096) return null
+                if (uri.length > 4096) return null
                 val edits = EditDocumentCodec.decode(o.optString("edits", "")) ?: return null
                 ProLayer(
                     uri = uri, edits = edits, name = o.optString("name", "").take(42),
@@ -59,7 +60,9 @@ object ProStore {
                     scale = unit(o, "scale", 1.0, .1f, 2f),
                     opacity = unit(o, "opacity", 1.0, 0f, 1f),
                     visible = o.optBoolean("visible", true),
-                    blend = value(o.optString("blend", ""), ProBlend.NORMAL)
+                    blend = value(o.optString("blend", ""), ProBlend.NORMAL),
+                    kind = value(o.optString("kind", ""), ProLayerKind.IMAGE),
+                    aspect = unit(o, "aspect", 1.0, .1f, 10f)
                 )
             }
             ProDocument(layers,

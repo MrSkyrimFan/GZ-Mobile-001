@@ -23,19 +23,27 @@ object CreativeRaster {
     fun drawInto(target: Bitmap, creative: CreativeDocument, cancel: (() -> Unit)? = null) {
         if (isEmpty(creative)) return
         require(target.isMutable) { "Compositing requires a caller-owned mutable bitmap" }
-        val canvas = Canvas(target)
-        val shorter = min(target.width, target.height).toFloat().coerceAtLeast(1f)
+        drawIntoCanvas(Canvas(target), creative, target.width, target.height, cancel)
+    }
+
+    /** Draws genuine vector layers into a caller-owned canvas; no temporary full-frame bitmap. */
+    fun drawIntoCanvas(
+        canvas: Canvas, creative: CreativeDocument, width: Int, height: Int,
+        cancel: (() -> Unit)? = null
+    ) {
+        if (isEmpty(creative)) return
+        val shorter = min(width, height).toFloat().coerceAtLeast(1f)
         for (item in creative.shapes.take(MAX_SHAPES)) {
             cancel?.invoke()
-            drawShape(canvas, item, target.width, target.height, shorter)
+            drawShape(canvas, item, width, height, shorter)
         }
         for (item in creative.strokes.take(MAX_INK)) {
             cancel?.invoke()
-            drawStroke(canvas, item, target.width, target.height, shorter)
+            drawStroke(canvas, item, width, height, shorter)
         }
         for (item in creative.text.take(MAX_TEXT)) {
             cancel?.invoke()
-            drawText(canvas, item, target.width, target.height, shorter)
+            drawText(canvas, item, width, height, shorter)
         }
     }
 

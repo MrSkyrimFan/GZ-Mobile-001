@@ -20,9 +20,9 @@ import androidx.compose.ui.unit.sp
 /** Distinct workflows, not a giant merged tool palette. Video intentionally ships last. */
 enum class WorkspaceMode(val label: String, val shortLabel: String, val hint: String, val available: Boolean = true) {
     PHOTO("Photo editing", "Photo", "Quick edits, Looks and simple corrections"),
-    PRO("Photo editing Pro", "Photo Pro", "Image layers, compositing and precision editing"),
+    PRO("Photo editing Pro", "Photo Pro", "Image, text, shape, brush and adjustment layers"),
     COLLAGE("Collage maker", "Collage", "Combine and independently edit up to 20 photos"),
-    GIF("GIF maker", "GIF", "Make looping GIFs from your photos"),
+    GIF("GIF maker", "GIF", "Turn videos into animated GIFs; photo sequences optional"),
     VIDEO("Video editing", "Video", "Coming soon · planned last", false)
 }
 
