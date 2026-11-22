@@ -56,7 +56,9 @@ object GifEncoder {
                 code(prefix)
                 if (nextCode < 4096) {
                     table[joined] = nextCode++
-                    if (nextCode == (1 shl codeWidth) && codeWidth < 12) codeWidth++
+                    // Encoder adds an entry one code earlier than the GIF decoder can see it.
+                    // Changing width at exactly 2^codeWidth corrupts longer animations.
+                    if (nextCode > (1 shl codeWidth) && codeWidth < 12) codeWidth++
                 } else {
                     code(256)
                     table.clear()
