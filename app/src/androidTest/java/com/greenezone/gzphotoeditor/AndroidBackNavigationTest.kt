@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.core.app.ActivityOptionsCompat
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.CollageDocument
@@ -333,9 +334,12 @@ class AndroidBackNavigationTest {
                 .config[ProViewportSemanticsKey]
         )
         rule.onNodeWithText("Undo").performClick()
-        rule.onNodeWithText("Shape 2 · Shape").assertDoesNotExist()
+        rule.onNodeWithText("Stack (1)").assertIsDisplayed()
         rule.onNodeWithText("Redo").performClick()
-        rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
+        rule.onNodeWithText("Stack (2)").assertIsDisplayed()
+        rule.onNodeWithText("Stack (2)").performClick()
+        rule.onNodeWithText("Shape 2").assertIsDisplayed()
+        rule.onNodeWithText("Done").performClick()
 
         pressSystemBack()
         rule.onNodeWithText("Photo ▾").assertIsDisplayed()
@@ -395,6 +399,10 @@ class AndroidBackNavigationTest {
             }
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
+            rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("GIF maker").fetchSemanticsNodes().isEmpty()
+            }
             pressSystemBack()
             rule.onNodeWithText("GIF ▾").assertIsDisplayed()
             rule.onNodeWithText("Source timing").assertIsDisplayed()
@@ -648,7 +656,10 @@ class AndroidBackNavigationTest {
             rule.onNodeWithText("Original photo", substring = true).assertDoesNotExist()
             rule.onNodeWithText("Add first photo").assertIsDisplayed()
             rule.onNodeWithText("Undo").performClick()
-            rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
+            rule.onNodeWithText("Stack (2)").assertIsDisplayed()
+            rule.onNodeWithText("Stack (2)").performClick()
+            rule.onNodeWithText("Shape 2").assertIsDisplayed()
+            rule.onNodeWithText("Done").performClick()
         } finally {
             rule.runOnIdle { mounted.value = false }
             rule.waitForIdle()
@@ -767,6 +778,8 @@ class AndroidBackNavigationTest {
                     rule.onNode(hasSetTextAction()).performTextInput(projectName)
                     rule.onNodeWithText("Save").performClick()
                     rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
+                    Espresso.closeSoftKeyboard()
+                    rule.waitForIdle()
 
                     pressSystemBack()
                     rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
