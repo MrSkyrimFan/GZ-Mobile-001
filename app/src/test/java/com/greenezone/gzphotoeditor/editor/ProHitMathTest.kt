@@ -60,4 +60,20 @@ class ProHitMathTest {
         assertEquals(1, ProHitMath.pick(ProDocument(listOf(backdrop,stroke)),.5f,.51f))
         assertEquals(0, ProHitMath.pick(ProDocument(listOf(backdrop,stroke)),.5f,.85f))
     }
+
+    @Test fun selectionPassesThroughErasedPixelsUntilTheyAreRepainted() {
+        val paint = InkStroke(listOf(BrushPoint(.1f, .5f), BrushPoint(.9f, .5f)), thickness = .08f)
+        val erase = paint.copy(points = listOf(BrushPoint(.5f, .2f), BrushPoint(.5f, .8f)), erase = true)
+        val drawing = ProLayer("", kind = ProLayerKind.DRAWING)
+        fun pick(x: Float, y: Float, vararg strokes: InkStroke): Int? {
+            val creative = CreativeDocument(strokes = strokes.toList())
+            val document = ProDocument(listOf(backdrop, drawing.copy(edits = EditDocument(creative = creative))))
+            return ProHitMath.pick(document, x, y, 1000, 500)
+        }
+        assertEquals(0, pick(.5f, .5f, paint, erase))
+        assertEquals(0, pick(.5f, .5f, paint, erase, paint.copy(opacity = 0f)))
+        assertEquals(1, pick(.5f, .5f, paint, erase, paint))
+        // At this aspect ratio the eraser is 40 pixels wide. This point is 30 pixels to its right.
+        assertEquals(1, pick(.53f, .5f, paint, erase))
+    }
 }

@@ -1,0 +1,93 @@
+package com.greenezone.gzphotoeditor
+
+import android.content.ContentValues
+import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.greenezone.gzphotoeditor.editor.*
+import com.greenezone.gzphotoeditor.ui.CollageWorkspaceScreen
+import java.io.File
+import java.nio.file.Files
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class CollageReopenUiTest {
+    @get:Rule val rule = createComposeRule()
+
+    @Test fun emptyWorkspaceReopensSavedTilesInTheExistingExportSlot() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = Files.createTempDirectory(target.cacheDir.toPath(), "collage-reopen-").toFile()
+        val storage = object : ContextWrapper(target) { override fun getFilesDir(): File = folder }
+        val resolver = target.contentResolver
+        val sources = mutableListOf<Uri>()
+        fun photo(index: Int, color: Int): CollagePhoto {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "gz-reopen-$index.png")
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+            sources.add(uri)
+            val bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+            try {
+                bitmap.eraseColor(color)
+                requireNotNull(resolver.openOutputStream(uri, "wt")).use {
+                    assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+            } finally { bitmap.recycle() }
+            return CollagePhoto(uri.toString())
+        }
+        try {
+            val first = photo(1, Color.RED).copy(edits = EditDocument(grade = Grade(exposure = -.3f)))
+            val saved = CollageDocument(listOf(first, photo(2, Color.BLUE)),
+                CollageLayout(template = CollageTemplate.STACKED))
+            assertTrue(CollageStore.save(storage, "Two tile portrait", saved))
+            var restored: CollageDocument? = null
+            rule.setContent {
+                val host = LocalContext.current
+                val context = remember(host) {
+                    object : ContextWrapper(host) { override fun getFilesDir(): File = folder }
+                }
+                var current by remember { mutableStateOf(CollageDocument()) }
+                CompositionLocalProvider(LocalContext provides context) {
+                    CollageWorkspaceScreen(current, { current = it; restored = it }, {})
+                }
+            }
+            rule.waitUntil(10_000) {
+                rule.onAllNodesWithText("Projects").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("Add photos").assertIsDisplayed()
+            val projects = rule.onNode(hasText("Projects") and hasClickAction())
+            val originalSlot = projects.fetchSemanticsNode().boundsInRoot
+            projects.performClick()
+            rule.onNodeWithText("Two tile portrait").performClick()
+            rule.onNodeWithText("Open").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.runOnIdle { assertEquals(saved, restored) }
+            val export = rule.onNode(hasText("Export") and hasClickAction())
+            assertEquals(originalSlot, export.fetchSemanticsNode().boundsInRoot)
+            export.performClick()
+            rule.onNodeWithText("Export image").assertIsDisplayed()
+        } finally {
+            sources.forEach { resolver.delete(it, null, null) }
+            folder.deleteRecursively()
+        }
+    }
+}

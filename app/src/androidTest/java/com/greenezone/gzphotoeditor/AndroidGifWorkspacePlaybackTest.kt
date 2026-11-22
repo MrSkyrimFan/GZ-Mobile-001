@@ -7,6 +7,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Movie
 import android.net.Uri
+import android.os.SystemClock
+import android.util.Log
 import android.provider.MediaStore
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
@@ -16,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityOptionsCompat
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -154,6 +157,159 @@ class AndroidGifWorkspacePlaybackTest {
         }
     }
 
+    @Test fun sixtyFpsBFramesUseContinuousSampledPlaybackAndExportTwoSeconds() {
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-phone-60fps.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_phone_60fps_bframes.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val doc = VideoGifSource.document(context, uri)
+            val clip = requireNotNull(doc.video)
+            assertEquals(720 to 1280, clip.width to clip.height)
+            assertEquals(120, clip.sourceTimesMs.size)
+            val times = GifVideoMath.frameTimesMs(clip)
+            assertEquals(80, times.size)
+            show(doc)
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            val tag = "gif-scheduled-video"
+            rule.waitUntil(15_000) {
+                val node = rule.onAllNodesWithTag(tag).fetchSemanticsNodes().singleOrNull()
+                val label = if (node != null && SemanticsProperties.ContentDescription in node.config)
+                    node.config[SemanticsProperties.ContentDescription].singleOrNull() else null
+                (label?.substringAfterLast(' ')?.toIntOrNull() ?: 0) >= 5
+            }
+            // These patches remain cyan and blue through the moving test pattern.
+            // Their positions come from independently decoding the rotated MP4 fixture.
+            val visible = rule.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
+            fun verifyPortraitPatches(image: Bitmap) {
+                assertTrue(image.height > image.width)
+                val cyan = image.getPixel(image.width / 5, image.height / 10)
+                val blue = image.getPixel(image.width / 5, image.height * 45 / 100)
+                assertTrue("rotated cyan patch = $cyan", Color.red(cyan) < 80 && Color.green(cyan) > 170 && Color.blue(cyan) > 170)
+                assertTrue("rotated blue patch = $blue", Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
+            }
+            verifyPortraitPatches(visible)
+            rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
+            waitFrame(times.size)
+
+            val small = doc.copy(size = GifSize.SMALL)
+            val baseline = java.io.ByteArrayOutputStream()
+            val baselineStart = SystemClock.elapsedRealtime()
+            VideoGifSource.writeVideoFrames(context, small, baseline, allowScaledBatches = false)
+            val baselineMs = SystemClock.elapsedRealtime() - baselineStart
+            val output = java.io.ByteArrayOutputStream()
+            val optimizedStart = SystemClock.elapsedRealtime()
+            VideoGifSource.write(context, small, output)
+            val optimizedMs = SystemClock.elapsedRealtime() - optimizedStart
+            Log.i("GzGifExportPerf", "720p60 long GOP to 180x320, 80 frames: timestamp=${baselineMs}ms batched=${optimizedMs}ms")
+            val encoded = GifSourceMetadata.read(output.toByteArray().inputStream(), "content://test/output")
+            val reference = GifSourceMetadata.read(baseline.toByteArray().inputStream(), encoded.uri)
+            assertEquals(reference, encoded)
+            assertEquals(2000L, encoded.durationMs)
+            assertEquals(80, encoded.sourceTimesMs.size)
+            assertEquals(180 to 320, encoded.width to encoded.height)
+            assertEquals(GifVideoMath.frameDelaysMs(clip), GifVideoMath.frameDelaysMs(encoded))
+            val bytes = output.toByteArray()
+            val movie = requireNotNull(Movie.decodeByteArray(bytes, 0, bytes.size))
+            val final = Bitmap.createBitmap(encoded.width, encoded.height, Bitmap.Config.ARGB_8888)
+            try {
+                movie.setTime(movie.duration() - 5)
+                movie.draw(android.graphics.Canvas(final), 0f, 0f)
+                verifyPortraitPatches(final)
+                val original = baseline.toByteArray()
+                val expected = requireNotNull(Movie.decodeByteArray(original, 0, original.size))
+                compareDecodedMotion(expected, movie, encoded.sourceTimesMs, GifVideoMath.frameDelaysMs(clip))
+            } finally { final.recycle() }
+        } finally { resolver.delete(uri, null, null) }
+    }
+
+    private fun compareDecodedMotion(expected: Movie, actual: Movie, starts: List<Long>, delays: List<Int>) {
+        val a = Bitmap.createBitmap(expected.width(), expected.height(), Bitmap.Config.ARGB_8888)
+        val b = Bitmap.createBitmap(actual.width(), actual.height(), Bitmap.Config.ARGB_8888)
+        val previous = IntArray(24 * 32)
+        var movingSamples = 0
+        var movingError = 0L
+        fun error(left: Int, right: Int): Int =
+            kotlin.math.abs(Color.red(left) - Color.red(right)) +
+                kotlin.math.abs(Color.green(left) - Color.green(right)) +
+                kotlin.math.abs(Color.blue(left) - Color.blue(right))
+        try {
+            starts.forEachIndexed { index, start ->
+                val t = start.toInt() + delays[index] / 2
+                expected.setTime(t)
+                actual.setTime(t)
+                expected.draw(android.graphics.Canvas(a), 0f, 0f)
+                actual.draw(android.graphics.Canvas(b), 0f, 0f)
+                var frameError = 0
+                for (row in 0 until 32) for (column in 0 until 24) {
+                    val x = (2 * column + 1) * a.width / 48
+                    val y = (2 * row + 1) * a.height / 64
+                    val color = a.getPixel(x, y)
+                    val delta = error(color, b.getPixel(x, y))
+                    frameError += delta
+                    val sample = row * 24 + column
+                    if (index > 0 && error(color, previous[sample]) >= 90) {
+                        movingSamples++
+                        movingError += delta
+                    }
+                    previous[sample] = color
+                }
+                assertTrue("Decoded frame $index differs from timestamp export: $frameError",
+                    frameError < previous.size * 3 * 10)
+            }
+            assertTrue("The fixture must exercise moving pixels", movingSamples > 200)
+            assertTrue("Color error at $movingSamples moving samples was $movingError",
+                movingError < movingSamples * 3L * 18)
+        } finally { a.recycle(); b.recycle() }
+    }
+
+    @Test fun longerAudioTrackDoesNotExtendVideoExportOrPlayback() {
+        // The fixture contains 16 video frames at 8 fps and a 5-second silent AAC track.
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-audio-tail.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_video_with_audio_tail.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val doc = VideoGifSource.document(context, uri)
+            val clip = requireNotNull(doc.video)
+            assertEquals(2000L, clip.durationMs)
+            val output = java.io.ByteArrayOutputStream()
+            VideoGifSource.write(context, doc, output)
+            val gif = GifSourceMetadata.read(output.toByteArray().inputStream(), "content://test/output")
+            assertEquals(2000L, gif.durationMs)
+            assertEquals(16, gif.sourceTimesMs.size)
+
+            // Reopen old projects that persisted the container end, including explicit trims.
+            val name = "Audio tail migration"
+            val key = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(name.toByteArray())
+            val folder = java.io.File(context.filesDir, "gz_gif_projects").apply { mkdirs() }
+            val file = java.io.File(folder, "$key.gzgif")
+            try {
+                for ((start, end, expectedEnd) in listOf(Triple(0L, 5000L, 2000L),
+                    Triple(250L, 1250L, 1250L), Triple(3000L, 4000L, 4000L))) {
+                    val old = doc.copy(video = clip.copy(durationMs = 5000, startMs = start, endMs = end,
+                        speedPercent = 50, reverse = true))
+                    file.writeText(org.json.JSONObject(GifStore.encode(old)).put("version", 3).toString())
+                    val restored = requireNotNull(GifStore.load(context, name)?.video)
+                    assertEquals(start, restored.startMs)
+                    assertEquals(expectedEnd, restored.endMs)
+                    assertEquals(50, restored.speedPercent)
+                    assertTrue(restored.reverse)
+                }
+            } finally { file.delete() }
+
+            show(doc)
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Pause").fetchSemanticsNodes().isNotEmpty() &&
+                    rule.onAllNodes(hasTestTag("gif-frame") and
+                        !hasContentDescription("GIF preview, frame 1")).fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
+            waitFrame(16)
+        } finally { resolver.delete(uri, null, null) }
+    }
+
     @Test fun mp4PlaysPausesAndSeeksThroughActualEditorControls() {
         val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-editor-preview.mp4", "video/mp4") { out ->
             instrument.context.assets.open("gif_sample_2sec_h264.mp4").use { it.copyTo(out) }
@@ -162,10 +318,16 @@ class AndroidGifWorkspacePlaybackTest {
             val doc = VideoGifSource.document(context, uri)
             show(doc)
             waitFrame(1)
+            val startedAt = SystemClock.elapsedRealtime()
             rule.onNodeWithText("Play").performClick()
             rule.waitUntil(15_000) {
-                rule.onAllNodesWithContentDescription("GIF preview, frame 1").fetchSemanticsNodes().isEmpty()
+                val native = rule.onAllNodesWithTag("gif-native-video").fetchSemanticsNodes().singleOrNull()
+                val label = if (native != null && SemanticsProperties.ContentDescription in native.config)
+                    native.config[SemanticsProperties.ContentDescription].singleOrNull() else null
+                val frame = label?.substringAfterLast(' ')?.toIntOrNull() ?: 0
+                frame >= 5
             }
+            Log.i("GzGifTiming", "2 s, 8 fps MP4: Play to frame 5 or later = ${SystemClock.elapsedRealtime() - startedAt} ms")
             rule.onNodeWithText("Pause").performClick()
             rule.onNodeWithText("Play").assertIsDisplayed()
             rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(

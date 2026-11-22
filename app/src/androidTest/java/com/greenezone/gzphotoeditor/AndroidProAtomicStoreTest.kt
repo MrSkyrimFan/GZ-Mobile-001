@@ -1,5 +1,6 @@
 package com.greenezone.gzphotoeditor
 
+import android.content.ContextWrapper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.*
@@ -8,6 +9,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
@@ -73,6 +75,28 @@ class AndroidProAtomicStoreTest {
         } finally {
             ProStore.delete(context, name)
             ProStore.delete(context, otherName)
+        }
+    }
+
+    @Test fun backupOnlyProjectCanBeOverwrittenWhenAllTwelveSlotsAreOccupied() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val isolated = Files.createTempDirectory(target.cacheDir.toPath(), "pro-slot-").toFile()
+        val context = object : ContextWrapper(target) {
+            override fun getFilesDir(): File = isolated
+        }
+        val project = ProDocument(listOf(ProLayer(uri = "content://qa/image")))
+        val edited = project.copy(layers = listOf(project.layers.single().copy(name = "New edit")))
+        try {
+            for (slot in 1..12) assertTrue(ProStore.save(context, "Slot $slot", project))
+            val id = Base64.getUrlEncoder().withoutPadding().encodeToString("Slot 1".toByteArray())
+            val file = File(isolated, "gz_pro_projects/$id.gzpro")
+            assertTrue(file.renameTo(File(file.path + ".bak")))
+            assertFalse(ProStore.save(context, "Extra", project))
+            assertTrue(ProStore.save(context, "Slot 1", edited))
+            assertEquals(edited, ProStore.load(context, "Slot 1"))
+            assertEquals(12, ProStore.names(context).size)
+        } finally {
+            isolated.deleteRecursively()
         }
     }
 }

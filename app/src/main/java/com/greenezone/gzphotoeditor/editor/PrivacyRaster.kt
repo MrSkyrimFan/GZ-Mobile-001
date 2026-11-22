@@ -22,7 +22,11 @@ object PrivacyRaster {
             val bounded = edits.take(MAX_EDITS)
             bounded.filter { it.kind == PrivacyKind.BLUR || it.kind == PrivacyKind.PIXELATE ||
                 it.kind == PrivacyKind.BLUR_BRUSH }.forEach {
-                applyFiltered(output, it, cancelCheck)
+                if (it.kind == PrivacyKind.BLUR_BRUSH) {
+                    applyBlurBrush(output, it, cancelCheck)
+                } else {
+                    applyFiltered(output, it, cancelCheck)
+                }
             }
             bounded.filter { it.kind == PrivacyKind.BLACK_BAR ||
                 it.kind == PrivacyKind.COLOR_COVER || it.kind == PrivacyKind.BLACK_BRUSH }.forEach {
@@ -98,16 +102,11 @@ object PrivacyRaster {
             val pixels = IntArray(sw * sh)
             sampled.getPixels(pixels, 0, sw, 0, 0, sw, sh)
             val line = IntArray(bounds.width)
-            val mask = if (mark.kind.usesBrush) MaskMath.prepareCoverage(brushMask(mark)) else null
             for (y in bounds.top until bounds.bottom) {
                 if (y % 12 == 0) cancelCheck?.invoke()
                 output.getPixels(line, 0, bounds.width, bounds.left, y, bounds.width, 1)
                 for (x in bounds.left until bounds.right) {
-                    val coverage = if (mask == null) {
-                        PrivacyMath.rectCoverage(mark, x, y, output.width, output.height)
-                    } else {
-                        MaskMath.coverageForPrepared(mask, x, y, output.width, output.height)
-                    }
+                    val coverage = PrivacyMath.rectCoverage(mark, x, y, output.width, output.height)
                     if (coverage <= .0001f) continue
                     val nx = ((x - bounds.left + .5f) / bounds.width * sw - .5f)
                         .coerceIn(0f, (sw - 1).toFloat())
@@ -123,9 +122,104 @@ object PrivacyRaster {
                 output.setPixels(line, 0, bounds.width, bounds.left, y, bounds.width, 1)
             }
         } finally {
-            if (sampled != null && !sampled.isRecycled) sampled.recycle()
-            if (crop != null && crop !== sampled && !crop.isRecycled) crop.recycle()
+            if (sampled != null && sampled !== output && !sampled.isRecycled) sampled.recycle()
+            if (crop != null && crop !== sampled && crop !== output && !crop.isRecycled) crop.recycle()
         }
+    }
+
+    private fun applyBlurBrush(output: Bitmap, mark: PrivacyEdit, cancelCheck: (() -> Unit)?) {
+        val bounds = PrivacyMath.bounds(mark, output.width, output.height)
+        val strength = mark.strength.coerceIn(0f, 1f)
+        if (bounds.empty || strength <= 0f) return
+        val mask = MaskMath.prepareCoverage(brushMask(mark))
+        val spread = minOf(output.width, output.height) * .032f * strength
+        val radius = spread.roundToInt().coerceAtLeast(1)
+        val diameter = radius * 2 + 1
+        val sampleLeft = (bounds.left - radius).coerceAtLeast(0)
+        val sampleRight = (bounds.right + radius).coerceAtMost(output.width)
+        val samples = IntArray(sampleRight - sampleLeft)
+        val rows = Array(diameter) { IntArray(bounds.width) }
+        val columns = Array(bounds.width) { ChannelSum() }
+        val original = IntArray(bounds.width)
+
+        fun readBlurredRow(sourceY: Int, row: IntArray) {
+            val y = sourceY.coerceIn(0, output.height - 1)
+            output.getPixels(samples, 0, samples.size, sampleLeft, y, samples.size, 1)
+            for (i in samples.indices) samples[i] = premultiply(samples[i])
+            fun sample(x: Int) = samples[(x - sampleLeft).coerceIn(0, samples.lastIndex)]
+            val horizontal = ChannelSum()
+            for (x in bounds.left - radius..bounds.left + radius) horizontal.add(sample(x), 1)
+            for (i in row.indices) {
+                row[i] = horizontal.average(diameter)
+                val x = bounds.left + i
+                horizontal.add(sample(x - radius), -1)
+                horizontal.add(sample(x + radius + 1), 1)
+            }
+        }
+
+        // Each source row is read before this rolling window writes back to it.
+        // The halo uses original neighboring pixels even beyond the brush boundary.
+        for (index in rows.indices) {
+            cancelCheck?.invoke()
+            val row = rows[index]
+            readBlurredRow(bounds.top - radius + index, row)
+            for (i in row.indices) columns[i].add(row[i], 1)
+        }
+        val opacity = spread.coerceAtMost(1f)
+        for (y in bounds.top until bounds.bottom) {
+            cancelCheck?.invoke()
+            output.getPixels(original, 0, bounds.width, bounds.left, y, bounds.width, 1)
+            for (i in original.indices) {
+                val weight = MaskMath.coverageForPrepared(mask, bounds.left + i, y,
+                    output.width, output.height) * opacity
+                if (weight > 0f) {
+                    val blurred = columns[i].average(diameter)
+                    original[i] = unpremultiply(blend(premultiply(original[i]), blurred, weight))
+                }
+            }
+            if (y + 1 < bounds.bottom) {
+                val oldest = rows[(y - bounds.top) % diameter]
+                for (i in oldest.indices) columns[i].add(oldest[i], -1)
+                readBlurredRow(y + radius + 1, oldest)
+                for (i in oldest.indices) columns[i].add(oldest[i], 1)
+            }
+            output.setPixels(original, 0, bounds.width, bounds.left, y, bounds.width, 1)
+        }
+    }
+
+    private class ChannelSum {
+        private var alpha = 0
+        private var red = 0
+        private var green = 0
+        private var blue = 0
+
+        fun add(color: Int, sign: Int) {
+            alpha += Color.alpha(color) * sign
+            red += Color.red(color) * sign
+            green += Color.green(color) * sign
+            blue += Color.blue(color) * sign
+        }
+
+        fun average(count: Int): Int {
+            val half = count / 2
+            return Color.argb((alpha + half) / count, (red + half) / count,
+                (green + half) / count, (blue + half) / count)
+        }
+    }
+
+    private fun premultiply(color: Int): Int {
+        val alpha = Color.alpha(color)
+        if (alpha == 255) return color
+        return Color.argb(alpha, (Color.red(color) * alpha + 127) / 255,
+            (Color.green(color) * alpha + 127) / 255, (Color.blue(color) * alpha + 127) / 255)
+    }
+
+    private fun unpremultiply(color: Int): Int {
+        val alpha = Color.alpha(color)
+        if (alpha == 255 || alpha == 0) return color
+        fun straight(channel: Int) = ((channel * 255 + alpha / 2) / alpha).coerceAtMost(255)
+        return Color.argb(alpha, straight(Color.red(color)), straight(Color.green(color)),
+            straight(Color.blue(color)))
     }
 
     private fun brushMask(mark: PrivacyEdit) = LocalMask(

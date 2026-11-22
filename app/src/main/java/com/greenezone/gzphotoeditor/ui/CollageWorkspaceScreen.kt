@@ -30,6 +30,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,6 +77,7 @@ import com.greenezone.gzphotoeditor.editor.CollageTemplate
 import com.greenezone.gzphotoeditor.editor.ExportSettings
 import com.greenezone.gzphotoeditor.editor.ExportSizing
 import com.greenezone.gzphotoeditor.editor.GeometryMath
+import com.greenezone.gzphotoeditor.editor.writeStagedImage
 import com.greenezone.gzphotoeditor.editor.ImageExportWriter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -83,7 +86,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.IOException
 import kotlin.math.min
 
 private enum class CollageSection(val label: String) {
@@ -264,12 +266,11 @@ fun CollageWorkspaceScreen(
                         image = rendered
                         val target = ExportSizing.layout(rendered, request.settings)
                         composed = target
-                        val written = withContext(Dispatchers.IO) {
-                            resolver.openOutputStream(uri, "wt")?.use {
-                                ImageExportWriter.write(target, request.settings, it)
-                            } ?: throw IOException("Could not open output document")
+                        withContext(Dispatchers.IO) {
+                            writeStagedImage(context.cacheDir,
+                                openDestination = { resolver.openOutputStream(uri, "wt") },
+                                checkActive = { ensureActive() }) { stream -> ImageExportWriter.write(target, request.settings, stream) }
                         }
-                        if (!written) throw IOException("The selected encoder failed")
                         target.width.toString() + " × " + target.height
                     } finally {
                         composed?.let { if (it !== image && !it.isRecycled) it.recycle() }
@@ -281,10 +282,8 @@ fun CollageWorkspaceScreen(
                 throw cancelled
             } catch (error: Exception) {
                 notice = "Export failed: " + (error.message ?: "unavailable photo")
-                try { resolver.delete(uri, null, null) } catch (_: Exception) {}
             } catch (_: OutOfMemoryError) {
                 notice = "Not enough memory. Try Standard or High quality."
-                try { resolver.delete(uri, null, null) } catch (_: Exception) {}
             } finally {
                 exporting = false
             }
@@ -316,6 +315,7 @@ fun CollageWorkspaceScreen(
     LaunchedEffect(document) {
         if (document.photos.isEmpty()) {
             preview = null
+            savedNames = withContext(Dispatchers.IO) { CollageStore.names(context) }
             return@LaunchedEffect
         }
         delay(125L)
@@ -409,9 +409,21 @@ fun CollageWorkspaceScreen(
                     Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold)
                     WorkspaceModeMenu(WorkspaceMode.COLLAGE, !exporting, onSwitch)
-                    TextButton(onClick = { showExport = true },
-                        enabled = document.photos.isNotEmpty() && !exporting) {
-                        Text("Export", color = EditorMint, fontWeight = FontWeight.Bold)
+                    val openProjects = document.photos.isEmpty() && savedNames.isNotEmpty()
+                    TextButton(onClick = {
+                        if (openProjects) {
+                            savedChoice = null
+                            savedList = true
+                        } else showExport = true
+                    }, enabled = (openProjects || document.photos.isNotEmpty()) && !exporting) {
+                        // Measure the original label in both states so the mode menu and hit target stay put.
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("Export", fontWeight = FontWeight.Bold,
+                                color = if (openProjects) Color.Transparent else EditorMint,
+                                modifier = if (openProjects) Modifier.clearAndSetSemantics {} else Modifier)
+                            if (openProjects) Text("Projects", color = EditorMint, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.matchParentSize().wrapContentSize(unbounded = true))
+                        }
                     }
                 }
                 Row(Modifier.fillMaxWidth().height(42.dp),

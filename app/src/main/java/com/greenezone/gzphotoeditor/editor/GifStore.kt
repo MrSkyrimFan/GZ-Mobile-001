@@ -21,7 +21,7 @@ object GifStore {
     fun encode(doc: GifDocument): String {
         require(GifMath.valid(doc))
         return JSONObject().apply {
-            put("version", 3)
+            put("version", 4)
             put("delayMs", doc.delayMs)
             put("size", doc.size.name)
             put("fit", doc.fit.name)
@@ -43,11 +43,14 @@ object GifStore {
             }
         }.toString().also { require(it.length <= MAX_BYTES) }
     }
-    fun decode(data: String): GifDocument? {
+    fun decode(data: String): GifDocument? = readProject(data, null)
+
+    private fun readProject(data: String, context: Context?): GifDocument? {
         if (data.length > MAX_BYTES) return null
         return try {
             val obj = JSONObject(data)
-            if (obj.optInt("version", 0) !in 1..3) return null
+            val version = obj.optInt("version", 0)
+            if (version !in 1..4) return null
             val array = obj.optJSONArray("frames") ?: return null
             if (array.length() > GifMath.MAX_FRAMES) return null
             val list = (0 until array.length()).map { array.optString(it, "") }
@@ -73,7 +76,7 @@ object GifStore {
             } else null
             fun <T : Enum<T>> find(items: Array<T>, key: String, fallback: T): T =
                 items.firstOrNull { it.name == obj.optString(key) } ?: fallback
-            GifDocument(
+            val document = GifDocument(
                 frames = list, delayMs = obj.optInt("delayMs", 350),
                 size = find(GifSize.entries.toTypedArray(), "size", GifSize.MEDIUM),
                 fit = find(GifFit.entries.toTypedArray(), "fit", GifFit.FIT),
@@ -85,22 +88,50 @@ object GifStore {
                 edits = if (obj.has("edits")) EditDocumentCodec.decode(obj.getString("edits")) ?: return null
                     else EditDocument(),
                 video = clip
-            ).takeIf { GifMath.valid(it) }
+            ).takeIf { GifMath.valid(it) } ?: return null
+            if (context == null || clip == null) document else restoreTimeline(context, document, clip, version)
         } catch (_: Exception) { null }
     }
-    fun names(context: Context): List<String> = folder(context).listFiles()?.mapNotNull {
-        if (!it.isFile || !it.name.endsWith(".gzgif")) return@mapNotNull null
-        try { String(Base64.getUrlDecoder().decode(it.name.removeSuffix(".gzgif")),
+    private fun restoreTimeline(context: Context, document: GifDocument, clip: GifVideoClip,
+        version: Int): GifDocument? {
+        val uri = Uri.parse(clip.uri)
+        val source = when {
+            // v2 saved edit parameters without frame timestamps or geometry.
+            clip.sourceTimesMs.isEmpty() -> VideoGifSource.inspect(context, uri)
+            version < 4 && !clip.isGif -> {
+                // v3 used container duration. Keep existing projects readable offline.
+                val visualEnd = try { VideoGifSource.visualDurationMs(context, uri) }
+                    catch (_: Exception) { null }
+                if (visualEnd == null || visualEnd >= clip.durationMs) return document
+                clip.copy(durationMs = visualEnd, sourceTimesMs = clip.sourceTimesMs.takeWhile { it < visualEnd })
+            }
+            else -> return document
+        }
+        // A saved selection ending at the source boundary follows the corrected end.
+        // Preserve explicit selections, even a deliberate hold inside the old audio tail.
+        val end = if (clip.endMs == clip.durationMs && clip.startMs < source.durationMs)
+            minOf(clip.endMs, source.durationMs) else clip.endMs
+        val restored = source.copy(durationMs = maxOf(source.durationMs, end),
+            startMs = clip.startMs, endMs = end, fps = clip.fps,
+            speedPercent = clip.speedPercent, reverse = clip.reverse)
+        return document.copy(video = restored).takeIf(GifMath::valid)
+    }
+
+    @Synchronized fun names(context: Context): List<String> = folder(context).listFiles()?.mapNotNull {
+        val projectName = it.name.removeSuffix(".bak")
+        if (!it.isFile || !projectName.endsWith(".gzgif")) return@mapNotNull null
+        try { String(Base64.getUrlDecoder().decode(projectName.removeSuffix(".gzgif")),
             Charsets.UTF_8) } catch (_: Exception) { null }
-    }?.sortedBy { it.lowercase() } ?: emptyList()
+    }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
 
     @Synchronized fun save(context: Context, name: String, doc: GifDocument): Boolean {
         val id = id(name) ?: return false
         val dir = folder(context)
         val file = File(dir, "$id.gzgif")
-        if (!file.exists() && names(context).size >= MAX_FILES) return false
+        if (!file.exists() && !File(file.path + ".bak").isFile && names(context).size >= MAX_FILES) return false
         return try {
             val data = encode(doc).toByteArray(Charsets.UTF_8)
+            require(data.size <= MAX_BYTES)
             val atomic = AtomicFile(file)
             val stream = atomic.startWrite()
             try {
@@ -116,17 +147,12 @@ object GifStore {
     @Synchronized fun load(context: Context, name: String): GifDocument? {
         val id = id(name) ?: return null
         val file = File(folder(context), "$id.gzgif")
-        if (!file.isFile || file.length() > MAX_BYTES) return null
+        // Legacy AtomicFile restores the backup first, including when there is no base file.
+        val backup = File(file.path + ".bak")
+        val recoverable = if (backup.exists()) backup else file
+        if (!recoverable.isFile || recoverable.length() > MAX_BYTES) return null
         return try {
-            val doc = AtomicFile(file).openRead().bufferedReader().use { decode(it.readText()) } ?: return null
-            val previous = doc.video
-            if (previous == null || previous.sourceTimesMs.isNotEmpty()) return doc
-            // v2 saved only the edit parameters. Obtain actual geometry and frame
-            // timestamps before offering the new Original options on these projects.
-            val source = VideoGifSource.inspect(context, Uri.parse(previous.uri))
-            doc.copy(video = source.copy(startMs = previous.startMs, endMs = previous.endMs,
-                fps = previous.fps, speedPercent = previous.speedPercent, reverse = previous.reverse))
-                .takeIf(GifMath::valid)
+            AtomicFile(file).openRead().bufferedReader().use { readProject(it.readText(), context) }
         } catch (_: Exception) { null }
     }
 }

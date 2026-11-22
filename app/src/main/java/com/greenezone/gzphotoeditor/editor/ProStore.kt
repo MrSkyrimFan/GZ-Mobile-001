@@ -184,7 +184,8 @@ object ProStore {
     @Synchronized fun save(context: Context, name: String, document: ProDocument): Boolean {
         val id = key(name) ?: return false
         val file = File(dir(context), "$id.gzpro")
-        if (!file.exists() && names(context).size >= MAX_SAVED) return false
+        val recoverableBackup = File(file.path + ".bak")
+        if (!file.exists() && !recoverableBackup.isFile && names(context).size >= MAX_SAVED) return false
         return try {
             val payload = encode(document).toByteArray(StandardCharsets.UTF_8)
             val atomic = AtomicFile(file)

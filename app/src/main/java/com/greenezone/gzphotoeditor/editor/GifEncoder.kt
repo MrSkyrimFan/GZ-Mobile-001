@@ -158,7 +158,9 @@ object GifEncoder {
             val source = loader(i)
             var target: Bitmap? = null
             try {
-                val image = if (source.width == w && source.height == h && doc.edits == neutral)
+                // Photo sequences composite transparent input onto the same black canvas as preview.
+                val needsPhotoBackground = doc.video == null && source.hasAlpha()
+                val image = if (source.width == w && source.height == h && doc.edits == neutral && !needsPhotoBackground)
                     source else renderFrame(source, doc, cancel = cancel)
                 target = image
                 palette.index(image, pixels)

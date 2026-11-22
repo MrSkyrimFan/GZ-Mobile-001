@@ -64,7 +64,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 private enum class ProTransform(val title: String) {
     SIZE("Size"), OPACITY("Opacity"), HORIZONTAL("X"), VERTICAL("Y"), ROTATE("Rotate")
@@ -307,12 +306,13 @@ fun ProWorkspaceScreen(
                             coroutine.ensureActive()
                         }
                         sized = ExportSizing.layout(image, request.second)
-                        val success = withContext(Dispatchers.IO) {
-                            resolver.openOutputStream(destination, "wt")?.use {
-                                ImageExportWriter.write(sized, request.second, it)
-                            } ?: throw IOException("Output file cannot be opened")
+                        withContext(Dispatchers.IO) {
+                            writeStagedImage(context.cacheDir,
+                                openDestination = { resolver.openOutputStream(destination, "wt") },
+                                checkActive = { ensureActive() }) { out ->
+                                ImageExportWriter.write(sized, request.second, out)
+                            }
                         }
-                        if (!success) throw IOException("Export encoder returned false")
                         sized.width.toString() + " × " + sized.height
                     } finally {
                         sized?.let { if (it !== image && !it.isRecycled) it.recycle() }
@@ -321,14 +321,11 @@ fun ProWorkspaceScreen(
                 }
                 notice = "Exported " + result + ". Original media unchanged."
             } catch (cancelled: CancellationException) {
-                try { resolver.delete(destination, null, null) } catch (_: Exception) {}
                 throw cancelled
             } catch (_: OutOfMemoryError) {
                 notice = "Not enough device memory. Try a smaller image."
-                try { resolver.delete(destination, null, null) } catch (_: Exception) {}
             } catch (failure: Exception) {
                 notice = "Export failed: " + (failure.message ?: "source unavailable")
-                try { resolver.delete(destination, null, null) } catch (_: Exception) {}
             } finally { exporting = false }
         }
     }

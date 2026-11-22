@@ -133,12 +133,16 @@ object VideoGifSource {
         try {
             reader.setDataSource(context, uri)
             fun meta(key: Int) = reader.extractMetadata(key)?.toLongOrNull() ?: 0L
-            val duration = meta(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            val containerDuration = meta(MediaMetadataRetriever.METADATA_KEY_DURATION)
             val w = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH).toInt()
             val h = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT).toInt()
-            require(w > 0 && h > 0 && duration > 0) { "This file has no readable video track" }
+            require(w > 0 && h > 0) { "This file has no readable video track" }
             val sideways = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION) % 180 != 0L
-            val times = sampleTimes(context, uri, duration)
+            val (duration, times) = withVideoTrack(context, uri) { extractor, format ->
+                val duration = durationMs(format) ?: containerDuration
+                require(duration > 0) { "This video has no readable duration" }
+                duration to sampleTimes(extractor, duration)
+            }
             val clip = GifVideoClip(uri.toString(), duration, width = if (sideways) h else w,
                 height = if (sideways) w else h, sourceTimesMs = times)
             require(GifVideoMath.valid(clip)) { "Video dimensions or duration are unsupported" }
@@ -146,7 +150,17 @@ object VideoGifSource {
         } finally { reader.release() }
     }
 
-    private fun sampleTimes(context: Context, uri: Uri, duration: Long): List<Long> {
+    // MediaMetadataRetriever reports the longest track in the container, including audio.
+    private fun durationMs(format: MediaFormat): Long? {
+        if (!format.containsKey(MediaFormat.KEY_DURATION)) return null
+        return ((format.getLong(MediaFormat.KEY_DURATION) + 500L) / 1000L).takeIf { it > 0L }
+    }
+
+    internal fun visualDurationMs(context: Context, uri: Uri): Long? =
+        withVideoTrack(context, uri) { _, format -> durationMs(format) }
+
+    private inline fun <T> withVideoTrack(context: Context, uri: Uri,
+        read: (MediaExtractor, MediaFormat) -> T): T {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(context, uri, null)
@@ -154,42 +168,71 @@ object VideoGifSource {
                 extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true
             } ?: throw IOException("No video track")
             extractor.selectTrack(track)
-            val times = ArrayList<Long>()
-            while (extractor.sampleTime >= 0L) {
-                val time = (extractor.sampleTime + 500L) / 1000L
-                if (time < duration) times.add(time)
-                require(times.size <= GifVideoMath.MAX_OUTPUT_FRAMES) { "Source exceeds 150,000 frames" }
-                if (!extractor.advance()) break
-            }
-            require(times.isNotEmpty()) { "The video has no readable frames" }
-            // Encoded packet order may differ from presentation order with B frames.
-            times.sort()
-            return times.distinct()
+            return read(extractor, extractor.getTrackFormat(track))
         } finally { extractor.release() }
     }
 
+    private fun sampleTimes(extractor: MediaExtractor, duration: Long): List<Long> {
+        val times = ArrayList<Long>()
+        while (extractor.sampleTime >= 0L) {
+            val time = (extractor.sampleTime + 500L) / 1000L
+            if (time < duration) times.add(time)
+            require(times.size <= GifVideoMath.MAX_OUTPUT_FRAMES) { "Source exceeds 150,000 frames" }
+            if (!extractor.advance()) break
+        }
+        require(times.isNotEmpty()) { "The video has no readable frames" }
+        // Encoded packet order may differ from presentation order with B frames.
+        times.sort()
+        return times.distinct()
+    }
+
     @Suppress("DEPRECATION")
-    fun open(context: Context, clip: GifVideoClip, batchForExport: Boolean = false): GifFrameReader {
+    fun open(context: Context, clip: GifVideoClip, batchFrames: Boolean = false,
+             allowScaledBatches: Boolean = false): GifFrameReader {
         require(GifVideoMath.valid(clip))
         val uri = Uri.parse(clip.uri)
         if (clip.isGif) {
             val movie = context.contentResolver.openInputStream(uri)?.buffered()?.use { Movie.decodeStream(GifSourceMetadata.indexedStream(it)) }
                 ?: throw IOException("Android cannot decode this GIF")
             return object : GifFrameReader {
+                private val pending = mutableMapOf<Int, Bitmap>()
+                private var previousEdge = 0
+
+                private fun draw(index: Int, width: Int, height: Int): Bitmap {
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bitmap)
+                    canvas.scale(width.toFloat() / clip.width, height.toFloat() / clip.height)
+                    movie.setTime(GifSourceMetadata.decoderTime(index))
+                    movie.draw(canvas, 0f, 0f)
+                    return bitmap
+                }
+
                 override fun frame(atMs: Long, edge: Int): Bitmap {
-                    val scale = minOf(1f, edge.toFloat() / maxOf(clip.width, clip.height))
-                    val bmp = Bitmap.createBitmap((clip.width * scale).roundToInt().coerceAtLeast(1),
-                        (clip.height * scale).roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-                    val canvas = Canvas(bmp)
-                    canvas.scale(bmp.width.toFloat() / clip.width, bmp.height.toFloat() / clip.height)
                     val t = atMs.coerceIn(0, clip.durationMs - 1)
                     val boundary = clip.sourceTimesMs.binarySearch(t)
                     val index = if (boundary >= 0) boundary else (-boundary - 2).coerceAtLeast(0)
-                    movie.setTime(GifSourceMetadata.decoderTime(index))
-                    movie.draw(canvas, 0f, 0f)
-                    return bmp
+                    if (previousEdge == edge) pending.remove(index)?.let { return it }
+                    clearPending()
+                    previousEdge = edge
+                    val scale = minOf(1f, edge.toFloat() / maxOf(clip.width, clip.height))
+                    val width = (clip.width * scale).roundToInt().coerceAtLeast(1)
+                    val height = (clip.height * scale).roundToInt().coerceAtLeast(1)
+                    if (batchFrames && clip.reverse && clip.fps == 0) {
+                        // GIF disposal is sequential. Composite a small window forwards once,
+                        // then hand its pixels to the caller in reverse display order.
+                        val window = (4L * 1024 * 1024 / (4L * width * height)).coerceIn(1, 8).toInt()
+                        for (sample in (index - window + 1).coerceAtLeast(0) until index) {
+                            pending[sample] = draw(sample, width, height)
+                        }
+                    }
+                    return draw(index, width, height)
                 }
-                override fun close() = Unit
+
+                private fun clearPending() {
+                    pending.values.forEach { it.recycle() }
+                    pending.clear()
+                }
+                override fun close() = clearPending()
             }
         }
         val reader = MediaMetadataRetriever()
@@ -201,28 +244,66 @@ object VideoGifSource {
             private val params = MediaMetadataRetriever.BitmapParams().apply {
                 preferredConfig = Bitmap.Config.ARGB_8888
             }
-            private val batch = (24L * 1024 * 1024 / (4L * clip.width * clip.height))
-                .coerceIn(1, 12).toInt()
-            private var batching = batchForExport && batch > 1 && clip.fps == 0 &&
-                clip.sourceTimesMs.isNotEmpty() &&
+            private val budget = 24L * 1024 * 1024
+            private val originalBytes = 4L * clip.width * clip.height
+            private var cachedWidth = 0
+            private var cachedHeight = 0
+            private var batching = batchFrames && clip.fps == 0 && clip.sourceTimesMs.isNotEmpty() &&
                 reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull() ==
                     clip.sourceTimesMs.size
 
-            private fun readBatch(index: Int): Bitmap? {
-                cache.remove(index)?.let { return it }
+            private fun readAtTime(sample: Long, width: Int, height: Int): Bitmap {
+                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 30)
+                    reader.getScaledFrameAtTime(sample * 1000, MediaMetadataRetriever.OPTION_CLOSEST, width, height, params)
+                    else reader.getScaledFrameAtTime(sample * 1000, MediaMetadataRetriever.OPTION_CLOSEST, width, height)
+                return bitmap ?: throw IOException("Cannot decode video frame at ${sample}ms")
+            }
+
+            private fun clearCache() {
                 cache.values.forEach { it.recycle() }
                 cache.clear()
-                val start = if (clip.reverse) (index - batch + 1).coerceAtLeast(0) else index
-                val count = minOf(batch, clip.sourceTimesMs.size - start)
+            }
+
+            private fun readBatch(index: Int, width: Int, height: Int, countLimit: Int): Bitmap? {
+                if (width == cachedWidth && height == cachedHeight) cache.remove(index)?.let { return it }
+                clearCache()
+                cachedWidth = width
+                cachedHeight = height
+                val start = if (clip.reverse) (index - countLimit + 1).coerceAtLeast(0) else index
+                val count = minOf(countLimit, clip.sourceTimesMs.size - start)
                 val frames = try {
                     reader.getFramesAtIndex(start, count, params)
                 } catch (_: RuntimeException) { emptyList() }
-                if (frames.size != count || frames.any { it.width != clip.width || it.height != clip.height }) {
+                val scaled = width != clip.width || height != clip.height
+                val reserve = if (scaled) 4L * width * height else 0L
+                if (frames.size != count || frames.any { it.width != clip.width || it.height != clip.height } ||
+                    frames.sumOf { it.allocationByteCount.toLong() } + reserve > budget) {
                     frames.forEach { it.recycle() }
                     batching = false
                     return null
                 }
-                frames.forEachIndexed { offset, bitmap -> cache[start + offset] = bitmap }
+                try {
+                    frames.forEachIndexed { offset, bitmap ->
+                        cache[start + offset] = if (scaled) {
+                            Bitmap.createScaledBitmap(bitmap, width, height, true).also { bitmap.recycle() }
+                        } else bitmap
+                    }
+                } catch (failed: Throwable) {
+                    clearCache()
+                    frames.forEach { if (!it.isRecycled) it.recycle() }
+                    throw failed
+                }
+                if (scaled) {
+                    // Verify the PTS anchor of each batch against the ordinary seek. Some
+                    // providers report frame counts yet return differently indexed frames.
+                    val reference = readAtTime(clip.sourceTimesMs[index], width, height)
+                    if (!sameSample(cache.getValue(index), reference)) {
+                        clearCache()
+                        batching = false
+                        return reference
+                    }
+                    reference.recycle()
+                }
                 return cache.remove(index)
             }
 
@@ -231,22 +312,37 @@ object VideoGifSource {
                 val times = clip.sourceTimesMs
                 val index = if (times.isEmpty()) -1 else times.binarySearch(t)
                 val floor = if (index >= 0) index else (-index - 2).coerceAtLeast(0)
-                if (batching && edge >= maxOf(clip.width, clip.height)) readBatch(floor)?.let { return it }
-                val sample = if (times.isEmpty()) t else times[floor]
                 val scale = minOf(1.0, edge.toDouble() / maxOf(clip.width, clip.height))
                 val w = (clip.width * scale).roundToInt().coerceAtLeast(1)
                 val h = (clip.height * scale).roundToInt().coerceAtLeast(1)
-                val bitmap = if (android.os.Build.VERSION.SDK_INT >= 30)
-                    reader.getScaledFrameAtTime(sample * 1000, MediaMetadataRetriever.OPTION_CLOSEST, w, h, params)
-                    else reader.getScaledFrameAtTime(sample * 1000, MediaMetadataRetriever.OPTION_CLOSEST, w, h)
-                return bitmap ?: throw IOException("Cannot decode video frame at ${sample}ms")
+                if (batching && (scale == 1.0 || allowScaledBatches)) {
+                    // Full decoded buffers and one scaled buffer coexist during reduction.
+                    val reserve = if (scale < 1.0) 4L * w * h else 0L
+                    val count = ((budget - reserve) / originalBytes).coerceAtMost(12).toInt()
+                    if (count > 1) readBatch(floor, w, h, count)?.let { return it }
+                }
+                return readAtTime(if (times.isEmpty()) t else times[floor], w, h)
             }
             override fun close() {
-                cache.values.forEach { it.recycle() }
-                cache.clear()
+                clearCache()
                 reader.release()
             }
         }
+    }
+
+    private fun sameSample(frame: Bitmap, reference: Bitmap): Boolean {
+        if (frame.width != reference.width || frame.height != reference.height) return false
+        var difference = 0
+        for (row in 0 until 8) for (column in 0 until 8) {
+            val x = (2 * column + 1) * frame.width / 16
+            val y = (2 * row + 1) * frame.height / 16
+            val a = frame.getPixel(x, y)
+            val b = reference.getPixel(x, y)
+            for (shift in 0..16 step 8)
+                difference += kotlin.math.abs((a ushr shift and 255) - (b ushr shift and 255))
+        }
+        // The platform's fused rotation/scale can round differently from Bitmap filtering.
+        return difference <= 64 * 3 * 4
     }
 
     fun preview(context: Context, clip: GifVideoClip, atMs: Long, edge: Int): Bitmap =
@@ -277,10 +373,17 @@ object VideoGifSource {
             onProgress?.invoke(count, count)
             return
         }
+        writeVideoFrames(context, doc, out, allowScaledBatches = true, cancel = cancel, onProgress = onProgress)
+    }
+
+    internal fun writeVideoFrames(context: Context, doc: GifDocument, out: OutputStream,
+        allowScaledBatches: Boolean, cancel: (() -> Unit)? = null,
+        onProgress: ((Int, Int) -> Unit)? = null) {
+        val clip = requireNotNull(doc.video)
         val times = GifVideoMath.frameTimesMs(clip)
         val delays = GifVideoMath.frameDelaysMs(clip)
         val (w, h) = GifMath.dimensions(doc)
-        open(context, clip, batchForExport = true).use { reader ->
+        open(context, clip, batchFrames = true, allowScaledBatches = allowScaledBatches).use { reader ->
             GifEncoder.writeFrames(out, doc, times.size, delays.first(), cancel,
                 delayAt = { delays[it] }) { index ->
                 val frame = reader.frame(times[index], maxOf(w,h))

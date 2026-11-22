@@ -13,10 +13,16 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.GifEncoder
+import com.greenezone.gzphotoeditor.editor.GifFrameReader
+import com.greenezone.gzphotoeditor.editor.GifMath
+import com.greenezone.gzphotoeditor.editor.GifPreviewClock
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
+import com.greenezone.gzphotoeditor.editor.canPlayContinuousVideo
+import com.greenezone.gzphotoeditor.editor.canPlaySourceDirectly
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -24,13 +30,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 
 private data class PreviewFrame(val index: Int, val bitmap: Bitmap)
 
-/** Forward, reverse and scrub use the same sample times and edits as the encoder. */
 @Composable
 internal fun GifFramePreview(
     document: GifDocument,
@@ -53,60 +56,77 @@ internal fun GifFramePreview(
             override fun sizeOf(key: Int, value: Bitmap) = value.allocationByteCount
         }
     }
+    var nativeFailed by remember(clip.uri) { mutableStateOf(false) }
+    var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
+    if (playing && !nativeFailed && remember(document) { document.canPlayContinuousVideo() }) {
+        val fallback: (Int) -> Unit = { resumeFrom = it; nativeFailed = true }
+        if (remember(document) { document.canPlaySourceDirectly() }) {
+            NativeGifPlayback(clip, startFrame, document.loopCount, onFrame, onEnd, fallback, modifier)
+        } else {
+            ScheduledGifPlayback(clip, startFrame, document.loopCount, onFrame, onEnd, fallback, modifier)
+        }
+        return
+    }
     LaunchedEffect(document, playing) {
         try {
-            val times = GifVideoMath.frameTimesMs(clip)
-            val delays = GifVideoMath.frameDelaysMs(clip)
-            var due = 0L
-            var lastShown = startFrame.coerceIn(times.indices)
-            flow {
-                VideoGifSource.open(context, clip).use { reader ->
+            withContext(Dispatchers.IO) {
+                val times = GifVideoMath.frameTimesMs(clip)
+                val (width, height) = GifMath.dimensions(document, maxEdge = 480)
+                val neutral = document.edits == EditDocument()
+                var reader: GifFrameReader? = null
+                try {
                     suspend fun decode(index: Int): PreviewFrame {
                         val job = currentCoroutineContext()
                         job.ensureActive()
                         val bitmap = cache.get(index) ?: run {
-                            val source = reader.frame(times[index], 480)
-                            val rendered = try {
-                                GifEncoder.renderFrame(source, document, maxEdge = 480, cancel = { job.ensureActive() })
-                            } catch (error: Throwable) {
-                                source.recycle()
-                                throw error
-                            }
-                            if (rendered !== source) source.recycle()
-                            cache.put(index, rendered)
-                            rendered
+                            val decoder = reader ?: VideoGifSource.open(context, clip, batchFrames = playing)
+                                .also { reader = it }
+                            val source = decoder.frame(times[index], 480)
+                            val result = if (neutral && source.width == width && source.height == height) source
+                                else try {
+                                    GifEncoder.renderFrame(source, document, maxEdge = 480,
+                                        cancel = { job.ensureActive() })
+                                } finally {
+                                    source.recycle()
+                                }
+                            cache.put(index, result)
+                            result
                         }
                         return PreviewFrame(index, bitmap)
                     }
                     if (!playing) {
-                        // Keep one decoder open while scrubbing. Conflate pending positions so a
-                        // slow decode finishes and remains visible while the latest seek loads.
                         snapshotFlow { requestedFrame }.conflate().collect { request ->
-                            emit(decode(request.coerceIn(times.indices)))
+                            val frame = decode(request.coerceIn(times.indices))
+                            withContext(Dispatchers.Main.immediate) {
+                                if (requestedFrame == request) shown = frame
+                            }
                         }
-                        return@use
+                    } else {
+                        suspend fun present(frame: PreviewFrame) = withContext(Dispatchers.Main.immediate) {
+                            shown = frame
+                            reportFrame(frame.index)
+                        }
+                        val clock = GifPreviewClock(GifVideoMath.frameDelaysMs(clip))
+                        val first = (resumeFrom ?: requestedFrame).coerceIn(times.indices)
+                        present(decode(first))
+                        var position = clock.startOf(first)
+                        val origin = SystemClock.uptimeMillis() - position
+                        val end = clock.endTime(document.loopCount)
+                        while (true) {
+                            val next = clock.nextBoundary(position)
+                            if (next >= end) break
+                            // Slow decoders may skip overdue preview samples. Export keeps every frame.
+                            position = maxOf(next, SystemClock.uptimeMillis() - origin).coerceAtMost(end - 1)
+                            val frame = decode(clock.frameAt(position))
+                            delay((origin + position - SystemClock.uptimeMillis()).coerceAtLeast(0))
+                            present(frame)
+                        }
+                        delay((origin + end - SystemClock.uptimeMillis()).coerceAtLeast(0))
+                        withContext(Dispatchers.Main.immediate) { reportEnd(times.lastIndex) }
                     }
-                    var index = requestedFrame.coerceIn(times.indices)
-                    var repeats = 0
-                    while (true) {
-                        emit(decode(index))
-                        if (index == times.lastIndex) {
-                            if (document.loopCount != 0 && repeats >= document.loopCount) break
-                            index = 0
-                            repeats++
-                        } else index++
-                    }
+                } finally {
+                    reader?.close()
                 }
-            }.buffer(2).flowOn(Dispatchers.IO).collect { frame ->
-                delay((due - SystemClock.uptimeMillis()).coerceAtLeast(0))
-                shown = frame
-                lastShown = frame.index
-                reportFrame(frame.index)
-                if (playing) due = SystemClock.uptimeMillis() + delays[frame.index]
-            }
-            if (playing) {
-                delay((due - SystemClock.uptimeMillis()).coerceAtLeast(0))
-                reportEnd(lastShown)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled

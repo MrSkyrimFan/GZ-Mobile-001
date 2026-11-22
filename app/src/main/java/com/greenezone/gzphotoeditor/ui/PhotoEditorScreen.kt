@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -72,6 +73,7 @@ import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.ExportSettings
+import com.greenezone.gzphotoeditor.editor.writeStagedImage
 import com.greenezone.gzphotoeditor.editor.ImageExportWriter
 import com.greenezone.gzphotoeditor.editor.ExportSizing
 import com.greenezone.gzphotoeditor.editor.InkMath
@@ -97,9 +99,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.IOException
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -271,12 +274,11 @@ fun PhotoEditorScreen(
                         rendered = full
                         val photo = ExportSizing.layout(full, request.settings)
                         sized = photo
-                        val written = withContext(Dispatchers.IO) {
-                            resolver.openOutputStream(output, "wt")?.use { stream ->
-                                ImageExportWriter.write(photo, request.settings, stream)
-                            } ?: throw IOException("Export destination unavailable")
+                        withContext(Dispatchers.IO) {
+                            writeStagedImage(context.cacheDir,
+                                openDestination = { resolver.openOutputStream(output, "wt") },
+                                checkActive = { ensureActive() }) { stream -> ImageExportWriter.write(photo, request.settings, stream) }
                         }
-                        if (!written) throw IOException("Image encoder returned failure")
                         photo.width.toString() + " × " + photo.height
                     } finally {
                         sized?.let { if (it !== rendered && !it.isRecycled) it.recycle() }
@@ -289,10 +291,8 @@ fun PhotoEditorScreen(
                 throw cancelled
             } catch (_: OutOfMemoryError) {
                 notice = "Not enough memory to export. Choose a smaller size."
-                try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } catch (error: Exception) {
                 notice = "Export failed: " + (error.message ?: "unknown error")
-                try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } finally {
                 exporting = false
             }
@@ -691,7 +691,27 @@ fun PhotoEditorScreen(
         quickSource = small
     }
 
-    LaunchedEffect(original, document, liveGesture, quickSource, painting, selectedTab) {
+    val editingBlurBrush = selectedTab == EditTab.PRIVACY &&
+        document.privacy.getOrNull(selectedPrivacy)?.kind == PrivacyKind.BLUR_BRUSH
+    LaunchedEffect(quickSource, painting, editingBlurBrush) {
+        val fast = quickSource ?: return@LaunchedEffect
+        if (!painting || !editingBlurBrush) return@LaunchedEffect
+        try {
+            // Complete the current frame, then render the newest pointer position.
+            snapshotFlow { document }.conflate().collect { edits ->
+                processed = withContext(Dispatchers.Default) {
+                    val running = currentCoroutineContext()
+                    ImagePipeline.render(fast, edits) { running.ensureActive() }
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            notice = "Preview error: " + (error.message ?: "unexpected error")
+        }
+    }
+
+    LaunchedEffect(original, if (painting) null else document, liveGesture, quickSource, painting, selectedTab) {
         val input = original ?: run { processed = null; return@LaunchedEffect }
         if (painting) return@LaunchedEffect
         val imageDocument = if (selectedTab == EditTab.CROP)
@@ -877,7 +897,7 @@ fun PhotoEditorScreen(
                         onContinue = ::continuePaint,
                         onFinish = ::finishPaint,
                         onTap = { chromeVisible = !chromeVisible },
-                        showGuides = true
+                        showGuides = !editingBlurBrush
                     )
                 }
             }
@@ -1137,7 +1157,6 @@ fun PhotoEditorScreen(
                         onOpen = ::openPicker,
                         onCollage = { collageOpen = true },
                         showCollage = onDoneCollagePhoto == null,
-                        compact = onDoneCollagePhoto == null,
                         creativeTool = creativeTools,
                         onCreativeTool = { creativeTools = it },
                         onNewText = { editWords(true) },
