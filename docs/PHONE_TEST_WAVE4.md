@@ -1,3 +1,7 @@
+# Superseded by PHONE_TEST_WAVE5.md (0.6)
+
+Historical v0.5 photo-first UI test. No retest required.
+
 # GZ Photo Editor Pro 0.5.0 · ONE short user-experience phone test
 
 This session is about **the interface redesign and regression of critical editing**, not testing fifty-six sliders one by one. Download the ZIP artifact \`gz-photo-editor-pro-debug\` from the verified merged-main Actions run, extract \`app-debug.apk\` and install as an in-place update to GZ Photo Editor Pro.

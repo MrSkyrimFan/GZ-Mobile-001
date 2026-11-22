@@ -27,7 +27,8 @@ fun BrushOverlay(
     onStart: (BrushPoint) -> Unit,
     onContinue: (BrushPoint) -> Unit,
     onFinish: () -> Unit,
-    onTap: () -> Unit = {}
+    onTap: () -> Unit = {},
+    showGuides: Boolean = true
 ) {
     val latestStart by rememberUpdatedState(onStart)
     val latestContinue by rememberUpdatedState(onContinue)
@@ -81,6 +82,7 @@ fun BrushOverlay(
         )
     }
     ) {
+        if (!showGuides) return@Canvas
         val scale = min(size.width / bitmapWidth, size.height / bitmapHeight)
         val displayedWidth = bitmapWidth * scale
         val displayedHeight = bitmapHeight * scale

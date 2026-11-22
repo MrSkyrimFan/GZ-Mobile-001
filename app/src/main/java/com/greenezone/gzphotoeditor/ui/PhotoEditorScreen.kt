@@ -70,6 +70,10 @@ import com.greenezone.gzphotoeditor.editor.Look
 import com.greenezone.gzphotoeditor.editor.Looks
 import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.ProjectStore
+import com.greenezone.gzphotoeditor.editor.PrivacyEdit
+import com.greenezone.gzphotoeditor.editor.PrivacyKind
+import com.greenezone.gzphotoeditor.editor.PrivacyMath
+import com.greenezone.gzphotoeditor.editor.PrivacyRaster
 import com.greenezone.gzphotoeditor.editor.SavedLooks
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +102,9 @@ fun PhotoEditorScreen() {
     var processed by remember { mutableStateOf<Bitmap?>(null) }
     var beforeImage by remember { mutableStateOf<Bitmap?>(null) }
     var filterThumbs by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
+    var quickSource by remember { mutableStateOf<Bitmap?>(null) }
+    var liveGesture by remember { mutableStateOf(false) }
+    var painting by remember { mutableStateOf(false) }
     var document by remember { mutableStateOf(EditDocument()) }
     var history by remember { mutableStateOf(EditHistory()) }
     var gestureStart by remember { mutableStateOf<EditDocument?>(null) }
@@ -106,6 +113,7 @@ fun PhotoEditorScreen() {
     var selectedTab by remember { mutableStateOf(EditTab.LOOKS) }
     var activeLook by remember { mutableStateOf("none") }
     var selectedMask by remember { mutableIntStateOf(0) }
+    var selectedPrivacy by remember { mutableIntStateOf(0) }
     var compare by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
@@ -129,10 +137,12 @@ fun PhotoEditorScreen() {
         history = history.checkpoint(document, next)
         document = next
         gestureStart = null
+        liveGesture = false
     }
     fun slide(next: EditDocument) {
         if (gestureStart == null) gestureStart = document
         document = next
+        liveGesture = true
         activeLook = "custom"
     }
     fun finishSlide() {
@@ -140,6 +150,7 @@ fun PhotoEditorScreen() {
             history = history.checkpoint(beginning, document)
         }
         gestureStart = null
+        liveGesture = false
     }
     fun applyLook(key: String, grade: Grade) {
         commit(document.copy(grade = grade))
@@ -169,10 +180,14 @@ fun PhotoEditorScreen() {
                 processed = bitmap
                 beforeImage = bitmap
                 filterThumbs = emptyList()
+                quickSource = null
+                painting = false
+                liveGesture = false
                 document = restored ?: EditDocument()
                 history = EditHistory()
                 gestureStart = null
                 selectedMask = 0
+                selectedPrivacy = 0
                 selectedTab = EditTab.LOOKS
                 activeLook = if (restored == null) "none" else "custom"
                 chromeVisible = true
@@ -180,7 +195,7 @@ fun PhotoEditorScreen() {
                 zoom = 1f
                 panX = 0f
                 panY = 0f
-                notice = if (restored == null) "Tap the photo to hide or show tools" else "Editable project restored"
+                notice = if (restored == null) "Media opened" else "Project restored"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -321,30 +336,109 @@ fun PhotoEditorScreen() {
         values[selectedMask] = updated
         commit(document.copy(masks = values))
     }
-    fun startPaint(point: BrushPoint) {
-        val mask = document.masks.getOrNull(selectedMask) ?: return
-        if (mask.kind != MaskKind.BRUSH) return
-        if (mask.strokes.size >= 40 || mask.strokes.sumOf { it.points.size } >= 640) {
-            notice = "Brush limit reached. Undo a stroke or add another mask."
+    fun addPrivacy(kind: PrivacyKind) {
+        if (document.privacy.size >= PrivacyRaster.MAX_EDITS) {
+            notice = "Maximum of twelve privacy layers per photo."
             return
         }
-        gestureStart = document
-        val updated = document.masks.toMutableList()
-        updated[selectedMask] = mask.copy(strokes = mask.strokes + BrushStroke(listOf(point)))
-        document = document.copy(masks = updated)
+        val item = PrivacyEdit(kind = kind, strength = .75f,
+            feather = if (kind == PrivacyKind.BLACK_BRUSH) .01f else .22f,
+            brushSize = if (kind.usesBrush) .045f else .055f)
+        selectedPrivacy = document.privacy.size
+        commit(document.copy(privacy = document.privacy + item))
+        zoom = 1f
+        panX = 0f
+        panY = 0f
+        notice = if (kind.usesBrush) "Drag on the photo to paint."
+            else "Drag the rectangle to position it."
     }
+
+    fun removePrivacy() {
+        if (selectedPrivacy !in document.privacy.indices) return
+        val updated = document.privacy.filterIndexed { i, _ -> i != selectedPrivacy }
+        commit(document.copy(privacy = updated))
+        selectedPrivacy = selectedPrivacy.coerceAtMost(updated.lastIndex).coerceAtLeast(0)
+    }
+
+    fun privacyStrokeEdit(clearAll: Boolean) {
+        val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
+        if (!mark.kind.usesBrush) return
+        val strokes = if (clearAll) emptyList() else mark.strokes.dropLast(1)
+        val updated = document.privacy.toMutableList()
+        updated[selectedPrivacy] = mark.copy(strokes = strokes)
+        commit(document.copy(privacy = updated))
+    }
+
+    fun movePrivacy(x: Float, y: Float) {
+        val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
+        if (mark.kind.usesBrush) return
+        val updated = document.privacy.toMutableList()
+        updated[selectedPrivacy] = PrivacyMath.withCenter(mark, x, y)
+        slide(document.copy(privacy = updated))
+    }
+
+    fun startPaint(point: BrushPoint) {
+        if (selectedTab == EditTab.PRIVACY) {
+            val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
+            if (!mark.kind.usesBrush) return
+            if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 640) {
+                notice = "Brush limit reached. Undo a stroke or add another brush."
+                return
+            }
+            gestureStart = document
+            painting = true
+            val updated = document.privacy.toMutableList()
+            updated[selectedPrivacy] = mark.copy(strokes =
+                mark.strokes + BrushStroke(listOf(point)))
+            document = document.copy(privacy = updated)
+        } else {
+            val mask = document.masks.getOrNull(selectedMask) ?: return
+            if (mask.kind != MaskKind.BRUSH) return
+            if (mask.strokes.size >= 40 || mask.strokes.sumOf { it.points.size } >= 640) {
+                notice = "Brush limit reached. Undo a stroke or add another mask."
+                return
+            }
+            gestureStart = document
+            painting = true
+            val updated = document.masks.toMutableList()
+            updated[selectedMask] = mask.copy(strokes =
+                mask.strokes + BrushStroke(listOf(point)))
+            document = document.copy(masks = updated)
+        }
+    }
+
     fun continuePaint(point: BrushPoint) {
-        val mask = document.masks.getOrNull(selectedMask) ?: return
-        val last = mask.strokes.lastOrNull() ?: return
-        if (gestureStart == null || mask.strokes.sumOf { it.points.size } >= 640) return
-        val previous = last.points.last()
-        val dx = point.x - previous.x
-        val dy = point.y - previous.y
-        if (dx * dx + dy * dy < .000012f) return
-        val newStroke = last.copy(points = last.points + point)
-        val updated = document.masks.toMutableList()
-        updated[selectedMask] = mask.copy(strokes = mask.strokes.dropLast(1) + newStroke)
-        document = document.copy(masks = updated)
+        if (!painting || gestureStart == null) return
+        if (selectedTab == EditTab.PRIVACY) {
+            val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
+            val last = mark.strokes.lastOrNull() ?: return
+            if (mark.strokes.sumOf { it.points.size } >= 640) return
+            val previous = last.points.last()
+            val dx = point.x - previous.x
+            val dy = point.y - previous.y
+            if (dx * dx + dy * dy < .000012f) return
+            val updated = document.privacy.toMutableList()
+            updated[selectedPrivacy] = mark.copy(strokes =
+                mark.strokes.dropLast(1) + last.copy(points = last.points + point))
+            document = document.copy(privacy = updated)
+        } else {
+            val mask = document.masks.getOrNull(selectedMask) ?: return
+            val last = mask.strokes.lastOrNull() ?: return
+            if (mask.strokes.sumOf { it.points.size } >= 640) return
+            val previous = last.points.last()
+            val dx = point.x - previous.x
+            val dy = point.y - previous.y
+            if (dx * dx + dy * dy < .000012f) return
+            val updated = document.masks.toMutableList()
+            updated[selectedMask] = mask.copy(strokes =
+                mask.strokes.dropLast(1) + last.copy(points = last.points + point))
+            document = document.copy(masks = updated)
+        }
+    }
+
+    fun finishPaint() {
+        painting = false
+        finishSlide()
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
@@ -375,15 +469,39 @@ fun PhotoEditorScreen() {
         showProjects = true
     }
 
-    LaunchedEffect(original, document) {
+    LaunchedEffect(original) {
+        val input = original ?: run { quickSource = null; return@LaunchedEffect }
+        val small = withContext(Dispatchers.Default) {
+            val scale = minOf(1f, 660f / maxOf(input.width, input.height))
+            if (scale >= 1f) input
+            else Bitmap.createScaledBitmap(input,
+                (input.width * scale).roundToInt().coerceAtLeast(1),
+                (input.height * scale).roundToInt().coerceAtLeast(1), true)
+        }
+        quickSource = small
+    }
+
+    LaunchedEffect(original, document, liveGesture, quickSource, painting) {
         val input = original ?: run { processed = null; return@LaunchedEffect }
-        delay(100L)
+        if (painting) return@LaunchedEffect
+        delay(if (liveGesture) 20L else 45L)
         try {
-            val edited = withContext(Dispatchers.Default) {
-                val running = currentCoroutineContext()
-                ImagePipeline.render(input, document) { running.ensureActive() }
+            val fast = quickSource
+            if (fast != null && fast !== input) {
+                val preview = withContext(Dispatchers.Default) {
+                    val running = currentCoroutineContext()
+                    ImagePipeline.render(fast, document) { running.ensureActive() }
+                }
+                processed = preview
             }
-            processed = edited
+            if (!liveGesture || fast == null || fast === input) {
+                if (fast != null && fast !== input) delay(140L)
+                val quality = withContext(Dispatchers.Default) {
+                    val running = currentCoroutineContext()
+                    ImagePipeline.render(input, document) { running.ensureActive() }
+                }
+                processed = quality
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
@@ -441,9 +559,16 @@ fun PhotoEditorScreen() {
     }
 
     val selectedImage = if (compare) beforeImage ?: original else processed ?: original
-    val brushSelected = chromeVisible && !compare && !busy && !exporting &&
-        selectedTab == EditTab.MASKS && zoom <= 1.001f &&
+    val activePrivacy = document.privacy.getOrNull(selectedPrivacy)
+    val maskBrushActive = selectedTab == EditTab.MASKS &&
         document.masks.getOrNull(selectedMask)?.kind == MaskKind.BRUSH
+    val privacyBrushActive = selectedTab == EditTab.PRIVACY &&
+        activePrivacy?.kind?.usesBrush == true
+    val brushSelected = !compare && !busy && !exporting && zoom <= 1.001f &&
+        (maskBrushActive || privacyBrushActive)
+    val privacyRegionSelected = !compare && !busy && !exporting &&
+        selectedTab == EditTab.PRIVACY && activePrivacy != null &&
+        !activePrivacy.kind.usesBrush && zoom <= 1.001f
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color(0xFF080B10)).clipToBounds(),
@@ -483,7 +608,14 @@ fun PhotoEditorScreen() {
                     }
             )
             if (brushSelected) {
-                val active = document.masks.getOrNull(selectedMask)
+                val active = if (privacyBrushActive) activePrivacy?.let {
+                    LocalMask(
+                        kind = MaskKind.BRUSH,
+                        strokes = it.strokes,
+                        radius = it.brushSize,
+                        feather = it.feather
+                    )
+                } else document.masks.getOrNull(selectedMask)
                 if (active != null) {
                     BrushOverlay(
                         bitmapWidth = selectedImage.width,
@@ -492,10 +624,23 @@ fun PhotoEditorScreen() {
                         enabled = !busy,
                         onStart = ::startPaint,
                         onContinue = ::continuePaint,
-                        onFinish = ::finishSlide,
-                        onTap = { chromeVisible = !chromeVisible }
+                        onFinish = ::finishPaint,
+                        onTap = { chromeVisible = !chromeVisible },
+                        showGuides = chromeVisible
                     )
                 }
+            }
+            if (privacyRegionSelected && activePrivacy != null) {
+                PrivacyRegionOverlay(
+                    imageWidth = selectedImage.width,
+                    imageHeight = selectedImage.height,
+                    mark = activePrivacy,
+                    canMove = true,
+                    showGuides = chromeVisible,
+                    onMove = ::movePrivacy,
+                    onFinished = ::finishSlide,
+                    onTap = { chromeVisible = !chromeVisible }
+                )
             }
         } else {
             Column(
@@ -503,25 +648,26 @@ fun PhotoEditorScreen() {
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 modifier = Modifier.padding(horizontal = 28.dp)
             ) {
-                Text("GZ", color = EditorMint, fontSize = 52.sp, fontWeight = FontWeight.Black)
-                Text(
-                    "Your photo deserves the whole screen.",
-                    color = EditorWhite, fontSize = 23.sp, fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    "No cloud. No ads. No AI. Just editing.",
-                    color = EditorMuted, fontSize = 14.sp
-                )
                 Button(
                     onClick = ::openPicker,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = EditorMint, contentColor = Color(0xFF0B1E18)
                     )
-                ) { Text("Open photo", fontWeight = FontWeight.Bold) }
+                ) { Text("Open media", fontWeight = FontWeight.Bold) }
             }
         }
 
-        if (chromeVisible) {
+        if (original == null && chromeVisible) {
+            Text(
+                "© 2026 Greenezone Software LLC",
+                color = EditorMuted,
+                fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.BottomStart)
+                    .navigationBarsPadding().padding(start = 16.dp, bottom = 12.dp)
+            )
+        }
+
+        if (chromeVisible && original != null) {
             Column(
                 Modifier.align(Alignment.TopCenter)
                     .fillMaxWidth()
@@ -536,13 +682,15 @@ fun PhotoEditorScreen() {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("GZ", color = EditorMint, fontSize = 21.sp,
-                        fontWeight = FontWeight.Black)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                         TextButton(
                             onClick = ::openPicker,
                             enabled = !busy && !exporting
-                        ) { Text("Open", color = EditorWhite, fontSize = 13.sp) }
+                        ) { Text("Open media", color = EditorWhite, fontSize = 13.sp) }
                         IconButton(
                             modifier = Modifier.size(42.dp).semantics { contentDescription = "Undo" },
                             onClick = {
@@ -617,7 +765,7 @@ fun PhotoEditorScreen() {
                         tab = selectedTab,
                         onTab = {
                             selectedTab = it
-                            if (it == EditTab.MASKS) {
+                            if (it == EditTab.MASKS || it == EditTab.PRIVACY) {
                                 zoom = 1f; panX = 0f; panY = 0f
                             }
                         },
@@ -629,6 +777,12 @@ fun PhotoEditorScreen() {
                         busy = busy || exporting,
                         selectedMaskIndex = selectedMask,
                         onSelectMask = { selectedMask = it },
+                        selectedPrivacyIndex = selectedPrivacy,
+                        onSelectPrivacy = { selectedPrivacy = it },
+                        onAddPrivacy = ::addPrivacy,
+                        onDeletePrivacy = ::removePrivacy,
+                        onUndoPrivacyStroke = { privacyStrokeEdit(false) },
+                        onClearPrivacy = { privacyStrokeEdit(true) },
                         onCommit = {
                             commit(it)
                             activeLook = "custom"
@@ -675,11 +829,11 @@ fun PhotoEditorScreen() {
             onQuality = { jpegQuality = it },
             onJpeg = {
                 showExport = false
-                jpeg.launch("GZPhotoEditorPro_Edit.jpg")
+                jpeg.launch("GZEditorPro_Edit.jpg")
             },
             onPng = {
                 showExport = false
-                png.launch("GZPhotoEditorPro_Edit.png")
+                png.launch("GZEditorPro_Edit.png")
             },
             onDismiss = { showExport = false }
         )

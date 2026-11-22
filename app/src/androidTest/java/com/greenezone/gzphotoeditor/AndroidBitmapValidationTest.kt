@@ -17,6 +17,8 @@ import com.greenezone.gzphotoeditor.editor.Grade
 import com.greenezone.gzphotoeditor.editor.ImagePipeline
 import com.greenezone.gzphotoeditor.editor.LocalMask
 import com.greenezone.gzphotoeditor.editor.MaskKind
+import com.greenezone.gzphotoeditor.editor.PrivacyEdit
+import com.greenezone.gzphotoeditor.editor.PrivacyKind
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -127,6 +129,90 @@ class AndroidBitmapValidationTest {
             assertEquals(uri, loaded.image)
         } finally {
             ProjectStore.delete(context, "Android Test")
+        }
+    }
+
+    @Test fun opaqueBlackBarSurvivesBlurAndFreshJpegExport() {
+        val source = Bitmap.createBitmap(96, 72, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.WHITE)
+        }
+        val edits = EditDocument(privacy = listOf(
+            PrivacyEdit(kind = PrivacyKind.BLUR, centerX = .5f, centerY = .5f,
+                width = .9f, height = .7f, strength = .9f),
+            PrivacyEdit(kind = PrivacyKind.BLACK_BAR, centerX = .5f, centerY = .5f,
+                width = .45f, height = .18f)
+        ))
+        val rendered = ImagePipeline.render(source, edits)
+        try {
+            assertEquals(Color.BLACK, rendered.getPixel(48, 36))
+            assertEquals(Color.WHITE, rendered.getPixel(0, 0))
+            assertEquals(Color.WHITE, source.getPixel(48, 36))
+            val output = ByteArrayOutputStream()
+            assertTrue(rendered.compress(Bitmap.CompressFormat.JPEG, 100, output))
+            val bytes = output.toByteArray()
+            val reopened = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            try {
+                val center = reopened.getPixel(48, 36)
+                assertTrue(Color.red(center) < 12)
+                assertTrue(Color.green(center) < 12)
+                assertTrue(Color.blue(center) < 12)
+            } finally { reopened.recycle() }
+        } finally {
+            rendered.recycle()
+            source.recycle()
+        }
+    }
+
+    @Test fun pixelateAndBlurChangeOnlyChosenRegion() {
+        val source = Bitmap.createBitmap(96, 80, Bitmap.Config.ARGB_8888)
+        for (y in 0 until source.height) for (x in 0 until source.width) {
+            val value = if ((x / 2 + y / 2) % 2 == 0) 255 else 0
+            source.setPixel(x, y, Color.rgb(value, value, value))
+        }
+        val pixelated = ImagePipeline.render(source, EditDocument(privacy = listOf(
+            PrivacyEdit(kind = PrivacyKind.PIXELATE, centerX = .5f, centerY = .5f,
+                width = .55f, height = .5f, strength = .8f, feather = 0f)
+        )))
+        val blurred = ImagePipeline.render(source, EditDocument(privacy = listOf(
+            PrivacyEdit(kind = PrivacyKind.BLUR_BRUSH, strength = .9f, brushSize = .17f,
+                strokes = listOf(BrushStroke(listOf(
+                    BrushPoint(.5f, .5f), BrushPoint(.6f, .5f)
+                ))))
+        )))
+        try {
+            assertEquals(source.getPixel(0, 0), pixelated.getPixel(0, 0))
+            assertEquals(source.getPixel(0, 0), blurred.getPixel(0, 0))
+            var changedPixels = 0
+            for (y in 30..50) for (x in 35..60) {
+                if (source.getPixel(x, y) != pixelated.getPixel(x, y)) changedPixels++
+            }
+            assertTrue(changedPixels > 100)
+            assertTrue(blurred.getPixel(48, 40) != source.getPixel(48, 40))
+        } finally {
+            pixelated.recycle()
+            blurred.recycle()
+            source.recycle()
+        }
+    }
+
+    @Test fun blackBrushCreatesSolidEditableStroke() {
+        val source = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.rgb(250, 180, 140))
+        }
+        val rendered = ImagePipeline.render(source, EditDocument(privacy = listOf(
+            PrivacyEdit(kind = PrivacyKind.BLACK_BRUSH,
+                brushSize = .11f, feather = .01f,
+                strokes = listOf(BrushStroke(listOf(
+                    BrushPoint(.3f, .4f), BrushPoint(.7f, .4f)
+                ))))
+        )))
+        try {
+            assertEquals(Color.BLACK, rendered.getPixel(50, 40))
+            assertEquals(Color.rgb(250, 180, 140), rendered.getPixel(0, 0))
+            assertEquals(Color.rgb(250, 180, 140), source.getPixel(50, 40))
+        } finally {
+            rendered.recycle()
+            source.recycle()
         }
     }
 

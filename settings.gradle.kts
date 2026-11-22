@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GZPhotoEditorPro"
+rootProject.name = "GZEditorPro"
 include(":app")
