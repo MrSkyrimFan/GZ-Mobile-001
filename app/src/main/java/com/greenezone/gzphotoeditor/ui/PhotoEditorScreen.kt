@@ -180,7 +180,7 @@ fun PhotoEditorScreen() {
                 zoom = 1f
                 panX = 0f
                 panY = 0f
-                notice = if (restored == null) "Photo opened" else "Editable project restored"
+                notice = if (restored == null) "Tap the photo to hide or show tools" else "Editable project restored"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -539,11 +539,10 @@ fun PhotoEditorScreen() {
                     Text("GZ", color = EditorMint, fontSize = 21.sp,
                         fontWeight = FontWeight.Black)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            modifier = Modifier.size(43.dp).semantics { contentDescription = "Open photo" },
+                        TextButton(
                             onClick = ::openPicker,
                             enabled = !busy && !exporting
-                        ) { Text("＋", color = EditorWhite, fontSize = 25.sp) }
+                        ) { Text("Open", color = EditorWhite, fontSize = 13.sp) }
                         IconButton(
                             modifier = Modifier.size(42.dp).semantics { contentDescription = "Undo" },
                             onClick = {
