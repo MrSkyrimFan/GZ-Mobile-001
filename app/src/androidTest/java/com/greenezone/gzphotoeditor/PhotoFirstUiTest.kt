@@ -37,6 +37,17 @@ import org.junit.runner.RunWith
 class PhotoFirstUiTest {
     @get:Rule val rule = createComposeRule()
 
+    @Test fun workspaceMenuSeparatesModesAndKeepsVideoDisabled() {
+        rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() } }
+        rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+        rule.onNodeWithText("Photo editing Pro").assertExists()
+        rule.onNodeWithText("Collage maker").assertExists()
+        rule.onNodeWithText("GIF maker").assertExists()
+        rule.onNodeWithText("Video editing · Coming soon").assertExists()
+        rule.onNodeWithText("Photo editing Pro").performClick()
+        rule.onNodeWithText("Add first photo").assertExists()
+    }
+
     @Test fun firstOpenExplainsHowToStartWithoutTinyPreview() {
         rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() } }
         rule.onNodeWithText("Open media").assertIsDisplayed()

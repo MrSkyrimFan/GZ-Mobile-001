@@ -66,3 +66,9 @@ Sources:
 - No claim of *zero lawsuit risk* or legal immunity. Counsel can be the final audit after the engineering, documentation and research work is done in-house.
 
 **Scope boundary:** Never change Greenezone's corporate website, DNS, accounts, XForge, GZFX or Beside-Me as part of this app wave.
+
+## Owner scope and UX correction: 0.9
+- Updated final product price: **$2.99 one-time**, not $1.99.
+- Hard UI requirement: top-right separated workflows for Regular Photo, Pro Photo, Collage, GIF and disabled Video Coming soon. Keep regular easy, expert tools in named Pro sections.
+- Complete feature-by-feature non-AI photography, Photoshop-style editing, frame animations, user-audio, slide shows, export and video-last development scope in `UNIFIED_PRODUCT_SCOPE_09.md`. Do not silently skip any requested capability, but do not call it implemented unless tested.
+- Dedicated combined field test after this wave `PHONE_TEST_WAVE8.md`. Owner has not performed the prior 0.8 phone check yet.

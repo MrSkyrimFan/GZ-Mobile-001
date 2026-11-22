@@ -66,6 +66,9 @@ import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.CropFrame
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
+import com.greenezone.gzphotoeditor.editor.ProDocument
+import com.greenezone.gzphotoeditor.editor.ProLayer
+import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.ExportSettings
@@ -118,6 +121,11 @@ fun PhotoEditorScreen(
 
     var collageOpen by remember { mutableStateOf(false) }
     var collageDocument by remember { mutableStateOf(CollageDocument()) }
+    var proOpen by remember { mutableStateOf(false) }
+    var proDocument by remember { mutableStateOf(ProDocument()) }
+    var gifOpen by remember { mutableStateOf(false) }
+    var gifDocument by remember { mutableStateOf(GifDocument()) }
+
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
     var processed by remember { mutableStateOf<Bitmap?>(null) }
@@ -291,6 +299,42 @@ fun PhotoEditorScreen(
         }
     }
 
+
+    fun chooseWorkspace(mode: WorkspaceMode) {
+        if (onDoneCollagePhoto != null || busy || exporting) return
+        when (mode) {
+            WorkspaceMode.PHOTO -> {
+                collageOpen = false
+                proOpen = false
+                gifOpen = false
+            }
+            WorkspaceMode.PRO -> {
+                if (proDocument.layers.isEmpty()) {
+                    sourceUri?.let { current ->
+                        proDocument = ProDocument(layers = listOf(ProLayer(
+                            uri = current.toString(), edits = document, name = "Original photo"
+                        )))
+                    }
+                }
+                collageOpen = false
+                gifOpen = false
+                proOpen = true
+            }
+            WorkspaceMode.COLLAGE -> {
+                proOpen = false
+                gifOpen = false
+                collageOpen = true
+            }
+            WorkspaceMode.GIF -> {
+                collageOpen = false
+                proOpen = false
+                gifOpen = true
+            }
+            WorkspaceMode.VIDEO -> {
+                notice = "Video editing is coming later, after the photo and GIF tools."
+            }
+        }
+    }
 
     fun finishCollageTile() {
         val originalTile = initialCollagePhoto ?: return
@@ -724,11 +768,30 @@ fun PhotoEditorScreen(
         }
     }
 
+    if (proOpen) {
+        ProWorkspaceScreen(
+            document = proDocument,
+            onDocument = { proDocument = it },
+            onBack = { proOpen = false },
+            onSwitch = ::chooseWorkspace
+        )
+        return
+    }
+    if (gifOpen) {
+        GifMakerScreen(
+            document = gifDocument,
+            onDocument = { gifDocument = it },
+            onBack = { gifOpen = false },
+            onSwitch = ::chooseWorkspace
+        )
+        return
+    }
     if (collageOpen) {
         CollageWorkspaceScreen(
             document = collageDocument,
             onDocument = { collageDocument = it },
-            onBack = { collageOpen = false }
+            onBack = { collageOpen = false },
+            onSwitch = ::chooseWorkspace
         )
         return
     }
@@ -903,14 +966,19 @@ fun PhotoEditorScreen(
         }
 
         if (original == null && chromeVisible) {
-            Text(
-                "GZ Editor Pro",
-                color = EditorWhite,
-                fontSize = 21.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.TopStart)
-                    .statusBarsPadding().padding(start = 18.dp, top = 15.dp)
-            )
+            Row(
+                modifier = Modifier.align(Alignment.TopCenter)
+                    .fillMaxWidth().statusBarsPadding()
+                    .padding(start = 18.dp, end = 7.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("GZ Editor Pro", color = EditorWhite, fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold)
+                if (onDoneCollagePhoto == null) {
+                    WorkspaceModeMenu(WorkspaceMode.PHOTO, !busy && !exporting, ::chooseWorkspace)
+                }
+            }
             Text(
                 "© 2026 Greenezone Software LLC",
                 color = EditorMuted,
@@ -937,6 +1005,9 @@ fun PhotoEditorScreen(
                 ) {
                     Text("GZ Editor Pro", color = EditorWhite,
                         fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    if (onDoneCollagePhoto == null) {
+                        WorkspaceModeMenu(WorkspaceMode.PHOTO, !busy && !exporting, ::chooseWorkspace)
+                    }
                     TextButton(
                         onClick = {
                             if (onDoneCollagePhoto != null) finishCollageTile()
@@ -1063,6 +1134,7 @@ fun PhotoEditorScreen(
                         onOpen = ::openPicker,
                         onCollage = { collageOpen = true },
                         showCollage = onDoneCollagePhoto == null,
+                        compact = onDoneCollagePhoto == null,
                         creativeTool = creativeTools,
                         onCreativeTool = { creativeTools = it },
                         onNewText = { editWords(true) },

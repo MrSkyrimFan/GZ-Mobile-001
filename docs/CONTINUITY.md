@@ -35,3 +35,10 @@ Next future phase: same-app video editing via independently reviewed Media3 Tran
 
 ## Final integration polishing
 The collage header uses two compact rows to prevent clipping, exposes an always-available Add action once photos exist, plus Undo/Redo. Snapshot history includes tile additions/removals/order/edits and layout operations; slider gestures produce one checkpoint. Source-URI export collision is blocked, nesting a collage while editing a tile is disabled, and coroutine cancellation is propagated. Tests added for history and maximum gap with 20 photos.
+
+## Nov 21 v0.9 owner continuation
+- Version 0.8 is merged on main `6080b98de997806ee3300d1ef68ebbb84422f072` with passed merged-main CI. The owner has **not tested 0.8 on their phone** yet.
+- New non-negotiable interface: top-right dropdown with independent Regular, Pro, Collage, GIF and Video (Coming soon) workspaces. Do not cram all features into regular editor.
+- Target $2.99 **one time**, no AI/ads/IAP/cloud. Prior features and files preserved. **Video last.**
+- Branch `feature/workspaces-pro-layers-gif-09`: Pro image-layer foundation and local GIF89a creation, plus persistent offline projects. Not a complete Photoshop/Lightroom or video implementation. Details and missing work in `UNIFIED_PRODUCT_SCOPE_09.md`.
+- Complete branch CI/PR SHA/merged-main CI first; perform only one combined owner phone check via `PHONE_TEST_WAVE8.md`. No corporate site, XForge, GZFX or Beside-Me changes.

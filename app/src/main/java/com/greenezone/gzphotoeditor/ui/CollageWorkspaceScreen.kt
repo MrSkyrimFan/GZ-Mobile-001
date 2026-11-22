@@ -107,7 +107,8 @@ private data class CollageExport(
 fun CollageWorkspaceScreen(
     document: CollageDocument,
     onDocument: (CollageDocument) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSwitch: (WorkspaceMode) -> Unit = {}
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -407,6 +408,7 @@ fun CollageWorkspaceScreen(
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold)
+                    WorkspaceModeMenu(WorkspaceMode.COLLAGE, !exporting, onSwitch)
                     TextButton(onClick = { showExport = true },
                         enabled = document.photos.isNotEmpty() && !exporting) {
                         Text("Export", color = EditorMint, fontWeight = FontWeight.Bold)
