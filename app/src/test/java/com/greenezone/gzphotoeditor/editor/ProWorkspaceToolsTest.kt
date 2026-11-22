@@ -42,9 +42,12 @@ class ProWorkspaceToolsTest {
             rotationDegrees = Float.NaN)))))
         assertFalse(ProMath.valid(doc.copy(layers = listOf(layer.copy(
             mask = ProSelection(ProSelectionKind.LASSO, points = emptyList())))))
-        assertFalse(ProMath.valid(doc.copy(layers = listOf(layer.copy(
-            retouches = List(81) { ProRetouchMark(
-                ProRetouchKind.CLONE,.1f,.1f,.8f,.8f) })))))
+        val overCap = layer.copy(
+            retouches = List(81) {
+                ProRetouchMark(ProRetouchKind.CLONE, .1f, .1f, .8f, .8f)
+            }
+        )
+        assertFalse(ProMath.valid(doc.copy(layers = listOf(overCap))))
         assertEquals(doc, ProHistory().checkpoint(doc, ProDocument()).undo(ProDocument())!!.first)
         assertEquals(ProLayerKind.IMAGE, layer.kind)
     }
