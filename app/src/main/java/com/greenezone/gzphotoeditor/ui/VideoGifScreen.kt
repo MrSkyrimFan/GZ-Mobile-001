@@ -167,7 +167,11 @@ fun VideoGifScreen(
                     val job = currentCoroutineContext()
                     val file = File.createTempFile("gz-gif-", ".tmp", context.cacheDir)
                     temp = file
-                    file.outputStream().buffered().use { stream ->
+                    val quota = GifExportGuard.maxTemporaryBytes(context.cacheDir.usableSpace)
+                    if (quota < GifExportGuard.MIN_EXPORT_BYTES) {
+                        throw IOException("Not enough free storage to safely create a GIF. Free at least 72 MB.")
+                    }
+                    GifExportGuard.limit(file.outputStream(), quota).buffered(65536).use { stream ->
                         VideoGifSource.write(context, saved, stream, cancel = { job.ensureActive() },
                             onProgress = { index, count ->
                                 if (index == count || index % 8 == 0) {
@@ -189,10 +193,11 @@ fun VideoGifScreen(
                 progress = "Saving GIF…"
                 withContext(Dispatchers.IO) {
                     val job = currentCoroutineContext()
-                    val firstByte = resolver.openInputStream(dest)?.use { it.read() }
-                        ?: throw IOException("Cannot verify the destination. Choose a new file in Files.")
-                    require(firstByte == -1) { "This file already has content. Save the GIF under a new name." }
-                    val output = resolver.openOutputStream(dest, "wt") ?: throw IOException("Cannot open the destination")
+                    // Android ACTION_CREATE_DOCUMENT creates a new document and does not
+                    // overwrite an existing filename. Some providers are write-only until
+                    // content is committed, so don't require openInputStream on a new URI.
+                    val output = resolver.openOutputStream(dest, "wt")
+                        ?: throw IOException("This provider cannot write the destination. Choose Files instead.")
                     try {
                         output.use { stream ->
                             requireNotNull(temp).inputStream().use { input ->
@@ -206,9 +211,11 @@ fun VideoGifScreen(
                             }
                         }
                     } catch (failed: Throwable) {
-                        // The destination was verified empty before opening. Restore that state,
-                        // retaining the document and its provider identity.
-                        runCatching { resolver.openOutputStream(dest, "wt")?.close() }
+                        // ACTION_CREATE_DOCUMENT created a new document for this export.
+                        // Remove incomplete output if its provider supports deletion.
+                        val removed = runCatching { resolver.delete(dest, null, null) > 0 }
+                            .getOrDefault(false)
+                        if (!removed) runCatching { resolver.openOutputStream(dest, "wt")?.close() }
                         throw failed
                     }
                 }
