@@ -66,7 +66,7 @@ class AndroidProWorkspaceToolsTest {
         }
         val mark = ProRetouchMark(ProRetouchKind.CLONE,
             sourceX = .75f, sourceY = .5f,
-            targetX = .25f, targetY = .5f, radius = .10f)
+            targetX = .25f, targetY = .5f, radius = .10f, strength = 1f)
         val clone = ProRetouchRaster.apply(source,listOf(mark))
         val soft = ProRetouchRaster.apply(source,
             listOf(mark.copy(kind = ProRetouchKind.SOFT_REPAIR)))

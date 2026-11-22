@@ -37,7 +37,7 @@ data class ProRetouchMark(
     val targetX: Float,
     val targetY: Float,
     val radius: Float = .04f,
-    val strength: Float = .85f
+    val strength: Float = 1f
 )
 
 enum class ProPixelEffect(val label: String) {

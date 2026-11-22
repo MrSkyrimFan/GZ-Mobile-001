@@ -105,7 +105,7 @@ fun ProWorkspaceScreen(
     var retouchSourceImage by remember { mutableStateOf<BrushPoint?>(null) }
     var retouchKind by remember { mutableStateOf(ProRetouchKind.CLONE) }
     var retouchRadius by remember { mutableFloatStateOf(.04f) }
-    var retouchStrength by remember { mutableFloatStateOf(.85f) }
+    var retouchStrength by remember { mutableFloatStateOf(1f) }
     var replacingImage by remember { mutableIntStateOf(-1) }
     var textOpen by remember { mutableStateOf(false) }
     var textDraft by remember { mutableStateOf("") }
