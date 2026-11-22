@@ -96,6 +96,26 @@ class AndroidProWorkspaceToolsTest {
         } finally { threshold.recycle() }
     }
 
+    @Test fun eraserRemovesOnlyPixelsFromSelectedDrawingLayer() {
+        val drawn = ProLayer(uri = "", name = "Paint",
+            kind = ProLayerKind.DRAWING,
+            edits = EditDocument(creative = CreativeDocument(strokes = listOf(
+                InkStroke(points = listOf(BrushPoint(.1f,.5f), BrushPoint(.9f,.5f)),
+                    color = Color.BLUE, thickness = .12f),
+                InkStroke(points = listOf(BrushPoint(.5f,.4f), BrushPoint(.5f,.6f)),
+                    color = Color.BLACK, thickness = .13f, erase = true)
+            ))))
+        val output = ProRaster.renderWithLoader(
+            ProDocument(listOf(drawn)), 200, 200, false,
+            loader = { _,_,_ -> error("Drawing layer should not load a photo") })
+        try {
+            assertEquals(Color.BLUE, output.getPixel(45,100))
+            assertEquals(Color.WHITE, output.getPixel(100,100))
+        } finally { output.recycle() }
+        val encoded = ProStore.encode(ProDocument(listOf(drawn)))
+        assertEquals(ProDocument(listOf(drawn)), ProStore.decode(encoded))
+    }
+
     @Test fun projectV3PersistsMaskCloneRotationAndEffectAndLoadsLegacy() {
         val mask = ProSelection(ProSelectionKind.LASSO, points = listOf(
             BrushPoint(.1f,.1f), BrushPoint(.7f,.1f), BrushPoint(.7f,.7f)))

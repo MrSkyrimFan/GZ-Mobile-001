@@ -15,3 +15,10 @@ Return **one** combined report with results for items 1–7 and screenshots only
 ## Refined one-video landing and memory QA
 - Opening GIF maker with no selected video should show **Select one video to turn into a GIF**, a single prominent **Choose video** button, and a discreet **Open saved GIF project** link. Photo-sequence creation must not clutter the first screen.
 - During Pro brush strokes and layer drags, the loading spinner must not block the image. Repeated GIF scrubbing and Pro edits should not accumulate bitmap memory or crash. Test a sustained editing session before production sign-off.
+
+## Owner field defects addressed in v0.11 (verify on actual phone)
+1. GIF: Play/Pause must animate/pause a **real video**, not a sequence of slow thumbnails. Change trim start/end and scrub; the visible video position must react immediately. Playback speed 50%/100%/200% should change real playback speed, GIF frame rate should affect exported GIF frames. Reverse uses frame-based preview on unsupported native reverse.
+2. GIF: **Save GIF must always be visibly available.** Actually choose Save GIF, choose a destination, confirm a new .gif appears in Files and plays repeatedly outside the app. Verify progress/errors; media-specific decoder failures must report an error instead of pretending the export succeeded.
+3. Pro: no Regular photo interface or Looks/Light sliders anywhere inside Pro. Test object layering, Center on canvas on an off-center object, rotation, rectangle/ellipse/freehand masks, invert/remove, pixel effect layers, Clone/Soft repair (tap source then target), drawing and erasing strokes, Undo/Redo and save/reopen.
+4. Photo and Collage regressions: two-photo collage edits and export, regular look/crop/black privacy bar, original source unchanged.
+5. Report responsiveness, gesture overlay hitboxes, any video codec that stalls, and crashes/Android version. The eventual full production-quality Pro toolset still needs further iterations; this build establishes functioning separated engines rather than asserting Photoshop feature parity.
