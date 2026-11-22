@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -116,17 +117,16 @@ private data class ExportRequest(val settings: ExportSettings, val edits: EditDo
 @Composable
 fun PhotoEditorScreen(
     initialCollagePhoto: CollagePhoto? = null,
-    onDoneCollagePhoto: ((CollagePhoto) -> Unit)? = null
+    onDoneCollagePhoto: ((CollagePhoto) -> Unit)? = null,
+    onCancelCollagePhoto: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
 
-    var collageOpen by remember { mutableStateOf(false) }
+    var workspaceNavigation by remember { mutableStateOf(WorkspaceNavigation()) }
     var collageDocument by remember { mutableStateOf(CollageDocument()) }
-    var proOpen by remember { mutableStateOf(false) }
     var proDocument by remember { mutableStateOf(ProDocument()) }
-    var gifOpen by remember { mutableStateOf(false) }
     var gifDocument by remember { mutableStateOf(GifDocument()) }
 
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
@@ -161,6 +161,11 @@ fun PhotoEditorScreen(
     var showTextDialog by remember { mutableStateOf(false) }
     var textDraft by remember { mutableStateOf("") }
     var editingTextIndex by remember { mutableIntStateOf(-1) }
+    var baselineUri by remember { mutableStateOf<String?>(null) }
+    var baselineDocument by remember { mutableStateOf(EditDocument()) }
+    var showRegularExit by remember { mutableStateOf(false) }
+    var showTileExit by remember { mutableStateOf(false) }
+    var closeAfterProjectSave by remember { mutableStateOf(false) }
 
     var showExport by remember { mutableStateOf(false) }
     var showSaveLook by remember { mutableStateOf(false) }
@@ -221,7 +226,10 @@ fun PhotoEditorScreen(
                 quickSource = null
                 painting = false
                 liveGesture = false
-                document = restored ?: EditDocument()
+                val loadedDocument = restored ?: EditDocument()
+                document = loadedDocument
+                baselineUri = uri.toString()
+                baselineDocument = loadedDocument
                 history = EditHistory()
                 gestureStart = null
                 selectedMask = 0
@@ -302,47 +310,93 @@ fun PhotoEditorScreen(
 
     fun chooseWorkspace(mode: WorkspaceMode) {
         if (onDoneCollagePhoto != null || busy || exporting) return
-        when (mode) {
-            WorkspaceMode.PHOTO -> {
-                collageOpen = false
-                proOpen = false
-                gifOpen = false
-            }
-            WorkspaceMode.PRO -> {
-                if (proDocument.layers.isEmpty()) {
-                    sourceUri?.let { current ->
-                        proDocument = ProDocument(layers = listOf(ProLayer(
-                            uri = current.toString(), edits = document, name = "Original photo",
-                            aspect = (processed ?: original)?.let { frame ->
-                                frame.width.toFloat() / frame.height.coerceAtLeast(1)
-                            }?.coerceIn(.1f, 10f) ?: 1f
-                        )))
-                    }
-                }
-                collageOpen = false
-                gifOpen = false
-                proOpen = true
-            }
-            WorkspaceMode.COLLAGE -> {
-                proOpen = false
-                gifOpen = false
-                collageOpen = true
-            }
-            WorkspaceMode.GIF -> {
-                collageOpen = false
-                proOpen = false
-                gifOpen = true
-            }
-            WorkspaceMode.VIDEO -> {
-                notice = "Video editing is coming later, after the photo and GIF tools."
+        if (mode == WorkspaceMode.VIDEO) {
+            notice = "Video editing is coming later, after the photo and GIF tools."
+            return
+        }
+        if (mode == WorkspaceMode.PRO &&
+            workspaceNavigation.current != WorkspaceMode.PRO &&
+            proDocument.layers.isEmpty()) {
+            sourceUri?.let { current ->
+                proDocument = ProDocument(layers = listOf(ProLayer(
+                    uri = current.toString(), edits = document, name = "Original photo",
+                    aspect = (processed ?: original)?.let { frame ->
+                        frame.width.toFloat() / frame.height.coerceAtLeast(1)
+                    }?.coerceIn(.1f, 10f) ?: 1f
+                )))
             }
         }
+        workspaceNavigation = workspaceNavigation.open(mode)
+    }
+
+    fun leaveWorkspace() {
+        workspaceNavigation.commitBack()?.let { workspaceNavigation = it }
     }
 
     fun finishCollageTile() {
         val originalTile = initialCollagePhoto ?: return
         val image = sourceUri?.toString() ?: originalTile.uri
+        showTileExit = false
         onDoneCollagePhoto?.invoke(CollagePhoto(image, document))
+    }
+
+    fun isPhotoDirty(): Boolean =
+        sourceUri?.toString() != baselineUri || document != baselineDocument
+
+    fun closeCurrentPhoto() {
+        loadingToken += 1
+        sourceUri = null
+        original = null
+        processed = null
+        beforeImage = null
+        filterThumbs = emptyList()
+        quickSource = null
+        document = EditDocument()
+        baselineUri = null
+        baselineDocument = EditDocument()
+        history = EditHistory()
+        gestureStart = null
+        liveGesture = false
+        painting = false
+        currentInk = null
+        chromeVisible = true
+        selectedTab = EditTab.LOOKS
+        activeLook = "none"
+        selectedMask = 0
+        selectedPrivacy = 0
+        compare = false
+        zoom = 1f
+        panX = 0f
+        panY = 0f
+        notice = ""
+        showExport = false
+        pendingExport = null
+        showTextDialog = false
+        showRegularExit = false
+        showTileExit = false
+        closeAfterProjectSave = false
+        selectedProject = null
+        creativeTools = CreativeToolState()
+    }
+
+    fun requestTileBack() {
+        if (busy || exporting) {
+            notice = if (exporting) "Finish or cancel the export before leaving this tile."
+                else "Wait for the current photo operation to finish."
+        } else if (isPhotoDirty()) {
+            showTileExit = true
+        } else {
+            onCancelCollagePhoto?.invoke()
+        }
+    }
+
+    fun requestRegularBack() {
+        val previous = workspaceNavigation.commitBack()
+        if (previous != null) {
+            workspaceNavigation = previous
+        } else if (original != null) {
+            if (isPhotoDirty()) showRegularExit = true else closeCurrentPhoto()
+        }
     }
 
     fun autoTone() {
@@ -560,6 +614,12 @@ fun PhotoEditorScreen(
         showSaveLook = true
     }
     fun saveProject() {
+        closeAfterProjectSave = false
+        draftName = ""
+        showSaveProject = true
+    }
+    fun saveProjectAndClose() {
+        closeAfterProjectSave = true
         draftName = ""
         showSaveProject = true
     }
@@ -675,8 +735,20 @@ fun PhotoEditorScreen(
         if (photo != null) loadPhoto(Uri.parse(photo.uri), photo.edits)
     }
 
-    BackHandler(enabled = onDoneCollagePhoto != null && !busy && !exporting) {
-        finishCollageTile()
+    BackHandler(enabled = onDoneCollagePhoto != null) {
+        requestTileBack()
+    }
+    BackHandler(
+        enabled = onDoneCollagePhoto == null &&
+            workspaceNavigation.current == WorkspaceMode.PHOTO &&
+            (workspaceNavigation.previewBack() != null || original != null || busy || exporting)
+    ) {
+        if (busy || exporting) {
+            notice = if (exporting) "Finish the export before leaving this photo."
+                else "Wait for the current photo operation to finish."
+        } else {
+            requestRegularBack()
+        }
     }
 
     LaunchedEffect(original) {
@@ -791,29 +863,29 @@ fun PhotoEditorScreen(
         }
     }
 
-    if (proOpen) {
+    if (workspaceNavigation.current == WorkspaceMode.PRO) {
         ProWorkspaceScreen(
             document = proDocument,
             onDocument = { proDocument = it },
-            onBack = { proOpen = false },
+            onBack = ::leaveWorkspace,
             onSwitch = ::chooseWorkspace
         )
         return
     }
-    if (gifOpen) {
+    if (workspaceNavigation.current == WorkspaceMode.GIF) {
         GifMakerScreen(
             document = gifDocument,
             onDocument = { gifDocument = it },
-            onBack = { gifOpen = false },
+            onBack = ::leaveWorkspace,
             onSwitch = ::chooseWorkspace
         )
         return
     }
-    if (collageOpen) {
+    if (workspaceNavigation.current == WorkspaceMode.COLLAGE) {
         CollageWorkspaceScreen(
             document = collageDocument,
             onDocument = { collageDocument = it },
-            onBack = { collageOpen = false },
+            onBack = ::leaveWorkspace,
             onSwitch = ::chooseWorkspace
         )
         return
@@ -978,7 +1050,7 @@ fun PhotoEditorScreen(
                 ) { Text("Open media", fontWeight = FontWeight.Bold) }
                 if (onDoneCollagePhoto == null) {
                     Button(
-                        onClick = { collageOpen = true },
+                        onClick = { chooseWorkspace(WorkspaceMode.COLLAGE) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF26333C),
                             contentColor = EditorWhite
@@ -1155,7 +1227,7 @@ fun PhotoEditorScreen(
                         onSaveProject = ::saveProject,
                         onProjects = ::openProjects,
                         onOpen = ::openPicker,
-                        onCollage = { collageOpen = true },
+                        onCollage = { chooseWorkspace(WorkspaceMode.COLLAGE) },
                         showCollage = onDoneCollagePhoto == null,
                         creativeTool = creativeTools,
                         onCreativeTool = { creativeTools = it },
@@ -1232,11 +1304,19 @@ fun PhotoEditorScreen(
                 val uri = sourceUri
                 if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
                     savedProjects = ProjectStore.load(context)
+                    baselineUri = uri.toString()
+                    baselineDocument = document
+                    val shouldClose = closeAfterProjectSave
+                    closeAfterProjectSave = false
                     showSaveProject = false
-                    notice = "Project saved on your phone"
+                    if (shouldClose) closeCurrentPhoto()
+                    else notice = "Project saved on your phone"
                 } else notice = "Could not save project (twelve maximum)."
             },
-            onDismiss = { showSaveProject = false }
+            onDismiss = {
+                closeAfterProjectSave = false
+                showSaveProject = false
+            }
         )
     }
     if (showProjects) {
@@ -1257,6 +1337,56 @@ fun PhotoEditorScreen(
                 notice = "Project reference removed. Original photo is untouched."
             },
             onDismiss = { showProjects = false }
+        )
+    }
+    if (showRegularExit) {
+        AlertDialog(
+            onDismissRequest = { showRegularExit = false },
+            title = { Text("Keep your photo edits?") },
+            text = { Text("Save an editable project, discard these changes, or keep editing.") },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { showRegularExit = false }) {
+                        Text("Keep editing")
+                    }
+                    TextButton(onClick = {
+                        showRegularExit = false
+                        saveProjectAndClose()
+                    }) {
+                        Text("Save project")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { closeCurrentPhoto() }) {
+                    Text("Discard")
+                }
+            }
+        )
+    }
+    if (showTileExit) {
+        AlertDialog(
+            onDismissRequest = { showTileExit = false },
+            title = { Text("Apply tile changes?") },
+            text = { Text("Only Apply or Done changes this collage tile.") },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { showTileExit = false }) {
+                        Text("Keep editing")
+                    }
+                    TextButton(onClick = { finishCollageTile() }) {
+                        Text("Apply")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showTileExit = false
+                    onCancelCollagePhoto?.invoke()
+                }) {
+                    Text("Discard")
+                }
+            }
         )
     }
 }

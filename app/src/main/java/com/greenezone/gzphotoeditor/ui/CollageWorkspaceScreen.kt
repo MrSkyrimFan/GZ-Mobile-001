@@ -174,6 +174,26 @@ fun CollageWorkspaceScreen(
         }
     }
 
+    fun requestBack() {
+        if (rendering || exporting) {
+            notice = if (exporting) "Finish the collage export before leaving."
+                else "Wait for the collage preview to finish."
+            return
+        }
+        finishLayout()
+        onBack()
+    }
+
+    fun requestSwitch(mode: WorkspaceMode) {
+        if (rendering || exporting) {
+            notice = if (exporting) "Finish the collage export before switching workspaces."
+                else "Wait for the collage preview to finish."
+            return
+        }
+        finishLayout()
+        onSwitch(mode)
+    }
+
     fun retainReadPermission(uri: Uri) {
         try {
             resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -212,12 +232,13 @@ fun CollageWorkspaceScreen(
                     commit(document.copy(photos = copy))
                 }
                 editingTile = -1
-            }
+            },
+            onCancelCollagePhoto = { editingTile = -1 }
         )
         return
     }
 
-    BackHandler { onBack() }
+    BackHandler { requestBack() }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(CollageMath.MAX_PHOTOS)
@@ -408,7 +429,11 @@ fun CollageWorkspaceScreen(
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold)
-                    WorkspaceModeMenu(WorkspaceMode.COLLAGE, !exporting, onSwitch)
+                    WorkspaceModeMenu(
+                        WorkspaceMode.COLLAGE,
+                        !rendering && !exporting,
+                        ::requestSwitch
+                    )
                     val openProjects = document.photos.isEmpty() && savedNames.isNotEmpty()
                     TextButton(onClick = {
                         if (openProjects) {
@@ -429,7 +454,7 @@ fun CollageWorkspaceScreen(
                 Row(Modifier.fillMaxWidth().height(42.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = onBack) {
+                    TextButton(onClick = ::requestBack) {
                         Text("Back", color = EditorWhite)
                     }
                     TextButton(onClick = ::undoCollage,
