@@ -15,7 +15,17 @@ object ProHitMath {
             val layer = document.layers[index]
             if (!layer.visible || layer.opacity <= 0f) continue
             val mask = layer.mask
-            if (mask != null && !maskContains(mask, x, y)) continue
+            if (mask != null) {
+                val sample = mask.anchor?.let {
+                    val transform = ProToolMath.maskTransform(it, layer, canvasWidth, canvasHeight)
+                    val inverse = android.graphics.Matrix()
+                    if (!transform.invert(inverse)) return@let BrushPoint(x, y)
+                    val point = floatArrayOf(x * canvasWidth, y * canvasHeight)
+                    inverse.mapPoints(point)
+                    BrushPoint(point[0] / canvasWidth, point[1] / canvasHeight)
+                } ?: BrushPoint(x, y)
+                if (!maskContains(mask, sample.x, sample.y)) continue
+            }
             val inBounds = when (layer.kind) {
                 ProLayerKind.IMAGE ->
                     ProMath.canvasToImageNormalized(

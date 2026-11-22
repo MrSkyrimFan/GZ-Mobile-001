@@ -64,6 +64,7 @@ internal fun ProCanvasSurface(
     modifier: Modifier = Modifier
 ) {
     val events by rememberUpdatedState(actions)
+    val image by rememberUpdatedState(bitmap)
     val currentView by rememberUpdatedState(view)
     val bitmapPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG) }
     val toggleLabel = if (controlsVisible) "Hide controls" else "Show controls"
@@ -72,14 +73,16 @@ internal fun ProCanvasSurface(
     Canvas(modifier.semantics {
         contentDescription = "Pro editable composition"
         if (enabled) onClick(label = toggleLabel) { events.toggleControls(); true }
-    }.pointerInput(width, height, section, enabled) {
+    }.pointerInput(section, enabled) {
         if (!enabled) return@pointerInput
         awaitEachGesture {
             val down = awaitFirstDown()
+            val documentW = image.width
+            val documentH = image.height
             val screenW = size.width.toFloat()
             val screenH = size.height.toFloat()
             var viewport = currentView
-            val initial = CanvasFrame(screenW, screenH, width, height, viewport)
+            val initial = CanvasFrame(screenW, screenH, documentW, documentH, viewport)
             val start = initial.point(down.position)
             val startsInside = start.x in 0f..1f && start.y in 0f..1f
             var navigating = false
@@ -97,10 +100,10 @@ internal fun ProCanvasSurface(
                         if (event.changes.count { it.previousPressed && it.pressed } >= 2) {
                             val centroid = event.calculateCentroid()
                             val previous = centroid - event.calculatePan()
-                            val oldFrame = CanvasFrame(screenW, screenH, width, height, viewport)
+                            val oldFrame = CanvasFrame(screenW, screenH, documentW, documentH, viewport)
                             val anchor = oldFrame.point(previous)
                             val zoom = (viewport.zoom * event.calculateZoom()).coerceIn(1f, 12f)
-                            val frame = CanvasFrame(screenW, screenH, width, height, ProViewport(zoom))
+                            val frame = CanvasFrame(screenW, screenH, documentW, documentH, ProViewport(zoom))
                             fun center(anchorValue: Float, pos: Float, screen: Float, extent: Float): Float {
                                 val margin = (.5f * screen / extent).coerceAtMost(.5f)
                                 return (anchorValue - (pos - screen / 2) / extent)
@@ -155,7 +158,7 @@ internal fun ProCanvasSurface(
             if ((section == ProSection.LAYERS || section == ProSection.MOVE) && layer?.visible == true)
                 drawLayerBounds(canvas, layer, width, height, guide)
             if (section == ProSection.SELECT) {
-                layer?.mask?.let { canvas.drawPath(ProToolMath.path(it, width, height), guide) }
+                layer?.mask?.let { canvas.drawPath(ProToolMath.projectedPath(it, layer, width, height), guide) }
                 if (draft != null && ProToolMath.valid(draft)) {
                     guide.color = android.graphics.Color.YELLOW
                     canvas.drawPath(ProToolMath.path(draft, width, height), guide)

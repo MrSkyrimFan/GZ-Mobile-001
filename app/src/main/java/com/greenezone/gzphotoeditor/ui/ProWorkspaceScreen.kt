@@ -15,6 +15,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,7 +43,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -265,11 +265,26 @@ fun ProWorkspaceScreen(
             try {
                 resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } catch (_: SecurityException) {}
-            commit(document.copy(layers = document.layers.toMutableList().also {
-                it[index] = it[index].copy(uri = uri.toString(), edits = EditDocument())
-            }))
-            selected = index
-            notice = "Image replaced. Its previous photo adjustments were cleared."
+            scope.launch {
+                busy = true
+                try {
+                    val aspect = withContext(Dispatchers.IO) {
+                        val sample = ImagePipeline.decode(resolver, uri, 200, 50_000L)
+                        try { (sample.width.toFloat() / sample.height).coerceIn(.1f, 10f) }
+                        finally { sample.recycle() }
+                    }
+                    commit(document.copy(layers = document.layers.toMutableList().also {
+                        it[index] = it[index].copy(uri = uri.toString(), aspect = aspect)
+                    }))
+                    selected = index
+                    clearToolDrafts()
+                    notice = "Source replaced. Layer edits preserved."
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    notice = "Could not read replacement image."
+                } finally { busy = false }
+            }
         }
     }
 
@@ -340,17 +355,35 @@ fun ProWorkspaceScreen(
         })
     }
 
-    DisposableEffect(preview) {
-        val owned = preview
-        onDispose { if (owned != null && !owned.isRecycled) owned.recycle() }
-    }
+    // A hardware display list can retain the previous preview after recomposition.
+    // Displayed bitmaps are framework/GC owned; only unpublished scratch images are recycled.
     val latestDocument by rememberUpdatedState(document)
-    LaunchedEffect(resolver) {
-        snapshotFlow { latestDocument }.conflate().collect { frame ->
+    var previewEdge by remember { mutableIntStateOf(940) }
+    val memoryClass = remember(context) {
+        (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
+    }
+    val maxPreviewPixels = when {
+        memoryClass >= 256 -> 3_000_000L
+        memoryClass >= 128 -> 2_000_000L
+        else -> 1_200_000L
+    }
+    LaunchedEffect(memoryClass, document.aspect) {
+        snapshotFlow { viewport.zoom }.collectLatest { zoom ->
+            delay(220)
+            previewEdge = when {
+                zoom >= 2.5f && memoryClass >= 256 -> 2048
+                zoom >= 1.5f && memoryClass >= 128 -> 1600
+                zoom >= 1.5f -> 1200
+                else -> 940
+            }
+        }
+    }
+    LaunchedEffect(resolver, maxPreviewPixels) {
+        snapshotFlow { latestDocument to previewEdge }.conflate().collect { (frame, edge) ->
             if (frame.layers.isEmpty()) { preview = null; chrome = true; return@collect }
             rendering = true
             try {
-                val (w, h) = ProMath.dimensions(frame.aspect, 940, 950_000L)
+                val (w, h) = ProMath.dimensions(frame.aspect, edge, maxPreviewPixels)
                 val bitmap = withContext(Dispatchers.Default) {
                     val job = currentCoroutineContext()
                     val rendered = ProRaster.render(resolver, frame, w, h, true) {
@@ -384,42 +417,45 @@ fun ProWorkspaceScreen(
     val available = !busy && !exporting
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
         val panelHeight = maxHeight * .39f
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        val safeArea = if (chrome) Modifier.statusBarsPadding().navigationBarsPadding() else Modifier
+        Column(Modifier.fillMaxSize().then(safeArea)) {
             if (chrome) {
-                Row(Modifier.fillMaxWidth().background(EditorSurface).horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Box {
-                        TextButton(onClick = { showFile = true }, enabled = available) { Text("File ▾") }
-                        DropdownMenu(expanded = showFile, onDismissRequest = { showFile = false }) {
-                            DropdownMenuItem(text = { Text("Open project") }, onClick = {
-                                showFile = false; savedNames = ProStore.names(context); showProjects = true
-                            })
-                            DropdownMenuItem(text = { Text("Save project") }, enabled = ProMath.valid(document),
-                                onClick = { showFile = false; showSave = true })
-                            DropdownMenuItem(text = { Text("Export image") }, enabled = ProMath.valid(document),
-                                onClick = { showFile = false; showExport = true })
-                            DropdownMenuItem(text = { Text("Fit canvas") }, enabled = document.layers.isNotEmpty(),
-                                onClick = { showFile = false; viewport = ProViewport() })
-                            DropdownMenuItem(text = { Text("Pro help") }, onClick = {
-                                showFile = false; showHelp = true
-                            })
-                            DropdownMenuItem(text = { Text("Back") }, onClick = { showFile = false; onBack() })
+                Row(Modifier.fillMaxWidth().background(EditorSurface), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Box {
+                            TextButton(onClick = { showFile = true }, enabled = available) { Text("File ▾") }
+                            DropdownMenu(expanded = showFile, onDismissRequest = { showFile = false }) {
+                                DropdownMenuItem(text = { Text("Open project") }, onClick = {
+                                    showFile = false; savedNames = ProStore.names(context); showProjects = true
+                                })
+                                DropdownMenuItem(text = { Text("Save project") }, enabled = ProMath.valid(document),
+                                    onClick = { showFile = false; showSave = true })
+                                DropdownMenuItem(text = { Text("Export image") }, enabled = ProMath.valid(document),
+                                    onClick = { showFile = false; showExport = true })
+                                DropdownMenuItem(text = { Text("Fit canvas") }, enabled = document.layers.isNotEmpty(),
+                                    onClick = { showFile = false; viewport = ProViewport() })
+                                DropdownMenuItem(text = { Text("Pro help") }, onClick = {
+                                    showFile = false; showHelp = true
+                                })
+                                DropdownMenuItem(text = { Text("Back") }, onClick = { showFile = false; onBack() })
+                            }
                         }
+                        TextButton(onClick = { showAdd = true }, enabled = available &&
+                            document.layers.size < ProMath.MAX_LAYERS) { Text("+ Add layer", color = EditorMint) }
+                        TextButton(enabled = available && history.undo.isNotEmpty(), onClick = {
+                            history.undo(document)?.let { (before, next) ->
+                                clearToolDrafts(); history = next; onDocument(before)
+                                selected = selected.coerceIn(0, before.layers.lastIndex.coerceAtLeast(0))
+                            }
+                        }) { Text("Undo") }
+                        TextButton(enabled = available && history.redo.isNotEmpty(), onClick = {
+                            history.redo(document)?.let { (after, next) ->
+                                clearToolDrafts(); history = next; onDocument(after)
+                                selected = selected.coerceIn(0, after.layers.lastIndex.coerceAtLeast(0))
+                            }
+                        }) { Text("Redo") }
                     }
-                    TextButton(onClick = { showAdd = true }, enabled = available &&
-                        document.layers.size < ProMath.MAX_LAYERS) { Text("+ Add layer", color = EditorMint) }
-                    TextButton(enabled = available && history.undo.isNotEmpty(), onClick = {
-                        history.undo(document)?.let { (before, next) ->
-                            clearToolDrafts(); history = next; onDocument(before)
-                            selected = selected.coerceIn(0, before.layers.lastIndex.coerceAtLeast(0))
-                        }
-                    }) { Text("Undo") }
-                    TextButton(enabled = available && history.redo.isNotEmpty(), onClick = {
-                        history.redo(document)?.let { (after, next) ->
-                            clearToolDrafts(); history = next; onDocument(after)
-                            selected = selected.coerceIn(0, after.layers.lastIndex.coerceAtLeast(0))
-                        }
-                    }) { Text("Redo") }
                     WorkspaceModeMenu(WorkspaceMode.PRO, available, onSwitch)
                 }
                 if (notice.isNotBlank()) Text(notice, color = EditorMint, fontSize = 12.sp,
@@ -800,7 +836,8 @@ fun ProWorkspaceScreen(
                                 onApply = {
                                     val selectedMask = draftSelection
                                     if (selectedMask != null && ProToolMath.valid(selectedMask)) {
-                                        changeLayer { it.copy(mask = selectedMask) }
+                                        changeLayer { layer -> layer.copy(mask = ProToolMath.applySelection(
+                                            selectedMask, layer, document.aspect.ratio)) }
                                         draftSelection = null
                                         notice = "Layer mask applied. Your image remains editable."
                                     }

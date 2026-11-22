@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.GifMath
+import com.greenezone.gzphotoeditor.editor.GifSourceMetadata
 import com.greenezone.gzphotoeditor.editor.GifStore
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
@@ -64,5 +65,28 @@ class AndroidGifFidelityTest {
             assertEquals(rotated, GifStore.decode(GifStore.encode(rotated)))
             assertEquals(12 to 18, GifMath.dimensions(rotated))
         } finally { resolver.delete(uri, null, null) }
+    }
+
+    @Test fun androidDecoderSelectsTheExactFrameEvenWithZeroAndOneTickDelays() {
+        val assets = InstrumentationRegistry.getInstrumentation().context.assets
+        val data = assets.open("gif_source_timing.gif").use { it.readBytes() }
+        val controls = data.indices.filter { i ->
+            i + 7 < data.size && data[i] == 0x21.toByte() && data[i+1] == 0xf9.toByte() && data[i+2] == 4.toByte()
+        }
+        assertEquals(3, controls.size)
+        data[controls[0] + 4] = 0
+        data[controls[1] + 4] = 1
+        val bytes = GifSourceMetadata.indexedStream(data.inputStream()).readBytes()
+        val movie = requireNotNull(Movie.decodeByteArray(bytes, 0, bytes.size))
+        assertEquals(300, movie.duration())
+        val frame = Bitmap.createBitmap(18, 12, Bitmap.Config.ARGB_8888)
+        try {
+            for ((index, expected) in listOf(2 to Color.rgb(71,103,141), 7 to Color.rgb(181,91,39),
+                12 to Color.rgb(29,163,137)).withIndex()) {
+                movie.setTime(GifSourceMetadata.decoderTime(index))
+                movie.draw(Canvas(frame), 0f, 0f)
+                assertEquals(expected.second, frame.getPixel(expected.first, 5))
+            }
+        } finally { frame.recycle() }
     }
 }

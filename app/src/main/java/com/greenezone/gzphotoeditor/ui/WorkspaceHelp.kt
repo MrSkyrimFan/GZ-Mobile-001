@@ -37,7 +37,7 @@ private val proTopics = listOf(
         "Adjust Size or Rotate to place the object. Center on canvas returns its center to the middle. Pinching the canvas changes the view you work in."),
     HelpTopic("Cut out part of a photo",
         "Select the image layer, then choose Select & mask. Drag from one corner to the opposite corner for a rectangle or ellipse. For Freehand, trace the area with one continuous drag.",
-        "Choose Apply layer mask. To make a window through the layer, choose Invert mask. The layer below shows through the hidden area. Increase Feather to soften the edge.",
+        "Choose Apply layer mask. To make a window through the layer, choose Invert mask. The layer below shows through the hidden area. Increase Feather to soften the edge. A new image mask follows the photo when you move, rotate or scale it.",
         "Remove mask brings the whole layer back. To try another outline, draw it and apply it to replace the current mask."),
     HelpTopic("Correct color in one area",
         "Open Tone & color. To grade one photo, select its image layer. To grade a composite, add an adjustment layer above the elements you want to affect.",

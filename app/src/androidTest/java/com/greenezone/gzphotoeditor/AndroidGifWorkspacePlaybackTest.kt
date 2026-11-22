@@ -1,10 +1,18 @@
 package com.greenezone.gzphotoeditor
 
+import android.app.Activity
+import android.content.Intent
 import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityOptionsCompat
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
@@ -25,10 +33,21 @@ class AndroidGifWorkspacePlaybackTest {
     private val context = instrument.targetContext
     private val resolver = context.contentResolver
 
-    private fun show(initial: GifDocument, changed: (GifDocument) -> Unit = {}) {
+    private fun show(initial: GifDocument, destination: Uri? = null, changed: (GifDocument) -> Unit = {}) {
+        val owner = object : ActivityResultRegistryOwner {
+            override val activityResultRegistry = object : ActivityResultRegistry() {
+                override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>,
+                    input: I, options: ActivityOptionsCompat?) {
+                    check(contract is ActivityResultContracts.CreateDocument && destination != null)
+                    dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(destination))
+                }
+            }
+        }
         rule.setContent {
             var doc by remember { mutableStateOf(initial) }
-            VideoGifScreen(doc, { doc = it; changed(it) }, {}, {}, {})
+            CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
+                VideoGifScreen(doc, { doc = it; changed(it) }, {}, {}, {})
+            }
         }
     }
 
@@ -69,11 +88,12 @@ class AndroidGifWorkspacePlaybackTest {
                 Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(colors[i]) }
             }
         }
+        val destination = publish(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "gz-reverse-output.gif", "image/gif") {}
         try {
             val original = VideoGifSource.document(context, uri)
             assertEquals(3, GifVideoMath.frameCount(original.video!!))
             var latest = original
-            show(original) { latest = it }
+            show(original, destination) { latest = it }
             waitFrame(1)
             assertTrue(Color.red(centerColor()) > 200)
             rule.onNodeWithText("Reverse").performClick()
@@ -105,7 +125,22 @@ class AndroidGifWorkspacePlaybackTest {
             rule.onNode(hasSetTextAction()).performTextInput("Backwards")
             rule.onNodeWithText("Apply").performClick()
             rule.runOnIdle { assertEquals("Backwards", latest.edits.creative.text.single().content) }
-        } finally { resolver.delete(uri, null, null) }
+            rule.onNodeWithText("Save GIF").performClick()
+            rule.waitUntil(25_000) {
+                rule.onAllNodesWithText("Edit saved GIF").fetchSemanticsNodes().isNotEmpty()
+            }
+            // Reopen the bytes written by the actual Save GIF action.
+            rule.onNodeWithText("Edit saved GIF").performClick()
+            rule.waitUntil(15_000) { latest.video?.uri == destination.toString() }
+            rule.runOnIdle {
+                assertEquals(EditDocument(), latest.edits)
+                assertEquals(3, GifVideoMath.frameCount(latest.video!!))
+                assertEquals(original.video!!.durationMs, latest.video!!.durationMs)
+            }
+        } finally {
+            resolver.delete(destination, null, null)
+            resolver.delete(uri, null, null)
+        }
     }
 
     @Test fun mp4PlaysPausesAndSeeksThroughActualEditorControls() {

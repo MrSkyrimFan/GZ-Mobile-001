@@ -48,6 +48,22 @@ class AndroidVideoGifDecodeTest {
             assertEquals(clip.durationMs, clip.endMs)
             assertEquals(16, GifVideoMath.frameCount(clip))
             assertEquals(-1, untouched.loopCount)
+            val legacy = untouched.copy(size = GifSize.SMALL, aspect = GifAspect.SQUARE,
+                video = clip.copy(startMs = 250, endMs = 1500, fps = 8, speedPercent = 50, reverse = true))
+            val name = "Legacy GIF migration"
+            // Write a v2 record with precisely the metadata fields that release saved.
+            val json = org.json.JSONObject(GifStore.encode(legacy)).apply {
+                put("version", 2)
+                val old = getJSONObject("video")
+                listOf("width", "height", "times", "isGif", "loopCount").forEach { old.remove(it) }
+            }
+            val key = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(name.toByteArray())
+            val folder = java.io.File(context.filesDir, "gz_gif_projects").apply { mkdirs() }
+            val projectFile = java.io.File(folder, "$key.gzgif")
+            try {
+                projectFile.writeText(json.toString())
+                assertEquals(legacy, GifStore.load(context, name))
+            } finally { projectFile.delete() }
             val times = GifVideoMath.frameTimesMs(clip)
             val holds = GifVideoMath.frameDelaysMs(clip)
             val forwardBytes = ByteArrayOutputStream().also {

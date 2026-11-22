@@ -108,6 +108,7 @@ fun GifMakerScreen(
     var saveOpen by remember { mutableStateOf(false) }
     var helpOpen by remember { mutableStateOf(false) }
     var projectsOpen by remember { mutableStateOf(false) }
+    var openingProject by remember { mutableStateOf(false) }
     var newOpen by remember { mutableStateOf(false) }
     var fileName by remember { mutableStateOf("") }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -429,25 +430,31 @@ fun GifMakerScreen(
             } else notice = "Could not save. Choose a name (12 maximum)."
         }, { saveOpen = false })
     if (projectsOpen) AlertDialog(
-        onDismissRequest = { projectsOpen = false },
+        onDismissRequest = { if (!openingProject) projectsOpen = false },
         title = { Text("Saved GIF projects") },
         text = {
             Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
                 if (savedNames.isEmpty()) Text("No saved GIF projects yet.", color = EditorMuted)
                 savedNames.forEach { name ->
-                    TextButton(onClick = {
-                        val restored = GifStore.load(context, name)
-                        if (restored == null) notice = "Saved GIF project unreadable"
-                        else {
-                            playing = false; commit(restored); index = 0
-                            projectsOpen = false; notice = "GIF project opened"
-                            if (restored.video != null) photoSequenceOnly = false
+                    TextButton(enabled = !openingProject, onClick = {
+                        openingProject = true
+                        scope.launch {
+                            try {
+                                val restored = withContext(Dispatchers.IO) { GifStore.load(context, name) }
+                                projectsOpen = false
+                                if (restored == null) notice = "Could not read the saved project or its source file."
+                                else {
+                                    playing = false; commit(restored); index = 0
+                                    notice = "GIF project opened"
+                                    if (restored.video != null) photoSequenceOnly = false
+                                }
+                            } finally { openingProject = false }
                         }
                     }) { Text(name, color = EditorMint) }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { projectsOpen = false }) { Text("Close") } }
+        confirmButton = { TextButton(enabled = !openingProject, onClick = { projectsOpen = false }) { Text("Close") } }
     )
     if (newOpen) AlertDialog(
         onDismissRequest = { newOpen = false },

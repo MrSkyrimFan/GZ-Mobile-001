@@ -13,10 +13,12 @@
 
 ## v0.12 GIF conversion and Pro canvas
 
+The emulator job produces `gz-editor-pro-phone-test`. This versioned debug install has its own app identity and local project storage, so a handset can keep the previous build and its projects. In a local build, `-PgzPhoneTestInstall=true` selects the same package.
+
 - Video imports begin with the full duration, source dimensions and frame timing, forward playback and neutral edits. GIF output uses an adaptive palette per frame. GIF color depth and delay precision still apply.
 - Reverse, trim, speed, scrub and playback share an ordered frame schedule with export. Open an existing GIF for editing, or save an untouched imported GIF byte for byte. Optional tools include photo adjustments, HSL, curves, Looks, caption placement, rotate, mirror and framing.
 - In Pro, tap the canvas to hide or restore the controls. Drag to use the selected tool. Pinch and pan to inspect detail. Hold in Layers to select an object, in Brush to sample a color, or in Clone & repair to sample and stamp.
-- The layer stack supports image grading, masked adjustment layers, feathered selections and 16 blend modes. Search Help in GIF maker, File → Pro help in Pro, or More → Help in the regular photo editor for step-by-step instructions.
+- The layer stack supports image grading, masked adjustment layers, linked image masks, feathered selections and 16 blend modes. Search Help in GIF maker, File → Pro help in Pro, or More → Help in the regular photo editor for step-by-step instructions.
 
 ## v0.11 hard separation and interaction repairs
 - **GIF Play/Pause is native video playback**, not a timer that tries to decode still frames on demand. Trim and scrub seek the real video, speed controls the native player, the **Save GIF** action is always visible and output remains a genuine animated GIF. When paused, a separately rendered frame reflects the GIF Fit/Fill/aspect settings; reverse uses timestamped frame preview because Android's native player cannot play backward. Video decoding and output codecs remain device-dependent.

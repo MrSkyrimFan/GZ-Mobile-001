@@ -3,6 +3,7 @@ package com.greenezone.gzphotoeditor.editor
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -22,8 +23,18 @@ data class ProSelection(
     val height: Float = .6f,
     val points: List<BrushPoint> = emptyList(),
     val inverted: Boolean = false,
-    val feather: Float = 0f
+    val feather: Float = 0f,
+    val anchor: ProMaskAnchor? = null
 )
+
+/** Artboard and image pose when an image mask was drawn. Absent on artboard-fixed masks. */
+data class ProMaskAnchor(
+    val x: Float, val y: Float, val scale: Float, val rotation: Float,
+    val canvasAspect: Float, val imageAspect: Float
+) {
+    fun valid() = x in 0f..1f && y in 0f..1f && scale in .1f..2f &&
+        rotation in -180f..180f && canvasAspect in .1f..10f && imageAspect in .1f..10f
+}
 
 enum class ProRetouchKind(val label: String) {
     CLONE("Clone stamp"),
@@ -55,6 +66,7 @@ object ProToolMath {
 
     fun valid(selection: ProSelection): Boolean {
         fun fraction(v: Float) = v.isFinite() && v in 0f..1f
+        if (selection.anchor?.valid() == false) return false
         if (!selection.feather.isFinite() || selection.feather !in 0f..0.2f) return false
         if (!fraction(selection.centerX) || !fraction(selection.centerY) ||
             !fraction(selection.width) || !fraction(selection.height)) return false
@@ -84,6 +96,44 @@ object ProToolMath {
             width = (right - left).coerceAtLeast(.005f),
             height = (bottom - top).coerceAtLeast(.005f)
         )
+    }
+
+    fun applySelection(selection: ProSelection, layer: ProLayer, canvasAspect: Float): ProSelection {
+        val anchor = if (layer.kind == ProLayerKind.IMAGE)
+            ProMaskAnchor(layer.x, layer.y, layer.scale, layer.rotationDegrees, canvasAspect, layer.aspect)
+        else null
+        return selection.copy(anchor = anchor)
+    }
+
+    /** Maps the normalized mask's reference artboard (drawn at width × height) to the current image. */
+    fun maskTransform(anchor: ProMaskAnchor, layer: ProLayer, width: Int, height: Int): Matrix {
+        val referenceWidth = height * anchor.canvasAspect
+        val oldImageW = min(referenceWidth, height * anchor.imageAspect) * anchor.scale
+        val newImageW = min(width.toFloat(), height * layer.aspect) * layer.scale
+        return Matrix().apply {
+            setScale(referenceWidth / width, 1f)
+            postTranslate(-anchor.x * referenceWidth, -anchor.y * height)
+            postRotate(-anchor.rotation)
+            postScale(newImageW / oldImageW, (newImageW / layer.aspect) / (oldImageW / anchor.imageAspect))
+            postRotate(layer.rotationDegrees)
+            postTranslate(layer.x * width, layer.y * height)
+        }
+    }
+
+    fun projectedPath(mask: ProSelection, layer: ProLayer, width: Int, height: Int): Path =
+        path(mask, width, height).apply {
+            mask.anchor?.let { transform(maskTransform(it, layer, width, height)) }
+        }
+
+    fun featherRadius(mask: ProSelection, layer: ProLayer, width: Int, height: Int): Float {
+        val anchor = mask.anchor ?: return mask.feather * min(width, height)
+        val refWidth = height * anchor.canvasAspect
+        val originalRadius = mask.feather * min(refWidth, height.toFloat())
+        // Reference bitmap coordinates use the current extent. Compensate its x scale
+        // before mapping the radius, including when a portrait project becomes landscape.
+        val transform = maskTransform(anchor, layer, width, height)
+        transform.preScale(width / refWidth, 1f)
+        return transform.mapRadius(originalRadius)
     }
 
     fun path(mask: ProSelection, width: Int, height: Int): Path {

@@ -79,7 +79,8 @@ object ProMath {
                     item.aspect.isFinite() && item.aspect in .1f..10f &&
                     item.rotationDegrees.isFinite() && item.rotationDegrees in -180f..180f &&
                     (item.mask == null || ((item.kind == ProLayerKind.IMAGE ||
-                        item.kind == ProLayerKind.ADJUSTMENT) && ProToolMath.valid(item.mask))) &&
+                        (item.kind == ProLayerKind.ADJUSTMENT && item.mask.anchor == null)) &&
+                        ProToolMath.valid(item.mask))) &&
                     item.retouches.size <= ProToolMath.MAX_RETOUCH &&
                     (item.retouches.isEmpty() || item.kind == ProLayerKind.IMAGE) &&
                     item.retouches.all(ProToolMath::valid) &&

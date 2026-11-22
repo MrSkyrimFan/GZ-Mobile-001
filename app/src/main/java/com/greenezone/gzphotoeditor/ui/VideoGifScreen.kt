@@ -23,12 +23,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenezone.gzphotoeditor.editor.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.IOException
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -66,7 +69,8 @@ fun VideoGifScreen(
     var history by remember { mutableStateOf(GifHistory()) }
     var dragStart by remember { mutableStateOf<GifDocument?>(null) }
     var dragLatest by remember { mutableStateOf<GifDocument?>(null) }
-    var outputSnapshot by remember { mutableStateOf<GifDocument?>(null) }
+    var exportJob by remember { mutableStateOf<Job?>(null) }
+    var destinationRequest by remember { mutableStateOf<CompletableDeferred<Uri?>?>(null) }
     var lastExport by remember { mutableStateOf<Uri?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
@@ -146,50 +150,85 @@ fun VideoGifScreen(
         showSaved = true
     }
 
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/gif")) { dest ->
-        val saved = outputSnapshot
-        outputSnapshot = null
-        if (dest != null && saved?.video != null) {
-            if (dest.toString() == saved.video.uri) {
-                notice = "Choose another filename to keep your original."
-            } else {
-                exporting = true
-                notice = ""
-                progress = "Writing GIF…"
-                scope.launch {
-                    try {
-                        withContext(Dispatchers.IO) {
-                            val job = currentCoroutineContext()
-                            resolver.openOutputStream(dest, "wt")?.use { stream ->
-                                VideoGifSource.write(context, saved, stream, cancel = { job.ensureActive() },
-                                    onProgress = { index, count ->
-                                        if (index == count || index % 8 == 0) {
-                                            scope.launch(Dispatchers.Main) { progress = "Writing frame $index of $count…" }
-                                        }
-                                    })
-                            } ?: throw IOException("Cannot open the selected destination")
-                        }
-                        lastExport = dest
-                        notice = "GIF saved"
-                    } catch (cancelled: CancellationException) {
-                        runCatching { resolver.delete(dest, null, null) }
-                        throw cancelled
-                    } catch (_: OutOfMemoryError) {
-                        notice = "Not enough memory to export. Choose a smaller canvas size and try again."
-                        runCatching { resolver.delete(dest, null, null) }
-                    } catch (error: Exception) {
-                        notice = "GIF export failed. ${error.message.orEmpty()}"
-                        runCatching { resolver.delete(dest, null, null) }
-                    } finally { exporting = false }
-                }
-            }
-        }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/gif")) {
+        destinationRequest?.complete(it)
     }
     fun startExport() {
         if (!enabled || !GifMath.valid(document)) return
+        val saved = document
         pauseAt(position)
-        outputSnapshot = document
-        exporter.launch("GZEditorPro.gif")
+        exporting = true
+        notice = ""
+        progress = "Writing GIF…"
+        exportJob = scope.launch {
+            var temp: File? = null
+            try {
+                withContext(Dispatchers.IO) {
+                    val job = currentCoroutineContext()
+                    val file = File.createTempFile("gz-gif-", ".tmp", context.cacheDir)
+                    temp = file
+                    file.outputStream().buffered().use { stream ->
+                        VideoGifSource.write(context, saved, stream, cancel = { job.ensureActive() },
+                            onProgress = { index, count ->
+                                if (index == count || index % 8 == 0) {
+                                    scope.launch(Dispatchers.Main) { progress = "Writing frame $index of $count…" }
+                                }
+                            })
+                    }
+                }
+                val request = CompletableDeferred<Uri?>()
+                destinationRequest = request
+                progress = "Choose where to save your GIF"
+                exporter.launch("GZEditorPro.gif")
+                val dest = request.await()
+                if (dest == null) {
+                    notice = "GIF export cancelled"
+                    return@launch
+                }
+                require(dest.toString() != saved.video?.uri) { "Choose a new filename to keep the original." }
+                progress = "Saving GIF…"
+                withContext(Dispatchers.IO) {
+                    val job = currentCoroutineContext()
+                    val firstByte = resolver.openInputStream(dest)?.use { it.read() }
+                        ?: throw IOException("Cannot verify the destination. Choose a new file in Files.")
+                    require(firstByte == -1) { "This file already has content. Save the GIF under a new name." }
+                    val output = resolver.openOutputStream(dest, "wt") ?: throw IOException("Cannot open the destination")
+                    try {
+                        output.use { stream ->
+                            requireNotNull(temp).inputStream().use { input ->
+                                val buffer = ByteArray(65536)
+                                while (true) {
+                                    job.ensureActive()
+                                    val n = input.read(buffer)
+                                    if (n < 0) break
+                                    stream.write(buffer, 0, n)
+                                }
+                            }
+                        }
+                    } catch (failed: Throwable) {
+                        // The destination was verified empty before opening. Restore that state,
+                        // retaining the document and its provider identity.
+                        runCatching { resolver.openOutputStream(dest, "wt")?.close() }
+                        throw failed
+                    }
+                }
+                lastExport = dest
+                notice = "GIF saved"
+            } catch (cancelled: CancellationException) {
+                notice = "GIF export cancelled"
+                throw cancelled
+            } catch (_: OutOfMemoryError) {
+                notice = "Not enough memory to export. Choose a smaller canvas size and try again."
+            } catch (error: Exception) {
+                notice = "GIF export failed. ${error.message.orEmpty()}"
+            } finally {
+                temp?.delete()
+                destinationRequest?.cancel()
+                destinationRequest = null
+                exporting = false
+                exportJob = null
+            }
+        }
     }
     BackHandler { if (enabled) onBack() }
 
@@ -365,6 +404,7 @@ fun VideoGifScreen(
             horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(color = EditorMint)
             Text(if (exporting) progress else "Opening source…", color = EditorWhite)
+            if (exporting) TextButton(onClick = { exportJob?.cancel() }) { Text("Cancel export", color = EditorMint) }
         }
     }
     if (showHelp) GifHelpDialog { showHelp = false }
@@ -381,13 +421,18 @@ fun VideoGifScreen(
                 if (savedNames.isEmpty()) Text("No saved GIF projects yet.")
                 savedNames.forEach { name ->
                     TextButton(onClick = {
-                        val saved = GifStore.load(context, name)
                         showSaved = false
-                        if (saved == null) notice = "This project could not be read."
-                        else if (saved.video != null) {
-                            commit(saved, 0)
-                            lastExport = null
-                        } else onOpenLegacyPhotoProject(saved)
+                        busy = true
+                        scope.launch {
+                            try {
+                                val saved = withContext(Dispatchers.IO) { GifStore.load(context, name) }
+                                if (saved == null) notice = "Could not read the saved project or its source file."
+                                else if (saved.video != null) {
+                                    commit(saved, 0)
+                                    lastExport = null
+                                } else onOpenLegacyPhotoProject(saved)
+                            } finally { busy = false }
+                        }
                     }) { Text(name) }
                 }
             }

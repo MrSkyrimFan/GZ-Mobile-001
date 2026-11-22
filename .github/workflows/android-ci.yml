@@ -55,6 +55,8 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      ORG_GRADLE_PROJECT_gzPhoneTestInstall: 'true'
     permissions:
       contents: read
     steps:
@@ -85,6 +87,12 @@ jobs:
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: bash .github/scripts/android-test-with-receipts.sh
+      - name: Upload the APK exercised on the emulator
+        uses: actions/upload-artifact@v4
+        with:
+          name: gz-editor-pro-phone-test
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
       - name: Upload Android emulator test receipts
         if: always()
         uses: actions/upload-artifact@v4

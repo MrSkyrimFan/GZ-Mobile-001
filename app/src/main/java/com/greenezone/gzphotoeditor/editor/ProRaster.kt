@@ -37,23 +37,25 @@ object ProRaster {
         ProBlend.LUMINOSITY -> BlendMode.LUMINOSITY
     }
 
-    private fun clipMask(canvas: Canvas, mask: ProSelection?) {
-        if (mask == null || mask.feather > 0f) return
-        val path = ProToolMath.path(mask, canvas.width, canvas.height)
+    private fun clipMask(canvas: Canvas, layer: ProLayer) {
+        val mask = layer.mask ?: return
+        if (mask.feather > 0f) return
+        val path = ProToolMath.projectedPath(mask, layer, canvas.width, canvas.height)
         if (mask.inverted) canvas.clipOutPath(path) else canvas.clipPath(path)
     }
 
-    private fun featherMask(mask: ProSelection?, width: Int, height: Int): Bitmap? {
-        if (mask == null || mask.feather == 0f) return null
+    private fun featherMask(layer: ProLayer, width: Int, height: Int): Bitmap? {
+        val mask = layer.mask ?: return null
+        if (mask.feather == 0f) return null
         val alpha = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
         try {
             if (mask.inverted) alpha.eraseColor(Color.WHITE)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
                 if (mask.inverted) blendMode = BlendMode.DST_OUT
-                maskFilter = BlurMaskFilter(mask.feather * minOf(width, height), BlurMaskFilter.Blur.NORMAL)
+                maskFilter = BlurMaskFilter(ProToolMath.featherRadius(mask, layer, width, height), BlurMaskFilter.Blur.NORMAL)
             }
-            Canvas(alpha).drawPath(ProToolMath.path(mask, width, height), paint)
+            Canvas(alpha).drawPath(ProToolMath.projectedPath(mask, layer, width, height), paint)
             return alpha
         } catch (e: Throwable) { alpha.recycle(); throw e }
     }
@@ -68,7 +70,7 @@ object ProRaster {
                 if (adjusted === base) return
                 val saved = canvas.save()
                 try {
-                    clipMask(canvas, layer.mask)
+                    clipMask(canvas, layer)
                     if (!base.hasAlpha() && (layer.mask?.feather ?: 0f) == 0f) {
                         val paint = Paint().apply {
                             alpha = (layer.opacity * 255).roundToInt()
@@ -102,7 +104,7 @@ object ProRaster {
             blendMode = blend(layer.blend)
         }
         val replace = Paint().apply { blendMode = BlendMode.SRC }
-        val feather = featherMask(layer.mask, width, base.height)
+        val feather = featherMask(layer, width, base.height)
         val maskRow = if (feather == null) null else IntArray(width)
         try {
             val region = canvas.clipBounds
@@ -215,11 +217,11 @@ object ProRaster {
                         alpha = (layer.opacity * 255).roundToInt().coerceIn(0, 255)
                         blendMode = blend(layer.blend)
                     }
-                    val feather = featherMask(layer.mask, width, height)
+                    val feather = featherMask(layer, width, height)
                     val saved = if (feather == null) canvas.save() else
                         canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), paint)
                     try {
-                        clipMask(canvas, layer.mask)
+                        clipMask(canvas, layer)
                         val transform = canvas.save()
                         try {
                             if (layer.rotationDegrees != 0f) canvas.rotate(layer.rotationDegrees,

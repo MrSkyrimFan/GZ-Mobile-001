@@ -1,6 +1,8 @@
 package com.greenezone.gzphotoeditor.editor
 
 import android.content.Context
+import android.util.AtomicFile
+import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -92,25 +94,39 @@ object GifStore {
             Charsets.UTF_8) } catch (_: Exception) { null }
     }?.sortedBy { it.lowercase() } ?: emptyList()
 
-    fun save(context: Context, name: String, doc: GifDocument): Boolean {
+    @Synchronized fun save(context: Context, name: String, doc: GifDocument): Boolean {
         val id = id(name) ?: return false
         val dir = folder(context)
         val file = File(dir, "$id.gzgif")
         if (!file.exists() && names(context).size >= MAX_FILES) return false
         return try {
-            val temp = File(dir, "$id.tmp")
-            temp.writeText(encode(doc), Charsets.UTF_8)
-            if (!temp.renameTo(file)) {
-                temp.copyTo(file, overwrite = true)
-                temp.delete()
+            val data = encode(doc).toByteArray(Charsets.UTF_8)
+            val atomic = AtomicFile(file)
+            val stream = atomic.startWrite()
+            try {
+                stream.write(data)
+                atomic.finishWrite(stream)
+            } catch (e: Throwable) {
+                atomic.failWrite(stream)
+                throw e
             }
             true
         } catch (_: Exception) { false }
     }
-    fun load(context: Context, name: String): GifDocument? {
+    @Synchronized fun load(context: Context, name: String): GifDocument? {
         val id = id(name) ?: return null
         val file = File(folder(context), "$id.gzgif")
         if (!file.isFile || file.length() > MAX_BYTES) return null
-        return try { decode(file.readText(Charsets.UTF_8)) } catch (_: Exception) { null }
+        return try {
+            val doc = AtomicFile(file).openRead().bufferedReader().use { decode(it.readText()) } ?: return null
+            val previous = doc.video
+            if (previous == null || previous.sourceTimesMs.isNotEmpty()) return doc
+            // v2 saved only the edit parameters. Obtain actual geometry and frame
+            // timestamps before offering the new Original options on these projects.
+            val source = VideoGifSource.inspect(context, Uri.parse(previous.uri))
+            doc.copy(video = source.copy(startMs = previous.startMs, endMs = previous.endMs,
+                fps = previous.fps, speedPercent = previous.speedPercent, reverse = previous.reverse))
+                .takeIf(GifMath::valid)
+        } catch (_: Exception) { null }
     }
 }
