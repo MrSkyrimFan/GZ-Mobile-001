@@ -77,6 +77,48 @@ class PhotoFirstUiTest {
         }
     }
 
+    @Test fun proUsesItsOwnPhotoshopToolStripAndCenterActuallyMovesALayer() {
+        var last = com.greenezone.gzphotoeditor.editor.ProDocument()
+        rule.setContent {
+            var doc by remember {
+                mutableStateOf(com.greenezone.gzphotoeditor.editor.ProDocument(
+                    listOf(com.greenezone.gzphotoeditor.editor.ProLayer(
+                        uri = "", name = "Shape",
+                        kind = com.greenezone.gzphotoeditor.editor.ProLayerKind.SHAPE,
+                        x = .2f, y = .8f,
+                        edits = com.greenezone.gzphotoeditor.editor.EditDocument(
+                            creative = com.greenezone.gzphotoeditor.editor.CreativeDocument(
+                                shapes = listOf(
+                                    com.greenezone.gzphotoeditor.editor.ShapeOverlay()
+                                )
+                            )
+                        )
+                    ))
+                ))
+            }
+            last = doc
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                com.greenezone.gzphotoeditor.ui.ProWorkspaceScreen(
+                    document = doc,
+                    onDocument = { doc = it },
+                    onBack = {},
+                    onSwitch = {}
+                )
+            }
+        }
+        rule.onNodeWithText("Select & mask").assertExists()
+        rule.onNodeWithText("Clone & repair").assertExists()
+        rule.onNodeWithText("Transform").performClick()
+        rule.onNodeWithText("Center on canvas").performClick()
+        rule.runOnIdle {
+            assertEquals(.5f, last.layers[0].x, .001f)
+            assertEquals(.5f, last.layers[0].y, .001f)
+        }
+        rule.onNodeWithText("Looks").assertDoesNotExist()
+        rule.onNodeWithText("Exposure").assertDoesNotExist()
+        rule.onNodeWithText("Edit photo").assertDoesNotExist()
+    }
+
     @Test fun videoGifLandingAsksOnlyForOneVideo() {
         rule.setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {

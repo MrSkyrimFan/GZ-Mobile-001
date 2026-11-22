@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Typeface
 import kotlin.math.PI
 import kotlin.math.cos
@@ -66,6 +68,10 @@ object CreativeRaster {
         val brush = paint(ink.color, ink.opacity).apply {
             style = Paint.Style.STROKE
             strokeWidth = ink.thickness.coerceIn(.0015f, .16f) * short
+            if (ink.erase) {
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                alpha = 255
+            }
         }
         if (ink.points.size == 1) {
             c.drawCircle(ink.points[0].x * w, ink.points[0].y * h,

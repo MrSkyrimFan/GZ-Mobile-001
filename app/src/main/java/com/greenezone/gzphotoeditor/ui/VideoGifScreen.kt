@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.VideoView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -96,12 +97,15 @@ fun VideoGifScreen(
     var selectedFrame by remember { mutableIntStateOf(0) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var playing by remember { mutableStateOf(false) }
+    var videoPlayer by remember { mutableStateOf<VideoView?>(null) }
+    var playerReady by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     var history by remember { mutableStateOf(GifHistory()) }
     var dragStart by remember { mutableStateOf<GifDocument?>(null) }
     var outputSnapshot by remember { mutableStateOf<GifDocument?>(null) }
+    var lastExport by remember { mutableStateOf<Uri?>(null) }
     var askSave by remember { mutableStateOf(false) }
     var savedOpen by remember { mutableStateOf(false) }
     var askNew by remember { mutableStateOf(false) }
@@ -112,6 +116,10 @@ fun VideoGifScreen(
         history = history.checkpoint(document, next)
         dragStart = null
         onDocument(next)
+        if (next.video?.uri != document.video?.uri) {
+            playing = false
+            playerReady = false
+        }
         val count = next.video?.let { if (GifVideoMath.valid(it)) GifVideoMath.frameCount(it) else 1 } ?: 1
         selectedFrame = selectedFrame.coerceIn(0, count - 1)
     }
@@ -119,6 +127,7 @@ fun VideoGifScreen(
         if (dragStart == null) dragStart = document
         onDocument(next)
         selectedFrame = 0
+        playing = false
     }
     fun finishSlide() {
         dragStart?.let { history = history.checkpoint(it, document) }
@@ -181,7 +190,8 @@ fun VideoGifScreen(
                                     })
                             } ?: throw IOException("Output file cannot be opened")
                         }
-                        notice = "GIF exported. Your original video was not changed."
+                        lastExport = dest
+                        notice = "GIF saved. Tap View saved GIF to inspect the animation."
                     } catch (cancelled: CancellationException) {
                         try { resolver.delete(dest, null, null) } catch (_: Exception) {}
                         throw cancelled
@@ -199,6 +209,7 @@ fun VideoGifScreen(
     fun startExport() {
         if (!GifMath.valid(document) || exporting || busy) return
         outputSnapshot = document
+        lastExport = null
         exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "image/gif"
@@ -210,22 +221,34 @@ fun VideoGifScreen(
         val owned = preview
         onDispose { if (owned != null && !owned.isRecycled) owned.recycle() }
     }
-    LaunchedEffect(clip, selectedFrame, document.size, document.aspect, document.fit) {
-        if (clip == null) { preview = null; return@LaunchedEffect }
+
+    // A paused frame is rendered with actual GIF Fit/Fill/aspect settings.
+    // During forward playback, the VideoView surface plays the real source instead.
+    LaunchedEffect(clip, selectedFrame, document.size, document.aspect, document.fit,
+        playing) {
+        if (clip == null || (playing && !clip.reverse)) {
+            preview = null
+            return@LaunchedEffect
+        }
+        delay(75L) // Coalesce continuous dragging of trim and scrub controls.
         try {
             val bitmap = withContext(Dispatchers.IO) {
                 val times = GifVideoMath.frameTimesMs(clip)
+                val index = selectedFrame.coerceIn(0, times.lastIndex)
                 val source = VideoGifSource.preview(
-                    context, clip, times[selectedFrame.coerceIn(0, times.lastIndex)],
-                    document.size.maxEdge * 2)
+                    context, clip, times[index], document.size.maxEdge * 2)
                 try {
-                    val rendered = GifEncoder.renderFrame(source, document)
-                    try { currentCoroutineContext().ensureActive(); rendered }
-                    catch (cancelled: CancellationException) {
-                        if (!rendered.isRecycled) rendered.recycle()
+                    val result = GifEncoder.renderFrame(source, document)
+                    try {
+                        currentCoroutineContext().ensureActive()
+                        result
+                    } catch (cancelled: CancellationException) {
+                        if (!result.isRecycled) result.recycle()
                         throw cancelled
                     }
-                } finally { if (!source.isRecycled) source.recycle() }
+                } finally {
+                    if (!source.isRecycled) source.recycle()
+                }
             }
             preview = bitmap
         } catch (cancelled: CancellationException) {
@@ -233,20 +256,28 @@ fun VideoGifScreen(
         } catch (error: Exception) {
             preview = null
             playing = false
-            notice = "Frame unavailable: " + (error.message ?: "video decoder error")
+            notice = "Frame preview unavailable: " +
+                (error.message ?: "unsupported frame")
         }
     }
+
+    // Reverse playback cannot be performed natively by VideoView. Decode its
+    // timestamped frames sequentially, waiting for each one to finish first.
+    // This prevents the earlier timer from cancelling every in-flight decode.
     LaunchedEffect(playing, clip, document.forever) {
-        if (!playing || clip == null) return@LaunchedEffect
+        if (!playing || clip == null || !clip.reverse) return@LaunchedEffect
         val count = GifVideoMath.frameCount(clip)
-        while (playing) {
+        while (true) {
             delay(GifVideoMath.gifDelayMs(clip).toLong())
             if (selectedFrame >= count - 1) {
-                if (document.forever) selectedFrame = 0 else {
+                if (document.forever) selectedFrame = 0
+                else {
                     playing = false
                     break
                 }
             } else selectedFrame++
+            // Wait until the visual frame decode has a chance to finish.
+            delay(150L)
         }
     }
     LaunchedEffect(notice) {
@@ -276,10 +307,31 @@ fun VideoGifScreen(
                 ) { Text("Open saved GIF project", color = EditorMuted) }
             }
         } else {
-            preview?.let {
-                Image(bitmap = it.asImageBitmap(),
-                    contentDescription = "Video GIF frame preview",
-                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            if (!clip.reverse) {
+                NativeGifPlayback(
+                    clip = clip,
+                    playing = playing,
+                    forever = document.forever,
+                    onPosition = { ms ->
+                        val fraction = ((ms - clip.startMs).toDouble() /
+                            (clip.endMs - clip.startMs)).coerceIn(0.0, 0.9999)
+                        selectedFrame = (fraction * GifVideoMath.frameCount(clip))
+                            .toInt().coerceIn(0, GifVideoMath.frameCount(clip) - 1)
+                    },
+                    onEnded = { playing = false },
+                    onError = { message -> playing = false; notice = message },
+                    onReady = { playerReady = true },
+                    onPlayer = { videoPlayer = it },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            if (!playing || clip.reverse) {
+                preview?.let {
+                    Image(bitmap = it.asImageBitmap(),
+                        contentDescription = "GIF crop and size preview",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit)
+                }
             }
         }
 
@@ -295,32 +347,75 @@ fun VideoGifScreen(
                     fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 WorkspaceModeMenu(WorkspaceMode.GIF, !busy && !exporting, onSwitch)
             }
-            if (clip != null) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = ::selectVideo, enabled = !busy && !exporting) {
-                    Text(if (clip == null) "Open video" else "Change video", color = EditorMint)
-                }
-                TextButton(enabled = clip != null && !busy && !exporting,
-                    onClick = { playing = !playing }) {
-                    Text(if (playing) "Pause" else "▶ Preview", color = EditorWhite)
-                }
-                TextButton(enabled = history.undo.isNotEmpty() && !busy && !exporting,
-                    onClick = {
-                        history.undo(document)?.let { (before, next) ->
-                            history = next; onDocument(before)
-                            selectedFrame = 0; playing = false
+            if (clip != null) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = ::selectVideo, enabled = !busy && !exporting) {
+                        Text("Change video", color = EditorWhite, fontSize = 12.sp)
+                    }
+                    TextButton(enabled = !busy && !exporting &&
+                        (clip.reverse || playerReady),
+                        onClick = {
+                            if (!playing && !clip.reverse) {
+                                val ms = GifVideoMath.frameTimesMs(clip)[selectedFrame
+                                    .coerceIn(0, GifVideoMath.frameCount(clip) - 1)]
+                                videoPlayer?.seekTo(ms.toInt())
+                            }
+                            playing = !playing
                         }
-                    }) { Text("Undo", color = EditorWhite) }
-                TextButton(enabled = history.redo.isNotEmpty() && !busy && !exporting,
-                    onClick = {
-                        history.redo(document)?.let { (after, next) ->
-                            history = next; onDocument(after)
-                            selectedFrame = 0; playing = false
+                    ) { Text(if (playing) "⏸ Pause" else "▶ Play video",
+                        color = EditorMint, fontSize = 13.sp) }
+                    Button(onClick = ::startExport, enabled = !busy && !exporting,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = EditorMint,
+                            contentColor = Color(0xFF0B1E18))) {
+                        Text("Save GIF", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+                if (lastExport != null) {
+                    TextButton(onClick = {
+                        val target = lastExport
+                        if (target != null) {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(target, "image/gif")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } catch (_: Exception) {
+                                notice = "The GIF is saved in Files. Open it with a GIF viewer."
+                            }
                         }
-                    }) { Text("Redo", color = EditorWhite) }
-                TextButton(enabled = clip != null && !busy && !exporting,
-                    onClick = ::startExport) {
-                    Text("Export GIF", color = EditorMint, fontWeight = FontWeight.Bold)
+                    }) {
+                        Text("View saved GIF", color = EditorMint,
+                            fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(enabled = history.undo.isNotEmpty() && !busy && !exporting,
+                        onClick = {
+                            history.undo(document)?.let { (before, next) ->
+                                playing = false
+                                history = next
+                                onDocument(before)
+                                selectedFrame = 0
+                            }
+                        }) { Text("Undo", color = EditorMuted, fontSize = 12.sp) }
+                    TextButton(enabled = history.redo.isNotEmpty() && !busy && !exporting,
+                        onClick = {
+                            history.redo(document)?.let { (after, next) ->
+                                playing = false
+                                history = next
+                                onDocument(after)
+                                selectedFrame = 0
+                            }
+                        }) { Text("Redo", color = EditorMuted, fontSize = 12.sp) }
+                    Text("GIF output: ${GifVideoMath.frameCount(clip)} frames · " +
+                        "${document.size.maxEdge}px · ${clip.fps} FPS",
+                        color = EditorMuted, fontSize = 11.sp)
                 }
             }
             if (notice.isNotBlank()) Text(notice, color = EditorMuted,
@@ -361,6 +456,7 @@ fun VideoGifScreen(
                                 val maxEnd = min(clip.durationMs, start + GifVideoMath.MAX_CLIP_MS)
                                 val end = clip.endMs.coerceIn(start + 500L, maxEnd)
                                 slide(document.copy(video = clip.copy(startMs = start, endMs = end)))
+                                videoPlayer?.seekTo(start.toInt())
                             },
                             onValueChangeFinished = ::finishSlide,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp)
@@ -374,8 +470,10 @@ fun VideoGifScreen(
                             enabled = !busy && !exporting && last > clip.startMs + 500L,
                             onValueChange = { next ->
                                 playing = false
-                                slide(document.copy(video = clip.copy(endMs = next.roundToLong()
-                                    .coerceIn(clip.startMs + 500L, last))))
+                                val end = next.roundToLong()
+                                    .coerceIn(clip.startMs + 500L, last)
+                                slide(document.copy(video = clip.copy(endMs = end)))
+                                videoPlayer?.seekTo((end - 1L).toInt())
                             },
                             onValueChangeFinished = ::finishSlide,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp)
@@ -387,12 +485,20 @@ fun VideoGifScreen(
                                 (GifVideoMath.frameCount(clip) - 1).toFloat()),
                             valueRange = 0f..(GifVideoMath.frameCount(clip) - 1).toFloat(),
                             enabled = !exporting && !busy,
-                            onValueChange = { playing = false; selectedFrame = it.toInt() },
+                            onValueChange = {
+                                playing = false
+                                selectedFrame = it.toInt()
+                                if (!clip.reverse) {
+                                    val times = GifVideoMath.frameTimesMs(clip)
+                                    videoPlayer?.seekTo(times[selectedFrame.coerceIn(
+                                        0, times.lastIndex)].toInt())
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 13.dp)
                         )
                     }
                     VideoGifTab.PLAYBACK -> {
-                        Text("Frame rate", color = EditorMuted, fontSize = 12.sp,
+                        Text("GIF frame rate (export)", color = EditorMuted, fontSize = 12.sp,
                             modifier = Modifier.padding(start = 15.dp))
                         Row(Modifier.horizontalScroll(rememberScrollState())
                             .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -403,7 +509,8 @@ fun VideoGifScreen(
                                 }
                             }
                         }
-                        Text("Playback speed", color = EditorMuted, fontSize = 12.sp,
+                        Text("Playback speed (video preview and GIF)", color = EditorMuted,
+                            fontSize = 12.sp,
                             modifier = Modifier.padding(start = 15.dp))
                         Row(Modifier.horizontalScroll(rememberScrollState())
                             .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -467,7 +574,7 @@ fun VideoGifScreen(
                                 askNew = true
                             }
                         }
-                        Text("GIFs have no audio. For a video with music, use the future video editor.",
+                        Text("Choose Save GIF above to export an animated GIF. GIF has no audio.",
                             color = EditorMuted, fontSize = 11.sp,
                             modifier = Modifier.padding(horizontal = 13.dp))
                     }

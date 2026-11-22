@@ -2,6 +2,8 @@ package com.greenezone.gzphotoeditor
 
 import android.content.ContentValues
 import android.graphics.Movie
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -46,6 +48,22 @@ class AndroidVideoGifDecodeTest {
                 assertTrue(frame.width > 0)
                 assertTrue(frame.height > 0)
             } finally { frame.recycle() }
+            val early = VideoGifSource.preview(context, clip, 150L, 320)
+            val late = VideoGifSource.preview(context, clip, 1_350L, 320)
+            try {
+                var changed = 0
+                val w = minOf(early.width, late.width)
+                val h = minOf(early.height, late.height)
+                for (y in 0 until h step 4) {
+                    for (x in 0 until w step 4) {
+                        if (early.getPixel(x,y) != late.getPixel(x,y)) changed++
+                    }
+                }
+                assertTrue("Video must supply genuinely different frames", changed > 5)
+            } finally {
+                early.recycle()
+                late.recycle()
+            }
             val doc = GifDocument(video = clip.copy(fps = 4), size = GifSize.SMALL)
             val out = ByteArrayOutputStream()
             var progress = 0
@@ -57,6 +75,23 @@ class AndroidVideoGifDecodeTest {
             val decoded = Movie.decodeByteArray(bytes, 0, bytes.size)
             assertNotNull("Native MP4 frames must produce a decodable GIF", decoded)
             assertTrue(decoded!!.duration() >= 1000)
+            val first = Bitmap.createBitmap(decoded.width(), decoded.height(),
+                Bitmap.Config.ARGB_8888)
+            val later = Bitmap.createBitmap(decoded.width(), decoded.height(),
+                Bitmap.Config.ARGB_8888)
+            try {
+                decoded.setTime(0)
+                decoded.draw(Canvas(first),0f,0f)
+                decoded.setTime(1_000)
+                decoded.draw(Canvas(later),0f,0f)
+                var differences = 0
+                for (y in 0 until first.height step 12) {
+                    for (x in 0 until first.width step 12) {
+                        if (first.getPixel(x,y) != later.getPixel(x,y)) differences++
+                    }
+                }
+                assertTrue("Exported GIF must have different visual frames",differences > 5)
+            } finally { first.recycle(); later.recycle() }
         } finally {
             if (uri != null) resolver.delete(uri, null, null)
         }

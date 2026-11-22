@@ -27,7 +27,12 @@ data class ProLayer(
     val visible: Boolean = true,
     val blend: ProBlend = ProBlend.NORMAL,
     val kind: ProLayerKind = ProLayerKind.IMAGE,
-    val aspect: Float = 1f
+    val aspect: Float = 1f,
+    val rotationDegrees: Float = 0f,
+    val mask: ProSelection? = null,
+    val retouches: List<ProRetouchMark> = emptyList(),
+    val effect: ProPixelEffect = ProPixelEffect.NONE,
+    val effectAmount: Float = .5f
 )
 data class ProDocument(
     val layers: List<ProLayer> = emptyList(),
@@ -67,7 +72,16 @@ object ProMath {
                     item.x.isFinite() && item.y.isFinite() && item.x in 0f..1f &&
                     item.y in 0f..1f && item.scale.isFinite() &&
                     item.scale in .1f..2f && item.opacity.isFinite() && item.opacity in 0f..1f &&
-                    item.aspect.isFinite() && item.aspect in .1f..10f
+                    item.aspect.isFinite() && item.aspect in .1f..10f &&
+                    item.rotationDegrees.isFinite() && item.rotationDegrees in -180f..180f &&
+                    (item.mask == null || (item.kind == ProLayerKind.IMAGE &&
+                        ProToolMath.valid(item.mask))) &&
+                    item.retouches.size <= ProToolMath.MAX_RETOUCH &&
+                    (item.retouches.isEmpty() || item.kind == ProLayerKind.IMAGE) &&
+                    item.retouches.all(ProToolMath::valid) &&
+                    item.effectAmount.isFinite() && item.effectAmount in 0f..1f &&
+                    (item.effect == ProPixelEffect.NONE ||
+                        item.kind == ProLayerKind.ADJUSTMENT)
             }
 
     fun dimensions(aspect: ProAspect, maxEdge: Int, maxPixels: Long): Pair<Int, Int> {
@@ -86,6 +100,35 @@ object ProMath {
         val x = layer.x.coerceIn(0f, 1f) * canvasW
         val y = layer.y.coerceIn(0f, 1f) * canvasH
         return ProRect(x - halfW, y - halfH, x + halfW, y + halfH)
+    }
+
+    /**
+     * Retouch points belong to the source image, not the output canvas.
+     * Undo scale/move/rotation before sampling; taps outside the image are rejected.
+     */
+    fun canvasToImageNormalized(
+        layer: ProLayer,
+        canvasWidth: Int,
+        canvasHeight: Int,
+        canvasPoint: BrushPoint
+    ): BrushPoint? {
+        if (layer.kind != ProLayerKind.IMAGE || canvasWidth <= 0 || canvasHeight <= 0)
+            return null
+        val iw = (1000f * layer.aspect).toInt().coerceAtLeast(1)
+        val rect = bounds(layer, canvasWidth, canvasHeight, iw, 1000)
+        val centerX = layer.x * canvasWidth
+        val centerY = layer.y * canvasHeight
+        val rx = canvasPoint.x * canvasWidth - centerX
+        val ry = canvasPoint.y * canvasHeight - centerY
+        val radians = -layer.rotationDegrees * kotlin.math.PI / 180.0
+        val cos = kotlin.math.cos(radians).toFloat()
+        val sin = kotlin.math.sin(radians).toFloat()
+        val x = centerX + rx * cos - ry * sin
+        val y = centerY + rx * sin + ry * cos
+        val u = (x - rect.left) / (rect.right - rect.left)
+        val v = (y - rect.top) / (rect.bottom - rect.top)
+        return if (u.isFinite() && v.isFinite() && u in 0f..1f && v in 0f..1f)
+            BrushPoint(u, v) else null
     }
 
     fun insert(document: ProDocument, layer: ProLayer): ProDocument? =
