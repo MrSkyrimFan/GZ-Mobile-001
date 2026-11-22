@@ -119,7 +119,8 @@ enum class CropRatio(val label: String, val ratio: Float?) {
     CLASSIC("3:2", 3f / 2f),
     PHOTO("4:3", 4f / 3f),
     WIDE("16:9", 16f / 9f),
-    CINEMA("21:9", 21f / 9f)
+    CINEMA("21:9", 21f / 9f),
+    FREE("Freeform", null)
 }
 
 data class EditDocument(
@@ -132,7 +133,9 @@ data class EditDocument(
     val cropCenterY: Float = .5f,
     val straightenDegrees: Float = 0f,
     val masks: List<LocalMask> = emptyList(),
-    val privacy: List<PrivacyEdit> = emptyList()
+    val privacy: List<PrivacyEdit> = emptyList(),
+    val cropFrame: CropFrame? = null,
+    val creative: CreativeDocument = CreativeDocument()
 )
 
 data class Look(val name: String, val grade: Grade)

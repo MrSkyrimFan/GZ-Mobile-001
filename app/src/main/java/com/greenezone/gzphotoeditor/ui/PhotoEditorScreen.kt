@@ -1,5 +1,6 @@
 package com.greenezone.gzphotoeditor.ui
 
+import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -61,6 +62,16 @@ import com.greenezone.gzphotoeditor.editor.AutoEnhanceMath
 import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.BrushStroke
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.CropFrame
+import com.greenezone.gzphotoeditor.editor.CropMath
+import com.greenezone.gzphotoeditor.editor.CropRatio
+import com.greenezone.gzphotoeditor.editor.ExportSettings
+import com.greenezone.gzphotoeditor.editor.ImageExportWriter
+import com.greenezone.gzphotoeditor.editor.ExportSizing
+import com.greenezone.gzphotoeditor.editor.InkMath
+import com.greenezone.gzphotoeditor.editor.InkStroke
+import com.greenezone.gzphotoeditor.editor.CreativeRaster
+import com.greenezone.gzphotoeditor.editor.TextOverlay
 import com.greenezone.gzphotoeditor.editor.EditHistory
 import com.greenezone.gzphotoeditor.editor.GeometryMath
 import com.greenezone.gzphotoeditor.editor.Grade
@@ -85,6 +96,8 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.Locale
 import kotlin.math.roundToInt
+
+private data class ExportRequest(val settings: ExportSettings, val edits: EditDocument)
 
 /**
  * Image-first editor. The image covers the entire canvas behind lightweight chrome.
@@ -122,7 +135,13 @@ fun PhotoEditorScreen() {
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var loadingToken by remember { mutableIntStateOf(0) }
-    var jpegQuality by remember { mutableIntStateOf(95) }
+    var exportSettings by remember { mutableStateOf(ExportSettings()) }
+    var pendingExport by remember { mutableStateOf<ExportRequest?>(null) }
+    var creativeTools by remember { mutableStateOf(CreativeToolState()) }
+    var currentInk by remember { mutableStateOf<InkStroke?>(null) }
+    var showTextDialog by remember { mutableStateOf(false) }
+    var textDraft by remember { mutableStateOf("") }
+    var editingTextIndex by remember { mutableIntStateOf(-1) }
 
     var showExport by remember { mutableStateOf(false) }
     var showSaveLook by remember { mutableStateOf(false) }
@@ -189,6 +208,9 @@ fun PhotoEditorScreen() {
                 selectedMask = 0
                 selectedPrivacy = 0
                 selectedTab = EditTab.LOOKS
+                creativeTools = CreativeToolState()
+                currentInk = null
+                showTextDialog = false
                 activeLook = if (restored == null) "none" else "custom"
                 chromeVisible = true
                 compare = false
@@ -209,50 +231,48 @@ fun PhotoEditorScreen() {
         }
     }
 
-    fun exportImage(output: Uri, format: Bitmap.CompressFormat, quality: Int) {
+    fun exportImage(output: Uri, request: ExportRequest) {
         val source = sourceUri ?: return
         if (source == output) {
             notice = "Export destination cannot overwrite the original."
             return
         }
-        val edits = document
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val maxPixels = GeometryMath.safeExportPixels(manager.memoryClass)
         scope.launch {
             exporting = true
             showExport = false
-            notice = "Exporting photo…"
+            notice = "Exporting image…"
             try {
                 val dimensions = withContext(Dispatchers.Default) {
                     var decoded: Bitmap? = null
                     var rendered: Bitmap? = null
-                    var flattened: Bitmap? = null
+                    var sized: Bitmap? = null
                     try {
-                        val full = ImagePipeline.decode(resolver, source, 12_000, maxPixels)
-                        decoded = full
-                        val result = ImagePipeline.render(full, edits) { ensureActive() }
-                        rendered = result
-                        val writeBitmap = if (format == Bitmap.CompressFormat.JPEG && result.hasAlpha()) {
-                            ImagePipeline.compositeWhite(result).also { flattened = it }
-                        } else result
-                        val done = withContext(Dispatchers.IO) {
+                        val originalFull = ImagePipeline.decode(resolver, source, 12_000, maxPixels)
+                        decoded = originalFull
+                        val full = ImagePipeline.render(originalFull, request.edits) { ensureActive() }
+                        rendered = full
+                        val photo = ExportSizing.layout(full, request.settings)
+                        sized = photo
+                        val written = withContext(Dispatchers.IO) {
                             resolver.openOutputStream(output, "wt")?.use { stream ->
-                                writeBitmap.compress(format, quality, stream)
-                            } ?: throw IOException("Save destination is inaccessible")
+                                ImageExportWriter.write(photo, request.settings, stream)
+                            } ?: throw IOException("Export destination unavailable")
                         }
-                        if (!done) throw IOException("Image encoder failed")
-                        writeBitmap.width.toString() + " × " + writeBitmap.height
+                        if (!written) throw IOException("Image encoder returned failure")
+                        photo.width.toString() + " × " + photo.height
                     } finally {
-                        flattened?.let { if (it !== rendered && !it.isRecycled) it.recycle() }
+                        sized?.let { if (it !== rendered && !it.isRecycled) it.recycle() }
                         rendered?.let { if (it !== decoded && !it.isRecycled) it.recycle() }
                         decoded?.let { if (!it.isRecycled) it.recycle() }
                     }
                 }
-                notice = "Saved " + dimensions + " • Original preserved"
+                notice = "Saved " + dimensions + " • Original unchanged"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: OutOfMemoryError) {
-                notice = "Not enough memory to export. Close other apps and retry."
+                notice = "Not enough memory to export. Choose a smaller size."
                 try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } catch (error: Exception) {
                 notice = "Export failed: " + (error.message ?: "unknown error")
@@ -262,6 +282,7 @@ fun PhotoEditorScreen() {
             }
         }
     }
+
 
     fun autoTone() {
         val bitmap = original ?: return
@@ -444,11 +465,29 @@ fun PhotoEditorScreen() {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
         if (it != null) loadPhoto(it)
     }
-    val jpeg = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/jpeg")) {
-        if (it != null) exportImage(it, Bitmap.CompressFormat.JPEG, jpegQuality)
+    val exporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val request = pendingExport
+        pendingExport = null
+        val output = result.data?.data
+        if (result.resultCode == Activity.RESULT_OK && output != null && request != null) {
+            exportImage(output, request)
+        }
     }
-    val png = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) {
-        if (it != null) exportImage(it, Bitmap.CompressFormat.PNG, 100)
+    fun requestExport() {
+        val settings = exportSettings
+        pendingExport = ExportRequest(settings, document)
+        showExport = false
+        val suffix = settings.format.extension
+        val target = if (settings.preset == com.greenezone.gzphotoeditor.editor.SocialPreset.ORIGINAL)
+            "GZEditorPro_Edit" else "GZEditorPro_" + settings.preset.name
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = settings.format.mime
+            putExtra(Intent.EXTRA_TITLE, target + "." + suffix)
+        }
+        exporter.launch(intent)
     }
     fun openPicker() {
         if (!busy && !exporting) {
@@ -469,6 +508,107 @@ fun PhotoEditorScreen() {
         showProjects = true
     }
 
+    fun startInk(point: BrushPoint) {
+        if (selectedTab != EditTab.DRAW) return
+        if (!creativeTools.erase &&
+            document.creative.strokes.size >= CreativeRaster.MAX_INK) {
+            notice = "Drawing layer limit reached. Clear some strokes first."
+            return
+        }
+        gestureStart = document
+        painting = true
+        if (creativeTools.erase) {
+            val erased = InkMath.erase(document.creative.strokes, point.x, point.y,
+                creativeTools.inkThickness)
+            document = document.copy(creative = document.creative.copy(strokes = erased))
+        } else {
+            currentInk = InkStroke(listOf(point), creativeTools.inkColor,
+                creativeTools.inkThickness, creativeTools.inkOpacity)
+        }
+    }
+
+    fun continueInk(point: BrushPoint) {
+        if (!painting || selectedTab != EditTab.DRAW) return
+        if (creativeTools.erase) {
+            val erased = InkMath.erase(document.creative.strokes, point.x, point.y,
+                creativeTools.inkThickness)
+            if (erased.size <= CreativeRaster.MAX_INK) {
+                document = document.copy(creative = document.creative.copy(strokes = erased))
+            }
+        } else {
+            val ink = currentInk ?: return
+            if (ink.points.size >= 500) return
+            val last = ink.points.last()
+            val dx = last.x - point.x
+            val dy = last.y - point.y
+            if (dx * dx + dy * dy >= .000008f) {
+                currentInk = ink.copy(points = ink.points + point)
+            }
+        }
+    }
+
+    fun finishInk() {
+        if (selectedTab == EditTab.DRAW && !creativeTools.erase) {
+            val ink = currentInk
+            if (ink != null && ink.points.isNotEmpty()) {
+                document = document.copy(creative = document.creative.copy(
+                    strokes = document.creative.strokes + ink
+                ))
+            }
+        }
+        currentInk = null
+        painting = false
+        finishSlide()
+    }
+
+    fun editWords(newLayer: Boolean) {
+        if (!newLayer && document.creative.text.getOrNull(creativeTools.textIndex) == null) return
+        editingTextIndex = if (newLayer) -1 else creativeTools.textIndex
+        textDraft = if (newLayer) "" else document.creative.text[editingTextIndex].content
+        showTextDialog = true
+    }
+
+    fun saveWords() {
+        val text = textDraft.trim().take(500)
+        if (text.isBlank()) return
+        val layers = document.creative.text.toMutableList()
+        if (editingTextIndex >= 0 && editingTextIndex in layers.indices) {
+            layers[editingTextIndex] = layers[editingTextIndex].copy(content = text)
+            creativeTools = creativeTools.copy(textIndex = editingTextIndex)
+        } else if (layers.size < CreativeRaster.MAX_TEXT) {
+            layers.add(TextOverlay(content = text))
+            creativeTools = creativeTools.copy(textIndex = layers.lastIndex)
+        } else {
+            notice = "Maximum number of text objects reached."
+            return
+        }
+        commit(document.copy(creative = document.creative.copy(text = layers)))
+        showTextDialog = false
+    }
+
+    fun moveCreative(x: Float, y: Float, w: Float, h: Float) {
+        if (selectedTab == EditTab.TEXT) {
+            val index = creativeTools.textIndex
+            val layer = document.creative.text.getOrNull(index) ?: return
+            val copy = document.creative.text.toMutableList()
+            copy[index] = layer.copy(x = x, y = y, width = w, height = h)
+            slide(document.copy(creative = document.creative.copy(text = copy)))
+        } else if (selectedTab == EditTab.SHAPES) {
+            val index = creativeTools.shapeIndex
+            val layer = document.creative.shapes.getOrNull(index) ?: return
+            val copy = document.creative.shapes.toMutableList()
+            copy[index] = layer.copy(x = x, y = y, width = w, height = h)
+            slide(document.copy(creative = document.creative.copy(shapes = copy)))
+        }
+    }
+
+    fun moveCrop(frame: CropFrame) {
+        slide(document.copy(
+            crop = if (document.crop == CropRatio.ORIGINAL) CropRatio.FREE else document.crop,
+            cropFrame = frame
+        ))
+    }
+
     LaunchedEffect(original) {
         val input = original ?: run { quickSource = null; return@LaunchedEffect }
         val small = withContext(Dispatchers.Default) {
@@ -481,16 +621,18 @@ fun PhotoEditorScreen() {
         quickSource = small
     }
 
-    LaunchedEffect(original, document, liveGesture, quickSource, painting) {
+    LaunchedEffect(original, document, liveGesture, quickSource, painting, selectedTab) {
         val input = original ?: run { processed = null; return@LaunchedEffect }
         if (painting) return@LaunchedEffect
+        val imageDocument = if (selectedTab == EditTab.CROP)
+            document.copy(crop = CropRatio.ORIGINAL, cropFrame = null) else document
         delay(if (liveGesture) 20L else 45L)
         try {
             val fast = quickSource
             if (fast != null && fast !== input) {
                 val preview = withContext(Dispatchers.Default) {
                     val running = currentCoroutineContext()
-                    ImagePipeline.render(fast, document) { running.ensureActive() }
+                    ImagePipeline.render(fast, imageDocument) { running.ensureActive() }
                 }
                 processed = preview
             }
@@ -498,7 +640,7 @@ fun PhotoEditorScreen() {
                 if (fast != null && fast !== input) delay(140L)
                 val quality = withContext(Dispatchers.Default) {
                     val running = currentCoroutineContext()
-                    ImagePipeline.render(input, document) { running.ensureActive() }
+                    ImagePipeline.render(input, imageDocument) { running.ensureActive() }
                 }
                 processed = quality
             }
@@ -511,12 +653,13 @@ fun PhotoEditorScreen() {
 
     // Keep before/after geometry identical; compute outside the UI thread.
     LaunchedEffect(original, document.quarterTurns, document.mirrored,
-        document.flipVertical, document.crop, document.cropCenterX,
-        document.cropCenterY, document.straightenDegrees) {
+        document.flipVertical, document.crop, document.cropFrame, document.cropCenterX,
+        document.cropCenterY, document.straightenDegrees, selectedTab) {
         val input = original ?: run { beforeImage = null; return@LaunchedEffect }
         try {
             val result = withContext(Dispatchers.Default) {
-                ImagePipeline.geometry(input, document)
+                ImagePipeline.geometry(input, if (selectedTab == EditTab.CROP)
+                    document.copy(crop = CropRatio.ORIGINAL, cropFrame = null) else document)
             }
             beforeImage = result
         } catch (cancelled: CancellationException) {
@@ -559,6 +702,14 @@ fun PhotoEditorScreen() {
     }
 
     val selectedImage = if (compare) beforeImage ?: original else processed ?: original
+    val cropEditing = selectedTab == EditTab.CROP && !compare && !busy && !exporting &&
+        zoom <= 1.001f
+    val textEditing = selectedTab == EditTab.TEXT && !compare && !busy && !exporting &&
+        zoom <= 1.001f && document.creative.text.getOrNull(creativeTools.textIndex) != null
+    val shapeEditing = selectedTab == EditTab.SHAPES && !compare && !busy && !exporting &&
+        zoom <= 1.001f && document.creative.shapes.getOrNull(creativeTools.shapeIndex) != null
+    val drawingActive = selectedTab == EditTab.DRAW && !compare && !busy && !exporting &&
+        zoom <= 1.001f
     val activePrivacy = document.privacy.getOrNull(selectedPrivacy)
     val maskBrushActive = selectedTab == EditTab.MASKS &&
         document.masks.getOrNull(selectedMask)?.kind == MaskKind.BRUSH
@@ -591,7 +742,8 @@ fun PhotoEditorScreen() {
                     }
                     .pointerInput(selectedImage, brushSelected) {
                         detectTransformGestures { _, pan, pinch, _ ->
-                            if (!brushSelected) {
+                            if (!brushSelected && !cropEditing && !textEditing &&
+                                !shapeEditing && !drawingActive) {
                                 zoom = (zoom * pinch).coerceIn(1f, 6f)
                                 val maxX = size.width * (zoom - 1f) / 2f
                                 val maxY = size.height * (zoom - 1f) / 2f
@@ -642,6 +794,57 @@ fun PhotoEditorScreen() {
                     onTap = { chromeVisible = !chromeVisible }
                 )
             }
+            if (cropEditing) {
+                CropFrameOverlay(
+                    imageWidth = selectedImage.width,
+                    imageHeight = selectedImage.height,
+                    frame = document.cropFrame ?: CropMath.initial(
+                        selectedImage.width, selectedImage.height, document.crop
+                    ),
+                    aspectRatio = document.crop.ratio,
+                    showGuides = chromeVisible,
+                    onChange = ::moveCrop,
+                    onFinished = ::finishSlide,
+                    onTap = { chromeVisible = !chromeVisible }
+                )
+            }
+            if (textEditing) {
+                val layer = document.creative.text.getOrNull(creativeTools.textIndex)
+                if (layer != null) EditableObjectOverlay(
+                    imageWidth = selectedImage.width,
+                    imageHeight = selectedImage.height,
+                    centerX = layer.x, centerY = layer.y,
+                    width = layer.width, height = layer.height,
+                    showGuides = chromeVisible,
+                    onChanged = ::moveCreative,
+                    onFinished = ::finishSlide,
+                    onTap = { chromeVisible = !chromeVisible }
+                )
+            }
+            if (shapeEditing) {
+                val layer = document.creative.shapes.getOrNull(creativeTools.shapeIndex)
+                if (layer != null) EditableObjectOverlay(
+                    imageWidth = selectedImage.width,
+                    imageHeight = selectedImage.height,
+                    centerX = layer.x, centerY = layer.y,
+                    width = layer.width, height = layer.height,
+                    showGuides = chromeVisible,
+                    onChanged = ::moveCreative,
+                    onFinished = ::finishSlide,
+                    onTap = { chromeVisible = !chromeVisible }
+                )
+            }
+            if (drawingActive) {
+                DrawTouchOverlay(
+                    imageWidth = selectedImage.width,
+                    imageHeight = selectedImage.height,
+                    ink = currentInk,
+                    onStart = ::startInk,
+                    onMove = ::continueInk,
+                    onFinish = ::finishInk,
+                    onTap = { chromeVisible = !chromeVisible }
+                )
+            }
         } else {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -678,55 +881,57 @@ fun PhotoEditorScreen() {
                     .padding(start = 11.dp, end = 7.dp, top = 3.dp, bottom = 12.dp)
             ) {
                 Row(
-                    Modifier.fillMaxWidth().height(52.dp),
+                    Modifier.fillMaxWidth().height(39.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Text("GZ Editor Pro", color = EditorWhite,
+                        fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    TextButton(
+                        onClick = { showExport = true },
+                        enabled = !busy && !exporting
                     ) {
-                        TextButton(
-                            onClick = ::openPicker,
-                            enabled = !busy && !exporting
-                        ) { Text("Open media", color = EditorWhite, fontSize = 13.sp) }
-                        IconButton(
-                            modifier = Modifier.size(42.dp).semantics { contentDescription = "Undo" },
-                            onClick = {
-                                history.undo(document)?.let { (previous, changes) ->
-                                    document = previous
-                                    history = changes
-                                    activeLook = "custom"
-                                }
-                            },
-                            enabled = history.undo.isNotEmpty() && !busy && !exporting
-                        ) { Text("↶", color = EditorWhite, fontSize = 27.sp) }
-                        IconButton(
-                            modifier = Modifier.size(42.dp).semantics { contentDescription = "Redo" },
-                            onClick = {
-                                history.redo(document)?.let { (next, changes) ->
-                                    document = next
-                                    history = changes
-                                    activeLook = "custom"
-                                }
-                            },
-                            enabled = history.redo.isNotEmpty() && !busy && !exporting
-                        ) { Text("↷", color = EditorWhite, fontSize = 27.sp) }
-                        TextButton(
-                            onClick = { compare = !compare },
-                            enabled = original != null && !busy && !exporting
-                        ) {
-                            Text(if (compare) "Edited" else "Before",
-                                color = EditorWhite, fontSize = 12.sp)
-                        }
-                        TextButton(
-                            onClick = { showExport = true },
-                            enabled = original != null && !busy && !exporting
-                        ) {
-                            Text("Export", color = EditorMint, fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp)
-                        }
+                        Text("Export", color = EditorMint,
+                            fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().height(42.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(
+                        onClick = ::openPicker,
+                        enabled = !busy && !exporting
+                    ) { Text("Open media", color = EditorWhite, fontSize = 13.sp) }
+                    IconButton(
+                        modifier = Modifier.size(42.dp).semantics { contentDescription = "Undo" },
+                        onClick = {
+                            history.undo(document)?.let { (previous, changes) ->
+                                document = previous
+                                history = changes
+                                activeLook = "custom"
+                            }
+                        },
+                        enabled = history.undo.isNotEmpty() && !busy && !exporting
+                    ) { Text("↶", color = EditorWhite, fontSize = 27.sp) }
+                    IconButton(
+                        modifier = Modifier.size(42.dp).semantics { contentDescription = "Redo" },
+                        onClick = {
+                            history.redo(document)?.let { (next, changes) ->
+                                document = next
+                                history = changes
+                                activeLook = "custom"
+                            }
+                        },
+                        enabled = history.redo.isNotEmpty() && !busy && !exporting
+                    ) { Text("↷", color = EditorWhite, fontSize = 27.sp) }
+                    TextButton(
+                        onClick = { compare = !compare },
+                        enabled = !busy && !exporting
+                    ) {
+                        Text(if (compare) "Edited" else "Before",
+                            color = EditorWhite, fontSize = 12.sp)
                     }
                 }
                 if (notice.isNotEmpty()) {
@@ -765,7 +970,9 @@ fun PhotoEditorScreen() {
                         tab = selectedTab,
                         onTab = {
                             selectedTab = it
-                            if (it == EditTab.MASKS || it == EditTab.PRIVACY) {
+                            if (it == EditTab.MASKS || it == EditTab.PRIVACY ||
+                                it == EditTab.TEXT || it == EditTab.DRAW ||
+                                it == EditTab.SHAPES || it == EditTab.CROP) {
                                 zoom = 1f; panX = 0f; panY = 0f
                             }
                         },
@@ -799,7 +1006,15 @@ fun PhotoEditorScreen() {
                         onSaveLook = ::saveLook,
                         onSaveProject = ::saveProject,
                         onProjects = ::openProjects,
-                        onOpen = ::openPicker
+                        onOpen = ::openPicker,
+                        creativeTool = creativeTools,
+                        onCreativeTool = { creativeTools = it },
+                        onNewText = { editWords(true) },
+                        onEditText = { editWords(false) },
+                        cropImageWidth = if (document.quarterTurns % 2 == 0)
+                            original.width else original.height,
+                        cropImageHeight = if (document.quarterTurns % 2 == 0)
+                            original.height else original.width
                     )
                 }
             }
@@ -825,17 +1040,18 @@ fun PhotoEditorScreen() {
 
     if (showExport) {
         ExportDialog(
-            jpegQuality = jpegQuality,
-            onQuality = { jpegQuality = it },
-            onJpeg = {
-                showExport = false
-                jpeg.launch("GZEditorPro_Edit.jpg")
-            },
-            onPng = {
-                showExport = false
-                png.launch("GZEditorPro_Edit.png")
-            },
+            settings = exportSettings,
+            onSettings = { exportSettings = it },
+            onSave = ::requestExport,
             onDismiss = { showExport = false }
+        )
+    }
+    if (showTextDialog) {
+        TextEditDialog(
+            content = textDraft,
+            onContent = { textDraft = it },
+            onSave = ::saveWords,
+            onDismiss = { showTextDialog = false }
         )
     }
     if (showSaveLook) {

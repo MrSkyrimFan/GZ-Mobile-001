@@ -57,6 +57,8 @@ import com.greenezone.gzphotoeditor.editor.ColorBand
 import com.greenezone.gzphotoeditor.editor.Control
 import com.greenezone.gzphotoeditor.editor.ControlCatalog
 import com.greenezone.gzphotoeditor.editor.CropRatio
+import com.greenezone.gzphotoeditor.editor.CropMath
+import com.greenezone.gzphotoeditor.editor.CropFrame
 import com.greenezone.gzphotoeditor.editor.CurveChannel
 import com.greenezone.gzphotoeditor.editor.CurveMath
 import com.greenezone.gzphotoeditor.editor.CurvePoints
@@ -88,6 +90,9 @@ enum class EditTab(val title: String) {
     CURVES("Curves"),
     MASKS("Masks"),
     PRIVACY("Blur & cover"),
+    TEXT("Text"),
+    DRAW("Draw"),
+    SHAPES("Shapes"),
     CROP("Crop"),
     MORE("More")
 }
@@ -127,7 +132,13 @@ fun EditorDock(
     onSaveLook: () -> Unit,
     onSaveProject: () -> Unit,
     onProjects: () -> Unit,
-    onOpen: () -> Unit
+    onOpen: () -> Unit,
+    creativeTool: CreativeToolState = CreativeToolState(),
+    onCreativeTool: (CreativeToolState) -> Unit = {},
+    onNewText: () -> Unit = {},
+    onEditText: () -> Unit = {},
+    cropImageWidth: Int = 1,
+    cropImageHeight: Int = 1
 ) {
     Column(
         modifier = Modifier
@@ -158,7 +169,21 @@ fun EditorDock(
                 onDeletePrivacy, onUndoPrivacyStroke, onClearPrivacy,
                 onCommit, onSlide, onSlideFinished
             )
-            EditTab.CROP -> CropDeck(document, !busy, onCommit, onSlide, onSlideFinished)
+            EditTab.TEXT -> TextDeck(
+                document, creativeTool, onCreativeTool, !busy, onNewText, onEditText,
+                onCommit, onSlide, onSlideFinished
+            )
+            EditTab.DRAW -> DrawDeck(
+                document, creativeTool, onCreativeTool, !busy, onCommit
+            )
+            EditTab.SHAPES -> ShapesDeck(
+                document, creativeTool, onCreativeTool, !busy,
+                onCommit, onSlide, onSlideFinished
+            )
+            EditTab.CROP -> CropDeck(
+                document, !busy, onCommit, onSlide, onSlideFinished,
+                cropImageWidth, cropImageHeight
+            )
             EditTab.MORE -> MoreDeck(
                 !busy, onAutoTone, onAutoWB, onSaveLook, onSaveProject, onProjects, onOpen,
                 onCommit, document
@@ -593,25 +618,38 @@ private fun CropDeck(
     enabled: Boolean,
     onCommit: (EditDocument) -> Unit,
     onSlide: (EditDocument) -> Unit,
-    onFinished: () -> Unit
+    onFinished: () -> Unit,
+    imageWidth: Int,
+    imageHeight: Int
 ) {
-    var tool by remember { mutableIntStateOf(0) }
     LazyRow(
         modifier = Modifier.fillMaxWidth().height(44.dp),
         contentPadding = PaddingValues(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         item { DockChip("Rotate left", false, enabled) {
-            onCommit(document.copy(quarterTurns = (document.quarterTurns + 3) % 4))
+            val quarter = (document.quarterTurns + 3) % 4
+            onCommit(document.copy(quarterTurns = quarter,
+                cropFrame = if (document.cropFrame != null)
+                    CropMath.initial(imageHeight, imageWidth, document.crop)
+                    else null))
         } }
         item { DockChip("Rotate right", false, enabled) {
-            onCommit(document.copy(quarterTurns = (document.quarterTurns + 1) % 4))
+            val quarter = (document.quarterTurns + 1) % 4
+            onCommit(document.copy(quarterTurns = quarter,
+                cropFrame = if (document.cropFrame != null)
+                    CropMath.initial(imageHeight, imageWidth, document.crop)
+                    else null))
         } }
         item { DockChip("Flip horizontal", document.mirrored, enabled) {
             onCommit(document.copy(mirrored = !document.mirrored))
         } }
         item { DockChip("Flip vertical", document.flipVertical, enabled) {
             onCommit(document.copy(flipVertical = !document.flipVertical))
+        } }
+        item { DockChip("Reset crop", false, enabled) {
+            onCommit(document.copy(crop = CropRatio.ORIGINAL, cropFrame = null,
+                cropCenterX = .5f, cropCenterY = .5f, straightenDegrees = 0f))
         } }
     }
     LazyRow(
@@ -621,48 +659,34 @@ private fun CropDeck(
     ) {
         items(CropRatio.entries) { ratio ->
             DockChip(ratio.label, document.crop == ratio, enabled) {
-                onCommit(document.copy(crop = ratio))
+                val frame = when (ratio) {
+                    CropRatio.ORIGINAL -> null
+                    CropRatio.FREE -> CropFrame(.08f, .08f, .92f, .92f)
+                    else -> CropMath.initial(imageWidth.coerceAtLeast(1),
+                        imageHeight.coerceAtLeast(1), ratio)
+                }
+                onCommit(document.copy(crop = ratio, cropFrame = frame,
+                    cropCenterX = .5f, cropCenterY = .5f))
             }
         }
     }
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        listOf("Straighten", "Move X", "Move Y").forEachIndexed { index, item ->
-            DockChip(item, tool == index, enabled) { tool = index }
-        }
-    }
-    val value = when (tool) {
-        1 -> document.cropCenterX
-        2 -> document.cropCenterY
-        else -> document.straightenDegrees
-    }
+    Text(
+        "Drag inside to move. Drag the corner dots to resize.",
+        color = EditorMuted, fontSize = 12.sp,
+        modifier = Modifier.padding(horizontal = 13.dp)
+    )
     SingleAdjustment(
-        title = listOf("Straighten", "Reframe horizontal", "Reframe vertical")[tool],
-        value = value,
-        low = if (tool == 0) -15f else 0f,
-        high = if (tool == 0) 15f else 1f,
+        title = "Straighten",
+        value = document.straightenDegrees,
+        low = -15f,
+        high = 15f,
         enabled = enabled,
-        valueSuffix = if (tool == 0) "°" else "",
-        onReset = {
-            onCommit(when (tool) {
-                1 -> document.copy(cropCenterX = .5f)
-                2 -> document.copy(cropCenterY = .5f)
-                else -> document.copy(straightenDegrees = 0f)
-            })
-        },
-        onChange = {
-            onSlide(when (tool) {
-                1 -> document.copy(cropCenterX = it)
-                2 -> document.copy(cropCenterY = it)
-                else -> document.copy(straightenDegrees = it)
-            })
-        },
+        valueSuffix = "°",
+        onReset = { onCommit(document.copy(straightenDegrees = 0f)) },
+        onChange = { onSlide(document.copy(straightenDegrees = it)) },
         onFinished = onFinished
     )
 }
-
 @Composable
 private fun MoreDeck(
     enabled: Boolean,

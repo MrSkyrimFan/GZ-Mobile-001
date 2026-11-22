@@ -1,25 +1,26 @@
-# GZ Editor Pro 0.6.0 engineering specification
+# GZ Editor Pro 0.7 integrated creative/export wave
 
-**Owner approval (2026-11-21):** Rename to **GZ Editor Pro**, remove all marketing slogans, replace Open photo with Open media, display only © 2026 Greenezone Software LLC bottom left on empty main screen. Preserve no ads, runtime AI, accounts or watermarks.
+## Owner decisions and field evidence
+- Preserve the user-approved photo-first dark UI and existing editing functions. Do not restructure Looks, Light, Color, Masks, Blur & cover or move buttons gratuitously.
+- Restore full **GZ Editor Pro** top-left title; keep company `© 2026 Greenezone Software LLC` bottom-left on empty main screen.
+- Add flexible typography with multiple fonts and editable width/height; drawing and shapes; manual crop handles/freeform; export file-format dropdown separate from destination-platform dropdown.
+- Existing screenshots demonstrated that the privacy tools, uncropped photo canvas and Reset were now useful. Do not regress those.
+- User requests one large coherent engineering batch and **one** Android phone verification, not countless little pushes.
 
-## Field evidence and UX
-Five actual Android screenshots show clipped Reset on Effects and Mask brushes, large brush-control dock hiding the area being painted, and green brush guide overlay separate from the real dark brush result. The existing full-image canvas and toggle are retained, but the **selected brush/rectangle must remain interactive after hiding chrome**. All tool lists must stay horizontally scrollable, with one active adjustable control at a time.
+## Engine / document changes
+`CreativeModel.kt`, `CreativeRaster.kt`, `InkMath.kt`, `CropMath.kt`, `ImageExportWriter.kt`, `CreativeCanvasOverlays.kt`, `CreativeDecks.kt`, edit/codec/render/UI integration and automated tests.
 
-## Major feature wave
-1. Brand update in launcher, main screen and workflow. Preserve existing applicationId for compatibility; increment version 6, name 0.6.0. Only the official empty/main page shows company copyright.
-2. 50 different built-in Looks, with previous 12 kept at the front, allowing selecting None first. Preview thumbnails are generated from imported photo in the background.
-3. Dedicated Blur & cover tab. Each operation stored as versioned, bounded non-destructive edit data in `EditDocument.privacy`. Each can be undone/redone and reopened in a saved project.
-4. Black bar and solid covers paint **opaque** pixels into the final export. Blur and pixelation are soft/cosmetic, cannot guarantee concealment. Paintable blur and black cover use bounded spatial mask paths.
-5. Privacy rects can be repositioned by direct photo drag. Brushes remain active when editing chrome is hidden; brush guide display is independent of paint availability.
-6. Current exposure, HSL, grading, curves, crop, brush masks, snapshots, project files, and no-network/export guarantees remain.
-7. Fix the Reset row dimensions and horizontal layout. Use two-stage preview to improve perceived responsiveness; full-resolution preview and export always use the same source-rendering implementation, but spatial detail can differ due to scaling.
-8. Source image and URI cannot be overwritten intentionally; export creates new PNG/JPEG, no watermark or captions are burned into output.
+Text, ink and shapes remain editable data in `EditDocument.creative`, with bounds and colors encoded in the existing version-1 keyed local project format. Free crop is `CropFrame` normalized on the oriented/straightened photo; legacy crop center settings continue to load for previously created projects. Main render draws pixel adjustments, privacy operations, then creative overlays, preserving source image. Export sizes are composed **after** all edits on the rendered copy.
 
-## Tests and release gate
-- JVM tests for privacy geometry, deterministic codec, bounded operation counts, and backwards compatibility with older version-1 projects.
-- Android emulator bitmap tests verify opaque black pixel output (including JPEG), outside-region preservation, blur/pixelation and brush output.
-- Compose tests cover main screen text, navigation, Reset visibility, and privacy tool access.
-- Branch + PR build, emulator and merged-main CI required before user gets the v0.6 test APK. One combined phone session tests all major systems.
-- Formal color fidelity, multiple Android phones, low-memory exports, different color profiles, accessibility, signing, privacy policy and Google Play eligibility remain commercial release gates.
+## Export behavior
+File formats: JPEG, PNG, WebP lossy, WebP lossless, BMP 24-bit RGB, TIFF uncompressed RGB 8-bit, PDF one page. Browser/Gallery preview support for BMP/TIFF is not universal. JPEG/BMP/TIFF/PDF flatten transparency to white. Quality only for lossy formats or WebP lossless compression effort. WebP lossless on Android 10 uses the documented legacy 100-quality format.
 
-**Not implemented:** video editing despite the neutral Open media label; RAW/16-bit, healing, content aware fill, GPU tiled renderer, batch editing, legal trademark clearance. No claims of professional final parity.
+Social presets: original, Instagram square/portrait/story/reel cover, Facebook square/landscape/story, TikTok photo 9:16, YouTube HD/4K thumbnail, Pinterest pin, LinkedIn square, X landscape, Snapchat story. Fit pads to exact canvas size and preserves all content, Fill crops edges and fills full canvas. No automatic posting, uploader, network or API.
+
+## Verification levels
+- Separate pure Kotlin and Android emulator tests, including crop geometry and corner ratio, codec legacy/snapshot roundtrip, text fonts and raster pixels, shapes and ink, export format signatures, social exact target size, alpha behavior.
+- PR CI, merge verified SHA, merged-main CI and exact APK artifact.
+- One field session on Samsung with short steps for text editing, brush and eraser, shape placement, drag crop, export dropdowns and existing privacy control regression.
+- Commercial release still blocked by real-device UX/memory/color, legal/privacy/trademark, Play compliance and production signed AAB.
+
+**No external website or project changes.**
