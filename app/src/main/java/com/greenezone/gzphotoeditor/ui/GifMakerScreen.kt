@@ -120,7 +120,7 @@ fun GifMakerScreen(
         }
     }
 
-    BackHandler { onBack() }
+    BackHandler { if (!exporting) onBack() }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(GifMath.MAX_FRAMES)
     ) { add(it) }
@@ -151,6 +151,7 @@ fun GifMakerScreen(
                 }
                 notice = "GIF exported · " + saved.frames.size + " frames · no watermark"
             } catch (cancelled: CancellationException) {
+                try { resolver.delete(uri, null, null) } catch (_: Exception) {}
                 throw cancelled
             } catch (_: OutOfMemoryError) {
                 notice = "Not enough memory to encode GIF. Choose a smaller size."
@@ -264,6 +265,10 @@ fun GifMakerScreen(
                     } }) { Text("Redo", color = EditorWhite) }
                 TextButton(enabled = !exporting && document.frames.size < 20,
                     onClick = ::importPhotos) { Text("+ Photos", color = EditorMint) }
+                TextButton(enabled = !exporting,
+                    onClick = { savedNames = GifStore.names(context); projectsOpen = true }) {
+                    Text("Open saved", color = EditorWhite)
+                }
                 TextButton(enabled = GifMath.valid(document) && !exporting,
                     onClick = ::startExport) { Text("Export GIF", color = EditorMint) }
             }

@@ -101,6 +101,7 @@ fun ProWorkspaceScreen(
     var history by remember { mutableStateOf(ProHistory()) }
     var sliderStart by remember { mutableStateOf<ProDocument?>(null) }
     var editing by remember { mutableIntStateOf(-1) }
+    var replacing by remember { mutableIntStateOf(-1) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var rendering by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
@@ -171,7 +172,24 @@ fun ProWorkspaceScreen(
         return
     }
 
-    BackHandler { onBack() }
+    BackHandler { if (!exporting) onBack() }
+    val replacePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        val i = replacing
+        replacing = -1
+        if (uri != null && i in document.layers.indices) {
+            try {
+                resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: SecurityException) {}
+            commit(document.copy(layers = document.layers.toMutableList().apply {
+                this[i] = this[i].copy(uri = uri.toString(),
+                    edits = com.greenezone.gzphotoeditor.editor.EditDocument())
+            }))
+            selected = i
+            notice = "Image replaced; layer position kept and photo edits reset."
+        }
+    }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(ProMath.MAX_LAYERS)
     ) { addPhotos(it) }
@@ -216,6 +234,7 @@ fun ProWorkspaceScreen(
                 }
                 notice = "Saved " + writtenSize + " · Original photos unchanged"
             } catch (cancelled: CancellationException) {
+                try { resolver.delete(uri, null, null) } catch (_: Exception) {}
                 throw cancelled
             } catch (_: OutOfMemoryError) {
                 notice = "Insufficient device memory for export."
@@ -352,6 +371,14 @@ fun ProWorkspaceScreen(
                             TextButton(enabled = layer != null && !exporting,
                                 onClick = { editing = selected }) {
                                 Text("Edit layer", color = EditorMint)
+                            }
+                            TextButton(enabled = layer != null && !exporting,
+                                onClick = {
+                                    replacing = selected
+                                    replacePicker.launch(PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                }) {
+                                Text("Replace", color = EditorWhite)
                             }
                             TextButton(enabled = layer != null && !exporting,
                                 onClick = { editSelected({ it.copy(visible = !it.visible) }) }) {
