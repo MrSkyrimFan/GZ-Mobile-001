@@ -135,6 +135,7 @@ fun EditorDock(
     onOpen: () -> Unit,
     onCollage: () -> Unit = {},
     showCollage: Boolean = true,
+    compact: Boolean = false,
     creativeTool: CreativeToolState = CreativeToolState(),
     onCreativeTool: (CreativeToolState) -> Unit = {},
     onNewText: () -> Unit = {},
@@ -197,7 +198,9 @@ fun EditorDock(
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             modifier = Modifier.fillMaxWidth().height(47.dp)
         ) {
-            items(EditTab.entries) { item ->
+            items(if (compact) listOf(EditTab.LOOKS, EditTab.LIGHT, EditTab.COLOR,
+                EditTab.DETAIL, EditTab.EFFECTS, EditTab.PRIVACY,
+                EditTab.CROP, EditTab.MORE) else EditTab.entries) { item ->
                 DockChip(
                     title = item.title,
                     selected = tab == item,
