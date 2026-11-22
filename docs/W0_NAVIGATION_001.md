@@ -1,6 +1,6 @@
 # W0 navigation correction 001
 
-Status: implementation candidate on `feature/w0-system-back-navigation`; CI and physical-device qualification are not yet credited.
+Status: implementation candidate on `feature/w0-system-back-navigation`. Implementation head `3a40059ae7bf8faa7a1de88b80f393bed2073e37` passed exact-head automated CI in run `#191` (`45080614667`), and both emulator XML receipts were inspected. Physical-device qualification and final acceptance remain open.
 
 Baseline: `main` at `1b995e8987ae96a841bf56dd22910deb784af054` (tree `026267872f3f1a98fa840effde4357378334a47e`).
 
@@ -64,6 +64,21 @@ The Android API 29 and API 35 suites must exercise a real system Back event and 
 - saving an independent Regular project does not make a dirty embedded tile clean, and Discard still leaves the parent unchanged.
 
 The complete pre-existing instrumentation suite remains required. With sixteen added Android tests, the expected suite count is 98 per emulator if no existing test is removed or skipped. The exact XML case list, failures, errors and skips must be inspected at the tested commit.
+
+## Recorded automated evidence
+
+Implementation head `3a40059ae7bf8faa7a1de88b80f393bed2073e37` passed GitHub Actions run `#191` (`45080614667`).
+
+- `verify` job `137387723540`: passed.
+- Android API 29 job `137387723330`: 98 tests, 0 failures, 0 errors and 0 skipped.
+- Android API 35 job `137387723574`: 98 tests, 0 failures, 0 errors and 0 skipped.
+- The API 29 and API 35 XML case sets were identical.
+- `AndroidBackNavigationTest`: 15/15 on both APIs.
+- `AndroidBackRotationTest`: 1/1 on both APIs.
+- API 29 receipt digest: `sha256:37142b24217638c51c82d4a42694d4366deb54a49f083855e98078768974906f`.
+- API 35 receipt digest: `sha256:0b699497454ac443d2a32ce16cf3bb94a1a3c7e00202cda9eb4f15a436862720`.
+
+This automated evidence does not close any physical predictive-Back, OEM picker/IME, document-provider copy, process-death, durable-persistence or final product-acceptance gate.
 
 ## Evidence that remains open
 
