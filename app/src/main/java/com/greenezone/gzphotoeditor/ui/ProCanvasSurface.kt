@@ -51,7 +51,9 @@ internal data class ProCanvasActions(
 /** The bitmap, guides, hit targets and brush share the same document-to-screen transform. */
 @Composable
 internal fun ProCanvasSurface(
-    bitmap: Bitmap,
+    bitmap: Bitmap?,
+    artboardSize: Pair<Int, Int>,
+    background: Int,
     section: ProSection,
     layer: ProLayer?,
     view: ProViewport,
@@ -64,21 +66,19 @@ internal fun ProCanvasSurface(
     modifier: Modifier = Modifier
 ) {
     val events by rememberUpdatedState(actions)
-    val image by rememberUpdatedState(bitmap)
+    val currentSize by rememberUpdatedState(artboardSize)
     val currentView by rememberUpdatedState(view)
     val bitmapPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG) }
     val toggleLabel = if (controlsVisible) "Hide controls" else "Show controls"
-    val width = bitmap.width
-    val height = bitmap.height
+    val (width, height) = artboardSize
     Canvas(modifier.semantics {
-        contentDescription = "Pro editable composition"
+        contentDescription = if (enabled) "Pro editable composition" else "Pro composition preview"
         if (enabled) onClick(label = toggleLabel) { events.toggleControls(); true }
     }.pointerInput(section, enabled) {
         if (!enabled) return@pointerInput
         awaitEachGesture {
             val down = awaitFirstDown()
-            val documentW = image.width
-            val documentH = image.height
+            val (documentW, documentH) = currentSize
             val screenW = size.width.toFloat()
             val screenH = size.height.toFloat()
             var viewport = currentView
@@ -149,7 +149,11 @@ internal fun ProCanvasSurface(
             canvas.translate(frame.left, frame.top)
             canvas.scale(frame.scale, frame.scale)
             canvas.clipRect(0, 0, width, height)
-            canvas.drawBitmap(bitmap, null, RectF(0f, 0f, width.toFloat(), height.toFloat()), bitmapPaint)
+            if (bitmap == null) {
+                canvas.drawColor(background)
+            } else {
+                canvas.drawBitmap(bitmap, null, RectF(0f, 0f, width.toFloat(), height.toFloat()), bitmapPaint)
+            }
             val guide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
                 strokeWidth = 2.dp.toPx() / frame.scale

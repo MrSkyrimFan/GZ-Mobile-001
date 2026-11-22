@@ -13,10 +13,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.conflate
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
@@ -357,7 +355,6 @@ fun ProWorkspaceScreen(
 
     // A hardware display list can retain the previous preview after recomposition.
     // Displayed bitmaps are framework/GC owned; only unpublished scratch images are recycled.
-    val latestDocument by rememberUpdatedState(document)
     var previewEdge by remember { mutableIntStateOf(940) }
     val memoryClass = remember(context) {
         (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
@@ -378,35 +375,50 @@ fun ProWorkspaceScreen(
             }
         }
     }
-    LaunchedEffect(resolver, maxPreviewPixels) {
-        snapshotFlow { latestDocument to previewEdge }.conflate().collect { (frame, edge) ->
-            if (frame.layers.isEmpty()) { preview = null; chrome = true; return@collect }
-            rendering = true
-            try {
-                val (w, h) = ProMath.dimensions(frame.aspect, edge, maxPreviewPixels)
-                val bitmap = withContext(Dispatchers.Default) {
-                    val job = currentCoroutineContext()
-                    val rendered = ProRaster.render(resolver, frame, w, h, true) {
-                        job.ensureActive()
-                    }
-                    try { job.ensureActive(); rendered }
-                    catch (cancelled: CancellationException) {
-                        if (!rendered.isRecycled) rendered.recycle()
-                        throw cancelled
-                    }
-                }
-                preview = bitmap
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (missing: ProRaster.MissingLayer) {
-                selected = missing.position
-                notice = "Source for image layer " + (missing.position + 1) + " is unavailable."
-            } catch (_: OutOfMemoryError) {
-                notice = "Preview has too many pixels for available memory."
-            } catch (failure: Exception) {
-                notice = "Preview failed: " + (failure.message ?: "unknown problem")
-            } finally { rendering = false }
+    val pristine = remember(document) {
+        document.layers.none { layer ->
+            layer.visible && layer.opacity > 0f && when (layer.kind) {
+                ProLayerKind.DRAWING -> layer.edits.creative.strokes.isNotEmpty()
+                ProLayerKind.ADJUSTMENT -> layer.effect != ProPixelEffect.NONE || layer.edits.grade != Grade()
+                else -> true
+            }
         }
+    }
+    val artboardSize = remember(document.aspect, previewEdge, maxPreviewPixels) {
+        ProMath.dimensions(document.aspect, previewEdge, maxPreviewPixels)
+    }
+    LaunchedEffect(document, artboardSize, resolver) {
+        if (pristine) {
+            preview = null
+            rendering = false
+            if (document.layers.isEmpty()) chrome = true
+            return@LaunchedEffect
+        }
+        rendering = true
+        try {
+            val (w, h) = artboardSize
+            val bitmap = withContext(Dispatchers.Default) {
+                val job = currentCoroutineContext()
+                val rendered = ProRaster.render(resolver, document, w, h, true) {
+                    job.ensureActive()
+                }
+                try { job.ensureActive(); rendered }
+                catch (cancelled: CancellationException) {
+                    if (!rendered.isRecycled) rendered.recycle()
+                    throw cancelled
+                }
+            }
+            preview = bitmap
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (missing: ProRaster.MissingLayer) {
+            selected = missing.position
+            notice = "Source for image layer " + (missing.position + 1) + " is unavailable."
+        } catch (_: OutOfMemoryError) {
+            notice = "Preview has too many pixels for available memory."
+        } catch (failure: Exception) {
+            notice = "Preview failed: " + (failure.message ?: "unknown problem")
+        } finally { rendering = false }
     }
     LaunchedEffect(notice) {
         if (notice.isNotBlank()) {
@@ -480,101 +492,108 @@ fun ProWorkspaceScreen(
                         }
                     }
                 } else {
-                    preview?.let { bitmap ->
-                        ProCanvasSurface(bitmap, section, active, viewport, chrome, available,
-                            draftSelection, activeStroke, retouchSource,
-                            actions = ProCanvasActions(
-                                toggleControls = { chrome = !chrome },
-                                hold = { point ->
-                                    if (section == ProSection.LAYERS) {
-                                        ProHitMath.pick(document, point.x, point.y, bitmap.width, bitmap.height)
-                                            ?.let(::selectLayer)
-                                    } else if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING && !eraserMode) {
-                                        val x = (point.x * bitmap.width).toInt().coerceIn(0, bitmap.width - 1)
-                                        val y = (point.y * bitmap.height).toInt().coerceIn(0, bitmap.height - 1)
-                                        brushColor = bitmap.getPixel(x, y) or -0x1000000
+                    val bitmap = if (pristine) null else preview
+                    val (canvasW, canvasH) = artboardSize
+                    val canEdit = available && (pristine || bitmap != null ||
+                        document.layers.none { it.kind == ProLayerKind.IMAGE && it.visible })
+                    ProCanvasSurface(bitmap, artboardSize, document.background.argb,
+                        section, active, viewport, chrome, canEdit,
+                        draftSelection, activeStroke, retouchSource,
+                        actions = ProCanvasActions(
+                            toggleControls = { chrome = !chrome },
+                            hold = { point ->
+                                if (section == ProSection.LAYERS) {
+                                    ProHitMath.pick(document, point.x, point.y, canvasW, canvasH)
+                                        ?.let(::selectLayer)
+                                } else if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING && !eraserMode) {
+                                    if (pristine || bitmap != null) {
+                                        brushColor = (bitmap?.let {
+                                            val x = (point.x * it.width).toInt().coerceIn(0, it.width - 1)
+                                            val y = (point.y * it.height).toInt().coerceIn(0, it.height - 1)
+                                            it.getPixel(x, y)
+                                        } ?: document.background.argb) or -0x1000000
                                         notice = "Brush color sampled from canvas."
-                                    } else if (section == ProSection.RETOUCH && active?.kind == ProLayerKind.IMAGE) {
-                                        val target = ProMath.canvasToImageNormalized(active, bitmap.width, bitmap.height, point)
-                                        val source = retouchSourceImage
-                                        if (target == null) notice = "Press inside the selected image."
-                                        else if (source == null) {
-                                            retouchSource = point
-                                            retouchSourceImage = target
-                                            notice = "Source set. Press and hold a destination to stamp."
-                                        } else if (active.retouches.size < ProToolMath.MAX_RETOUCH) {
-                                            val mark = ProRetouchMark(retouchKind, source.x, source.y,
-                                                target.x, target.y, retouchRadius, retouchStrength)
-                                            changeLayer { it.copy(retouches = it.retouches + mark) }
-                                        } else notice = "This image already has 80 retouch marks."
                                     }
-                                },
-                                dragStart = { point ->
-                                    lastDragValue = null
-                                    dragStart = document
-                                    if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
-                                        active.visible && active.edits.creative.strokes.size < CreativeRaster.MAX_INK)
-                                        activeStroke = InkStroke(listOf(point), color = brushColor,
-                                            thickness = brushSize, opacity = brushOpacity, erase = eraserMode)
-                                    if (section == ProSection.SELECT && (active?.kind == ProLayerKind.IMAGE ||
-                                            active?.kind == ProLayerKind.ADJUSTMENT)) {
-                                        selectionStart = point
-                                        draftSelection = if (selectionKind == ProSelectionKind.LASSO)
-                                            ProSelection(selectionKind, points = listOf(point))
-                                        else ProToolMath.rectangle(point, point, selectionKind)
+                                } else if (section == ProSection.RETOUCH && active?.kind == ProLayerKind.IMAGE) {
+                                    val target = ProMath.canvasToImageNormalized(active, canvasW, canvasH, point)
+                                    val source = retouchSourceImage
+                                    if (target == null) notice = "Press inside the selected image."
+                                    else if (source == null) {
+                                        retouchSource = point
+                                        retouchSourceImage = target
+                                        notice = "Source set. Press and hold a destination to stamp."
+                                    } else if (active.retouches.size < ProToolMath.MAX_RETOUCH) {
+                                        val mark = ProRetouchMark(retouchKind, source.x, source.y,
+                                            target.x, target.y, retouchRadius, retouchStrength)
+                                        changeLayer { it.copy(retouches = it.retouches + mark) }
+                                    } else notice = "This image already has 80 retouch marks."
+                                }
+                            },
+                            dragStart = { point ->
+                                lastDragValue = null
+                                dragStart = document
+                                if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
+                                    active.visible && active.edits.creative.strokes.size < CreativeRaster.MAX_INK)
+                                    activeStroke = InkStroke(listOf(point), color = brushColor,
+                                        thickness = brushSize, opacity = brushOpacity, erase = eraserMode)
+                                if (section == ProSection.SELECT && (active?.kind == ProLayerKind.IMAGE ||
+                                        active?.kind == ProLayerKind.ADJUSTMENT)) {
+                                    selectionStart = point
+                                    draftSelection = if (selectionKind == ProSelectionKind.LASSO)
+                                        ProSelection(selectionKind, points = listOf(point))
+                                    else ProToolMath.rectangle(point, point, selectionKind)
+                                }
+                            },
+                            drag = { start, point ->
+                                val before = dragStart
+                                val item = before?.layers?.getOrNull(selected)
+                                if (before != null && item != null) when (section) {
+                                    ProSection.MOVE -> if (item.visible && item.kind in listOf(
+                                        ProLayerKind.IMAGE, ProLayerKind.TEXT, ProLayerKind.SHAPE)) {
+                                        val moved = item.copy(x = (item.x + point.x - start.x).coerceIn(0f, 1f),
+                                            y = (item.y + point.y - start.y).coerceIn(0f, 1f))
+                                        val next = before.copy(layers = before.layers.toMutableList().also {
+                                            it[selected] = moved
+                                        })
+                                        lastDragValue = next
+                                        onDocument(next)
                                     }
-                                },
-                                drag = { start, point ->
-                                    val before = dragStart
-                                    val item = before?.layers?.getOrNull(selected)
-                                    if (before != null && item != null) when (section) {
-                                        ProSection.MOVE -> if (item.visible && item.kind in listOf(
-                                            ProLayerKind.IMAGE, ProLayerKind.TEXT, ProLayerKind.SHAPE)) {
-                                            val moved = item.copy(x = (item.x + point.x - start.x).coerceIn(0f, 1f),
-                                                y = (item.y + point.y - start.y).coerceIn(0f, 1f))
-                                            val next = before.copy(layers = before.layers.toMutableList().also {
-                                                it[selected] = moved
-                                            })
-                                            lastDragValue = next
-                                            onDocument(next)
-                                        }
-                                        ProSection.PAINT -> activeStroke?.let { stroke ->
-                                            if (stroke.points.size < 500 && stroke.points.last() != point)
-                                                activeStroke = stroke.copy(points = stroke.points + point)
-                                        }
-                                        ProSection.SELECT -> if (selectionStart != null) {
-                                            draftSelection = if (selectionKind == ProSelectionKind.LASSO) {
-                                                val points = draftSelection?.points.orEmpty()
-                                                if (points.size < ProToolMath.MAX_LASSO_POINTS)
-                                                    ProSelection(selectionKind, points = points + point)
-                                                else draftSelection
-                                            } else ProToolMath.rectangle(start, point, selectionKind)
-                                        }
-                                        else -> Unit
+                                    ProSection.PAINT -> activeStroke?.let { stroke ->
+                                        if (stroke.points.size < 500 && stroke.points.last() != point)
+                                            activeStroke = stroke.copy(points = stroke.points + point)
                                     }
-                                },
-                                dragEnd = { cancel ->
-                                    val before = dragStart
-                                    if (cancel) {
-                                        if (section == ProSection.MOVE && before != null) onDocument(before)
-                                        if (selectionStart != null) draftSelection = null
-                                    } else if (before != null && section == ProSection.MOVE) {
-                                        history = history.checkpoint(before, lastDragValue ?: before)
-                                    } else if (section == ProSection.PAINT) {
-                                        activeStroke?.let { stroke ->
-                                            changeLayer { layer -> layer.copy(edits = layer.edits.copy(
-                                                creative = layer.edits.creative.copy(strokes =
-                                                    layer.edits.creative.strokes + stroke))) }
-                                        }
+                                    ProSection.SELECT -> if (selectionStart != null) {
+                                        draftSelection = if (selectionKind == ProSelectionKind.LASSO) {
+                                            val points = draftSelection?.points.orEmpty()
+                                            if (points.size < ProToolMath.MAX_LASSO_POINTS)
+                                                ProSelection(selectionKind, points = points + point)
+                                            else draftSelection
+                                        } else ProToolMath.rectangle(start, point, selectionKind)
                                     }
-                                    lastDragValue = null
-                                    dragStart = null
-                                    activeStroke = null
-                                    selectionStart = null
-                                },
-                                changeView = { viewport = it }
-                            ), modifier = Modifier.fillMaxSize())
-                    }
+                                    else -> Unit
+                                }
+                            },
+                            dragEnd = { cancel ->
+                                val before = dragStart
+                                if (cancel) {
+                                    if (section == ProSection.MOVE && before != null) onDocument(before)
+                                    if (selectionStart != null) draftSelection = null
+                                } else if (before != null && section == ProSection.MOVE) {
+                                    history = history.checkpoint(before, lastDragValue ?: before)
+                                } else if (section == ProSection.PAINT) {
+                                    activeStroke?.let { stroke ->
+                                        changeLayer { layer -> layer.copy(edits = layer.edits.copy(
+                                            creative = layer.edits.creative.copy(strokes =
+                                                layer.edits.creative.strokes + stroke))) }
+                                    }
+                                }
+                                lastDragValue = null
+                                dragStart = null
+                                activeStroke = null
+                                selectionStart = null
+                            },
+                            changeView = { viewport = it }
+                        ), modifier = Modifier.fillMaxSize())
                 }
             }
             if (chrome && document.layers.isNotEmpty()) {
@@ -948,7 +967,7 @@ fun ProWorkspaceScreen(
                 }
             }
         }
-        if (busy || exporting || (rendering && preview == null)) {
+        if (busy || exporting || (rendering && !pristine && preview == null)) {
             Row(Modifier.align(Alignment.Center)
                 .background(Color(0xE0212630), RoundedCornerShape(14.dp))
                 .padding(horizontal = 14.dp, vertical = 12.dp),

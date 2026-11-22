@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -73,6 +74,11 @@ class ProCanvasInteractionTest {
             val span = stroke.points.last().x - stroke.points.first().x
             // A 30%-of-fit drag covers only 15% of a canvas zoomed to 2×.
             assertTrue("Zoomed brush mapped to source coordinates: $span", span in .12f.. .18f)
+        }
+        rule.waitUntil(15_000) {
+            val frame = canvas.captureToImage()
+            val color = frame.toPixelMap()[frame.width / 2, frame.height / 2]
+            color.green > color.red + .15f && color.green > color.blue
         }
         rule.onNodeWithText("Tools ▾").assertDoesNotExist()
         canvas.performTouchInput { click(center) }

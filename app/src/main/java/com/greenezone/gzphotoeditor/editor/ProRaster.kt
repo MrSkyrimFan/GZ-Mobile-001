@@ -47,7 +47,11 @@ object ProRaster {
     private fun featherMask(layer: ProLayer, width: Int, height: Int): Bitmap? {
         val mask = layer.mask ?: return null
         if (mask.feather == 0f) return null
-        val alpha = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
+        // Android draws ALPHA_8 bitmaps as paint coverage. DST_IN needs a color
+        // image carrying source alpha; otherwise a soft cutout can stay opaque.
+        // Adjustment layers only read mask samples and can use the smaller format.
+        val format = if (layer.kind == ProLayerKind.IMAGE) Bitmap.Config.ARGB_8888 else Bitmap.Config.ALPHA_8
+        val alpha = Bitmap.createBitmap(width, height, format)
         try {
             if (mask.inverted) alpha.eraseColor(Color.WHITE)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
