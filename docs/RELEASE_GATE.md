@@ -1,30 +1,17 @@
-# GZ Photo Editor Pro — release gates (v0.4.0 candidate)
+# GZ Photo Editor Pro · photo-first 0.5.0 release gates
 
-## Automated
-- [ ] Branch CI: compile, JVM unit tests, APK artifact, no permissions/brand drift
-- [ ] Android 15 emulator bitmap tests: rotation/crop, safe straighten, preview/export pixel parity, JPEG alpha flattening, project roundtrip, Activity starts
-- [ ] PR CI green, source diff reviewed, merge with expected commit
-- [ ] Merged-main CI green, artifact available for download
-- [ ] Confirm manifest no INTERNET, CAMERA, broad media library, location or billing permission
+- [ ] v0.5 feature branch compilation and JVM tests pass.
+- [ ] Android 15 emulator bitmap/Activity tests AND Compose photo-first navigation tests pass.
+- [ ] New UI makes source photograph fill canvas; no small preview box and no vertical stack of fifty-six adjustments.
+- [ ] Dark theme labels and slider states are readable on the Samsung phone.
+- [ ] Looks starts with None, horizontal scrolling reveals presets, tapping changes actual edited photo.
+- [ ] Touching photo hides controls; touching again restores them; gestures do not accidentally dismiss on slider interaction.
+- [ ] Brush drag still paints local mask at Fit; photo tap and two-finger zoom behavior reviewed.
+- [ ] Bottom dock categories and tool labels are clear; one active slider at a time; Reset/Undo/Redo work.
+- [ ] Masks, crop/straightening, curves, presets, saved projects, auto corrections and JPEG/PNG export all remain functional.
+- [ ] Existing data retained across in-place install; package/application ID unchanged.
+- [ ] Branch and PR checks pass, reviewed PR merged with expected SHA, merged-main workflow passes.
+- [ ] Test APK artifact verified against merged commit, one consolidated phone field test completed.
+- [ ] Memory/device/color QA, privacy policy, Play Store organization, brand/trademark, AAB signing and other production gates remain open.
 
-## ONE real Android phone qualification session
-- [ ] Launch and open photos from Gallery/Photos/Files
-- [ ] Global tonal, color-grade/HSL, detail denoise/texture, film controls
-- [ ] Auto tone and white balance, compare, undo/redo/reset
-- [ ] RGB/master curves, histogram
-- [ ] Radial, linear, and finger-painted BRUSH masks with resizing/softening and local edits
-- [ ] Straighten, center/reposition crop, 90° rotates, flips, zoom/pan and Fit
-- [ ] Save local named project, kill and restart app, reload settings and original; preset save/delete
-- [ ] Export 4 JPEG/PNG variants and open output files; compare against source; test transparency
-- [ ] 12MP, 24MP, >24MP images and long-session memory; note output resolution caps
-- [ ] No crashes, stale previews, bad banding/darkness, poor speed or broken output
-
-## Before commercial release (all currently unclaimed)
-- [ ] Name/brand trademark clearance and formal owner approval
-- [ ] Real photo quality evaluation, mobile UI accessibility, dynamic text/insets, multiple devices/API levels
-- [ ] Better performance for demanding file sizes, modern high-bit-depth color profile and RAW assessment
-- [ ] Privacy policy published on official Greenezone website, without changing that site blindly
-- [ ] Play organization account verification, store listing, current policy, required target SDK
-- [ ] Production signing, release AAB, store prelaunch checks, app ownership and license review
-
-A green CI verifies tests and debug build, **not premium market parity**.
+**Do not label debug APK a final paid Play Store build.** Never alter Greenezone website or unrelated projects to satisfy this Android work.

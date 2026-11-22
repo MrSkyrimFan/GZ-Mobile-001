@@ -1,44 +1,36 @@
 package com.greenezone.gzphotoeditor.ui
 
-import android.graphics.Bitmap
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,50 +43,50 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.greenezone.gzphotoeditor.editor.ColorBand
+import com.greenezone.gzphotoeditor.editor.AutoEnhanceMath
 import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.BrushStroke
-import com.greenezone.gzphotoeditor.editor.AutoEnhanceMath
-import com.greenezone.gzphotoeditor.editor.GeometryMath
-import com.greenezone.gzphotoeditor.editor.ProjectStore
-import com.greenezone.gzphotoeditor.editor.SavedProject
-import com.greenezone.gzphotoeditor.editor.CurveChannel
-import com.greenezone.gzphotoeditor.editor.CurveMath
-import com.greenezone.gzphotoeditor.editor.LocalMask
-import com.greenezone.gzphotoeditor.editor.MaskKind
-import com.greenezone.gzphotoeditor.editor.ControlCatalog
-import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.EditHistory
+import com.greenezone.gzphotoeditor.editor.GeometryMath
+import com.greenezone.gzphotoeditor.editor.Grade
 import com.greenezone.gzphotoeditor.editor.ImagePipeline
+import com.greenezone.gzphotoeditor.editor.LocalMask
 import com.greenezone.gzphotoeditor.editor.Look
 import com.greenezone.gzphotoeditor.editor.Looks
-import com.greenezone.gzphotoeditor.editor.Panel
+import com.greenezone.gzphotoeditor.editor.MaskKind
+import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.editor.SavedLooks
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.Locale
+import kotlin.math.roundToInt
 
-private val Muted = Color(0xFF9DAFB3)
-private val Frame = Color(0xFF29353D)
-
+/**
+ * Image-first editor. The image covers the entire canvas behind lightweight chrome.
+ * One tap hides the controls; a second tap restores them. Do not show a vertical
+ * adjustment list or constrain the image to a short preview box.
+ */
 @Composable
 fun PhotoEditorScreen() {
     val context = LocalContext.current
@@ -104,77 +96,97 @@ fun PhotoEditorScreen() {
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
     var processed by remember { mutableStateOf<Bitmap?>(null) }
+    var beforeImage by remember { mutableStateOf<Bitmap?>(null) }
+    var filterThumbs by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var document by remember { mutableStateOf(EditDocument()) }
     var history by remember { mutableStateOf(EditHistory()) }
-    var dragStart by remember { mutableStateOf<EditDocument?>(null) }
-    var selectedPanel by remember { mutableStateOf(Panel.LIGHT) }
-    var selectedColor by remember { mutableStateOf(ColorBand.RED) }
-    var selectedCurve by remember { mutableStateOf(CurveChannel.MASTER) }
-    var selectedMaskIndex by remember { mutableIntStateOf(0) }
+    var gestureStart by remember { mutableStateOf<EditDocument?>(null) }
+
+    var chromeVisible by remember { mutableStateOf(true) }
+    var selectedTab by remember { mutableStateOf(EditTab.LOOKS) }
+    var activeLook by remember { mutableStateOf("none") }
+    var selectedMask by remember { mutableIntStateOf(0) }
     var compare by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Open a photo to begin editing.") }
-    var busy by remember { mutableStateOf(false) }
-    var exporting by remember { mutableStateOf(false) }
-    var showExport by remember { mutableStateOf(false) }
-    var jpegQuality by remember { mutableIntStateOf(95) }
-    var showHistogram by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
-    var savedLooks by remember { mutableStateOf(SavedLooks.load(context)) }
-    var selectedSavedLook by remember { mutableStateOf<String?>(null) }
-    var saveLookDialog by remember { mutableStateOf(false) }
-    var deleteLookDialog by remember { mutableStateOf(false) }
-    var newLookName by remember { mutableStateOf("") }
-    var savedProjects by remember { mutableStateOf(ProjectStore.load(context)) }
-    var saveProjectDialog by remember { mutableStateOf(false) }
-    var projectListDialog by remember { mutableStateOf(false) }
-    var projectName by remember { mutableStateOf("") }
-    var selectedProject by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
     var loadingToken by remember { mutableIntStateOf(0) }
-    var histogram by remember { mutableStateOf(IntArray(64)) }
+    var jpegQuality by remember { mutableIntStateOf(95) }
+
+    var showExport by remember { mutableStateOf(false) }
+    var showSaveLook by remember { mutableStateOf(false) }
+    var showSaveProject by remember { mutableStateOf(false) }
+    var showProjects by remember { mutableStateOf(false) }
+    var draftName by remember { mutableStateOf("") }
+    var selectedProject by remember { mutableStateOf<String?>(null) }
+    var savedLooks by remember { mutableStateOf(SavedLooks.load(context)) }
+    var savedProjects by remember { mutableStateOf(ProjectStore.load(context)) }
 
     fun commit(next: EditDocument) {
         history = history.checkpoint(document, next)
         document = next
-        dragStart = null
+        gestureStart = null
+    }
+    fun slide(next: EditDocument) {
+        if (gestureStart == null) gestureStart = document
+        document = next
+        activeLook = "custom"
+    }
+    fun finishSlide() {
+        gestureStart?.let { beginning ->
+            history = history.checkpoint(beginning, document)
+        }
+        gestureStart = null
+    }
+    fun applyLook(key: String, grade: Grade) {
+        commit(document.copy(grade = grade))
+        activeLook = key
     }
 
     fun loadPhoto(uri: Uri, restored: EditDocument? = null) {
         val request = ++loadingToken
         scope.launch {
             busy = true
-            message = "Loading photo…"
+            notice = "Opening photo…"
             try {
                 try {
                     resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 } catch (_: SecurityException) {
-                    // Some providers offer a non-persistable grant; opening a saved project may fail after restart.
+                    // Some pickers grant access only for this session.
                 }
-                val loaded = withContext(Dispatchers.IO) {
+                val bitmap = withContext(Dispatchers.IO) {
                     ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L)
                 }
-                if (request == loadingToken) {
-                    sourceUri = uri
-                    original = loaded
-                    document = restored ?: EditDocument()
-                    history = EditHistory()
-                    processed = loaded
-                    dragStart = null
-                    compare = false
-                    selectedMaskIndex = 0
-                    zoom = 1f; panX = 0f; panY = 0f
-                    message = "Photo loaded • " + loaded.width + " × " + loaded.height +
-                        " preview" + (if (restored != null) " • saved project restored" else "")
-                } else {
-                    loaded.recycle()
+                if (request != loadingToken) {
+                    bitmap.recycle()
+                    return@launch
                 }
+                sourceUri = uri
+                original = bitmap
+                processed = bitmap
+                beforeImage = bitmap
+                filterThumbs = emptyList()
+                document = restored ?: EditDocument()
+                history = EditHistory()
+                gestureStart = null
+                selectedMask = 0
+                selectedTab = EditTab.LOOKS
+                activeLook = if (restored == null) "none" else "custom"
+                chromeVisible = true
+                compare = false
+                zoom = 1f
+                panX = 0f
+                panY = 0f
+                notice = if (restored == null) "Tap the photo to hide or show tools" else "Editable project restored"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 if (request == loadingToken) {
-                    message = "Could not open photo: " + (error.message ?: "permission or unsupported file") +
-                        ". Re-select the original if the provider revoked access."
+                    notice = "Could not open photo: " +
+                        (error.message ?: "file missing or permission revoked")
                 }
             } finally {
                 if (request == loadingToken) busy = false
@@ -184,57 +196,51 @@ fun PhotoEditorScreen() {
 
     fun exportImage(output: Uri, format: Bitmap.CompressFormat, quality: Int) {
         val source = sourceUri ?: return
+        if (source == output) {
+            notice = "Export destination cannot overwrite the original."
+            return
+        }
         val edits = document
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val maxPixels = GeometryMath.safeExportPixels(manager.memoryClass)
-        if (output == source) {
-            message = "Refusing to export over the source image."
-            return
-        }
         scope.launch {
             exporting = true
             showExport = false
-            message = "Rendering full-quality photo locally…"
+            notice = "Exporting photo…"
             try {
                 val dimensions = withContext(Dispatchers.Default) {
                     var decoded: Bitmap? = null
                     var rendered: Bitmap? = null
                     var flattened: Bitmap? = null
                     try {
-                        val decodedImage = ImagePipeline.decode(resolver, source, 12_000, maxPixels)
-                        decoded = decodedImage
-                        val renderedImage = ImagePipeline.render(decodedImage, edits) { ensureActive() }
-                        rendered = renderedImage
-                        val writable = if (format == Bitmap.CompressFormat.JPEG && renderedImage.hasAlpha()) {
-                            ImagePipeline.compositeWhite(renderedImage).also { flattened = it }
-                        } else renderedImage
-                        val completed = withContext(Dispatchers.IO) {
+                        val full = ImagePipeline.decode(resolver, source, 12_000, maxPixels)
+                        decoded = full
+                        val result = ImagePipeline.render(full, edits) { ensureActive() }
+                        rendered = result
+                        val writeBitmap = if (format == Bitmap.CompressFormat.JPEG && result.hasAlpha()) {
+                            ImagePipeline.compositeWhite(result).also { flattened = it }
+                        } else result
+                        val done = withContext(Dispatchers.IO) {
                             resolver.openOutputStream(output, "wt")?.use { stream ->
-                                writable.compress(format, quality, stream)
-                            } ?: throw IOException("Document provider did not open an output stream")
+                                writeBitmap.compress(format, quality, stream)
+                            } ?: throw IOException("Save destination is inaccessible")
                         }
-                        if (!completed) throw IOException("Image encoder rejected the output")
-                        writable.width.toString() + " × " + writable.height
+                        if (!done) throw IOException("Image encoder failed")
+                        writeBitmap.width.toString() + " × " + writeBitmap.height
                     } finally {
-                        flattened?.let { temporary ->
-                            if (temporary !== rendered && !temporary.isRecycled) temporary.recycle()
-                        }
-                        rendered?.let { temporary ->
-                            if (temporary !== decoded && !temporary.isRecycled) temporary.recycle()
-                        }
-                        decoded?.let { temporary ->
-                            if (!temporary.isRecycled) temporary.recycle()
-                        }
+                        flattened?.let { if (it !== rendered && !it.isRecycled) it.recycle() }
+                        rendered?.let { if (it !== decoded && !it.isRecycled) it.recycle() }
+                        decoded?.let { if (!it.isRecycled) it.recycle() }
                     }
                 }
-                message = "Saved " + dimensions + " • source image unchanged."
+                notice = "Saved " + dimensions + " • Original preserved"
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (error: OutOfMemoryError) {
-                message = "Not enough memory for this export. Close other apps, then retry."
+            } catch (_: OutOfMemoryError) {
+                notice = "Not enough memory to export. Close other apps and retry."
                 try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } catch (error: Exception) {
-                message = "Export failed: " + (error.message ?: "unknown error")
+                notice = "Export failed: " + (error.message ?: "unknown error")
                 try { resolver.delete(output, null, null) } catch (_: Exception) {}
             } finally {
                 exporting = false
@@ -242,661 +248,495 @@ fun PhotoEditorScreen() {
         }
     }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri -> if (uri != null) loadPhoto(uri) }
-    val jpeg = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("image/jpeg")
-    ) { uri -> if (uri != null) exportImage(uri, Bitmap.CompressFormat.JPEG, jpegQuality) }
-    val png = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("image/png")
-    ) { uri -> if (uri != null) exportImage(uri, Bitmap.CompressFormat.PNG, 100) }
+    fun autoTone() {
+        val bitmap = original ?: return
+        scope.launch {
+            busy = true
+            try {
+                val correction = withContext(Dispatchers.Default) {
+                    AutoEnhanceMath.autoTone(ImagePipeline.luminanceHistogram(bitmap))
+                }
+                commit(document.copy(grade = document.grade.copy(
+                    exposure = correction.exposure,
+                    contrast = correction.contrast,
+                    shadows = correction.shadows,
+                    highlights = correction.highlights
+                )))
+                activeLook = "custom"
+                notice = "Auto tone applied"
+            } catch (error: Exception) {
+                notice = "Auto tone failed: " + (error.message ?: "unknown error")
+            } finally { busy = false }
+        }
+    }
+
+    fun autoWB() {
+        val bitmap = original ?: return
+        scope.launch {
+            busy = true
+            try {
+                val correction = withContext(Dispatchers.Default) {
+                    AutoEnhanceMath.whiteBalance(bitmap)
+                }
+                commit(document.copy(grade = document.grade.copy(
+                    temperature = correction.temperature,
+                    tint = correction.tint
+                )))
+                activeLook = "custom"
+                notice = "Auto white balance applied"
+            } catch (error: Exception) {
+                notice = "Auto WB failed: " + (error.message ?: "unknown error")
+            } finally { busy = false }
+        }
+    }
+
+    fun addMask(kind: MaskKind) {
+        if (document.masks.size >= 4) {
+            notice = "Maximum of four masks per photo."
+            return
+        }
+        val mask = if (kind == MaskKind.BRUSH) {
+            LocalMask(kind = kind, radius = .045f, feather = .45f, exposure = .55f)
+        } else LocalMask(kind = kind)
+        selectedMask = document.masks.size
+        commit(document.copy(masks = document.masks + mask))
+        if (kind == MaskKind.BRUSH) {
+            zoom = 1f
+            panX = 0f
+            panY = 0f
+            notice = "Brush selected. Drag on your photo to paint."
+        }
+    }
+    fun removeMask() {
+        if (selectedMask !in document.masks.indices) return
+        val updated = document.masks.filterIndexed { i, _ -> i != selectedMask }
+        commit(document.copy(masks = updated))
+        selectedMask = selectedMask.coerceAtMost(updated.lastIndex).coerceAtLeast(0)
+    }
+    fun brushEdit(clearAll: Boolean) {
+        val mask = document.masks.getOrNull(selectedMask) ?: return
+        if (mask.kind != MaskKind.BRUSH) return
+        val updated = mask.copy(strokes = if (clearAll) emptyList() else mask.strokes.dropLast(1))
+        val values = document.masks.toMutableList()
+        values[selectedMask] = updated
+        commit(document.copy(masks = values))
+    }
+    fun startPaint(point: BrushPoint) {
+        val mask = document.masks.getOrNull(selectedMask) ?: return
+        if (mask.kind != MaskKind.BRUSH) return
+        if (mask.strokes.size >= 40 || mask.strokes.sumOf { it.points.size } >= 640) {
+            notice = "Brush limit reached. Undo a stroke or add another mask."
+            return
+        }
+        gestureStart = document
+        val updated = document.masks.toMutableList()
+        updated[selectedMask] = mask.copy(strokes = mask.strokes + BrushStroke(listOf(point)))
+        document = document.copy(masks = updated)
+    }
+    fun continuePaint(point: BrushPoint) {
+        val mask = document.masks.getOrNull(selectedMask) ?: return
+        val last = mask.strokes.lastOrNull() ?: return
+        if (gestureStart == null || mask.strokes.sumOf { it.points.size } >= 640) return
+        val previous = last.points.last()
+        val dx = point.x - previous.x
+        val dy = point.y - previous.y
+        if (dx * dx + dy * dy < .000012f) return
+        val newStroke = last.copy(points = last.points + point)
+        val updated = document.masks.toMutableList()
+        updated[selectedMask] = mask.copy(strokes = mask.strokes.dropLast(1) + newStroke)
+        document = document.copy(masks = updated)
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
+        if (it != null) loadPhoto(it)
+    }
+    val jpeg = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/jpeg")) {
+        if (it != null) exportImage(it, Bitmap.CompressFormat.JPEG, jpegQuality)
+    }
+    val png = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) {
+        if (it != null) exportImage(it, Bitmap.CompressFormat.PNG, 100)
+    }
+    fun openPicker() {
+        if (!busy && !exporting) {
+            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
+    }
+    fun saveLook() {
+        draftName = ""
+        showSaveLook = true
+    }
+    fun saveProject() {
+        draftName = ""
+        showSaveProject = true
+    }
+    fun openProjects() {
+        savedProjects = ProjectStore.load(context)
+        selectedProject = null
+        showProjects = true
+    }
 
     LaunchedEffect(original, document) {
-        val src = original
-        if (src == null) {
-            processed = null
-        } else {
-            delay(110L)
-            try {
-                val result = withContext(Dispatchers.Default) {
-                    ImagePipeline.render(src, document) { ensureActive() }
-                }
-                processed = result
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                message = "Preview error: " + (error.message ?: "unknown error")
+        val input = original ?: run { processed = null; return@LaunchedEffect }
+        delay(100L)
+        try {
+            val edited = withContext(Dispatchers.Default) {
+                val running = currentCoroutineContext()
+                ImagePipeline.render(input, document) { running.ensureActive() }
             }
+            processed = edited
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            notice = "Preview error: " + (error.message ?: "unexpected error")
         }
     }
 
-    val compared = remember(original, document.quarterTurns, document.mirrored, document.flipVertical, document.crop) {
-        original?.let { ImagePipeline.geometry(it, document) }
-    }
-    LaunchedEffect(processed, showHistogram) {
-        val image = processed
-        histogram = if (image != null && showHistogram) {
-            withContext(Dispatchers.Default) { ImagePipeline.luminanceHistogram(image) }
-        } else IntArray(64)
+    // Keep before/after geometry identical; compute outside the UI thread.
+    LaunchedEffect(original, document.quarterTurns, document.mirrored,
+        document.flipVertical, document.crop, document.cropCenterX,
+        document.cropCenterY, document.straightenDegrees) {
+        val input = original ?: run { beforeImage = null; return@LaunchedEffect }
+        try {
+            val result = withContext(Dispatchers.Default) {
+                ImagePipeline.geometry(input, document)
+            }
+            beforeImage = result
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            beforeImage = input
+        }
     }
 
-    Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .safeDrawingPadding().padding(horizontal = 14.dp)
+    LaunchedEffect(original) {
+        val input = original ?: run { filterThumbs = emptyList(); return@LaunchedEffect }
+        try {
+            val created = withContext(Dispatchers.Default) {
+                val working = currentCoroutineContext()
+                val longest = maxOf(input.width, input.height)
+                val sizeFactor = 128f / longest.coerceAtLeast(1)
+                val width = (input.width * sizeFactor).roundToInt().coerceAtLeast(1)
+                val height = (input.height * sizeFactor).roundToInt().coerceAtLeast(1)
+                val thumbnail = Bitmap.createScaledBitmap(input, width, height, true)
+                listOf(thumbnail) + Looks.all.map { look ->
+                    working.ensureActive()
+                    ImagePipeline.render(thumbnail, EditDocument(grade = look.grade)) {
+                        working.ensureActive()
+                    }
+                }
+            }
+            filterThumbs = created
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            filterThumbs = emptyList()
+        }
+    }
+
+    LaunchedEffect(notice) {
+        if (notice.isNotEmpty()) {
+            delay(4500L)
+            notice = ""
+        }
+    }
+
+    val selectedImage = if (compare) beforeImage ?: original else processed ?: original
+    val brushSelected = chromeVisible && !compare && !busy && !exporting &&
+        selectedTab == EditTab.MASKS && zoom <= 1.001f &&
+        document.masks.getOrNull(selectedMask)?.kind == MaskKind.BRUSH
+
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color(0xFF080B10)).clipToBounds(),
+        contentAlignment = Alignment.Center
     ) {
-        Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text("GZ PHOTO", letterSpacing = 1.4.sp, fontWeight = FontWeight.Black, fontSize = 19.sp)
-                Text("EDITOR PRO  •  OFFLINE", color = Muted, fontSize = 10.sp, letterSpacing = 0.6.sp)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(
-                    enabled = original != null && history.undo.isNotEmpty() && !busy && !exporting,
-                    onClick = { history.undo(document)?.let { (d, h) -> document = d; history = h } }
-                ) { Text("↶", fontSize = 24.sp) }
-                TextButton(
-                    enabled = original != null && history.redo.isNotEmpty() && !busy && !exporting,
-                    onClick = { history.redo(document)?.let { (d, h) -> document = d; history = h } }
-                ) { Text("↷", fontSize = 24.sp) }
-            }
-        }
-
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                enabled = !busy && !exporting,
-                onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-            ) { Text("Open photo") }
-            OutlinedButton(
-                enabled = original != null && !busy && !exporting,
-                onClick = {
-                    val photo = original
-                    if (photo != null) scope.launch {
-                        busy = true
-                        try {
-                            val suggestion = withContext(Dispatchers.Default) {
-                                AutoEnhanceMath.autoTone(ImagePipeline.luminanceHistogram(photo))
-                            }
-                            commit(document.copy(grade = document.grade.copy(
-                                exposure = suggestion.exposure,
-                                contrast = suggestion.contrast,
-                                shadows = suggestion.shadows,
-                                highlights = suggestion.highlights
-                            )))
-                            message = "Auto tone applied. Fine-tune with Light sliders."
-                        } catch (error: Exception) {
-                            message = "Auto tone failed: " + (error.message ?: "unexpected error")
-                        } finally { busy = false }
+        if (selectedImage != null) {
+            Image(
+                bitmap = selectedImage.asImageBitmap(),
+                contentDescription = "Photo editing canvas. Tap to hide or show tools.",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+                    .semantics {
+                        onClick(label = "Hide or show editing controls") {
+                            chromeVisible = !chromeVisible
+                            true
+                        }
                     }
-                }
-            ) { Text("Auto tone") }
-            OutlinedButton(
-                enabled = original != null && !busy && !exporting,
-                onClick = {
-                    val photo = original
-                    if (photo != null) scope.launch {
-                        busy = true
-                        try {
-                            val value = withContext(Dispatchers.Default) {
-                                AutoEnhanceMath.whiteBalance(photo)
-                            }
-                            commit(document.copy(grade = document.grade.copy(
-                                temperature = value.temperature, tint = value.tint
-                            )))
-                            message = "Auto white balance applied."
-                        } catch (error: Exception) {
-                            message = "White balance failed: " + (error.message ?: "unexpected error")
-                        } finally { busy = false }
+                    .pointerInput(selectedImage) {
+                        detectTapGestures(onTap = { chromeVisible = !chromeVisible })
                     }
-                }
-            ) { Text("Auto WB") }
-            OutlinedButton(
-                enabled = original != null && !busy && !exporting,
-                onClick = { projectName = ""; saveProjectDialog = true }
-            ) { Text("Save project") }
-            TextButton(enabled = !busy && !exporting, onClick = {
-                savedProjects = ProjectStore.load(context)
-                projectListDialog = true
-            }) { Text("Projects") }
-            OutlinedButton(
-                enabled = original != null && !busy && !exporting,
-                onClick = { compare = !compare }
-            ) { Text(if (compare) "Show edit" else "Compare") }
-            OutlinedButton(
-                enabled = original != null && !busy && !exporting,
-                onClick = { commit(EditDocument()) }
-            ) { Text("Reset edits") }
-            TextButton(
-                enabled = original != null,
-                onClick = { showHistogram = !showHistogram }
-            ) { Text(if (showHistogram) "Hide histogram" else "Histogram") }
-        }
-
-        Spacer(Modifier.height(10.dp))
-        Box(
-            modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds()
-                .background(Color(0xFF0A0E12)).border(1.dp, Frame),
-            contentAlignment = Alignment.Center
-        ) {
-            val bitmap = if (compare) compared else processed
-            if (bitmap == null) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(20.dp)
-                ) {
-                    Text("◈", color = MaterialTheme.colorScheme.primary, fontSize = 48.sp)
-                    Text("Your photo, your vision.", fontWeight = FontWeight.Medium, fontSize = 18.sp)
-                    Text("Advanced curves, selective masks.\nNo ads. No AI. No cloud.",
-                        color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
-                }
-            } else {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = if (compare) "Original photo comparison" else "Edited photo preview",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
-                        .pointerInput(bitmap) {
-                            detectTransformGestures { _, pan, change, _ ->
-                                zoom = (zoom * change).coerceIn(1f, 5f)
+                    .pointerInput(selectedImage, brushSelected) {
+                        detectTransformGestures { _, pan, pinch, _ ->
+                            if (!brushSelected) {
+                                zoom = (zoom * pinch).coerceIn(1f, 6f)
                                 val maxX = size.width * (zoom - 1f) / 2f
                                 val maxY = size.height * (zoom - 1f) / 2f
                                 panX = (panX + pan.x).coerceIn(-maxX, maxX)
                                 panY = (panY + pan.y).coerceIn(-maxY, maxY)
                             }
                         }
-                        .graphicsLayer {
-                            scaleX = zoom
-                            scaleY = zoom
-                            translationX = panX
-                            translationY = panY
-                        }
-                )
-                val brush = if (selectedPanel == Panel.MASKS && !compare &&
-                    zoom <= 1.001f && !busy && !exporting
-                ) document.masks.getOrNull(selectedMaskIndex)?.takeIf { it.kind == MaskKind.BRUSH }
-                else null
-                if (brush != null) {
+                    }
+                    .graphicsLayer {
+                        scaleX = zoom
+                        scaleY = zoom
+                        translationX = panX
+                        translationY = panY
+                    }
+            )
+            if (brushSelected) {
+                val active = document.masks.getOrNull(selectedMask)
+                if (active != null) {
                     BrushOverlay(
-                        bitmapWidth = bitmap.width, bitmapHeight = bitmap.height,
-                        mask = brush, enabled = true,
-                        onStart = { point ->
-                            val index = selectedMaskIndex
-                            val current = document.masks.getOrNull(index)
-                            if (current != null &&
-                                current.strokes.size < 40 &&
-                                current.strokes.sumOf { it.points.size } < 640
-                            ) {
-                                dragStart = document
-                                val all = document.masks.toMutableList()
-                                all[index] = current.copy(strokes =
-                                    current.strokes + BrushStroke(listOf(point)))
-                                document = document.copy(masks = all)
-                            } else {
-                                message = "Brush capacity reached. Use Undo brush stroke or another mask."
-                            }
-                        },
-                        onContinue = { point ->
-                            val index = selectedMaskIndex
-                            val current = document.masks.getOrNull(index)
-                            val stroke = current?.strokes?.lastOrNull()
-                            if (dragStart != null && current != null && stroke != null &&
-                                current.strokes.sumOf { it.points.size } < 640
-                            ) {
-                                val previous = stroke.points.last()
-                                val dx = point.x - previous.x
-                                val dy = point.y - previous.y
-                                if (dx * dx + dy * dy >= .000012f) {
-                                    val updatedStroke = stroke.copy(points = stroke.points + point)
-                                    val updated = current.strokes.dropLast(1) + updatedStroke
-                                    val all = document.masks.toMutableList()
-                                    all[index] = current.copy(strokes = updated)
-                                    document = document.copy(masks = all)
-                                }
-                            }
-                        },
-                        onFinish = {
-                            dragStart?.let { start -> history = history.checkpoint(start, document) }
-                            dragStart = null
-                        }
+                        bitmapWidth = selectedImage.width,
+                        bitmapHeight = selectedImage.height,
+                        mask = active,
+                        enabled = !busy,
+                        onStart = ::startPaint,
+                        onContinue = ::continuePaint,
+                        onFinish = ::finishSlide,
+                        onTap = { chromeVisible = !chromeVisible }
                     )
                 }
-                if (zoom > 1f) {
-                    TextButton(
-                        onClick = { zoom = 1f; panX = 0f; panY = 0f },
-                        modifier = Modifier.align(Alignment.TopEnd)
-                    ) { Text("Fit • " + String.format(Locale.US, "%.1fx", zoom)) }
-                }
-            }
-        }
-        if (showHistogram && original != null) {
-            Histogram(histogram)
-        }
-        Text(message, fontSize = 11.sp, color = Muted, maxLines = 2,
-            modifier = Modifier.padding(top = 7.dp, bottom = 7.dp))
-        HorizontalDivider(color = Frame)
-
-        if (original != null) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("LOOKS", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
-                TextButton(enabled = !busy && !exporting, onClick = { newLookName = ""; saveLookDialog = true }) {
-                    Text("Save current look")
-                }
-            }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Looks.all.forEach { look ->
-                    AssistChip(
-                        onClick = {
-                            selectedSavedLook = null
-                            commit(document.copy(grade = look.grade))
-                        },
-                        label = { Text(look.name) }, enabled = !busy && !exporting
-                    )
-                }
-            }
-            if (savedLooks.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("MY LOOKS", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
-                    TextButton(enabled = selectedSavedLook != null, onClick = { deleteLookDialog = true }) {
-                        Text("Delete selected")
-                    }
-                }
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    savedLooks.forEach { look ->
-                        FilterChip(
-                            selected = selectedSavedLook == look.name,
-                            onClick = {
-                                selectedSavedLook = look.name
-                                commit(document.copy(grade = look.grade))
-                            },
-                            label = { Text(look.name) },
-                            enabled = !busy && !exporting
-                        )
-                    }
-                }
-            }
-
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Panel.entries.forEach { panel ->
-                    FilterChip(
-                        selected = panel == selectedPanel,
-                        onClick = {
-                            selectedPanel = panel
-                            if (panel == Panel.MASKS) { zoom = 1f; panX = 0f; panY = 0f }
-                        },
-                        label = { Text(panel.title) }
-                    )
-                }
-            }
-
-            if (selectedPanel == Panel.HSL) {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ColorBand.entries.forEach { band ->
-                        FilterChip(
-                            selected = band == selectedColor,
-                            onClick = { selectedColor = band },
-                            label = { Text(band.label) }
-                        )
-                    }
-                }
-            }
-
-            val activeControls = if (selectedPanel == Panel.HSL) {
-                ControlCatalog.mixer.getValue(selectedColor)
-            } else {
-                ControlCatalog.groups.getValue(selectedPanel)
-            }
-
-            Column(Modifier.heightIn(max = 235.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                if (selectedPanel == Panel.CURVES) {
-                    CurvePanel(
-                        selectedChannel = selectedCurve,
-                        onSelectChannel = { selectedCurve = it },
-                        points = CurveMath.get(document.grade, selectedCurve),
-                        onValueChange = { index, value ->
-                            if (dragStart == null) dragStart = document
-                            val nextCurve = CurveMath.get(document.grade, selectedCurve).change(index, value)
-                            document = document.copy(grade = CurveMath.put(document.grade, selectedCurve, nextCurve))
-                        },
-                        onValueChangeFinished = {
-                            dragStart?.let { start -> history = history.checkpoint(start, document) }
-                            dragStart = null
-                        },
-                        onReset = {
-                            commit(document.copy(grade = CurveMath.put(document.grade, selectedCurve, CurveMath.identity)))
-                        }
-                    )
-                }
-                if (selectedPanel == Panel.MASKS) {
-                    MaskPanel(
-                        masks = document.masks,
-                        selectedIndex = selectedMaskIndex,
-                        onSelect = { selectedMaskIndex = it },
-                        onAdd = { kind ->
-                            if (document.masks.size < 4) {
-                                selectedMaskIndex = document.masks.size
-                                val mask = if (kind == MaskKind.BRUSH) {
-                                    LocalMask(kind = kind, radius = .045f, feather = .45f, exposure = .55f)
-                                } else LocalMask(kind = kind)
-                                commit(document.copy(masks = document.masks + mask))
-                                if (kind == MaskKind.BRUSH) { zoom = 1f; panX = 0f; panY = 0f }
-                            }
-                        },
-                        onDelete = {
-                            if (selectedMaskIndex in document.masks.indices) {
-                                commit(document.copy(masks = document.masks.filterIndexed { i, _ -> i != selectedMaskIndex }))
-                                selectedMaskIndex = selectedMaskIndex.coerceAtMost(document.masks.lastIndex).coerceAtLeast(0)
-                            }
-                        },
-                        onMaskChange = { changed ->
-                            if (selectedMaskIndex in document.masks.indices) {
-                                if (dragStart == null) dragStart = document
-                                val copy = document.masks.toMutableList()
-                                copy[selectedMaskIndex] = changed
-                                document = document.copy(masks = copy)
-                            }
-                        },
-                        onChangeFinished = {
-                            dragStart?.let { start -> history = history.checkpoint(start, document) }
-                            dragStart = null
-                        }
-                    )
-                }
-                activeControls.forEach { control ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(control.name, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        Text(String.format(Locale.US, "%+.2f", control.read(document.grade)),
-                            color = Muted, fontSize = 11.sp)
-                        TextButton(
-                            enabled = !busy && !exporting && control.read(document.grade) != 0f,
-                            onClick = { commit(document.copy(grade = control.write(document.grade, 0f))) }
-                        ) { Text("↺") }
-                    }
-                    Slider(
-                        value = control.read(document.grade),
-                        valueRange = control.min..control.max,
-                        enabled = !busy && !exporting,
-                        onValueChange = { value ->
-                            if (dragStart == null) dragStart = document
-                            document = document.copy(grade = control.write(document.grade, value))
-                        },
-                        onValueChangeFinished = {
-                            dragStart?.let { start -> history = history.checkpoint(start, document) }
-                            dragStart = null
-                        },
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    )
-                }
-                HorizontalDivider(color = Frame, modifier = Modifier.padding(vertical = 8.dp))
-                Text("TRANSFORM", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        commit(document.copy(quarterTurns = (document.quarterTurns + 3) % 4))
-                    }) { Text("↶ 90°") }
-                    OutlinedButton(onClick = {
-                        commit(document.copy(quarterTurns = (document.quarterTurns + 1) % 4))
-                    }) { Text("↷ 90°") }
-                    OutlinedButton(onClick = {
-                        commit(document.copy(mirrored = !document.mirrored))
-                    }) { Text("Flip H") }
-                    OutlinedButton(onClick = {
-                        commit(document.copy(flipVertical = !document.flipVertical))
-                    }) { Text("Flip V") }
-                }
-                Text("STRAIGHTEN", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(String.format(Locale.US, "%+.1f°", document.straightenDegrees),
-                        color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    TextButton(onClick = {
-                        commit(document.copy(straightenDegrees = 0f))
-                    }) { Text("Level reset") }
-                }
-                Slider(
-                    value = document.straightenDegrees,
-                    valueRange = -15f..15f,
-                    onValueChange = { value ->
-                        if (dragStart == null) dragStart = document
-                        document = document.copy(straightenDegrees = value)
-                    },
-                    onValueChangeFinished = {
-                        dragStart?.let { start -> history = history.checkpoint(start, document) }
-                        dragStart = null
-                    }
-                )
-                Text("CENTER CROP", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CropRatio.entries.forEach { ratio ->
-                        FilterChip(
-                            selected = document.crop == ratio,
-                            onClick = { commit(document.copy(crop = ratio)) },
-                            label = { Text(ratio.label) }
-                        )
-                    }
-                }
-                if (document.crop != CropRatio.ORIGINAL) {
-                    Text("Reframe horizontal")
-                    Slider(
-                        value = document.cropCenterX, valueRange = 0f..1f,
-                        onValueChange = {
-                            if (dragStart == null) dragStart = document
-                            document = document.copy(cropCenterX = it)
-                        },
-                        onValueChangeFinished = {
-                            dragStart?.let { start -> history = history.checkpoint(start, document) }
-                            dragStart = null
-                        }
-                    )
-                    Text("Reframe vertical")
-                    Slider(
-                        value = document.cropCenterY, valueRange = 0f..1f,
-                        onValueChange = {
-                            if (dragStart == null) dragStart = document
-                            document = document.copy(cropCenterY = it)
-                        },
-                        onValueChangeFinished = {
-                            dragStart?.let { start -> history = history.checkpoint(start, document) }
-                            dragStart = null
-                        }
-                    )
-                }
-            }
-
-            if (showExport) {
-                Card(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Save a NEW image", fontWeight = FontWeight.Bold)
-                        Text("Adaptive export limit based on device memory (up to 24 MP). " +
-                            "New file only, original unchanged.",
-                            color = Muted, fontSize = 12.sp)
-                        Text("JPEG quality", fontSize = 12.sp)
-                        Row(Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf(85, 90, 95, 100).forEach { quality ->
-                                FilterChip(
-                                    selected = jpegQuality == quality,
-                                    onClick = { jpegQuality = quality },
-                                    label = { Text(quality.toString()) }
-                                )
-                            }
-                        }
-                        Row(Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { jpeg.launch("GZPhotoEditorPro_Edit.jpg") }) { Text("Save JPEG") }
-                            OutlinedButton(onClick = { png.launch("GZPhotoEditorPro_Edit.png") }) { Text("Save PNG") }
-                            TextButton(onClick = { showExport = false }) { Text("Cancel") }
-                        }
-                    }
-                }
-            } else {
-                Button(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
-                    enabled = !busy && !exporting,
-                    onClick = { showExport = true }
-                ) { Text(if (exporting) "Exporting…" else "EXPORT PHOTO") }
             }
         } else {
-            Spacer(Modifier.height(12.dp))
-            Text("Greenezone Software LLC • One-time purchase • Your images stay on your phone",
-                fontSize = 11.sp, color = Muted, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 15.dp))
-        }
-    }
-
-    if (saveProjectDialog) {
-        AlertDialog(
-            onDismissRequest = { saveProjectDialog = false },
-            title = { Text("Save editable project") },
-            text = {
-                Column {
-                    Text("Stores edit settings and a reference to the original photo locally. " +
-                        "The photo is not duplicated.")
-                    TextField(
-                        value = projectName,
-                        onValueChange = { projectName = it.take(28) },
-                        singleLine = true, label = { Text("Project name") }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                modifier = Modifier.padding(horizontal = 28.dp)
+            ) {
+                Text("GZ", color = EditorMint, fontSize = 52.sp, fontWeight = FontWeight.Black)
+                Text(
+                    "Your photo deserves the whole screen.",
+                    color = EditorWhite, fontSize = 23.sp, fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "No cloud. No ads. No AI. Just editing.",
+                    color = EditorMuted, fontSize = 14.sp
+                )
+                Button(
+                    onClick = ::openPicker,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = EditorMint, contentColor = Color(0xFF0B1E18)
                     )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val current = sourceUri
-                    if (current != null && ProjectStore.save(context, projectName, current, document)) {
-                        savedProjects = ProjectStore.load(context)
-                        saveProjectDialog = false
-                        message = "Project saved. Keep the original photo accessible on this device."
-                    } else {
-                        message = "Could not save project (enter a name; 12 projects maximum)."
-                    }
-                }) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { saveProjectDialog = false }) { Text("Cancel") }
+                ) { Text("Open photo", fontWeight = FontWeight.Bold) }
             }
-        )
-    }
+        }
 
-    if (projectListDialog) {
-        AlertDialog(
-            onDismissRequest = { projectListDialog = false },
-            title = { Text("My editable projects") },
-            text = {
-                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                    Text("Local only. Saved projects require the original photo to remain accessible.")
-                    if (savedProjects.isEmpty()) Text("No saved projects yet.")
-                    savedProjects.forEach { entry ->
-                        FilterChip(
-                            selected = selectedProject == entry.name,
-                            onClick = { selectedProject = entry.name },
-                            label = { Text(entry.name) }
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = savedProjects.any { it.name == selectedProject },
-                    onClick = {
-                        savedProjects.firstOrNull { it.name == selectedProject }?.let { entry ->
-                            loadPhoto(entry.image, entry.document)
+        if (chromeVisible) {
+            Column(
+                Modifier.align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .background(Brush.verticalGradient(
+                        listOf(Color(0xE5090C13), Color(0xC5090C13), Color.Transparent)
+                    ))
+                    .statusBarsPadding()
+                    .padding(start = 11.dp, end = 7.dp, top = 3.dp, bottom = 12.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().height(52.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("GZ", color = EditorMint, fontSize = 21.sp,
+                        fontWeight = FontWeight.Black)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            onClick = ::openPicker,
+                            enabled = !busy && !exporting
+                        ) { Text("Open", color = EditorWhite, fontSize = 13.sp) }
+                        IconButton(
+                            modifier = Modifier.size(42.dp).semantics { contentDescription = "Undo" },
+                            onClick = {
+                                history.undo(document)?.let { (previous, changes) ->
+                                    document = previous
+                                    history = changes
+                                    activeLook = "custom"
+                                }
+                            },
+                            enabled = history.undo.isNotEmpty() && !busy && !exporting
+                        ) { Text("↶", color = EditorWhite, fontSize = 27.sp) }
+                        IconButton(
+                            modifier = Modifier.size(42.dp).semantics { contentDescription = "Redo" },
+                            onClick = {
+                                history.redo(document)?.let { (next, changes) ->
+                                    document = next
+                                    history = changes
+                                    activeLook = "custom"
+                                }
+                            },
+                            enabled = history.redo.isNotEmpty() && !busy && !exporting
+                        ) { Text("↷", color = EditorWhite, fontSize = 27.sp) }
+                        TextButton(
+                            onClick = { compare = !compare },
+                            enabled = original != null && !busy && !exporting
+                        ) {
+                            Text(if (compare) "Edited" else "Before",
+                                color = EditorWhite, fontSize = 12.sp)
                         }
-                        projectListDialog = false
+                        TextButton(
+                            onClick = { showExport = true },
+                            enabled = original != null && !busy && !exporting
+                        ) {
+                            Text("Export", color = EditorMint, fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp)
+                        }
                     }
-                ) { Text("Open") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(enabled = selectedProject != null, onClick = {
-                        selectedProject?.let { ProjectStore.delete(context, it) }
-                        savedProjects = ProjectStore.load(context)
-                        selectedProject = null
-                        message = "Saved project entry deleted. Original photo left untouched."
-                    }) { Text("Delete") }
-                    TextButton(onClick = { projectListDialog = false }) { Text("Close") }
                 }
-            }
-        )
-    }
-
-    if (saveLookDialog) {
-        AlertDialog(
-            onDismissRequest = { saveLookDialog = false },
-            title = { Text("Save custom look") },
-            text = {
-                Column {
-                    Text("Save the current color adjustments for any photo. Crop and rotation are not saved.")
-                    TextField(
-                        value = newLookName,
-                        onValueChange = { newLookName = it.take(28) },
-                        label = { Text("Look name") },
-                        singleLine = true
+                if (notice.isNotEmpty()) {
+                    Text(
+                        notice,
+                        color = EditorWhite,
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp)
                     )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (SavedLooks.save(context, newLookName, document.grade)) {
-                        savedLooks = SavedLooks.load(context)
-                        selectedSavedLook = newLookName.trim().replace(Regex("\\s+"), " ").take(28)
-                        saveLookDialog = false
-                        message = "Custom look saved on this device."
-                    } else {
-                        message = "Could not save look. Enter a name (up to 20 looks)."
-                    }
-                }) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { saveLookDialog = false }) { Text("Cancel") } }
-        )
-    }
+            }
 
-    if (deleteLookDialog) {
-        AlertDialog(
-            onDismissRequest = { deleteLookDialog = false },
-            title = { Text("Delete saved look?") },
-            text = { Text("This removes the saved preset, not your photo or current edits.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    selectedSavedLook?.let { SavedLooks.remove(context, it) }
-                    savedLooks = SavedLooks.load(context)
-                    selectedSavedLook = null
-                    deleteLookDialog = false
-                    message = "Saved look removed."
-                }) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = { deleteLookDialog = false }) { Text("Cancel") } }
-        )
-    }
-}
+            if (zoom > 1.01f && original != null) {
+                TextButton(
+                    onClick = {
+                        zoom = 1f; panX = 0f; panY = 0f
+                    },
+                    modifier = Modifier.align(Alignment.TopEnd)
+                        .statusBarsPadding().padding(top = 64.dp, end = 10.dp)
+                        .background(Color(0xC9151D24), RoundedCornerShape(12.dp))
+                ) {
+                    Text("Fit • " + String.format(Locale.US, "%.1f×", zoom),
+                        color = EditorMint, fontSize = 12.sp)
+                }
+            }
 
-@Composable
-private fun Histogram(bins: IntArray) {
-    val peak = maxOf(1, bins.maxOrNull() ?: 1)
-    Canvas(Modifier.fillMaxWidth().height(48.dp).background(Color(0xFF0A0E12))) {
-        val width = size.width / bins.size
-        bins.forEachIndexed { i, count ->
-            val h = size.height * count.toFloat() / peak
-            drawRect(
-                color = Color(0xFF9BE7C4),
-                topLeft = Offset(i * width, size.height - h),
-                size = Size(maxOf(1f, width - 1f), h)
-            )
+            if (original != null) {
+                Box(
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                ) {
+                    EditorDock(
+                        tab = selectedTab,
+                        onTab = {
+                            selectedTab = it
+                            if (it == EditTab.MASKS) {
+                                zoom = 1f; panX = 0f; panY = 0f
+                            }
+                        },
+                        document = document,
+                        original = original,
+                        thumbnails = filterThumbs,
+                        savedLooks = savedLooks,
+                        activeLook = activeLook,
+                        busy = busy || exporting,
+                        selectedMaskIndex = selectedMask,
+                        onSelectMask = { selectedMask = it },
+                        onCommit = {
+                            commit(it)
+                            activeLook = "custom"
+                        },
+                        onSlide = ::slide,
+                        onSlideFinished = ::finishSlide,
+                        onSelectLook = ::applyLook,
+                        onAddMask = ::addMask,
+                        onDeleteMask = ::removeMask,
+                        onUndoBrush = { brushEdit(false) },
+                        onClearBrush = { brushEdit(true) },
+                        onAutoTone = ::autoTone,
+                        onAutoWB = ::autoWB,
+                        onSaveLook = ::saveLook,
+                        onSaveProject = ::saveProject,
+                        onProjects = ::openProjects,
+                        onOpen = ::openPicker
+                    )
+                }
+            }
         }
+
+        if (busy || exporting) {
+            Row(
+                Modifier.align(Alignment.Center)
+                    .background(Color(0xD9212930), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = EditorMint, strokeWidth = 2.dp
+                )
+                Text(if (exporting) "Exporting locally…" else "Processing…",
+                    color = EditorWhite, fontSize = 13.sp)
+            }
+        }
+    }
+
+    if (showExport) {
+        ExportDialog(
+            jpegQuality = jpegQuality,
+            onQuality = { jpegQuality = it },
+            onJpeg = {
+                showExport = false
+                jpeg.launch("GZPhotoEditorPro_Edit.jpg")
+            },
+            onPng = {
+                showExport = false
+                png.launch("GZPhotoEditorPro_Edit.png")
+            },
+            onDismiss = { showExport = false }
+        )
+    }
+    if (showSaveLook) {
+        SaveNameDialog(
+            title = "Save my look",
+            description = "Save your color and curve settings for other photos. " +
+                "Your original remains unchanged.",
+            name = draftName,
+            onName = { draftName = it },
+            onSave = {
+                if (SavedLooks.save(context, draftName, document.grade)) {
+                    savedLooks = SavedLooks.load(context)
+                    showSaveLook = false
+                    notice = "Custom look saved"
+                } else notice = "Give the look a name (up to twenty saved)."
+            },
+            onDismiss = { showSaveLook = false }
+        )
+    }
+    if (showSaveProject) {
+        SaveNameDialog(
+            title = "Save editable project",
+            description = "Stores your edits and a local reference to this photo. " +
+                "Keep the original photo available.",
+            name = draftName,
+            onName = { draftName = it },
+            onSave = {
+                val uri = sourceUri
+                if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
+                    savedProjects = ProjectStore.load(context)
+                    showSaveProject = false
+                    notice = "Project saved on your phone"
+                } else notice = "Could not save project (twelve maximum)."
+            },
+            onDismiss = { showSaveProject = false }
+        )
+    }
+    if (showProjects) {
+        ProjectsDialog(
+            projects = savedProjects,
+            selectedName = selectedProject,
+            onSelect = { selectedProject = it },
+            onOpen = {
+                savedProjects.firstOrNull { it.name == selectedProject }?.let {
+                    loadPhoto(it.image, it.document)
+                }
+                showProjects = false
+            },
+            onDelete = {
+                selectedProject?.let { ProjectStore.delete(context, it) }
+                savedProjects = ProjectStore.load(context)
+                selectedProject = null
+                notice = "Project reference removed. Original photo is untouched."
+            },
+            onDismiss = { showProjects = false }
+        )
     }
 }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.greenezone.gzphotoeditor"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -46,4 +46,7 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.04.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

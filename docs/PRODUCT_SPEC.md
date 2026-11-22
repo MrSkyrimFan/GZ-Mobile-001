@@ -1,40 +1,28 @@
-# GZ Photo Editor Pro — engineering contract 0.4
+# GZ Photo Editor Pro · UI/UX redesign · 0.5.0
 
-**Brand** owner-approved: GZ Photo Editor Pro
-**Company:** Greenezone Software LLC
-**Business model:** $1.99 one-time Google Play paid app
-**Architecture:** offline on-device native Android; zero runtime AI or telemetry.
+## Evidence
 
-## Quality goals
+The user installed and ran the v0.4 Android debug APK on a Samsung phone and provided three screenshots on 2026-11-21. Verified defects: photograph restricted to a short landscape preview; very long vertically scrolled adjustment lists; unreadably dark labels on a dark background; filter/tool discovery inaccessible; excessive occupied UI height. User explicitly requested a large image in the background, swipeable filters beginning with None, and tap-image-to-hide UI.
 
-This is not an arbitrary slider counter. Actual source and output integrity, non-destructive work, color accuracy, small phones, 12–24MP photograph throughput, device memory safety, robust save/restore and predictable edits are release criteria. Build success alone is insufficient.
+## Implemented UI changes
 
-## Functional feature wave
+- New image-first \`PhotoEditorScreen\`, new \`EditorDock\`, new \`EditorDialogs\`. Obsolete vertically stacked \`EditorExtras\` UI removed.
+- Entire phone-sized canvas holds image, with proportional Fit scaling; pinch/drag still available. Full image can be viewed without editing panels using single tap.
+- Top minimal overlay actions: Open, Undo, Redo, Before/Edited, Export; visible status messages and zoom Fit.
+- Bottom translucent dock: swipeable category chips; each category shows a short horizontal list of **tools**, never a long column.
+- Looks deck starts at None, followed by original color-presets and named local looks. Small thumbnail samples are rendered from the actual opened photo on a background dispatcher. Tap a tile to apply. Filter catalog remains unchanged.
+- Light/Color/Mix/Grading/Detail/Effects: one current control and one slider, reset at hand.
+- Curves: channel and knot selectors, miniature curve graph, one selected knot slider.
+- Masks: mask chips, add/remove/undo stroke/clear, one selected adjustment; brush stroke overlay remains interactive when editing at Fit.
+- Crop: scrollable rotation/flip actions and aspect options; horizontal/vertical reframe and straighten share one selected control.
+- More: auto tone/WB, save look, save/editable project, open projects, reset, new photo.
+- Explicit high-contrast text colors and readable selected states; Android status/navigation insets respected while photo remains behind translucent overlays.
+- No changes to rendering or data/document codecs, to prevent lost project compatibility. APK shares the same application ID and updates the 0.4 installation in place when signed consistently.
 
-1. 56 independent global light/color/tonal/detail/film controls. Detail now includes independent texture, thresholded sharpening and edge-aware noise reduction.
-2. RGB master + three independent RGB tone curves, adjustable fixed x-anchors.
-3. Eight hue bands with independent hue/saturation/luminance, three-zone RGB color grading.
-4. Four editable radial, linear and brush local masks with radius, feather, exposure, contrast, saturation. Brush vector data capped; index grid reduces scanning outside painted paths.
-5. Up to twelve saved local project snapshots with original content-URI references and versioned bounded document data. Can reopen if image provider retains access. Up to twenty saved grade/curve presets.
-6. Safe undo/redo, compare, histogram, zoom/pan, rotate/mirror, centered/repositionable aspect crop, ±15° straightening, auto tone/auto white balance.
-7. Cancellable render with five scanline buffers, gamma LUT, cached color/mask trig, sRGB 8-bit decoding and export, adaptive per-device export-size limit max 24MP.
-8. High-quality JPEG 85/90/95/100 and PNG new-file save, JPEG alpha flattened white, no writes to source.
+## Limits and release gates
 
-## Engineering safeguards and honest known limits
+Compiled/tested UI still needs on-device usability feedback; thumb size, real touch gestures, scroll behavior, blur/focus, contrast, dialogs and hand/device form factors require actual testing. No claims of verified full commercial Photoshop/Lightroom parity.
 
-- Project storage is app-private and references original images, rather than duplicating them. The original URI might become inaccessible after restart if a picker/provider cannot grant persistable access.
-- Original image is **never intentionally overwritten**: output URI checked for source equality; CreateDocument opens another destination. A partial target file is removed after failed export where provider allows it.
-- Adaptive memory cap protects low-heap devices by downscaling export. Fidelity for huge photography files is not automatically preserved.
-- Geometry operations create intermediate Android Bitmaps. Source and temporary ownership is explicit; dedicated emulator tests cover pixels, JPEG matte, project saving and Activity startup.
-- Preview and export use identical pixel math but are processed at different sizes, so texture/denoise and grain may differ at native zoom.
-- Current curves remain 5-anchor master/individual-channel, not arbitrary spline node editing. Brush paints a feathered adjustment region, not healing/cloning.
-- sRGB8 output does not preserve arbitrary ICC, high-bit-depth source, HDR metadata, RAW demosaicing or floating-point edits.
-- High-resolution memory pressure, EXIF cases, provider behavior, full color accuracy and touch UX remain phone qualification gates.
+Long-term professional parity work remains separate: RAW/16-bit ICC workflow, healing/cloning, robust batching, performance and memory benchmarks, professional cropping/transforms, GPU/tiled processing, accessibility and release signing.
 
-## Next unshipped engineering
-
-True layers, retouch/heal/clone, arbitrary crop/free rotation and perspective, high bit-depth color-managed pipeline, RAW/DNG engine, optical correction, batch export, GPU/tiled rendering, sophisticated interactive mask overlay / brush hardness, extensible project export/import and professional UI accessibility audit. None can be represented as already shipped.
-
-## Project boundary
-
-The official Greenezone corporate website is a separately deferred project; DO NOT write to its DNS, hosting, organization settings or other repos. This Android app is independent of XForge/GZFX/Beside-Me.
+Company official website, DNS, hosting, XForge/GZFX/Beside-Me and any other repository **must remain untouched**.

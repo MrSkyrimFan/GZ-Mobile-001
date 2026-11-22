@@ -1,3 +1,7 @@
+# SUPERSEDED by PHONE_TEST_WAVE4.md (photo-first UI)
+
+Historical v0.2 field guide only. Do not ask the user to repeat this test.
+
 # GZ Photo Editor Pro 0.3.0 — ONE integrated phone test
 
 **Build:** Open the successful **merged-main** Android CI run and download its artifact **gz-photo-editor-pro-debug**. This is an debug-signed test APK, not the Google Play release. Because the package ID changed, Android may install it alongside the old prototype. Do not treat the old app as the current candidate.
