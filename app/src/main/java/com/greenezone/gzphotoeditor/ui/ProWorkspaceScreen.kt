@@ -371,6 +371,20 @@ fun ProWorkspaceScreen(
                 Image(bitmap = bitmap.asImageBitmap(),
                     contentDescription = "Pro editable composition",
                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                if (section == ProSection.LAYERS && !busy && !exporting) {
+                    ProTapToSelect(
+                        document = document,
+                        selected = selected,
+                        canvasWidth = bitmap.width,
+                        canvasHeight = bitmap.height,
+                        onSelect = { index ->
+                            selected = index
+                            draftSelection = null
+                            retouchSource = null
+                            notice = "Selected " + document.layers[index].name
+                        }
+                    )
+                }
                 if ((section == ProSection.MOVE || section == ProSection.PAINT) &&
                     active != null && !busy && !exporting) {
                     val canvasAction = if (section == ProSection.PAINT)
@@ -552,6 +566,9 @@ fun ProWorkspaceScreen(
                     modifier = Modifier.padding(start = 14.dp))
                 if (active != null) when (section) {
                     ProSection.LAYERS -> {
+                        Text("Tap an object on the canvas or its layer chip to select it.",
+                            color = EditorMuted, fontSize = 11.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp))
                         Row(Modifier.horizontalScroll(rememberScrollState())
                             .padding(horizontal = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(3.dp)) {
