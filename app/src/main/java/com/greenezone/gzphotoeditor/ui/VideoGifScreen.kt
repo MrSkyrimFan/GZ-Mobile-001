@@ -33,6 +33,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -204,6 +205,10 @@ fun VideoGifScreen(
         })
     }
 
+    DisposableEffect(preview) {
+        val owned = preview
+        onDispose { if (owned != null && !owned.isRecycled) owned.recycle() }
+    }
     LaunchedEffect(clip, selectedFrame, document.size, document.aspect, document.fit) {
         if (clip == null) { preview = null; return@LaunchedEffect }
         try {
@@ -212,8 +217,14 @@ fun VideoGifScreen(
                 val source = VideoGifSource.preview(
                     context, clip, times[selectedFrame.coerceIn(0, times.lastIndex)],
                     document.size.maxEdge * 2)
-                try { GifEncoder.renderFrame(source, document) }
-                finally { if (!source.isRecycled) source.recycle() }
+                try {
+                    val rendered = GifEncoder.renderFrame(source, document)
+                    try { currentCoroutineContext().ensureActive(); rendered }
+                    catch (cancelled: CancellationException) {
+                        if (!rendered.isRecycled) rendered.recycle()
+                        throw cancelled
+                    }
+                } finally { if (!source.isRecycled) source.recycle() }
             }
             preview = bitmap
         } catch (cancelled: CancellationException) {

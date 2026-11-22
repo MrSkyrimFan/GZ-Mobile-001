@@ -35,6 +35,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -321,6 +322,10 @@ fun ProWorkspaceScreen(
         })
     }
 
+    DisposableEffect(preview) {
+        val owned = preview
+        onDispose { if (owned != null && !owned.isRecycled) owned.recycle() }
+    }
     LaunchedEffect(document) {
         if (document.layers.isEmpty()) { preview = null; return@LaunchedEffect }
         delay(if (dragStart != null || sliderStart != null) 55L else 90L)
@@ -329,7 +334,14 @@ fun ProWorkspaceScreen(
             val (w, h) = ProMath.dimensions(document.aspect, 940, 950_000L)
             val bitmap = withContext(Dispatchers.Default) {
                 val job = currentCoroutineContext()
-                ProRaster.render(resolver, document, w, h, true) { job.ensureActive() }
+                val rendered = ProRaster.render(resolver, document, w, h, true) {
+                    job.ensureActive()
+                }
+                try { job.ensureActive(); rendered }
+                catch (cancelled: CancellationException) {
+                    if (!rendered.isRecycled) rendered.recycle()
+                    throw cancelled
+                }
             }
             preview = bitmap
         } catch (cancelled: CancellationException) {
@@ -762,15 +774,18 @@ fun ProWorkspaceScreen(
                 }
             }
         }
-        if (busy || exporting) {
+        if (busy || exporting || (rendering && preview == null)) {
             Row(Modifier.align(Alignment.Center)
                 .background(Color(0xE0212630), RoundedCornerShape(14.dp))
                 .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(color = EditorMint,
                     modifier = Modifier.padding(end = 10.dp))
-                Text(if (exporting) "Exporting locally…" else "Opening images…",
-                    color = EditorWhite)
+                Text(when {
+                    exporting -> "Exporting locally…"
+                    busy -> "Opening images…"
+                    else -> "Preparing preview…"
+                }, color = EditorWhite)
             }
         }
     }

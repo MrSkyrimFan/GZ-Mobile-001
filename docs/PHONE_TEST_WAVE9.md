@@ -11,3 +11,7 @@ Use only the exact verified merged-main v0.10 debug APK. Back up any saved proje
 7. No AI, accounts, network permissions, ads, watermarks, subscriptions or microtransactions.
 
 Return **one** combined report with results for items 1–7 and screenshots only for actual defects. Full advanced professional tools/RAW/video timeline still need future engineering.
+
+## Refined one-video landing and memory QA
+- Opening GIF maker with no selected video should show **Select one video to turn into a GIF**, a single prominent **Choose video** button, and a discreet **Open saved GIF project** link. Photo-sequence creation must not clutter the first screen.
+- During Pro brush strokes and layer drags, the loading spinner must not block the image. Repeated GIF scrubbing and Pro edits should not accumulate bitmap memory or crash. Test a sustained editing session before production sign-off.

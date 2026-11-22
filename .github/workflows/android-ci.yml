@@ -6,6 +6,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Superseded feature pushes should not consume emulator minutes in parallel.
+# A merged-main run is never cancelled by a subsequent push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   verify:
     runs-on: ubuntu-latest
