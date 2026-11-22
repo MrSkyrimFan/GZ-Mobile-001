@@ -617,8 +617,11 @@ fun ProWorkspaceScreen(
                                         transform = option
                                     }
                                 }
-                                DockChip("Center", false) {
+                                DockChip("Center on canvas", false) {
+                                    val already = active.x == .5f && active.y == .5f
                                     changeLayer { it.copy(x = .5f, y = .5f) }
+                                    notice = if (already) "Layer already centered."
+                                        else "Layer centered on canvas."
                                 }
                             }
                             val value = when (transform) {
@@ -626,8 +629,13 @@ fun ProWorkspaceScreen(
                                 ProTransform.OPACITY -> active.opacity
                                 ProTransform.HORIZONTAL -> active.x
                                 ProTransform.VERTICAL -> active.y
+                                ProTransform.ROTATE -> active.rotationDegrees
                             }
-                            val range = if (transform == ProTransform.SIZE) .1f..2f else 0f..1f
+                            val range = when (transform) {
+                                ProTransform.SIZE -> .1f..2f
+                                ProTransform.ROTATE -> -180f..180f
+                                else -> 0f..1f
+                            }
                             Slider(value = value.coerceIn(range.start, range.endInclusive),
                                 valueRange = range, onValueChange = { x ->
                                     changeLayer({ layer -> when (transform) {
@@ -635,6 +643,7 @@ fun ProWorkspaceScreen(
                                         ProTransform.OPACITY -> layer.copy(opacity = x)
                                         ProTransform.HORIZONTAL -> layer.copy(x = x)
                                         ProTransform.VERTICAL -> layer.copy(y = x)
+                                        ProTransform.ROTATE -> layer.copy(rotationDegrees = x)
                                     } }, sliding = true)
                                 }, onValueChangeFinished = ::finishSlider,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
@@ -762,43 +771,66 @@ fun ProWorkspaceScreen(
                             onClick = { addCreative(ProLayerKind.DRAWING) }
                         ) { Text("+ Draw on new layer", color = EditorMint) }
                     }
-                    ProSection.TUNE -> {
-                        if (active.kind == ProLayerKind.ADJUSTMENT) {
-                            Row(Modifier.horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                proControls.forEach { control ->
-                                    DockChip(control.name, control.name == controlName) {
-                                        controlName = control.name
-                                    }
-                                }
+                    ProSection.SELECT -> ProSelectionPanel(
+                        layer = active,
+                        selectedKind = selectionKind,
+                        onKind = {
+                            selectionKind = it
+                            draftSelection = null
+                            selectionStart = null
+                        },
+                        draft = draftSelection,
+                        onApply = {
+                            val selectedMask = draftSelection
+                            if (selectedMask != null && ProToolMath.valid(selectedMask)) {
+                                changeLayer { it.copy(mask = selectedMask) }
+                                draftSelection = null
+                                notice = "Layer mask applied. Your image remains editable."
                             }
-                            val control = proControls.first { it.name == controlName }
-                            val value = control.read(active.edits.grade)
-                            Text(control.name, color = EditorMuted, fontSize = 12.sp,
-                                modifier = Modifier.padding(start = 14.dp))
-                            Slider(value = value.coerceIn(control.min,control.max),
-                                valueRange = control.min..control.max,
-                                onValueChange = { v ->
-                                    changeLayer({ item -> item.copy(edits = item.edits.copy(
-                                        grade = control.write(item.edits.grade,v))) }, true)
-                                }, onValueChangeFinished = ::finishSlider,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp))
-                        } else {
-                            Row(Modifier.horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (active.kind == ProLayerKind.IMAGE) {
-                                    TextButton(onClick = { editingImage = selected }) {
-                                        Text("Edit this photo", color = EditorMint)
-                                    }
-                                }
-                                TextButton(enabled = document.layers.size < ProMath.MAX_LAYERS,
-                                    onClick = { addCreative(ProLayerKind.ADJUSTMENT) }) {
-                                    Text("+ Adjustment layer", color = EditorMint)
-                                }
-                            }
+                        },
+                        onInvert = {
+                            changeLayer { layer -> layer.copy(mask =
+                                layer.mask?.copy(inverted = !layer.mask.inverted)) }
+                            notice = "Mask inverted."
+                        },
+                        onRemove = {
+                            changeLayer { it.copy(mask = null) }
+                            notice = "Mask removed."
+                        },
+                        onDiscard = { draftSelection = null }
+                    )
+                    ProSection.RETOUCH -> ProRetouchPanel(
+                        layer = active,
+                        mode = retouchKind,
+                        onMode = {
+                            retouchKind = it
+                            retouchSource = null
+                        },
+                        radius = retouchRadius,
+                        onRadius = { retouchRadius = it },
+                        strength = retouchStrength,
+                        onStrength = { retouchStrength = it },
+                        sourceChosen = retouchSource != null,
+                        onClearSource = { retouchSource = null },
+                        onUndoMark = {
+                            changeLayer { it.copy(retouches = it.retouches.dropLast(1)) }
+                        },
+                        onClearMarks = {
+                            changeLayer { it.copy(retouches = emptyList()) }
                         }
-                    }
+                    )
+                    ProSection.PIXEL -> ProPixelEffectPanel(
+                        layer = active,
+                        canAdd = document.layers.size < ProMath.MAX_LAYERS,
+                        onAdd = { addCreative(ProLayerKind.ADJUSTMENT) },
+                        onEffect = { effect ->
+                            changeLayer { it.copy(effect = effect) }
+                        },
+                        onAmount = { amount ->
+                            changeLayer({ it.copy(effectAmount = amount) }, true)
+                        },
+                        onAmountDone = ::finishSlider
+                    )
                     ProSection.BLEND -> {
                         Row(Modifier.horizontalScroll(rememberScrollState())
                             .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -954,13 +986,15 @@ fun ProWorkspaceScreen(
         title = { Text("Photo Pro · Quick guide", color = EditorWhite) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("1. Tap + Add layer to insert a photo, text, shape, brush or adjustment.",
+                Text("1. Regular Photo is for photographic adjustments. Pro is for layered " +
+                    "compositing, objects, selections, masks and retouching.",
                     color = EditorWhite)
-                Text("2. Select its named layer at the bottom. Use Move & size to drag it, " +
-                    "Text & shapes to restyle, or Draw to paint on a brush layer.",
+                Text("2. Add layers, select one, then Transform to move/rotate it. " +
+                    "Select & mask supports rectangles, ellipses and freehand paths.",
                     color = EditorWhite)
-                Text("3. Place adjustment layers above the layers you want to affect. " +
-                    "Change order with ↑ Above / ↓ Behind. Undo is always available.",
+                Text("3. Apply a mask to hide unwanted image regions. For Clone & repair, " +
+                    "tap a clean source and then the destination. Use Layer effects " +
+                    "for grayscale, inversion, threshold or posterize.",
                     color = EditorWhite)
                 Text("Save a Pro project to keep individual layers editable. Export creates a new image file.",
                     color = EditorMuted)
