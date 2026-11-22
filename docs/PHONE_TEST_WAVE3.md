@@ -1,3 +1,7 @@
+# SUPERSEDED by PHONE_TEST_WAVE4.md (photo-first UI)
+
+Historical v0.4 field guide only. Do not ask the user to repeat this test.
+
 # GZ Photo Editor Pro 0.4.0 — ONE complete Android phone field test
 
 This test is intended to cover the entire major engineering wave at once. We are **not** doing twenty tiny one-slider tests. First run all source and Android emulator CI. Download the `gz-photo-editor-pro-debug` artifact from the green **main** GitHub Actions run, unzip it, then install the `app-debug.apk`. This is a debug-signed engineering APK, not a commercial Play Store release.

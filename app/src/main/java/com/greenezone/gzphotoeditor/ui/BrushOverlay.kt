@@ -2,6 +2,7 @@ package com.greenezone.gzphotoeditor.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,13 +26,20 @@ fun BrushOverlay(
     enabled: Boolean,
     onStart: (BrushPoint) -> Unit,
     onContinue: (BrushPoint) -> Unit,
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    onTap: () -> Unit = {}
 ) {
     val latestStart by rememberUpdatedState(onStart)
     val latestContinue by rememberUpdatedState(onContinue)
     val latestFinish by rememberUpdatedState(onFinish)
+    val latestTap by rememberUpdatedState(onTap)
 
-    Canvas(Modifier.fillMaxSize().pointerInput(bitmapWidth, bitmapHeight, enabled) {
+    Canvas(
+        Modifier.fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { latestTap() })
+            }
+            .pointerInput(bitmapWidth, bitmapHeight, enabled) {
         var isPainting = false
         fun coordinates(position: Offset, onlyInside: Boolean): BrushPoint? {
             val width = size.width.toFloat()
@@ -71,7 +79,8 @@ fun BrushOverlay(
                 }
             }
         )
-    }) {
+    }
+    ) {
         val scale = min(size.width / bitmapWidth, size.height / bitmapHeight)
         val displayedWidth = bitmapWidth * scale
         val displayedHeight = bitmapHeight * scale

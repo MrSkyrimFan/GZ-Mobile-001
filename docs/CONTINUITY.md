@@ -1,17 +1,23 @@
-# GZ Photo Editor Pro — exact continuity (2026-11-21)
+# GZ Photo Editor Pro · continuity after photo-first redesign (2026-11-21)
 
-## Business and name
-**Owner-approved:** GZ Photo Editor Pro. ChromaVale and Focavera were rejected. Greenezone Software LLC owns product. Price target $1.99 one-time. Strictly no runtime AI, ads, accounts, microtransactions, subscription, analytics or internet.
+**Approved name:** GZ Photo Editor Pro, Greenezone Software LLC. All prior invented names ChromaVale/Focavera are rejected. $1.99 once, on-device, no AI, ads, IAP, subscriptions, accounts, analytics, internet. Never deviate without an owner decision.
 
-## Code custody
-Main baseline after PR #3 merged: `618c220a48c9ba42d8b06d659a52e5fce5e49761`.
-Current integration work: `feature/pro-quality-wave-04`. Source proof must include both math unit tests and actual Android emulator bitmap/Activity tests. After PR approval, verify main workflow and explicit debug APK artifact. Do not call untested code production-ready.
+**Repository:** \`MrSkyrimFan/GZ-Mobile-001\` main baseline v0.4.0 merge \`1c46465d996f989c25b48f4df109164ab21d52d1\`. v0.5.0 branch \`feature/photo-first-ui-05\`; must finish CI/PR/merge/main verification before classifying as a valid Android APK.
 
-### 0.4 engineering wave
-56 global controls, sharpen threshold, texture and edge-aware noise reduction. New direct finger-painted local BRUSH alongside radial/linear masks. Versioned deterministic edit codec and named local project library. Safe crop/straightening/reframe, conservative Auto Tone/Auto WB, device-memory-aware export limit, input URI persistence attempts, transparent JPEG white compositing, temporary Bitmap cleanup and export failure cleanup. Run emulator tests and a consolidated **one-time phone field session**.
+## User field evidence and intent
 
-## Critical boundaries
-Official Greenezone corporate website was deferred. Existing goals were About/Contact/Privacy/future Products; actual live DNS/hosting/registrar setup must NOT be guessed or modified from this Android repo. XForge, GZFX, Beside-Me, other repos and accounts are out of scope. Keep offline/no INTERNET security stance.
+Three uploaded phone screenshots from 2026-11-21 show **unacceptable UX**: minuscule horizontal preview, huge vertical sliders, illegible black label text on dark surface, messy horizontal tabs, excessive occupied space. User explicitly demanded full-screen photo background, horizontally swipeable filters beginning at None, one selectable tool at a time, tap photo to hide all UI / tap to restore. This is not optional, and was more important than another random feature batch.
 
-## Working practice
-One substantial coherent engineering batch, source and unit tests, emulator tests, final merged-main verification, then one complete phone test. Avoid repetitive micro APKs. Report failures and factual uncertainty honestly, especially Android phone/picker memory behaviors. Save continuity files in this repo.
+## Engineering decisions
+
+- Preserve trusted 0.4.0 image engine, 56 global controls, mask/curve/project/preset history and build tools.
+- Replace \`ui/PhotoEditorScreen.kt\` with image-first canvas; add \`ui/EditorDock.kt\` for compact horizontal filter/tool navigation, add \`ui/EditorDialogs.kt\` for saving/exporting dialogs; wire \`ui/BrushOverlay.kt\` to handle photo taps while brush mode is selected.
+- Remove obsolete \`ui/EditorExtras.kt\`.
+- Full canvas image can be tapped to hide/show controls. Top minimal overlay contains open/undo/redo/before/export. Bottom dock over image shows Looks/Light/Color/Mix/Grading/Detail/Effects/Curves/Masks/Crop/More, one slider at a time. Looks thumbnails use original photo and are computed on background thread.
+- Same \`com.greenezone.gzphotoeditor\` package. Bump version 0.5.0 / code 5.
+- Expand Android emulator Compose tests for first open, Looks None-to-Golden selection, and one-slider-per-tool behavior.
+- One consolidated on-phone validation of photo size, filter swipes, tap-to-hide and touch controls after green merged-main CI. **Do not burden user with micro iteration.**
+
+**Boundaries:** This Android repo must not touch Greenezone corporate website, registrar, DNS, XForge, GZFX, Beside-Me or other GitHub repos. The future Greenezone website was deferred, with general About/Contact/Privacy/Products structure; exact hosting details are not proven by this app repo. Do not assume them.
+
+**Proof policy:** Compiler + JVM + Android emulator + artifact + on-phone field evidence are separate levels. Do not claim commercial release-ready based on green CI.
