@@ -339,6 +339,10 @@ class AndroidBackNavigationTest {
         rule.onNodeWithText("Stack (2)").performClick()
         rule.onNodeWithText("Shape 2").assertIsDisplayed()
         rule.onNodeWithText("Done").performClick()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Layer stack").fetchSemanticsNodes().isEmpty()
+        }
+        rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
 
         pressSystemBack()
         rule.onNodeWithText("Photo ▾").assertIsDisplayed()
@@ -676,6 +680,15 @@ class AndroidBackNavigationTest {
     @Test fun dirtyLoadedRegularBackCanStayOrDiscardWithoutChangingSource() =
         withLoadedRegular { uri, original ->
             rule.onNodeWithText("Golden").performClick()
+            rule.waitUntil(15_000) {
+                try {
+                    rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+                    true
+                } catch (_: AssertionError) {
+                    false
+                }
+            }
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             pressSystemBack()
             rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
 
