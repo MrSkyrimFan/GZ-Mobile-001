@@ -14,7 +14,7 @@
 - **Non-obscuring layout:** editing controls use a translucent dock over the photo; the top bar holds Open, Undo/Redo, Before, and Export. Preview remains the entire canvas.
 - **Zoom and position:** pinch and drag photo, tap Fit if zoomed. Brush mode paints locally with one finger at Fit/1×.
 - **Work preservation:** existing project saving, presets, masks, curves, crop/straighten and JPEG/PNG export are retained; package name stays \`com.greenezone.gzphotoeditor\`.
-- The photo-first UI is integrated with the existing 56 global controls, 12 built-in looks, four local mask types? **No**: three mask types (brush, radial, linear) with up to four instances, four curve channels and existing edit/export pipeline.
+- The photo-first UI is integrated with the existing 56 global controls, 12 built-in looks, three mask types (brush, radial, linear, with up to four instances), four curve channels and existing edit/export pipeline.
 
 ## Product contract
 

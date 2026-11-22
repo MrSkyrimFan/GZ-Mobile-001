@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -37,6 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
@@ -68,7 +71,7 @@ import java.util.Locale
 internal val EditorMint = Color(0xFF96E5C2)
 internal val EditorWhite = Color(0xFFF2F5F6)
 internal val EditorMuted = Color(0xFFB1BBC4)
-internal val EditorSurface = Color(0xF2171C25)
+internal val EditorSurface = Color(0xE6171C25)
 private val ChipIdle = Color(0xFF292F3C)
 private val ChipSelected = Color(0xFF345548)
 
@@ -733,10 +736,43 @@ private fun SingleAdjustment(
             colors = SliderDefaults.colors(
                 thumbColor = EditorMint,
                 activeTrackColor = EditorMint,
-                inactiveTrackColor = Color(0xFF505967),
-                activeTickColor = EditorMint,
-                inactiveTickColor = EditorMuted
-            )
+                inactiveTrackColor = Color(0xFF505967)
+            ),
+            thumb = {
+                Box(
+                    Modifier.size(19.dp)
+                        .clip(CircleShape)
+                        .background(if (enabled) EditorMint else EditorMuted)
+                        .border(2.dp, Color(0xFF1C2530), CircleShape)
+                )
+            },
+            track = { sliderState ->
+                Canvas(Modifier.fillMaxWidth().height(6.dp)) {
+                    val fraction = ((sliderState.value - low) / (high - low)).coerceIn(0f, 1f)
+                    val neutral = if (low < 0f && high > 0f) (-low / (high - low)) else 0f
+                    val start = minOf(fraction, neutral)
+                    val end = maxOf(fraction, neutral)
+                    val round = CornerRadius(size.height / 2f, size.height / 2f)
+                    drawRoundRect(color = Color(0xFF56606F), cornerRadius = round)
+                    if (end - start > .001f) {
+                        drawRoundRect(
+                            color = EditorMint,
+                            topLeft = Offset(size.width * start, 0f),
+                            size = Size(size.width * (end - start), size.height),
+                            cornerRadius = round
+                        )
+                    }
+                    if (low < 0f && high > 0f) {
+                        val x = neutral * size.width
+                        drawLine(
+                            color = Color(0xFFF1F7F6).copy(alpha = .65f),
+                            start = Offset(x, -5f),
+                            end = Offset(x, size.height + 5f),
+                            strokeWidth = 2f
+                        )
+                    }
+                }
+            }
         )
     }
 }
