@@ -74,6 +74,8 @@ object CollageRaster {
                             .coerceIn(250_000L, 9_000_000L)
                     val decoded = try {
                         loader(photo, maxEdge, pixelBudget)
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
                     } catch (failure: Exception) {
                         throw MissingPhoto(index, failure)
                     }

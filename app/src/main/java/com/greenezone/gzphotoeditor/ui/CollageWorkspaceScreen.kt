@@ -200,6 +200,10 @@ fun CollageWorkspaceScreen(
     }
 
     fun runExport(uri: Uri, request: CollageExport) {
+        if (request.collage.photos.any { it.uri == uri.toString() }) {
+            notice = "Export destination cannot overwrite a source photo."
+            return
+        }
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val budget = GeometryMath.safeExportPixels(manager.memoryClass)
         scope.launch {

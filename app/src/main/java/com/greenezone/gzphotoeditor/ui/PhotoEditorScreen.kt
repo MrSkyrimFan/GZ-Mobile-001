@@ -1062,6 +1062,7 @@ fun PhotoEditorScreen(
                         onProjects = ::openProjects,
                         onOpen = ::openPicker,
                         onCollage = { collageOpen = true },
+                        showCollage = onDoneCollagePhoto == null,
                         creativeTool = creativeTools,
                         onCreativeTool = { creativeTools = it },
                         onNewText = { editWords(true) },
