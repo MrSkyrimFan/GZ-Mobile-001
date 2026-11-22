@@ -81,3 +81,12 @@ complete and witnessed.
   and export; require full requalification rather than increase test timeout.
 - No marketing or release certification until both API29 and API35 report
   all tests green again after these corrections.
+
+## GIF re-open UI race identified on API35 and API29
+- The "GIF saved" notice was set while `exporting` was still true.
+  The "Edit saved GIF" action appeared immediately, but `openSource`
+  quietly returned while `enabled=false`. The automated test intermittently
+  timed out waiting for a state update after the ignored click.
+- Gate the button on `enabled` so it cannot be clicked until the job's
+  `finally` clears export state. Verify bytes with an Android GIF decoder
+  and re-inspect saved content before simulating button press.

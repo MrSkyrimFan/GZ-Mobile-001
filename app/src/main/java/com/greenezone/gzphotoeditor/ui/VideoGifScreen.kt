@@ -273,7 +273,9 @@ fun VideoGifScreen(
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(notice, color = EditorWhite, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    if (lastExport != null && notice == "GIF saved") TextButton(onClick = {
+                    // The success text is published before finally clears exporting.
+                    // Do not expose a clickable link until openSource() can accept it.
+                    if (enabled && lastExport != null && notice == "GIF saved") TextButton(onClick = {
                         lastExport?.let(::openSource)
                     }) { Text("Edit saved GIF", color = EditorMint) }
                     TextButton(onClick = { notice = "" }) { Text("Dismiss", color = EditorMuted) }
