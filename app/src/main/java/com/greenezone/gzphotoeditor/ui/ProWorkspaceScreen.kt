@@ -102,6 +102,7 @@ fun ProWorkspaceScreen(
     var selectionStart by remember { mutableStateOf<BrushPoint?>(null) }
     var draftSelection by remember { mutableStateOf<ProSelection?>(null) }
     var retouchSource by remember { mutableStateOf<BrushPoint?>(null) }
+    var retouchSourceImage by remember { mutableStateOf<BrushPoint?>(null) }
     var retouchKind by remember { mutableStateOf(ProRetouchKind.CLONE) }
     var retouchRadius by remember { mutableFloatStateOf(.04f) }
     var retouchStrength by remember { mutableFloatStateOf(.85f) }
@@ -381,6 +382,7 @@ fun ProWorkspaceScreen(
                             selected = index
                             draftSelection = null
                             retouchSource = null
+                            retouchSourceImage = null
                             notice = "Selected " + document.layers[index].name
                         }
                     )
@@ -459,24 +461,31 @@ fun ProWorkspaceScreen(
                         },
                         onEndSelection = { selectionStart = null },
                         onRetouchTap = { point ->
-                            val source = retouchSource
-                            if (source == null) {
-                                retouchSource = point
-                                notice = "Source set. Tap where to clone or repair."
+                            val local = ProMath.canvasToImageNormalized(
+                                active, bitmap.width, bitmap.height, point)
+                            if (local == null) {
+                                notice = "Tap inside the selected image to sample/repair."
+                            } else if (retouchSourceImage == null) {
+                                retouchSource = point // Canvas coordinates for marker.
+                                retouchSourceImage = local // Source-image coordinates for edit.
+                                notice = "Source set. Tap the image area to clone/repair."
                             } else {
                                 if (active.retouches.size >= ProToolMath.MAX_RETOUCH) {
                                     notice = "Maximum 80 retouch marks per image."
                                 } else {
+                                    val source = retouchSourceImage!!
                                     val mark = ProRetouchMark(
                                         retouchKind, source.x, source.y,
-                                        point.x, point.y,
+                                        local.x, local.y,
                                         radius = retouchRadius, strength = retouchStrength)
                                     changeLayer { layer ->
                                         layer.copy(retouches = layer.retouches + mark)
                                     }
-                                    notice = "Retouch mark applied. Choose another source."
+                                    notice = "Retouch applied. Choose another source."
                                 }
                                 retouchSource = null
+                            retouchSourceImage = null
+                                retouchSourceImage = null
                             }
                         }
                     )
@@ -547,6 +556,7 @@ fun ProWorkspaceScreen(
                             draftSelection = null
                             selectionStart = null
                             retouchSource = null
+                            retouchSourceImage = null
                         }
                     }
                 }
@@ -556,6 +566,7 @@ fun ProWorkspaceScreen(
                         DockChip(mode.title, section == mode, enabled = !busy && !exporting) {
                             section = mode
                             retouchSource = null
+                            retouchSourceImage = null
                         }
                     }
                 }
@@ -832,13 +843,14 @@ fun ProWorkspaceScreen(
                         onMode = {
                             retouchKind = it
                             retouchSource = null
+                            retouchSourceImage = null
                         },
                         radius = retouchRadius,
                         onRadius = { retouchRadius = it },
                         strength = retouchStrength,
                         onStrength = { retouchStrength = it },
                         sourceChosen = retouchSource != null,
-                        onClearSource = { retouchSource = null },
+                        onClearSource = { retouchSource = null; retouchSourceImage = null },
                         onUndoMark = {
                             changeLayer { it.copy(retouches = it.retouches.dropLast(1)) }
                         },

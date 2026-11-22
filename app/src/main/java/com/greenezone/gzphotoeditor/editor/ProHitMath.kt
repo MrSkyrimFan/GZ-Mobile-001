@@ -15,13 +15,9 @@ object ProHitMath {
             val mask = layer.mask
             if (mask != null && !maskContains(mask, x, y)) continue
             val inBounds = when (layer.kind) {
-                ProLayerKind.IMAGE -> {
-                    val rect = ProMath.bounds(layer, 1000, 1000,
-                        (1000f * layer.aspect).toInt().coerceAtLeast(1), 1000)
-                    val px = x * 1000; val py = y * 1000
-                    px >= rect.left && px <= rect.right &&
-                        py >= rect.top && py <= rect.bottom
-                }
+                ProLayerKind.IMAGE ->
+                    ProMath.canvasToImageNormalized(
+                        layer, 1000, 1000, BrushPoint(x, y)) != null
                 ProLayerKind.TEXT -> {
                     val text = layer.edits.creative.text.firstOrNull()
                     if (text == null) false

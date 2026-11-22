@@ -49,6 +49,25 @@ class ProWorkspaceToolsTest {
         assertEquals(ProLayerKind.IMAGE, layer.kind)
     }
 
+    @Test fun clonePointsMapFromMovedRotatedCanvasToSourcePixels() {
+        val image = ProLayer("content://image/test", name = "Layer",
+            aspect = 2f, x = .6f, y = .4f, scale = .8f)
+        val center = ProMath.canvasToImageNormalized(
+            image, 1000, 1000, BrushPoint(.6f, .4f))
+        assertNotNull(center)
+        assertEquals(.5f, center!!.x, .001f)
+        assertEquals(.5f, center.y, .001f)
+        val out = ProMath.canvasToImageNormalized(
+            image, 1000, 1000, BrushPoint(.02f, .02f))
+        assertNull(out)
+        val rotated = image.copy(rotationDegrees = 90f)
+        val mapped = ProMath.canvasToImageNormalized(
+            rotated, 1000, 1000, BrushPoint(.6f, .4f))
+        assertNotNull(mapped)
+        assertEquals(.5f, mapped!!.x, .001f)
+        assertEquals(.5f, mapped.y, .001f)
+    }
+
     @Test fun proEffectLayersCannotBeFakeImageLayers() {
         val fx = ProLayer(uri = "", name = "Invert",
             kind = ProLayerKind.ADJUSTMENT, effect = ProPixelEffect.INVERT)
