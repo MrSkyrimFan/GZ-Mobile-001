@@ -38,10 +38,12 @@ class ProWorkspaceToolsTest {
             rotationDegrees = 40f)
         val doc = ProDocument(listOf(layer))
         assertTrue(ProMath.valid(doc))
-        assertFalse(ProMath.valid(doc.copy(layers = listOf(layer.copy(
-            rotationDegrees = Float.NaN)))))
-        assertFalse(ProMath.valid(doc.copy(layers = listOf(layer.copy(
-            mask = ProSelection(ProSelectionKind.LASSO, points = emptyList())))))
+        val invalidRotation = layer.copy(rotationDegrees = Float.NaN)
+        assertFalse(ProMath.valid(ProDocument(listOf(invalidRotation))))
+        val invalidMask = layer.copy(
+            mask = ProSelection(ProSelectionKind.LASSO, points = emptyList())
+        )
+        assertFalse(ProMath.valid(ProDocument(listOf(invalidMask))))
         val overCap = layer.copy(
             retouches = List(81) {
                 ProRetouchMark(ProRetouchKind.CLONE, .1f, .1f, .8f, .8f)
