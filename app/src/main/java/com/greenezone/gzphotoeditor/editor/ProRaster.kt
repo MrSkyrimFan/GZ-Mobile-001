@@ -15,6 +15,13 @@ object ProRaster {
     class MissingLayer(val position: Int, cause: Throwable) :
         IllegalStateException("Layer " + (position + 1) + " cannot access its source photo", cause)
 
+    private fun blend(mode: ProBlend): BlendMode = when (mode) {
+        ProBlend.NORMAL -> BlendMode.SRC_OVER
+        ProBlend.MULTIPLY -> BlendMode.MULTIPLY
+        ProBlend.SCREEN -> BlendMode.SCREEN
+        ProBlend.OVERLAY -> BlendMode.OVERLAY
+    }
+
     fun render(
         resolver: ContentResolver,
         document: ProDocument,
@@ -42,6 +49,48 @@ object ProRaster {
             for ((index, layer) in document.layers.withIndex()) {
                 cancel?.invoke()
                 if (!layer.visible || layer.opacity <= 0f) continue
+                if (layer.kind != ProLayerKind.IMAGE) {
+                    if (layer.kind == ProLayerKind.ADJUSTMENT) {
+                        val adjusted = ImagePipeline.render(
+                            output, EditDocument(grade = layer.edits.grade), cancel)
+                        try {
+                            if (adjusted !== output) canvas.drawBitmap(adjusted, 0f, 0f,
+                                Paint(Paint.FILTER_BITMAP_FLAG).apply {
+                                    alpha = (layer.opacity * 255).roundToInt().coerceIn(0, 255)
+                                    blendMode = blend(layer.blend)
+                                })
+                        } finally {
+                            if (adjusted !== output && !adjusted.isRecycled) adjusted.recycle()
+                        }
+                    } else {
+                        val creative = layer.edits.creative
+                        val overlay = when (layer.kind) {
+                            ProLayerKind.TEXT -> CreativeDocument(text = creative.text.map {
+                                it.copy(x = layer.x, y = layer.y,
+                                    width = (it.width * layer.scale).coerceIn(.07f, 1f),
+                                    height = (it.height * layer.scale).coerceIn(.04f, 1f),
+                                    size = (it.size * layer.scale).coerceIn(.012f, .24f))
+                            })
+                            ProLayerKind.SHAPE -> CreativeDocument(shapes = creative.shapes.map {
+                                it.copy(x = layer.x, y = layer.y,
+                                    width = (it.width * layer.scale).coerceIn(.018f, 1f),
+                                    height = (it.height * layer.scale).coerceIn(.018f, 1f))
+                            })
+                            ProLayerKind.DRAWING -> CreativeDocument(strokes = creative.strokes)
+                            else -> CreativeDocument()
+                        }
+                        val save = canvas.saveLayer(
+                            0f, 0f, width.toFloat(), height.toFloat(),
+                            Paint().apply {
+                                alpha = (layer.opacity * 255).roundToInt().coerceIn(0, 255)
+                                blendMode = blend(layer.blend)
+                            })
+                        try {
+                            CreativeRaster.drawIntoCanvas(canvas, overlay, width, height, cancel)
+                        } finally { canvas.restoreToCount(save) }
+                    }
+                    continue
+                }
                 var source: Bitmap? = null
                 var edited: Bitmap? = null
                 try {
@@ -60,12 +109,7 @@ object ProRaster {
                     val frame = ProMath.bounds(layer, width, height, edited.width, edited.height)
                     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                         alpha = (layer.opacity * 255).roundToInt().coerceIn(0, 255)
-                        blendMode = when (layer.blend) {
-                            ProBlend.NORMAL -> BlendMode.SRC_OVER
-                            ProBlend.MULTIPLY -> BlendMode.MULTIPLY
-                            ProBlend.SCREEN -> BlendMode.SCREEN
-                            ProBlend.OVERLAY -> BlendMode.OVERLAY
-                        }
+                        blendMode = blend(layer.blend)
                     }
                     canvas.drawBitmap(edited, null,
                         RectF(frame.left, frame.top, frame.right, frame.bottom), paint)

@@ -1,6 +1,10 @@
 package com.greenezone.gzphotoeditor.editor
 
-/** Independent image layers. The original source and each layer's edits remain untouched. */
+/** Original bitmap files and editable vector layers coexist in one ordered stack. */
+enum class ProLayerKind(val label: String) {
+    IMAGE("Image"), TEXT("Text"), SHAPE("Shape"), DRAWING("Brush"), ADJUSTMENT("Adjustment")
+}
+
 enum class ProBlend(val label: String) {
     NORMAL("Normal"), MULTIPLY("Multiply"), SCREEN("Screen"), OVERLAY("Overlay")
 }
@@ -21,7 +25,9 @@ data class ProLayer(
     val scale: Float = 1f,
     val opacity: Float = 1f,
     val visible: Boolean = true,
-    val blend: ProBlend = ProBlend.NORMAL
+    val blend: ProBlend = ProBlend.NORMAL,
+    val kind: ProLayerKind = ProLayerKind.IMAGE,
+    val aspect: Float = 1f
 )
 data class ProDocument(
     val layers: List<ProLayer> = emptyList(),
@@ -46,11 +52,22 @@ object ProMath {
     fun valid(document: ProDocument): Boolean =
         document.layers.size in 1..MAX_LAYERS &&
             document.layers.all { item ->
-                item.uri.startsWith("content://") && item.uri.length <= 4096 &&
-                    item.name.length <= 42 &&
+                val sourceValid = when (item.kind) {
+                    ProLayerKind.IMAGE -> item.uri.startsWith("content://") && item.uri.length <= 4096
+                    ProLayerKind.TEXT -> item.uri.isEmpty() &&
+                        item.edits.creative.text.size == 1 &&
+                        item.edits.creative.text[0].content.length <= 500
+                    ProLayerKind.SHAPE -> item.uri.isEmpty() && item.edits.creative.shapes.size == 1
+                    ProLayerKind.DRAWING -> item.uri.isEmpty() &&
+                        item.edits.creative.strokes.size <= CreativeRaster.MAX_INK &&
+                        item.edits.creative.strokes.all { it.points.size <= 500 }
+                    ProLayerKind.ADJUSTMENT -> item.uri.isEmpty()
+                }
+                sourceValid && item.name.isNotBlank() && item.name.length <= 42 &&
                     item.x.isFinite() && item.y.isFinite() && item.x in 0f..1f &&
                     item.y in 0f..1f && item.scale.isFinite() &&
-                    item.scale in .1f..2f && item.opacity.isFinite() && item.opacity in 0f..1f
+                    item.scale in .1f..2f && item.opacity.isFinite() && item.opacity in 0f..1f &&
+                    item.aspect.isFinite() && item.aspect in .1f..10f
             }
 
     fun dimensions(aspect: ProAspect, maxEdge: Int, maxPixels: Long): Pair<Int, Int> {
@@ -71,7 +88,11 @@ object ProMath {
         return ProRect(x - halfW, y - halfH, x + halfW, y + halfH)
     }
 
-    /** Index zero is the bottommost image; final element is the topmost. */
+    fun insert(document: ProDocument, layer: ProLayer): ProDocument? =
+        if (document.layers.size >= MAX_LAYERS) null
+        else document.copy(layers = document.layers + layer)
+
+    /** Index zero is the bottommost layer; final element is the topmost. */
     fun move(layers: List<ProLayer>, from: Int, to: Int): List<ProLayer> {
         if (from !in layers.indices || to !in layers.indices || from == to) return layers
         return layers.toMutableList().apply { add(to, removeAt(from)) }
