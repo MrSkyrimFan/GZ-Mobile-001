@@ -138,6 +138,10 @@ fun ProWorkspaceScreen(
             onDocument(next)
         } else commit(next)
     }
+    /** Trailing lambda convenience preserves one straightforward tool action per click. */
+    fun changeLayer(transformer: (ProLayer) -> ProLayer) {
+        changeLayer(transformer, false)
+    }
     fun finishSlider() {
         sliderStart?.let { history = history.checkpoint(it, document) }
         sliderStart = null
