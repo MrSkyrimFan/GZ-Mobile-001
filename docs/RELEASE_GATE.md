@@ -25,3 +25,11 @@
 Native app profiling, large-photo/20-tile memory pressure, long session/ANR, color accuracy, Android API/device coverage, media URI grant lifetime, trademark/patent/license/SBOM and privacy/Play/store legal checks, production signed AAB. No final 1.0 claim.
 
 Refer also to `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md` for lawful original-code Lightroom-class **non-AI** features, RAW/license decisions and later video editing.
+
+## Additional v0.9 gates
+- [ ] Top-right mode dropdown on Regular, Pro, GIF and Collage. Video disabled / Coming soon. Regular toolbar compact, no destroyed existing tools.
+- [ ] Pro image compositor: independent image edits, blend/position/size/opacity/visibility/order/undo/persist/export.
+- [ ] Real GIF89a multi-frame output with tested Android decoder, timing/loop/ordering, saved project/undo and safe source ownership.
+- [ ] No new permission, dependency, AI, ad, account, watermark or network regressions.
+- [ ] Exact PR HEAD passed CI, merged main Android bitmap/Compose tests passed, expected APK artifact exists.
+- [ ] Combined physical phone check `PHONE_TEST_WAVE8.md` for 0.8 + 0.9; commercial release and professional/RAW/video work remain open.

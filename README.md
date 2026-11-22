@@ -1,8 +1,8 @@
 # GZ Editor Pro
 
-**Greenezone Software LLC** · Android photo editing · Target **$1.99 one-time** purchase
+**Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-**Status: version 0.8.0 engineering qualification candidate. Not published on Google Play.**
+**Status: version 0.9.0 engineering qualification candidate. Not published on Google Play.**
 
 ## Core contract
 - Fully offline. No runtime AI, subscriptions, ads, account, telemetry, in-app purchases, watermarks or network permission.
@@ -10,6 +10,14 @@
 - All edits are parameters in saved local project snapshots; previous projects remain decodable.
 - Compact image-first interface: GZ Editor Pro top-left, Open media, Undo/Redo, Before, Export, swipeable bottom tool dock, tap to hide editing chrome, company copyright bottom-left on empty main page.
 - Preserve all prior 56 global adjustments, 50 Looks, HSL color mixer, grading, 4 curve channels, 3 adjustment-mask types, Blur & cover, crop/rotate/flip/straighten, project/preset storage, JPEG/PNG export and transparent output where supported.
+
+## Separate editing workspaces (v0.9)
+- **Top-right Photo ▾** selects Photo editing (regular), Photo editing Pro, Collage maker, GIF maker or Video editing (Coming soon and disabled). Each workspace owns its editing controls.
+- **Regular Photo editing** has a compact set of familiar core controls, with previous source image and editing session retained when switching workspaces.
+- **Photo Pro** has real image layers (up to 12), independent existing photo editor per layer, reorder/duplicate/hide/delete, position/size/opacity and Normal/Multiply/Screen/Overlay blending. Non-destructive project save/reopen, Undo/Redo and full image export. Text/drawing/shapes are editable *inside* each image layer. A complete universal Photoshop-style layer stack, heal and selection tools remain a future engineering target.
+- **GIF maker** accepts 2–20 photos, reorder/remove/preview/play, frame timing, loop, output size/ratio/Fit/Fill, editable local projects and actual animated GIF89a with original-code LZW encoding. GIFs do not carry audio; a photo with music needs future MP4 video export.
+- **Video editing comes last**, is not implemented, and has no fake working controls. The complete non-AI Lightroom/Photoshop-like still-photo, GIF, music and video scope is in `docs/UNIFIED_PRODUCT_SCOPE_09.md`.
+- No additional third-party dependencies, accounts, AI, ads, watermarks or online services were introduced for this wave.
 
 ## New collage workspace (v0.8)
 
@@ -37,7 +45,7 @@
 - Renderer uses 8-bit sRGB, not a RAW/16-bit managed photo pipeline. New TIFF is uncompressed 8-bit RGB, not 16-bit.
 - Social dimensions are practical composition presets, **not guarantees of platform acceptance**, safe-area rules or uploaded file size. Platforms may change their policies.
 - Export presets may upscale lower-resolution source photos; this cannot recover missing detail. Fit can add margins; Fill can crop. The user selects explicitly.
-- Drawing eraser splits vector strokes at erased points, not a pixel-based clone/heal tool. No video editing despite the button label Open media.
+- Drawing eraser splits vector strokes at erased points, not a pixel-based clone/heal tool. Video editing is not yet implemented and stays disabled in the mode menu.
 - Very large photo output is limited by device memory. Custom-font file imports, movable individual crop-edge handles, text-on-path, arbitrary masking or PSD project import remain unimplemented.
 - Blur/pixelation are not secure redaction. Use a fully opaque black covering for sensitive material.
 
