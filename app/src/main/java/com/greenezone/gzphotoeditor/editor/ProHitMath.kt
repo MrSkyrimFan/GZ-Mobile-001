@@ -6,7 +6,9 @@ import kotlin.math.sqrt
 
 /** Deterministic hit-testing for the topmost visible Pro object. */
 object ProHitMath {
-    fun pick(document: ProDocument, x: Float, y: Float): Int? {
+    fun pick(document: ProDocument, x: Float, y: Float,
+        canvasWidth: Int = (1000 * document.aspect.ratio).toInt(), canvasHeight: Int = 1000
+    ): Int? {
         if (!x.isFinite() || !y.isFinite() || x !in 0f..1f || y !in 0f..1f)
             return null
         for (index in document.layers.indices.reversed()) {
@@ -17,18 +19,19 @@ object ProHitMath {
             val inBounds = when (layer.kind) {
                 ProLayerKind.IMAGE ->
                     ProMath.canvasToImageNormalized(
-                        layer, 1000, 1000, BrushPoint(x, y)) != null
-                ProLayerKind.TEXT -> {
+                        layer, canvasWidth, canvasHeight, BrushPoint(x, y)) != null
+                ProLayerKind.TEXT, ProLayerKind.SHAPE -> {
                     val text = layer.edits.creative.text.firstOrNull()
-                    if (text == null) false
-                    else abs(x - layer.x) <= text.width * layer.scale / 2f &&
-                        abs(y - layer.y) <= text.height * layer.scale / 2f
-                }
-                ProLayerKind.SHAPE -> {
                     val shape = layer.edits.creative.shapes.firstOrNull()
-                    if (shape == null) false
-                    else abs(x - layer.x) <= shape.width * layer.scale / 2f &&
-                        abs(y - layer.y) <= shape.height * layer.scale / 2f
+                    val width = (text?.width ?: shape?.width ?: 0f) * layer.scale
+                    val height = (text?.height ?: shape?.height ?: 0f) * layer.scale
+                    val angle = -layer.rotationDegrees * kotlin.math.PI / 180.0
+                    val dx = (x - layer.x) * canvasWidth
+                    val dy = (y - layer.y) * canvasHeight
+                    val u = dx * kotlin.math.cos(angle) - dy * kotlin.math.sin(angle)
+                    val v = dx * kotlin.math.sin(angle) + dy * kotlin.math.cos(angle)
+                    abs(u) <= width.coerceAtMost(1f) * canvasWidth / 2 &&
+                        abs(v) <= height.coerceAtMost(1f) * canvasHeight / 2
                 }
                 ProLayerKind.DRAWING -> layer.edits.creative.strokes.any { stroke ->
                     val radius = (stroke.thickness / 2f).coerceAtLeast(.008f)

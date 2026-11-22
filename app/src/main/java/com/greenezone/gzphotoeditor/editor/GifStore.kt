@@ -9,7 +9,7 @@ import java.util.Base64
 /** Local-only GIF projects: source references plus order, tempo and output options. */
 object GifStore {
     private const val MAX_FILES = 12
-    private const val MAX_BYTES = 90_000
+    private const val MAX_BYTES = 2_400_000
     private fun folder(context: Context) = File(context.filesDir, "gz_gif_projects").also { it.mkdirs() }
     private fun id(name: String): String? {
         val clean = name.trim().replace(Regex("\\s+"), " ").take(32)
@@ -19,12 +19,14 @@ object GifStore {
     fun encode(doc: GifDocument): String {
         require(GifMath.valid(doc))
         return JSONObject().apply {
-            put("version", 2)
+            put("version", 3)
             put("delayMs", doc.delayMs)
             put("size", doc.size.name)
             put("fit", doc.fit.name)
             put("aspect", doc.aspect.name)
             put("forever", doc.forever)
+            doc.repeatCount?.let { put("repeatCount", it) }
+            if (doc.edits != EditDocument()) put("edits", EditDocumentCodec.encode(doc.edits))
             put("frames", JSONArray(doc.frames))
             doc.video?.let { clip ->
                 put("video", JSONObject().apply {
@@ -32,6 +34,9 @@ object GifStore {
                     put("startMs", clip.startMs); put("endMs", clip.endMs)
                     put("fps", clip.fps); put("speed", clip.speedPercent)
                     put("reverse", clip.reverse)
+                    put("width", clip.width); put("height", clip.height)
+                    put("isGif", clip.isGif); put("loopCount", clip.loopCount)
+                    put("times", JSONArray(clip.sourceTimesMs))
                 })
             }
         }.toString().also { require(it.length <= MAX_BYTES) }
@@ -40,20 +45,28 @@ object GifStore {
         if (data.length > MAX_BYTES) return null
         return try {
             val obj = JSONObject(data)
-            if (obj.optInt("version", 0) !in 1..2) return null
+            if (obj.optInt("version", 0) !in 1..3) return null
             val array = obj.optJSONArray("frames") ?: return null
             if (array.length() > GifMath.MAX_FRAMES) return null
             val list = (0 until array.length()).map { array.optString(it, "") }
             val v = obj.optJSONObject("video")
-            val clip = if (v != null && obj.optInt("version") == 2) {
+            val clip = if (v != null && obj.optInt("version") >= 2) {
+                val times = v.optJSONArray("times")
+                if (times != null && times.length() > GifVideoMath.MAX_OUTPUT_FRAMES) return null
+                val duration = v.optLong("durationMs", 0)
+                val stamps = if (times == null) emptyList() else (0 until times.length()).map { times.getLong(it) }
+                if (stamps.any { it !in 0 until duration } || stamps.indices.any { it > 0 && stamps[it] <= stamps[it - 1] }) return null
                 GifVideoClip(
                     uri = v.optString("uri", ""),
-                    durationMs = v.optLong("durationMs", 0),
+                    durationMs = duration,
                     startMs = v.optLong("startMs", 0),
                     endMs = v.optLong("endMs", 0),
                     fps = v.optInt("fps", 8),
                     speedPercent = v.optInt("speed", 100),
-                    reverse = v.optBoolean("reverse", false)
+                    reverse = v.optBoolean("reverse", false),
+                    width = v.optInt("width", 480), height = v.optInt("height", 480),
+                    sourceTimesMs = stamps, isGif = v.optBoolean("isGif"),
+                    loopCount = v.optInt("loopCount", -1)
                 )
             } else null
             fun <T : Enum<T>> find(items: Array<T>, key: String, fallback: T): T =
@@ -64,6 +77,11 @@ object GifStore {
                 fit = find(GifFit.entries.toTypedArray(), "fit", GifFit.FIT),
                 aspect = find(GifAspect.entries.toTypedArray(), "aspect", GifAspect.SQUARE),
                 forever = obj.optBoolean("forever", true),
+                repeatCount = if (obj.has("repeatCount")) obj.getInt("repeatCount").also {
+                    if (it !in 1..65535) return null
+                } else null,
+                edits = if (obj.has("edits")) EditDocumentCodec.decode(obj.getString("edits")) ?: return null
+                    else EditDocument(),
                 video = clip
             ).takeIf { GifMath.valid(it) }
         } catch (_: Exception) { null }

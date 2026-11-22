@@ -40,9 +40,54 @@ class AndroidVideoGifDecodeTest {
             resolver.update(uri!!, ContentValues().apply {
                 put(MediaStore.Video.Media.IS_PENDING, 0)
             }, null, null)
-            val clip = VideoGifSource.inspect(context, uri)
+            val untouched = VideoGifSource.document(context, uri)
+            val clip = requireNotNull(untouched.video)
             assertTrue(GifVideoMath.valid(clip))
             assertTrue("Fixture duration must match actual video", clip.durationMs in 1800L..2200L)
+            assertEquals(32 to 24, GifMath.dimensions(untouched))
+            assertEquals(clip.durationMs, clip.endMs)
+            assertEquals(16, GifVideoMath.frameCount(clip))
+            assertEquals(-1, untouched.loopCount)
+            val times = GifVideoMath.frameTimesMs(clip)
+            val holds = GifVideoMath.frameDelaysMs(clip)
+            val forwardBytes = ByteArrayOutputStream().also {
+                VideoGifSource.write(context, untouched, it)
+            }.toByteArray()
+            val reverseBytes = ByteArrayOutputStream().also {
+                VideoGifSource.write(context, untouched.copy(video = clip.copy(reverse = true)), it)
+            }.toByteArray()
+            val forward = requireNotNull(Movie.decodeByteArray(forwardBytes, 0, forwardBytes.size))
+            val reverse = requireNotNull(Movie.decodeByteArray(reverseBytes, 0, reverseBytes.size))
+            assertEquals(clip.durationMs.toInt(), forward.duration())
+            assertEquals(forward.duration(), reverse.duration())
+            val a = Bitmap.createBitmap(32, 24, Bitmap.Config.ARGB_8888)
+            val b = Bitmap.createBitmap(32, 24, Bitmap.Config.ARGB_8888)
+            try {
+                var elapsed = 0
+                VideoGifSource.open(context, clip).use { reader ->
+                    for (i in times.indices) {
+                        val midpoint = elapsed + holds[i] / 2
+                        forward.setTime(midpoint)
+                        forward.draw(Canvas(a), 0f, 0f)
+                        reverse.setTime(forward.duration() - midpoint)
+                        reverse.draw(Canvas(b), 0f, 0f)
+                        assertTrue("Reverse must match forward frame $i exactly", a.sameAs(b))
+                        val source = reader.frame(times[i], 32)
+                        try {
+                            var error = 0L
+                            for (y in 0 until 24) for (x in 0 until 32) {
+                                val src = source.getPixel(x, y)
+                                val dst = a.getPixel(x, y)
+                                for (shift in listOf(0, 8, 16)) {
+                                    error += kotlin.math.abs((src ushr shift and 255) - (dst ushr shift and 255))
+                                }
+                            }
+                            assertTrue("Color error in frame $i was $error", error < 32 * 24 * 3 * 9)
+                        } finally { source.recycle() }
+                        elapsed += holds[i]
+                    }
+                }
+            } finally { a.recycle(); b.recycle() }
             val frame = VideoGifSource.preview(context, clip, 750L, 320)
             try {
                 assertTrue(frame.width > 0)

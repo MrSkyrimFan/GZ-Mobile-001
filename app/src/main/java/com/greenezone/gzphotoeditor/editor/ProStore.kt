@@ -9,7 +9,7 @@ import java.util.Base64
 
 /** Versioned private JSON holding photo URIs and editable layer settings, never source image bytes. */
 object ProStore {
-    private const val VERSION = 3
+    private const val VERSION = 4
     private const val MAX_BYTES = 3_000_000
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
@@ -32,6 +32,7 @@ object ProStore {
                         put("x", mask.centerX.toDouble()); put("y", mask.centerY.toDouble())
                         put("width", mask.width.toDouble()); put("height", mask.height.toDouble())
                         put("invert", mask.inverted)
+                        put("feather", mask.feather.toDouble())
                         put("points", JSONArray().also { arr ->
                             mask.points.forEach { point ->
                                 arr.put(JSONArray().put(point.x.toDouble()).put(point.y.toDouble()))
@@ -96,7 +97,8 @@ object ProStore {
                         centerY = unit(json, "y", .5, 0f, 1f),
                         width = unit(json, "width", .6, 0f, 1f),
                         height = unit(json, "height", .6, 0f, 1f),
-                        points = points, inverted = json.optBoolean("invert", false)
+                        points = points, inverted = json.optBoolean("invert", false),
+                        feather = unit(json, "feather", 0.0, 0f, .2f)
                     ).takeIf(ProToolMath::valid) ?: return null
                 }
                 val rawRetouch = o.optJSONArray("retouches") ?: JSONArray()

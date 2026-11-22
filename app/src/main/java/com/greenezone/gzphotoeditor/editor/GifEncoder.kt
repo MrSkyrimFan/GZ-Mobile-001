@@ -5,107 +5,112 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import java.io.ByteArrayOutputStream
+import java.io.BufferedOutputStream
 import java.io.OutputStream
 import kotlin.math.max
 import kotlin.math.min
 
-/**
- * Independent GIF89a writer with an original 256-color 3-3-2 global palette and LZW
- * compression. Entire GIF is streamed: one source bitmap and one output frame at a time.
- * No external codec, runtime AI, ads or network access.
- */
+/** Streaming GIF89a writer with per-frame source-adaptive palettes. */
 object GifEncoder {
+    private val neutral = EditDocument()
     private fun OutputStream.byte(value: Int) { write(value and 255) }
     private fun OutputStream.short(value: Int) { byte(value); byte(value shr 8) }
     private fun OutputStream.ascii(value: String) { write(value.toByteArray(Charsets.US_ASCII)) }
 
-    /** 3 red bits / 3 green bits / 2 blue bits; each index maps to one global palette entry. */
-    fun quantize(argb: Int): Int =
-        ((argb shr 16 and 255) shr 5 shl 5) or
-        (((argb shr 8 and 255) shr 5) shl 2) or
-        ((argb and 255) shr 6)
-
-    /** GIF's least-significant-bit-first, dynamic 9–12-bit dictionary stream. */
-    internal fun lzw(data: ByteArray): ByteArray {
-        require(data.isNotEmpty())
-        val out = ByteArrayOutputStream()
-        var bits = 0
-        var used = 0
-        var codeWidth = 9
-        var nextCode = 258
-        val table = HashMap<Int, Int>(4096)
-        fun code(n: Int) {
+    /** The dictionary and GIF data sub-block buffer are reused for the whole export. */
+    private class LzwWriter(private val out: OutputStream, private val cancel: (() -> Unit)?) {
+        private val keys = IntArray(8192)
+        private val codes = IntArray(8192)
+        private val block = ByteArray(255)
+        private var length = 0
+        private var bits = 0
+        private var used = 0
+        private var width = 9
+        private fun emitByte(n: Int) {
+            block[length++] = n.toByte()
+            if (length == 255) flushBlock()
+        }
+        private fun flushBlock() {
+            if (length > 0) {
+                out.write(length)
+                out.write(block, 0, length)
+                length = 0
+            }
+        }
+        private fun code(n: Int) {
             bits = bits or (n shl used)
-            used += codeWidth
+            used += width
             while (used >= 8) {
-                out.write(bits and 255)
+                emitByte(bits and 255)
                 bits = bits ushr 8
                 used -= 8
             }
         }
-        code(256) // Clear table.
-        var prefix = data[0].toInt() and 255
-        for (i in 1 until data.size) {
-            val value = data[i].toInt() and 255
-            val joined = (prefix shl 8) or value
-            val found = table[joined]
-            if (found != null) {
-                prefix = found
-            } else {
-                code(prefix)
-                if (nextCode < 4096) {
-                    table[joined] = nextCode++
-                    // Encoder adds an entry one code earlier than the GIF decoder can see it.
-                    // Changing width at exactly 2^codeWidth corrupts longer animations.
-                    if (nextCode > (1 shl codeWidth) && codeWidth < 12) codeWidth++
-                } else {
-                    code(256)
-                    table.clear()
-                    nextCode = 258
-                    codeWidth = 9
-                }
-                prefix = value
-            }
-        }
-        code(prefix)
-        code(257) // End of image.
-        if (used > 0) out.write(bits and 255)
-        return out.toByteArray()
-    }
 
-    private fun writeBlocks(output: OutputStream, bytes: ByteArray) {
-        var index = 0
-        while (index < bytes.size) {
-            val count = min(255, bytes.size - index)
-            output.byte(count)
-            output.write(bytes, index, count)
-            index += count
+        fun write(data: ByteArray) {
+            bits = 0; used = 0; width = 9
+            codes.fill(0)
+            code(256)
+            var next = 258
+            var prefix = data[0].toInt() and 255
+            for (i in 1 until data.size) {
+                if ((i and 65535) == 0) cancel?.invoke()
+                val value = data[i].toInt() and 255
+                val joined = (prefix shl 8) or value
+                var slot = (joined * -1640531527) ushr 19
+                while (codes[slot] != 0 && keys[slot] != joined) slot = (slot + 1) and 8191
+                if (codes[slot] != 0) prefix = codes[slot]
+                else {
+                    code(prefix)
+                    if (next < 4096) {
+                        keys[slot] = joined
+                        codes[slot] = next++
+                        // The encoder creates each entry one code before the GIF decoder.
+                        if (next > (1 shl width) && width < 12) width++
+                    } else {
+                        code(256)
+                        codes.fill(0)
+                        next = 258; width = 9
+                    }
+                    prefix = value
+                }
+            }
+            code(prefix)
+            if (next == (1 shl width) && width < 12) width++
+            code(257)
+            if (used > 0) emitByte(bits and 255)
+            flushBlock()
+            out.write(0)
         }
-        output.byte(0)
     }
 
     /** One shared composition recipe for animated preview and final GIF frames. */
-    fun renderFrame(source: Bitmap, doc: GifDocument): Bitmap {
+    fun renderFrame(source: Bitmap, doc: GifDocument, maxEdge: Int? = null,
+                    cancel: (() -> Unit)? = null): Bitmap {
         require(source.width > 0 && source.height > 0 && !source.isRecycled)
-        val (w, h) = GifMath.dimensions(doc)
-        require(w > 0 && h > 0 && w.toLong() * h <= 640L * 640L)
+        val (w, h) = GifMath.dimensions(doc, maxEdge)
+        require(w.toLong() * h <= 16_777_216L) { "Choose a smaller export size for this canvas" }
         val target = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        var edited: Bitmap? = null
         try {
+            val input = if (doc.edits == neutral) source else ImagePipeline.render(source, doc.edits, cancel)
+            edited = input
             val canvas = Canvas(target)
-            canvas.drawColor(Color.BLACK)
+            if (doc.video?.isGif != true) canvas.drawColor(Color.BLACK)
             val scale = if (doc.fit == GifFit.FIT) {
-                min(w.toFloat() / source.width, h.toFloat() / source.height)
-            } else max(w.toFloat() / source.width, h.toFloat() / source.height)
-            val rw = source.width * scale
-            val rh = source.height * scale
-            canvas.drawBitmap(source, null,
+                min(w.toFloat() / input.width, h.toFloat() / input.height)
+            } else max(w.toFloat() / input.width, h.toFloat() / input.height)
+            val rw = input.width * scale
+            val rh = input.height * scale
+            canvas.drawBitmap(input, null,
                 RectF((w - rw) / 2f, (h - rh) / 2f, (w + rw) / 2f, (h + rh) / 2f),
                 Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
             return target
         } catch (failed: Throwable) {
             target.recycle()
             throw failed
+        } finally {
+            if (edited != null && edited !== source) edited.recycle()
         }
     }
 
@@ -117,7 +122,7 @@ object GifEncoder {
         loader: (position: Int) -> Bitmap
     ) {
         require(doc.video == null && GifMath.valid(doc))
-        writeFrames(output, doc, doc.frames.size, doc.delayMs, cancel, loader)
+        writeFrames(output, doc, doc.frames.size, doc.delayMs, cancel, loader = loader)
     }
 
     /** Stream frames from either a photo sequence or a timestamped native video decoder. */
@@ -127,62 +132,59 @@ object GifEncoder {
         frameCount: Int,
         frameDelayMs: Int,
         cancel: (() -> Unit)? = null,
+        delayAt: (Int) -> Int = { frameDelayMs },
         loader: (position: Int) -> Bitmap
     ) {
-        require(frameCount in 2..GifVideoMath.MAX_OUTPUT_FRAMES)
-        require(frameDelayMs in 20..1500)
+        require(frameCount in 1..GifVideoMath.MAX_OUTPUT_FRAMES)
         val (w, h) = GifMath.dimensions(doc)
-        require(w > 0 && h > 0 && w.toLong() * h <= 640L * 640L)
-        output.ascii("GIF89a")
-        output.short(w)
-        output.short(h)
-        output.byte(0xF7)  // 8-bit indexed color, global palette of 256.
-        output.byte(0)     // Background palette index.
-        output.byte(0)     // Pixel aspect ratio.
-        for (idx in 0..255) {
-            output.byte(((idx shr 5) and 7) * 255 / 7)
-            output.byte(((idx shr 2) and 7) * 255 / 7)
-            output.byte((idx and 3) * 255 / 3)
+        require(w.toLong() * h <= 16_777_216L) { "Choose a smaller export size for this canvas" }
+        val stream = BufferedOutputStream(output, 64 * 1024)
+        val writer = LzwWriter(stream, cancel)
+        val palette = GifPalette(w, cancel, reserveTransparency = doc.video?.isGif == true)
+        val pixels = ByteArray(w * h)
+        val table = ByteArray(256 * 3)
+        stream.ascii("GIF89a")
+        stream.short(w); stream.short(h)
+        // A two-entry global table supplies the logical background for transparent frames.
+        stream.byte(0xf0); stream.byte(0); stream.byte(0)
+        stream.write(ByteArray(6))
+        if (doc.loopCount >= 0) {
+            stream.byte(0x21); stream.byte(0xff); stream.byte(11)
+            stream.ascii("NETSCAPE2.0")
+            stream.byte(3); stream.byte(1); stream.short(doc.loopCount); stream.byte(0)
         }
-        // NETSCAPE2.0 loop extension: 0 = forever; 1 = one repeat (two plays).
-        if (doc.forever) {
-            output.byte(0x21); output.byte(0xFF); output.byte(11)
-            output.ascii("NETSCAPE2.0")
-            output.byte(3); output.byte(1); output.short(0); output.byte(0)
-        }
-        val line = IntArray(w)
-        for (frameIndex in 0 until frameCount) {
+        for (i in 0 until frameCount) {
             cancel?.invoke()
-            var source: Bitmap? = null
+            val source = loader(i)
             var target: Bitmap? = null
             try {
-                source = loader(frameIndex)
-                require(source.width > 0 && source.height > 0)
-                target = renderFrame(source, doc)
-                val pixels = ByteArray(w * h)
-                for (y in 0 until h) {
-                    if ((y and 31) == 0) cancel?.invoke()
-                    target.getPixels(line, 0, w, 0, y, w, 1)
-                    for (x in 0 until w) pixels[y * w + x] = quantize(line[x]).toByte()
+                val image = if (source.width == w && source.height == h && doc.edits == neutral)
+                    source else renderFrame(source, doc, cancel = cancel)
+                target = image
+                palette.index(image, pixels)
+                palette.colors.forEachIndexed { idx, color ->
+                    table[idx * 3] = (color ushr 16).toByte()
+                    table[idx * 3 + 1] = (color ushr 8).toByte()
+                    table[idx * 3 + 2] = color.toByte()
                 }
-                // Graphic Control Extension: disposal 2 (clear canvas for next frame), delay in 1/100s.
-                output.byte(0x21); output.byte(0xF9); output.byte(4)
-                output.byte(0x08)
-                output.short((frameDelayMs / 10).coerceIn(1, 65535))
-                output.byte(0); output.byte(0)
-                // Image Descriptor, no local color table.
-                output.byte(0x2C)
-                output.short(0); output.short(0)
-                output.short(w); output.short(h)
-                output.byte(0)
-                output.byte(8) // LZW minimum code size for 256 colors.
-                writeBlocks(output, lzw(pixels))
+                var ticks = ((delayAt(i) + 5) / 10).coerceAtLeast(1)
+                while (ticks > 0) {
+                    val hold = min(65535, ticks)
+                    stream.byte(0x21); stream.byte(0xf9); stream.byte(4)
+                    stream.byte(if (palette.transparent) 0x09 else 0x04)
+                    stream.short(hold); stream.byte(0); stream.byte(0)
+                    stream.byte(0x2c); stream.short(0); stream.short(0)
+                    stream.short(w); stream.short(h); stream.byte(0x87)
+                    stream.write(table); stream.byte(8)
+                    writer.write(pixels)
+                    ticks -= hold
+                }
             } finally {
-                target?.let { if (!it.isRecycled) it.recycle() }
-                source?.let { if (!it.isRecycled) it.recycle() }
+                if (target != null && target !== source) target.recycle()
+                source.recycle()
             }
         }
-        output.byte(0x3B)
-        output.flush()
+        stream.byte(0x3b)
+        stream.flush()
     }
 }

@@ -32,10 +32,13 @@ internal fun ProSelectionPanel(
     onApply: () -> Unit,
     onInvert: () -> Unit,
     onRemove: () -> Unit,
-    onDiscard: () -> Unit
+    onDiscard: () -> Unit,
+    onFeather: (Float) -> Unit,
+    onResetFeather: () -> Unit,
+    onFinish: () -> Unit
 ) {
-    if (layer.kind != ProLayerKind.IMAGE) {
-        Text("Select an image layer. Masks cut out parts of an image non-destructively.",
+    if (layer.kind != ProLayerKind.IMAGE && layer.kind != ProLayerKind.ADJUSTMENT) {
+        Text("Choose an image or adjustment layer to create an editable mask.",
             color = EditorMuted, fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 13.dp))
         return
@@ -60,6 +63,10 @@ internal fun ProSelectionPanel(
         DockChip("Discard selection", false,
             enabled = draft != null, onClick = onDiscard)
     }
+    layer.mask?.let { mask ->
+        SingleAdjustment("Feather", mask.feather, 0f, .2f, true,
+            onReset = onResetFeather, onChange = onFeather, onFinished = onFinish)
+    }
 }
 
 @Composable
@@ -82,8 +89,8 @@ internal fun ProRetouchPanel(
             modifier = Modifier.padding(horizontal = 13.dp))
         return
     }
-    Text(if (sourceChosen) "Now tap the destination on the image."
-        else "Tap a clean source point on the image, then the point to repair.",
+    Text(if (sourceChosen) "Press and hold a destination to stamp. Reset source to sample again."
+        else "Press and hold a clean source, then hold each area to repair. A short tap hides the controls.",
         color = EditorWhite, fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 13.dp))
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())

@@ -339,6 +339,26 @@ private fun LookTile(title: String, bitmap: Bitmap?, selected: Boolean, enabled:
 }
 
 @Composable
+internal fun GradeAdjustmentDeck(
+    edits: EditDocument, enabled: Boolean,
+    commit: (EditDocument) -> Unit, slide: (EditDocument) -> Unit, finish: () -> Unit
+) {
+    var panel by remember { mutableStateOf(EditTab.LIGHT) }
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(EditTab.LIGHT, EditTab.COLOR, EditTab.DETAIL, EditTab.EFFECTS,
+            EditTab.GRADE, EditTab.MIXER, EditTab.CURVES).forEach {
+            DockChip(it.title, panel == it, enabled) { panel = it }
+        }
+    }
+    when (panel) {
+        EditTab.MIXER -> MixerDeck(edits, enabled, commit, slide, finish)
+        EditTab.CURVES -> CurveDeck(edits, enabled, commit, slide, finish)
+        else -> GlobalDeck(panel, edits, enabled, commit, slide, finish)
+    }
+}
+
+@Composable
 private fun GlobalDeck(
     tab: EditTab,
     document: EditDocument,
@@ -706,6 +726,8 @@ private fun MoreDeck(
     onCommit: (EditDocument) -> Unit,
     document: EditDocument
 ) {
+    var helpOpen by remember { mutableStateOf(false) }
+    if (helpOpen) PhotoHelpDialog { helpOpen = false }
     Text(
         "QUICK ACTIONS",
         color = EditorMuted,
@@ -718,6 +740,7 @@ private fun MoreDeck(
         contentPadding = PaddingValues(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
+        item { DockChip("Help", false) { helpOpen = true } }
         item { DockChip("Auto tone", false, enabled, onAutoTone) }
         item { DockChip("Auto white balance", false, enabled, onAutoWB) }
         item { DockChip("Save my look", false, enabled, onSaveLook) }

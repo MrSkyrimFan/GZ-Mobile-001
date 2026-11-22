@@ -1,23 +1,28 @@
 package com.greenezone.gzphotoeditor.editor
 
 enum class GifSize(val label: String, val maxEdge: Int) {
+    SOURCE("Original size", 4096),
     SMALL("Small · 320 px", 320),
     MEDIUM("Medium · 480 px", 480),
     LARGE("Large · 640 px", 640)
 }
 enum class GifFit(val label: String) { FIT("Fit whole photo"), FILL("Fill frame") }
 enum class GifAspect(val label: String, val ratio: Float) {
-    SQUARE("Square", 1f), PORTRAIT("Portrait", .8f), LANDSCAPE("Landscape", 16f / 9f)
+    SOURCE("Original aspect", 0f), SQUARE("Square", 1f), PORTRAIT("Portrait", .8f), LANDSCAPE("Landscape", 16f / 9f)
 }
 data class GifDocument(
     val frames: List<String> = emptyList(),
     val delayMs: Int = 350,
-    val size: GifSize = GifSize.MEDIUM,
+    val size: GifSize = if (frames.isEmpty()) GifSize.SOURCE else GifSize.MEDIUM,
     val fit: GifFit = GifFit.FIT,
-    val aspect: GifAspect = GifAspect.SQUARE,
-    val forever: Boolean = true,
-    val video: GifVideoClip? = null
-)
+    val aspect: GifAspect = if (frames.isEmpty()) GifAspect.SOURCE else GifAspect.SQUARE,
+    val forever: Boolean = frames.isNotEmpty(),
+    val video: GifVideoClip? = null,
+    val edits: EditDocument = EditDocument(),
+    val repeatCount: Int? = null
+) {
+    val loopCount: Int get() = if (forever) 0 else repeatCount ?: -1
+}
 data class GifHistory(val undo: List<GifDocument> = emptyList(),
                       val redo: List<GifDocument> = emptyList()) {
     fun checkpoint(before: GifDocument, after: GifDocument): GifHistory =
@@ -33,10 +38,21 @@ object GifMath {
         if (doc.video != null) doc.frames.isEmpty() && GifVideoMath.valid(doc.video)
         else doc.frames.size in 2..MAX_FRAMES && doc.delayMs in 100..1500 &&
             doc.frames.all { it.startsWith("content://") && it.length <= 4096 }
-    fun dimensions(doc: GifDocument): Pair<Int, Int> {
-        val edge = doc.size.maxEdge
-        return if (doc.aspect.ratio >= 1f) edge to (edge / doc.aspect.ratio).toInt()
-        else (edge * doc.aspect.ratio).toInt() to edge
+    fun dimensions(doc: GifDocument, maxEdge: Int? = null): Pair<Int, Int> {
+        var width = doc.video?.width ?: 480
+        var height = doc.video?.height ?: 480
+        if (doc.edits.quarterTurns % 2 != 0) {
+            val swapped = width
+            width = height
+            height = swapped
+        }
+        val sourceEdge = maxOf(width, height)
+        val edge = (if (doc.size == GifSize.SOURCE) sourceEdge else doc.size.maxEdge)
+            .coerceAtMost(maxEdge ?: 65535)
+        val ratio = if (doc.aspect == GifAspect.SOURCE) width.toDouble() / height
+            else doc.aspect.ratio.toDouble()
+        return if (ratio >= 1) edge to Math.round(edge / ratio).toInt().coerceAtLeast(1)
+            else Math.round(edge * ratio).toInt().coerceAtLeast(1) to edge
     }
     fun move(frames: List<String>, from: Int, to: Int): List<String> {
         if (from !in frames.indices || to !in frames.indices || from == to) return frames

@@ -78,7 +78,7 @@ fun GifMakerScreen(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit
 ) {
-    var photoSequenceOnly by remember { mutableStateOf(false) }
+    var photoSequenceOnly by remember { mutableStateOf(document.frames.isNotEmpty() && document.video == null) }
     if (!photoSequenceOnly) {
         VideoGifScreen(
             document = document,
@@ -106,6 +106,7 @@ fun GifMakerScreen(
     var timingStart by remember { mutableStateOf<GifDocument?>(null) }
     var pending by remember { mutableStateOf<GifDocument?>(null) }
     var saveOpen by remember { mutableStateOf(false) }
+    var helpOpen by remember { mutableStateOf(false) }
     var projectsOpen by remember { mutableStateOf(false) }
     var newOpen by remember { mutableStateOf(false) }
     var fileName by remember { mutableStateOf("") }
@@ -265,7 +266,9 @@ fun GifMakerScreen(
                 TextButton(enabled = !exporting, onClick = onBack) {
                     Text("‹ Back", color = EditorWhite, fontSize = 13.sp)
                 }
-                Text("GIF maker", color = EditorWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                TextButton(enabled = !exporting, onClick = { playing = false; helpOpen = true }) {
+                    Text("Help", color = EditorMint)
+                }
                 TextButton(enabled = !exporting, onClick = { photoSequenceOnly = false }) {
                     Text("Video → GIF", color = EditorMint, fontSize = 12.sp)
                 }
@@ -365,7 +368,7 @@ fun GifMakerScreen(
                     GifTool.SIZE -> {
                         Row(Modifier.horizontalScroll(rememberScrollState())
                             .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GifSize.entries.forEach {
+                            GifSize.entries.filter { it != GifSize.SOURCE }.forEach {
                                 DockChip(it.label, document.size == it, enabled = !exporting) {
                                     commit(document.copy(size = it))
                                 }
@@ -373,7 +376,7 @@ fun GifMakerScreen(
                         }
                         Row(Modifier.horizontalScroll(rememberScrollState())
                             .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GifAspect.entries.forEach {
+                            GifAspect.entries.filter { it != GifAspect.SOURCE }.forEach {
                                 DockChip(it.label, document.aspect == it, enabled = !exporting) {
                                     commit(document.copy(aspect = it))
                                 }
@@ -416,6 +419,7 @@ fun GifMakerScreen(
         }
     }
 
+    if (helpOpen) GifHelpDialog { helpOpen = false }
     if (saveOpen) SaveNameDialog("Save editable GIF project",
         "Save photo order, frame speed and canvas options. Keep the original photos.",
         fileName, { fileName = it }, {

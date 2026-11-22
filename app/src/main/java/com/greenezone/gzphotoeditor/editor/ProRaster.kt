@@ -2,6 +2,9 @@ package com.greenezone.gzphotoeditor.editor
 
 import android.content.ContentResolver
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
+import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -20,6 +23,109 @@ object ProRaster {
         ProBlend.MULTIPLY -> BlendMode.MULTIPLY
         ProBlend.SCREEN -> BlendMode.SCREEN
         ProBlend.OVERLAY -> BlendMode.OVERLAY
+        ProBlend.SOFT_LIGHT -> BlendMode.SOFT_LIGHT
+        ProBlend.HARD_LIGHT -> BlendMode.HARD_LIGHT
+        ProBlend.DARKEN -> BlendMode.DARKEN
+        ProBlend.LIGHTEN -> BlendMode.LIGHTEN
+        ProBlend.COLOR_DODGE -> BlendMode.COLOR_DODGE
+        ProBlend.COLOR_BURN -> BlendMode.COLOR_BURN
+        ProBlend.DIFFERENCE -> BlendMode.DIFFERENCE
+        ProBlend.EXCLUSION -> BlendMode.EXCLUSION
+        ProBlend.HUE -> BlendMode.HUE
+        ProBlend.SATURATION -> BlendMode.SATURATION
+        ProBlend.COLOR -> BlendMode.COLOR
+        ProBlend.LUMINOSITY -> BlendMode.LUMINOSITY
+    }
+
+    private fun clipMask(canvas: Canvas, mask: ProSelection?) {
+        if (mask == null || mask.feather > 0f) return
+        val path = ProToolMath.path(mask, canvas.width, canvas.height)
+        if (mask.inverted) canvas.clipOutPath(path) else canvas.clipPath(path)
+    }
+
+    private fun featherMask(mask: ProSelection?, width: Int, height: Int): Bitmap? {
+        if (mask == null || mask.feather == 0f) return null
+        val alpha = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
+        try {
+            if (mask.inverted) alpha.eraseColor(Color.WHITE)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                if (mask.inverted) blendMode = BlendMode.DST_OUT
+                maskFilter = BlurMaskFilter(mask.feather * minOf(width, height), BlurMaskFilter.Blur.NORMAL)
+            }
+            Canvas(alpha).drawPath(ProToolMath.path(mask, width, height), paint)
+            return alpha
+        } catch (e: Throwable) { alpha.recycle(); throw e }
+    }
+
+    private fun renderAdjustment(
+        base: Bitmap, canvas: Canvas, layer: ProLayer, cancel: (() -> Unit)?
+    ) {
+        val graded = ImagePipeline.render(base, EditDocument(grade = layer.edits.grade), cancel)
+        try {
+            val adjusted = ProEffectRaster.render(graded, layer.effect, layer.effectAmount, cancel)
+            try {
+                if (adjusted === base) return
+                val saved = canvas.save()
+                try {
+                    clipMask(canvas, layer.mask)
+                    if (!base.hasAlpha() && (layer.mask?.feather ?: 0f) == 0f) {
+                        val paint = Paint().apply {
+                            alpha = (layer.opacity * 255).roundToInt()
+                            blendMode = blend(layer.blend)
+                        }
+                        canvas.drawBitmap(adjusted, null, Rect(0, 0, base.width, base.height), paint)
+                    } else {
+                        compositeKeepingAlpha(base, canvas, adjusted, layer, cancel)
+                    }
+                } finally { canvas.restoreToCount(saved) }
+            } finally { if (adjusted !== graded) adjusted.recycle() }
+        } finally { if (graded !== base) graded.recycle() }
+    }
+
+    // Blend the colors independently of coverage. Painting a filtered copy over its
+    // original with SRC_OVER would increase alpha at every translucent edge.
+    private fun compositeKeepingAlpha(
+        base: Bitmap, canvas: Canvas, adjusted: Bitmap, layer: ProLayer, cancel: (() -> Unit)?
+    ) {
+        val width = base.width
+        val old = IntArray(width)
+        val changed = IntArray(width)
+        val coverage = IntArray(width)
+        val bottom = Bitmap.createBitmap(width, 1, Bitmap.Config.ARGB_8888)
+        val top = Bitmap.createBitmap(width, 1, Bitmap.Config.ARGB_8888)
+        val strip = Canvas(bottom)
+        val rowRect = Rect(0, 0, width, 1)
+        val dst = Rect()
+        val mix = Paint().apply {
+            alpha = (layer.opacity * 255).roundToInt()
+            blendMode = blend(layer.blend)
+        }
+        val replace = Paint().apply { blendMode = BlendMode.SRC }
+        val feather = featherMask(layer.mask, width, base.height)
+        val maskRow = if (feather == null) null else IntArray(width)
+        try {
+            val region = canvas.clipBounds
+            for (y in region.top until region.bottom) {
+                if ((y and 31) == 0) cancel?.invoke()
+                base.getPixels(old, 0, width, 0, y, width, 1)
+                adjusted.getPixels(changed, 0, width, 0, y, width, 1)
+                if (feather != null && maskRow != null) feather.getPixels(maskRow, 0, width, 0, y, width, 1)
+                for (x in old.indices) {
+                    coverage[x] = old[x] and -0x1000000
+                    old[x] = old[x] or -0x1000000
+                    changed[x] = (changed[x] and 0xffffff) or ((maskRow?.get(x) ?: -1) and -0x1000000)
+                }
+                bottom.setPixels(old, 0, width, 0, 0, width, 1)
+                top.setPixels(changed, 0, width, 0, 0, width, 1)
+                strip.drawBitmap(top, null, rowRect, mix)
+                bottom.getPixels(changed, 0, width, 0, 0, width, 1)
+                for (x in changed.indices) changed[x] = coverage[x] or (changed[x] and 0xffffff)
+                bottom.setPixels(changed, 0, width, 0, 0, width, 1)
+                dst.set(0, y, width, y + 1)
+                canvas.drawBitmap(bottom, null, dst, replace)
+            }
+        } finally { feather?.recycle(); bottom.recycle(); top.recycle() }
     }
 
     fun render(
@@ -51,21 +157,7 @@ object ProRaster {
                 if (!layer.visible || layer.opacity <= 0f) continue
                 if (layer.kind != ProLayerKind.IMAGE) {
                     if (layer.kind == ProLayerKind.ADJUSTMENT) {
-                        val adjusted = if (layer.effect != ProPixelEffect.NONE) {
-                            ProEffectRaster.render(output, layer.effect, layer.effectAmount, cancel)
-                        } else {
-                            ImagePipeline.render(
-                                output, EditDocument(grade = layer.edits.grade), cancel)
-                        }
-                        try {
-                            if (adjusted !== output) canvas.drawBitmap(adjusted, 0f, 0f,
-                                Paint(Paint.FILTER_BITMAP_FLAG).apply {
-                                    alpha = (layer.opacity * 255).roundToInt().coerceIn(0, 255)
-                                    blendMode = blend(layer.blend)
-                                })
-                        } finally {
-                            if (adjusted !== output && !adjusted.isRecycled) adjusted.recycle()
-                        }
+                        renderAdjustment(output, canvas, layer, cancel)
                     } else {
                         val creative = layer.edits.creative
                         val overlay = when (layer.kind) {
@@ -102,8 +194,8 @@ object ProRaster {
                 var retouched: Bitmap? = null
                 try {
                     val edge = (maxOf(width, height) * layer.scale.coerceIn(.1f, 2f) * 1.3f)
-                        .roundToInt().coerceIn(96, if (preview) 1400 else 5600)
-                    val pixels = if (preview) 1_600_000L else
+                        .roundToInt().coerceIn(96, if (preview) 2048 else 5600)
+                    val pixels = if (preview) (width.toLong() * height * 2).coerceIn(250_000L, 3_000_000L) else
                         (width.toLong() * height * 2).coerceIn(250_000L, 12_000_000L)
                     source = try {
                         loader(layer, edge, pixels)
@@ -123,19 +215,27 @@ object ProRaster {
                         alpha = (layer.opacity * 255).roundToInt().coerceIn(0, 255)
                         blendMode = blend(layer.blend)
                     }
-                    val saved = canvas.save()
+                    val feather = featherMask(layer.mask, width, height)
+                    val saved = if (feather == null) canvas.save() else
+                        canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), paint)
                     try {
-                        layer.mask?.let { mask ->
-                            val path = ProToolMath.path(mask, width, height)
-                            if (mask.inverted) canvas.clipOutPath(path) else canvas.clipPath(path)
-                        }
-                        if (layer.rotationDegrees != 0f) {
-                            canvas.rotate(layer.rotationDegrees,
+                        clipMask(canvas, layer.mask)
+                        val transform = canvas.save()
+                        try {
+                            if (layer.rotationDegrees != 0f) canvas.rotate(layer.rotationDegrees,
                                 layer.x * width, layer.y * height)
+                            canvas.drawBitmap(outputImage, null,
+                                RectF(frame.left, frame.top, frame.right, frame.bottom),
+                                if (feather == null) paint else Paint(Paint.FILTER_BITMAP_FLAG))
+                        } finally { canvas.restoreToCount(transform) }
+                        if (feather != null) {
+                            canvas.drawBitmap(feather, null, Rect(0, 0, width, height),
+                                Paint().apply { blendMode = BlendMode.DST_IN })
                         }
-                        canvas.drawBitmap(outputImage, null,
-                            RectF(frame.left, frame.top, frame.right, frame.bottom), paint)
-                    } finally { canvas.restoreToCount(saved) }
+                    } finally {
+                        canvas.restoreToCount(saved)
+                        feather?.recycle()
+                    }
                 } finally {
                     retouched?.let { if (it !== edited && !it.isRecycled) it.recycle() }
                     edited?.let { if (it !== source && !it.isRecycled) it.recycle() }

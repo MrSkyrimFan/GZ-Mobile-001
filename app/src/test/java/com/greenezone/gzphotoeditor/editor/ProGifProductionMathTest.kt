@@ -45,24 +45,26 @@ class ProGifProductionMathTest {
         }), ProLayer(first, name = "Overflow")))
     }
 
-    @Test fun videoGifTrimmingFramesSpeedAndReverseStayBounded() {
-        val clip = GifVideoMath.defaultClip("content://example/video-1", 18_000L)
-        assertTrue(GifVideoMath.valid(clip))
-        assertEquals(5_000L, clip.endMs)
-        assertEquals(40, GifVideoMath.frameCount(clip))
-        assertEquals(130, GifVideoMath.gifDelayMs(clip)) // GIF stores 10-ms ticks.
-        val times = GifVideoMath.frameTimesMs(clip)
-        assertEquals(40, times.size)
-        assertEquals(0L, times.first())
-        assertTrue(times.last() < clip.endMs)
-        assertEquals(times.reversed(), GifVideoMath.frameTimesMs(clip.copy(reverse = true)))
-        assertTrue(GifVideoMath.valid(clip.copy(endMs = 12_000L, fps = 10)))
-        assertFalse(GifVideoMath.valid(clip.copy(endMs = 13_000L)))
-        assertFalse(GifVideoMath.valid(clip.copy(endMs = 500L, startMs = 250L)))
-        assertFalse(GifVideoMath.valid(clip.copy(fps = 60)))
+    @Test fun sourceDurationAndVariableFrameHoldsSurviveTrimReverseAndSpeed() {
+        val clip = GifVideoClip("content://example/video-1", 18_000L, width = 360, height = 640,
+            sourceTimesMs = listOf(0L, 33L, 67L, 100L, 170L, 200L))
+        assertEquals(18_000L, GifVideoMath.defaultClip(clip.uri, clip.durationMs).endMs)
+        assertEquals(18_000, GifVideoMath.frameDelaysMs(clip).sum())
+        assertEquals(360 to 640, GifMath.dimensions(GifDocument(video = clip)))
+        val segment = clip.copy(startMs = 10, endMs = 170)
+        assertEquals(listOf(10L, 33L, 67L, 100L), GifVideoMath.frameTimesMs(segment))
+        assertEquals(listOf(20, 40, 30, 70), GifVideoMath.frameDelaysMs(segment))
+        val reverse = segment.copy(reverse = true)
+        assertEquals(GifVideoMath.frameTimesMs(segment).reversed(), GifVideoMath.frameTimesMs(reverse))
+        assertEquals(GifVideoMath.frameDelaysMs(segment).reversed(), GifVideoMath.frameDelaysMs(reverse))
+        assertEquals(80, GifVideoMath.frameDelaysMs(reverse.copy(speedPercent = 200)).sum())
+        assertEquals(320, GifVideoMath.frameDelaysMs(reverse.copy(speedPercent = 50)).sum())
+        val output = GifDocument(video = clip.copy(fps = 8))
+        assertEquals(144, GifVideoMath.frameCount(output.video!!))
+        assertEquals(18_000, GifVideoMath.frameDelaysMs(output.video).sum())
+        assertFalse(GifVideoMath.valid(clip.copy(endMs = clip.durationMs + 1)))
+        assertFalse(GifVideoMath.valid(clip.copy(startMs = clip.endMs)))
         assertFalse(GifVideoMath.valid(clip.copy(uri = "file:///tmp/bad.mp4")))
-        val video = GifDocument(video = clip)
-        assertTrue(GifMath.valid(video))
-        assertFalse(GifMath.valid(video.copy(frames = listOf(first))))
+        assertFalse(GifMath.valid(output.copy(frames = listOf(first))))
     }
 }

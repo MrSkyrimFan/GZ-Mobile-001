@@ -21,7 +21,8 @@ data class ProSelection(
     val width: Float = .6f,
     val height: Float = .6f,
     val points: List<BrushPoint> = emptyList(),
-    val inverted: Boolean = false
+    val inverted: Boolean = false,
+    val feather: Float = 0f
 )
 
 enum class ProRetouchKind(val label: String) {
@@ -54,6 +55,7 @@ object ProToolMath {
 
     fun valid(selection: ProSelection): Boolean {
         fun fraction(v: Float) = v.isFinite() && v in 0f..1f
+        if (!selection.feather.isFinite() || selection.feather !in 0f..0.2f) return false
         if (!fraction(selection.centerX) || !fraction(selection.centerY) ||
             !fraction(selection.width) || !fraction(selection.height)) return false
         return if (selection.kind == ProSelectionKind.LASSO) {
