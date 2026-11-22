@@ -1012,9 +1012,9 @@ fun PhotoEditorScreen() {
                         onNewText = { editWords(true) },
                         onEditText = { editWords(false) },
                         cropImageWidth = if (document.quarterTurns % 2 == 0)
-                            original.width else original.height,
+                            (original?.width ?: 1) else (original?.height ?: 1),
                         cropImageHeight = if (document.quarterTurns % 2 == 0)
-                            original.height else original.width
+                            (original?.height ?: 1) else (original?.width ?: 1)
                     )
                 }
             }
