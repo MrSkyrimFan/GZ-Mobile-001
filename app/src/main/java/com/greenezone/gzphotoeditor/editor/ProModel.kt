@@ -6,7 +6,11 @@ enum class ProLayerKind(val label: String) {
 }
 
 enum class ProBlend(val label: String) {
-    NORMAL("Normal"), MULTIPLY("Multiply"), SCREEN("Screen"), OVERLAY("Overlay")
+    NORMAL("Normal"), MULTIPLY("Multiply"), SCREEN("Screen"), OVERLAY("Overlay"),
+    SOFT_LIGHT("Soft light"), HARD_LIGHT("Hard light"), DARKEN("Darken"), LIGHTEN("Lighten"),
+    COLOR_DODGE("Color dodge"), COLOR_BURN("Color burn"), DIFFERENCE("Difference"),
+    EXCLUSION("Exclusion"), HUE("Hue"), SATURATION("Saturation"), COLOR("Color"),
+    LUMINOSITY("Luminosity")
 }
 enum class ProAspect(val label: String, val ratio: Float) {
     SQUARE("Square 1:1", 1f), PORTRAIT("Portrait 4:5", .8f),
@@ -74,7 +78,8 @@ object ProMath {
                     item.scale in .1f..2f && item.opacity.isFinite() && item.opacity in 0f..1f &&
                     item.aspect.isFinite() && item.aspect in .1f..10f &&
                     item.rotationDegrees.isFinite() && item.rotationDegrees in -180f..180f &&
-                    (item.mask == null || (item.kind == ProLayerKind.IMAGE &&
+                    (item.mask == null || ((item.kind == ProLayerKind.IMAGE ||
+                        (item.kind == ProLayerKind.ADJUSTMENT && item.mask.anchor == null)) &&
                         ProToolMath.valid(item.mask))) &&
                     item.retouches.size <= ProToolMath.MAX_RETOUCH &&
                     (item.retouches.isEmpty() || item.kind == ProLayerKind.IMAGE) &&

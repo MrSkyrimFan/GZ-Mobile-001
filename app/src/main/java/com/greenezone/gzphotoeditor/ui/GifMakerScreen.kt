@@ -78,7 +78,7 @@ fun GifMakerScreen(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit
 ) {
-    var photoSequenceOnly by remember { mutableStateOf(false) }
+    var photoSequenceOnly by remember { mutableStateOf(document.frames.isNotEmpty() && document.video == null) }
     if (!photoSequenceOnly) {
         VideoGifScreen(
             document = document,
@@ -106,7 +106,9 @@ fun GifMakerScreen(
     var timingStart by remember { mutableStateOf<GifDocument?>(null) }
     var pending by remember { mutableStateOf<GifDocument?>(null) }
     var saveOpen by remember { mutableStateOf(false) }
+    var helpOpen by remember { mutableStateOf(false) }
     var projectsOpen by remember { mutableStateOf(false) }
+    var openingProject by remember { mutableStateOf(false) }
     var newOpen by remember { mutableStateOf(false) }
     var fileName by remember { mutableStateOf("") }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -265,7 +267,9 @@ fun GifMakerScreen(
                 TextButton(enabled = !exporting, onClick = onBack) {
                     Text("‹ Back", color = EditorWhite, fontSize = 13.sp)
                 }
-                Text("GIF maker", color = EditorWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                TextButton(enabled = !exporting, onClick = { playing = false; helpOpen = true }) {
+                    Text("Help", color = EditorMint)
+                }
                 TextButton(enabled = !exporting, onClick = { photoSequenceOnly = false }) {
                     Text("Video → GIF", color = EditorMint, fontSize = 12.sp)
                 }
@@ -365,7 +369,7 @@ fun GifMakerScreen(
                     GifTool.SIZE -> {
                         Row(Modifier.horizontalScroll(rememberScrollState())
                             .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GifSize.entries.forEach {
+                            GifSize.entries.filter { it != GifSize.SOURCE }.forEach {
                                 DockChip(it.label, document.size == it, enabled = !exporting) {
                                     commit(document.copy(size = it))
                                 }
@@ -373,7 +377,7 @@ fun GifMakerScreen(
                         }
                         Row(Modifier.horizontalScroll(rememberScrollState())
                             .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GifAspect.entries.forEach {
+                            GifAspect.entries.filter { it != GifAspect.SOURCE }.forEach {
                                 DockChip(it.label, document.aspect == it, enabled = !exporting) {
                                     commit(document.copy(aspect = it))
                                 }
@@ -416,6 +420,7 @@ fun GifMakerScreen(
         }
     }
 
+    if (helpOpen) GifHelpDialog { helpOpen = false }
     if (saveOpen) SaveNameDialog("Save editable GIF project",
         "Save photo order, frame speed and canvas options. Keep the original photos.",
         fileName, { fileName = it }, {
@@ -425,25 +430,31 @@ fun GifMakerScreen(
             } else notice = "Could not save. Choose a name (12 maximum)."
         }, { saveOpen = false })
     if (projectsOpen) AlertDialog(
-        onDismissRequest = { projectsOpen = false },
+        onDismissRequest = { if (!openingProject) projectsOpen = false },
         title = { Text("Saved GIF projects") },
         text = {
             Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
                 if (savedNames.isEmpty()) Text("No saved GIF projects yet.", color = EditorMuted)
                 savedNames.forEach { name ->
-                    TextButton(onClick = {
-                        val restored = GifStore.load(context, name)
-                        if (restored == null) notice = "Saved GIF project unreadable"
-                        else {
-                            playing = false; commit(restored); index = 0
-                            projectsOpen = false; notice = "GIF project opened"
-                            if (restored.video != null) photoSequenceOnly = false
+                    TextButton(enabled = !openingProject, onClick = {
+                        openingProject = true
+                        scope.launch {
+                            try {
+                                val restored = withContext(Dispatchers.IO) { GifStore.load(context, name) }
+                                projectsOpen = false
+                                if (restored == null) notice = "Could not read the saved project or its source file."
+                                else {
+                                    playing = false; commit(restored); index = 0
+                                    notice = "GIF project opened"
+                                    if (restored.video != null) photoSequenceOnly = false
+                                }
+                            } finally { openingProject = false }
                         }
                     }) { Text(name, color = EditorMint) }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { projectsOpen = false }) { Text("Close") } }
+        confirmButton = { TextButton(enabled = !openingProject, onClick = { projectsOpen = false }) { Text("Close") } }
     )
     if (newOpen) AlertDialog(
         onDismissRequest = { newOpen = false },

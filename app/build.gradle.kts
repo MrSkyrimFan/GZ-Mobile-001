@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val appVersionCode = 12
+val appVersionName = "0.12.0"
+
 android {
     namespace = "com.greenezone.gzphotoeditor"
     compileSdk = 36
@@ -11,9 +14,19 @@ android {
         applicationId = "com.greenezone.gzphotoeditor"
         minSdk = 29
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.11.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+        manifestPlaceholders["launcherLabel"] = "@string/app_name"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        getByName("debug") {
+            if (providers.gradleProperty("gzPhoneTestInstall").orNull == "true") {
+                applicationIdSuffix = ".phonetest.v$appVersionCode"
+                manifestPlaceholders["launcherLabel"] = "GZ Editor Pro $appVersionName Test"
+            }
+        }
     }
 
     buildFeatures {

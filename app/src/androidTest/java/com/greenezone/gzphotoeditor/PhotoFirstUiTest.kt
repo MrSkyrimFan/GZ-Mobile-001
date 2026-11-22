@@ -106,6 +106,7 @@ class PhotoFirstUiTest {
                 )
             }
         }
+        rule.onNodeWithText("Tools ▾").performClick()
         rule.onNodeWithText("Select & mask").assertExists()
         rule.onNodeWithText("Clone & repair").assertExists()
         rule.onNodeWithText("Transform").performClick()

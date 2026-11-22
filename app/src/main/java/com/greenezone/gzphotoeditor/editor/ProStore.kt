@@ -9,7 +9,7 @@ import java.util.Base64
 
 /** Versioned private JSON holding photo URIs and editable layer settings, never source image bytes. */
 object ProStore {
-    private const val VERSION = 3
+    private const val VERSION = 5
     private const val MAX_BYTES = 3_000_000
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
@@ -32,6 +32,17 @@ object ProStore {
                         put("x", mask.centerX.toDouble()); put("y", mask.centerY.toDouble())
                         put("width", mask.width.toDouble()); put("height", mask.height.toDouble())
                         put("invert", mask.inverted)
+                        put("feather", mask.feather.toDouble())
+                        mask.anchor?.let { anchor ->
+                            put("imageAnchor", JSONObject().apply {
+                                put("x", anchor.x.toDouble())
+                                put("y", anchor.y.toDouble())
+                                put("scale", anchor.scale.toDouble())
+                                put("rotation", anchor.rotation.toDouble())
+                                put("canvasAspect", anchor.canvasAspect.toDouble())
+                                put("imageAspect", anchor.imageAspect.toDouble())
+                            })
+                        }
                         put("points", JSONArray().also { arr ->
                             mask.points.forEach { point ->
                                 arr.put(JSONArray().put(point.x.toDouble()).put(point.y.toDouble()))
@@ -68,7 +79,8 @@ object ProStore {
         if (data.length > MAX_BYTES) return null
         return try {
             val obj = JSONObject(data)
-            if (obj.optInt("version", -1) !in 1..VERSION) return null
+            val version = obj.optInt("version", -1)
+            if (version !in 1..VERSION) return null
             val array = obj.optJSONArray("layers") ?: return null
             if (array.length() !in 1..ProMath.MAX_LAYERS) return null
             fun unit(o: JSONObject, key: String, default: Double, lo: Float, hi: Float): Float {
@@ -96,7 +108,19 @@ object ProStore {
                         centerY = unit(json, "y", .5, 0f, 1f),
                         width = unit(json, "width", .6, 0f, 1f),
                         height = unit(json, "height", .6, 0f, 1f),
-                        points = points, inverted = json.optBoolean("invert", false)
+                        points = points, inverted = json.optBoolean("invert", false),
+                        feather = unit(json, "feather", 0.0, 0f, .2f),
+                        anchor = if (version >= 5 && json.has("imageAnchor")) {
+                            val anchor = json.getJSONObject("imageAnchor")
+                            ProMaskAnchor(
+                                unit(anchor, "x", Double.NaN, 0f, 1f),
+                                unit(anchor, "y", Double.NaN, 0f, 1f),
+                                unit(anchor, "scale", Double.NaN, .1f, 2f),
+                                unit(anchor, "rotation", Double.NaN, -180f, 180f),
+                                unit(anchor, "canvasAspect", Double.NaN, .1f, 10f),
+                                unit(anchor, "imageAspect", Double.NaN, .1f, 10f)
+                            )
+                        } else null
                     ).takeIf(ProToolMath::valid) ?: return null
                 }
                 val rawRetouch = o.optJSONArray("retouches") ?: JSONArray()
