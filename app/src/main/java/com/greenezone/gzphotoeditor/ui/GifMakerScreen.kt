@@ -84,13 +84,7 @@ fun GifMakerScreen(
             document = document,
             onDocument = onDocument,
             onBack = onBack,
-            onSwitch = onSwitch,
-            onAnimatePhotos = {
-                if (document.video != null) {
-                    onDocument(document.copy(frames = emptyList(), video = null))
-                }
-                photoSequenceOnly = true
-            }
+            onSwitch = onSwitch
         )
         return
     }

@@ -84,8 +84,7 @@ fun VideoGifScreen(
     document: GifDocument,
     onDocument: (GifDocument) -> Unit,
     onBack: () -> Unit,
-    onSwitch: (WorkspaceMode) -> Unit,
-    onAnimatePhotos: () -> Unit
+    onSwitch: (WorkspaceMode) -> Unit
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -104,7 +103,6 @@ fun VideoGifScreen(
     var askSave by remember { mutableStateOf(false) }
     var savedOpen by remember { mutableStateOf(false) }
     var askNew by remember { mutableStateOf(false) }
-    var askPhotos by remember { mutableStateOf(false) }
     var saveName by remember { mutableStateOf("") }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
 
@@ -252,17 +250,18 @@ fun VideoGifScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(13.dp),
                 modifier = Modifier.padding(horizontal = 22.dp)) {
-                Text("Video to GIF", color = EditorWhite,
-                    fontWeight = FontWeight.Bold, fontSize = 24.sp)
-                Text("Pick a video, trim the best moment, adjust playback, then export a real GIF.",
+                Text("Select one video to turn into a GIF",
+                    color = EditorWhite, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                Text("Choose a video from your phone.",
                     color = EditorMuted, fontSize = 13.sp)
                 Button(onClick = ::selectVideo, enabled = !busy,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = EditorMint, contentColor = Color(0xFF09231A)
                     )) { Text("Choose video") }
-                TextButton(onClick = onAnimatePhotos) {
-                    Text("Instead: animate multiple photos", color = EditorWhite)
-                }
+                TextButton(
+                    enabled = !busy && !exporting,
+                    onClick = { savedNames = GifStore.names(context); savedOpen = true }
+                ) { Text("Open saved GIF project", color = EditorMuted) }
             }
         } else {
             preview?.let {
@@ -284,7 +283,7 @@ fun VideoGifScreen(
                     fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 WorkspaceModeMenu(WorkspaceMode.GIF, !busy && !exporting, onSwitch)
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            if (clip != null) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = ::selectVideo, enabled = !busy && !exporting) {
                     Text(if (clip == null) "Open video" else "Change video", color = EditorMint)
@@ -455,9 +454,6 @@ fun VideoGifScreen(
                             DockChip("Start over", false, enabled = !busy && !exporting) {
                                 askNew = true
                             }
-                            DockChip("Animate photos", false, enabled = !busy && !exporting) {
-                                askPhotos = true
-                            }
                         }
                         Text("GIFs have no audio. For a video with music, use the future video editor.",
                             color = EditorMuted, fontSize = 11.sp,
@@ -497,29 +493,26 @@ fun VideoGifScreen(
                         val restored = GifStore.load(context, name)
                         if (restored?.video != null) {
                             commit(restored); selectedFrame = 0; savedOpen = false
-                        } else notice = "That project is a photo animation or cannot be read."
+                        } else notice = "This GIF maker accepts video projects. The previous photo-animation project is still saved."
                     }) { Text(name, color = EditorMint) }
                 }
             }
         },
         confirmButton = { TextButton(onClick = { savedOpen = false }) { Text("Close") } }
     )
-    if (askNew || askPhotos) AlertDialog(
-        onDismissRequest = { askNew = false; askPhotos = false },
+    if (askNew) AlertDialog(
+        onDismissRequest = { askNew = false },
         title = { Text("Leave this video GIF?") },
         text = { Text("Save your edit first if you want to reopen it later. Undo history may restore it.",
             color = EditorMuted) },
         confirmButton = { TextButton(onClick = {
             playing = false
-            if (askPhotos) {
-                commit(document.copy(video = null, frames = emptyList()))
-                onAnimatePhotos()
-            } else commit(GifDocument())
+            commit(GifDocument())
             selectedFrame = 0
-            askNew = false; askPhotos = false
+            askNew = false
         }) { Text("Continue", color = EditorMint) } },
         dismissButton = { TextButton(onClick = {
-            askNew = false; askPhotos = false
+            askNew = false
         }) { Text("Cancel") } }
     )
 }

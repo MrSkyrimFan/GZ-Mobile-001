@@ -48,6 +48,23 @@ class PhotoFirstUiTest {
         rule.onNodeWithText("Add first photo").assertExists()
     }
 
+    @Test fun videoGifLandingAsksOnlyForOneVideo() {
+        rule.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                com.greenezone.gzphotoeditor.ui.VideoGifScreen(
+                    document = com.greenezone.gzphotoeditor.editor.GifDocument(),
+                    onDocument = {},
+                    onBack = {},
+                    onSwitch = {}
+                )
+            }
+        }
+        rule.onNodeWithText("Select one video to turn into a GIF").assertIsDisplayed()
+        rule.onNodeWithText("Choose video").assertIsDisplayed()
+        rule.onNodeWithText("Open saved GIF project").assertExists()
+        rule.onNodeWithText("Instead: animate multiple photos").assertDoesNotExist()
+    }
+
     @Test fun firstOpenExplainsHowToStartWithoutTinyPreview() {
         rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() } }
         rule.onNodeWithText("Open media").assertIsDisplayed()
