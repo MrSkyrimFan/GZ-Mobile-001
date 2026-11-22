@@ -102,6 +102,35 @@ object ProMath {
         return ProRect(x - halfW, y - halfH, x + halfW, y + halfH)
     }
 
+    /**
+     * Retouch points belong to the source image, not the output canvas.
+     * Undo scale/move/rotation before sampling; taps outside the image are rejected.
+     */
+    fun canvasToImageNormalized(
+        layer: ProLayer,
+        canvasWidth: Int,
+        canvasHeight: Int,
+        canvasPoint: BrushPoint
+    ): BrushPoint? {
+        if (layer.kind != ProLayerKind.IMAGE || canvasWidth <= 0 || canvasHeight <= 0)
+            return null
+        val iw = (1000f * layer.aspect).toInt().coerceAtLeast(1)
+        val rect = bounds(layer, canvasWidth, canvasHeight, iw, 1000)
+        val centerX = layer.x * canvasWidth
+        val centerY = layer.y * canvasHeight
+        val rx = canvasPoint.x * canvasWidth - centerX
+        val ry = canvasPoint.y * canvasHeight - centerY
+        val radians = -layer.rotationDegrees * kotlin.math.PI / 180.0
+        val cos = kotlin.math.cos(radians).toFloat()
+        val sin = kotlin.math.sin(radians).toFloat()
+        val x = centerX + rx * cos - ry * sin
+        val y = centerY + rx * sin + ry * cos
+        val u = (x - rect.left) / (rect.right - rect.left)
+        val v = (y - rect.top) / (rect.bottom - rect.top)
+        return if (u.isFinite() && v.isFinite() && u in 0f..1f && v in 0f..1f)
+            BrushPoint(u, v) else null
+    }
+
     fun insert(document: ProDocument, layer: ProLayer): ProDocument? =
         if (document.layers.size >= MAX_LAYERS) null
         else document.copy(layers = document.layers + layer)
