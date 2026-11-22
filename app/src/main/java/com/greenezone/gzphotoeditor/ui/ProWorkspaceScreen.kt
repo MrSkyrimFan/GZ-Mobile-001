@@ -10,7 +10,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.snapshotFlow
@@ -427,8 +427,13 @@ fun ProWorkspaceScreen(
     }
 
     val available = !busy && !exporting
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
-        val panelHeight = maxHeight * .39f
+    // The original BoxWithConstraints used a SubcomposeLayout for the entire
+    // Pro workspace. Its disposable nested slot table could fail during Android
+    // activity teardown after rapid layer/brush changes. The workspace needs
+    // no subcomposition: a normal Box and configuration-aware panel bound
+    // preserve usable canvas space without a nested composition lifecycle.
+    val panelHeight = LocalConfiguration.current.screenHeightDp.dp * .39f
+    Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
         val safeArea = if (chrome) Modifier.statusBarsPadding().navigationBarsPadding() else Modifier
         Column(Modifier.fillMaxSize().then(safeArea)) {
             if (chrome) {
