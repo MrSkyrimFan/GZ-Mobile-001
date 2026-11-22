@@ -1,29 +1,27 @@
-# GZ Editor Pro 0.7 engineering and release gates
+# GZ Editor Pro 0.8 — collage engineering and release gates
 
-## Automated
-- [ ] Exact branch build + JVM tests + debug APK pass
-- [ ] Android emulator image-format headers, social sizing, crop, text/ink/shapes pixel tests pass
-- [ ] Android Compose UX tests pass for text, drawing, crop, export dropdown and original tools
-- [ ] Old v0.6 project data still loads with all old grading, masks and privacy
-- [ ] New editable text/ink/shapes/crop survive save/reopen and undo/redo
-- [ ] Export format MIME and file bytes agree, no watermark or source writes
-- [ ] Crop frame UI is correctly mapped to photo and respects aspect when constrained
-- [ ] Company branding in top-left and copyright remain; previous UI functions preserved
-- [ ] PR review and exact merge; merged-main full workflow success and correct downloadable artifact
+## Mandatory automated verification
+- [ ] Main original photo edit screen unchanged aside from GZ brand on landing and Create collage entry.
+- [ ] Crop/blur/text/shapes/brush active guides persist while main toolbar is hidden, and editing remains possible.
+- [ ] Pure layout checks: all seven arrangements, counts 1–20, nonoverlap, bounds, tap selection, max spacing and budget.
+- [ ] Android bitmap render checks: 2 independent edits, exactly 20 tiles, no source overwrite, PNG/JPEG image output.
+- [ ] Local collage project encode/decode/save/load with distinct per-tile color, privacy and creative layers.
+- [ ] Collage Undo/Redo restores layout, tile order and per-tile edits, with bounded snapshots and one checkpoint per slider gesture.
+- [ ] Missing photo raises tile-specific error and offers replacement rather than silently omitting content.
+- [ ] Import count hard capped at twenty, including Android picker fallback.
+- [ ] Collage exports via existing seven real file encoders/social sizing choices; no AI, ads, network or watermarks.
+- [ ] All prior JVM, Android raster and Compose tests continue passing.
+- [ ] PR head CI pass, exact SHA merge, merged-main CI pass, verified debug APK artifact.
 
-## One real phone session
-- [ ] Test multiple fonts, multiline text, drag+resize, color, rotation, save and export
-- [ ] Draw with different colors, thickness, opacity and eraser; add/change a shape
-- [ ] Crop by dragging corners and moving the box in freeform and 4:5; verify exported area
-- [ ] Export JPEG, PNG, WebP, BMP and TIFF/PDF where phone can inspect; verify file types and content
-- [ ] Instagram portrait and TikTok 9:16 social presets: Fit vs Fill outputs correct dimensions and composition
-- [ ] Existing Looks, Privacy black covering, masks and Undo/Redo still work
-- [ ] No clipped controls, visual overlaps, severe slider lag or crashes
+## One phone field pass
+- [ ] Add 2 photos side by side; edit each tile independently in full editor, return with Done.
+- [ ] Add 6–20 photos (as many as convenient), try Grid/Mosaic/Featured templates and aspect, spacing, margin/background.
+- [ ] Reorder, remove, replace; save named collage, reopen and verify per-tile adjustments.
+- [ ] Export JPEG and PNG, check distinct photos/content preserved, no watermarks.
+- [ ] In regular editor, hide tools while editing crop/blur/text/brush; selected handles must stay present.
+- [ ] Check original standalone photo editor, saved projects, privacy black bars and JPEG export still work.
 
-## Still before commercial release
-- [ ] Device QA beyond emulator, memory and performance under large photos
-- [ ] 16-bit/wide-gamut/RAW workflows, clone/heal, file-size ceilings and accessibility
-- [ ] Branding/trademark clearance, correct website privacy/legal disclosures, organization Play account
-- [ ] Signed release AAB, prelaunch report, security/license review and store compliance
+## Commercial gate remains open
+Native app profiling, large-photo/20-tile memory pressure, long session/ANR, color accuracy, Android API/device coverage, media URI grant lifetime, trademark/patent/license/SBOM and privacy/Play/store legal checks, production signed AAB. No final 1.0 claim.
 
-Do NOT represent this engineering APK as the final 1.0 paid release.
+Refer also to `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md` for lawful original-code Lightroom-class **non-AI** features, RAW/license decisions and later video editing.

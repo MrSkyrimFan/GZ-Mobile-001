@@ -1,4 +1,4 @@
-# GZ Editor Pro 0.7 integrated creative/export wave
+# GZ Editor Pro 0.8 — collage workspace and active-tool corrections
 
 ## Owner decisions and field evidence
 - Preserve the user-approved photo-first dark UI and existing editing functions. Do not restructure Looks, Light, Color, Masks, Blur & cover or move buttons gratuitously.
@@ -24,3 +24,15 @@ Social presets: original, Instagram square/portrait/story/reel cover, Facebook s
 - Commercial release still blocked by real-device UX/memory/color, legal/privacy/trademark, Play compliance and production signed AAB.
 
 **No external website or project changes.**
+
+## Major 0.8 integration
+- Independent collage document of 1–20 image content URIs and full per-tile EditDocument. Do not flatten individual edits before final export.
+- Offline seven template compositions, per-tile edit/reorder/replace/delete, aspect/spacing/radius/border/background/Fill-Fit, bounded preview and output, saved named collages.
+- Android picker may fall back to ACTION_OPEN_DOCUMENT without enforcing maximum selection; always clamp imported sources to twenty.
+- The photo editor itself is retained as the individual tile editor. The parent photo edit session stays intact when opening/closing Collage.
+- Selected crop/blur/text/shape/brush editing guides are **always visible for the active tool**, independent of the main toolbar hidden state. Main UI chrome can be hidden to reveal the whole photo.
+- Home screen GZ Editor Pro title restored without marketing slogans.
+- Professional and legal roadmap: `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md` (RAW/color/catalog/batch/video) with original engineering and license gates.
+
+## Qualification
+Android source + math + emulator compositor and UI checks, exact merge SHA, main APK artifact, one field pass. These are not commercial release certification.

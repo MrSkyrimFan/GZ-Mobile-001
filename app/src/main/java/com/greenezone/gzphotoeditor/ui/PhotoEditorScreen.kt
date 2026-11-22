@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,6 +64,8 @@ import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.BrushStroke
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.CropFrame
+import com.greenezone.gzphotoeditor.editor.CollageDocument
+import com.greenezone.gzphotoeditor.editor.CollagePhoto
 import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.ExportSettings
@@ -105,11 +108,16 @@ private data class ExportRequest(val settings: ExportSettings, val edits: EditDo
  * adjustment list or constrain the image to a short preview box.
  */
 @Composable
-fun PhotoEditorScreen() {
+fun PhotoEditorScreen(
+    initialCollagePhoto: CollagePhoto? = null,
+    onDoneCollagePhoto: ((CollagePhoto) -> Unit)? = null
+) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
 
+    var collageOpen by remember { mutableStateOf(false) }
+    var collageDocument by remember { mutableStateOf(CollageDocument()) }
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
     var processed by remember { mutableStateOf<Bitmap?>(null) }
@@ -283,6 +291,12 @@ fun PhotoEditorScreen() {
         }
     }
 
+
+    fun finishCollageTile() {
+        val originalTile = initialCollagePhoto ?: return
+        val image = sourceUri?.toString() ?: originalTile.uri
+        onDoneCollagePhoto?.invoke(CollagePhoto(image, document))
+    }
 
     fun autoTone() {
         val bitmap = original ?: return
@@ -609,6 +623,15 @@ fun PhotoEditorScreen() {
         ))
     }
 
+    LaunchedEffect(initialCollagePhoto?.uri) {
+        val photo = initialCollagePhoto
+        if (photo != null) loadPhoto(Uri.parse(photo.uri), photo.edits)
+    }
+
+    BackHandler(enabled = onDoneCollagePhoto != null && !busy && !exporting) {
+        finishCollageTile()
+    }
+
     LaunchedEffect(original) {
         val input = original ?: run { quickSource = null; return@LaunchedEffect }
         val small = withContext(Dispatchers.Default) {
@@ -701,6 +724,15 @@ fun PhotoEditorScreen() {
         }
     }
 
+    if (collageOpen) {
+        CollageWorkspaceScreen(
+            document = collageDocument,
+            onDocument = { collageDocument = it },
+            onBack = { collageOpen = false }
+        )
+        return
+    }
+
     val selectedImage = if (compare) beforeImage ?: original else processed ?: original
     val cropEditing = selectedTab == EditTab.CROP && !compare && !busy && !exporting &&
         zoom <= 1.001f
@@ -779,7 +811,7 @@ fun PhotoEditorScreen() {
                         onContinue = ::continuePaint,
                         onFinish = ::finishPaint,
                         onTap = { chromeVisible = !chromeVisible },
-                        showGuides = chromeVisible
+                        showGuides = true
                     )
                 }
             }
@@ -789,7 +821,7 @@ fun PhotoEditorScreen() {
                     imageHeight = stableCoordinates.height,
                     mark = activePrivacy,
                     canMove = true,
-                    showGuides = chromeVisible,
+                    showGuides = true,
                     onMove = ::movePrivacy,
                     onFinished = ::finishSlide,
                     onTap = { chromeVisible = !chromeVisible }
@@ -803,7 +835,7 @@ fun PhotoEditorScreen() {
                         stableCoordinates.width, stableCoordinates.height, document.crop
                     ),
                     aspectRatio = document.crop.ratio,
-                    showGuides = chromeVisible,
+                    showGuides = true,
                     onChange = ::moveCrop,
                     onFinished = ::finishSlide,
                     onTap = { chromeVisible = !chromeVisible }
@@ -816,7 +848,7 @@ fun PhotoEditorScreen() {
                     imageHeight = stableCoordinates.height,
                     centerX = layer.x, centerY = layer.y,
                     width = layer.width, height = layer.height,
-                    showGuides = chromeVisible,
+                    showGuides = true,
                     onChanged = ::moveCreative,
                     onFinished = ::finishSlide,
                     onTap = { chromeVisible = !chromeVisible }
@@ -829,7 +861,7 @@ fun PhotoEditorScreen() {
                     imageHeight = stableCoordinates.height,
                     centerX = layer.x, centerY = layer.y,
                     width = layer.width, height = layer.height,
-                    showGuides = chromeVisible,
+                    showGuides = true,
                     onChanged = ::moveCreative,
                     onFinished = ::finishSlide,
                     onTap = { chromeVisible = !chromeVisible }
@@ -858,10 +890,27 @@ fun PhotoEditorScreen() {
                         containerColor = EditorMint, contentColor = Color(0xFF0B1E18)
                     )
                 ) { Text("Open media", fontWeight = FontWeight.Bold) }
+                if (onDoneCollagePhoto == null) {
+                    Button(
+                        onClick = { collageOpen = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF26333C),
+                            contentColor = EditorWhite
+                        )
+                    ) { Text("Create collage") }
+                }
             }
         }
 
         if (original == null && chromeVisible) {
+            Text(
+                "GZ Editor Pro",
+                color = EditorWhite,
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.TopStart)
+                    .statusBarsPadding().padding(start = 18.dp, top = 15.dp)
+            )
             Text(
                 "© 2026 Greenezone Software LLC",
                 color = EditorMuted,
@@ -889,10 +938,14 @@ fun PhotoEditorScreen() {
                     Text("GZ Editor Pro", color = EditorWhite,
                         fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     TextButton(
-                        onClick = { showExport = true },
+                        onClick = {
+                            if (onDoneCollagePhoto != null) finishCollageTile()
+                            else showExport = true
+                        },
                         enabled = !busy && !exporting
                     ) {
-                        Text("Export", color = EditorMint,
+                        Text(if (onDoneCollagePhoto != null) "Done" else "Export",
+                            color = EditorMint,
                             fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
@@ -1008,6 +1061,8 @@ fun PhotoEditorScreen() {
                         onSaveProject = ::saveProject,
                         onProjects = ::openProjects,
                         onOpen = ::openPicker,
+                        onCollage = { collageOpen = true },
+                        showCollage = onDoneCollagePhoto == null,
                         creativeTool = creativeTools,
                         onCreativeTool = { creativeTools = it },
                         onNewText = { editWords(true) },

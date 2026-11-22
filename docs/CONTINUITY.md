@@ -20,3 +20,18 @@ Preserve the existing easy photo-first UI and all working features. Put **GZ Edi
 
 ## Hard rules
 Review source, test JVM and real Android bitmap/Compose, verify PR commit SHA, merged-main workflow and APK artifact. Don't claim final Play-ready app without physical phone and policy release gates. Do not change the Greenezone corporate website, registrar, DNS, XForge, GZFX, Beside-Me or unrelated repo settings.
+
+## Collage wave v0.8.0 (2026-11-21 local)
+Current verified main baseline before this wave: `7508ff715d39dbb13ae543961b943cee5c78c22b` (GZ Editor Pro 0.7).
+Branch: `feature/collage-workspace-photo-08`.
+The owner added an explicit 2–20-photo collage requirement, independent photo editing inside tiles and high-quality layout templates. They supplied Lightroom's *functional* feature comparison as roadmap input and prohibit runtime AI, infringement and improperly licensed dependencies. No claims of zero legal risk.
+
+Core source: `CollageModel.kt` for cell geometry/templates, `CollageRaster.kt` for incremental tile composition, `CollageStore.kt` for local project custody and `CollageWorkspaceScreen.kt` for a separate swipeable collage workflow. Route through existing `PhotoEditorScreen` so original photo-session state is retained and each tile opens the existing entire editor.
+Fix prior screenshots' crop/blur/text/shape guides: editing overlays remain visible while UI toolbars hide, and the current tool remains interactive. Restore GZ Editor Pro top-left on empty launch.
+
+Next future phase: same-app video editing via independently reviewed Media3 Transformer and frame-indexed edit documents. No video feature is claimed shipped. Source research and legal/patent/license gates live in `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md`.
+
+**Do not alter corporate Greenezone website or other repos.** Test in CI before merging, then one consolidated real-phone check.
+
+## Final integration polishing
+The collage header uses two compact rows to prevent clipping, exposes an always-available Add action once photos exist, plus Undo/Redo. Snapshot history includes tile additions/removals/order/edits and layout operations; slider gestures produce one checkpoint. Source-URI export collision is blocked, nesting a collage while editing a tile is disabled, and coroutine cancellation is propagated. Tests added for history and maximum gap with 20 photos.

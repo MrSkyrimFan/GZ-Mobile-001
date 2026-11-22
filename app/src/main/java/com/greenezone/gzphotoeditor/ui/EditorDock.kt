@@ -133,6 +133,8 @@ fun EditorDock(
     onSaveProject: () -> Unit,
     onProjects: () -> Unit,
     onOpen: () -> Unit,
+    onCollage: () -> Unit = {},
+    showCollage: Boolean = true,
     creativeTool: CreativeToolState = CreativeToolState(),
     onCreativeTool: (CreativeToolState) -> Unit = {},
     onNewText: () -> Unit = {},
@@ -186,7 +188,7 @@ fun EditorDock(
             )
             EditTab.MORE -> MoreDeck(
                 !busy, onAutoTone, onAutoWB, onSaveLook, onSaveProject, onProjects, onOpen,
-                onCommit, document
+                onCollage, showCollage, onCommit, document
             )
         }
 
@@ -696,6 +698,8 @@ private fun MoreDeck(
     onSaveProject: () -> Unit,
     onProjects: () -> Unit,
     onOpen: () -> Unit,
+    onCollage: () -> Unit,
+    showCollage: Boolean,
     onCommit: (EditDocument) -> Unit,
     document: EditDocument
 ) {
@@ -717,6 +721,7 @@ private fun MoreDeck(
         item { DockChip("Save project", false, enabled, onSaveProject) }
         item { DockChip("Open projects", false, enabled, onProjects) }
         item { DockChip("New photo", false, enabled, onOpen) }
+        if (showCollage) item { DockChip("Create collage", false, enabled, onCollage) }
         item { DockChip("Reset all edits", false, enabled) { onCommit(EditDocument()) } }
     }
     Text(
