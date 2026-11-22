@@ -116,7 +116,21 @@ object GifEncoder {
         cancel: (() -> Unit)? = null,
         loader: (position: Int) -> Bitmap
     ) {
-        require(GifMath.valid(doc))
+        require(doc.video == null && GifMath.valid(doc))
+        writeFrames(output, doc, doc.frames.size, doc.delayMs, cancel, loader)
+    }
+
+    /** Stream frames from either a photo sequence or a timestamped native video decoder. */
+    fun writeFrames(
+        output: OutputStream,
+        doc: GifDocument,
+        frameCount: Int,
+        frameDelayMs: Int,
+        cancel: (() -> Unit)? = null,
+        loader: (position: Int) -> Bitmap
+    ) {
+        require(frameCount in 2..GifVideoMath.MAX_OUTPUT_FRAMES)
+        require(frameDelayMs in 20..1500)
         val (w, h) = GifMath.dimensions(doc)
         require(w > 0 && h > 0 && w.toLong() * h <= 640L * 640L)
         output.ascii("GIF89a")
@@ -137,7 +151,7 @@ object GifEncoder {
             output.byte(3); output.byte(1); output.short(0); output.byte(0)
         }
         val line = IntArray(w)
-        for (frameIndex in doc.frames.indices) {
+        for (frameIndex in 0 until frameCount) {
             cancel?.invoke()
             var source: Bitmap? = null
             var target: Bitmap? = null
@@ -154,7 +168,7 @@ object GifEncoder {
                 // Graphic Control Extension: disposal 2 (clear canvas for next frame), delay in 1/100s.
                 output.byte(0x21); output.byte(0xF9); output.byte(4)
                 output.byte(0x08)
-                output.short((doc.delayMs / 10).coerceIn(1, 65535))
+                output.short((frameDelayMs / 10).coerceIn(1, 65535))
                 output.byte(0); output.byte(0)
                 // Image Descriptor, no local color table.
                 output.byte(0x2C)
