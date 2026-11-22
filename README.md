@@ -18,7 +18,7 @@
 - Arrange in seven original patterns: Grid, Side by side, Stacked, Featured, Filmstrip, Magazine and Mosaic.
 - Six aspect ratios; adjustable tile spacing, outer margin, rounded corners, border, color/transparent background, Fit whole photo or Fill tile; Standard/High/Ultra quality with adaptive device-memory cap.
 - Tap a collage tile, choose **Photos → Edit selected** to open the **entire existing photo editor** on that specific tile, including original grading, masks, text, crop, blur/covers and drawing. **Done** writes edits back to that tile only. Other source photos and their edits stay independent.
-- Add, replace, reorder and remove photo tiles. Save up to twelve named local editable collages referencing your original image URIs. If a media provider revokes access later, replace the affected tile; photos are not silently copied to cloud.
+- Add, replace, reorder and remove photo tiles, with bounded **collage Undo/Redo** for layout and tile changes. Save up to twelve named local editable collages referencing your original image URIs. If a media provider revokes access later, replace the affected tile; photos are not silently copied to cloud.
 - Export the completed collage using existing real JPEG/PNG/WebP/BMP/TIFF/PDF encoders and optional social size Fit/Fill presets; no watermarks.
 - Active crop/blur/text/shape and brush guides now remain visible even while the main editing toolbar is hidden, so tool selection is not lost during photo interaction.
 - Minimal empty landing screen includes **GZ Editor Pro** top-left, **Open media** and **Create collage**, with company copyright bottom-left.

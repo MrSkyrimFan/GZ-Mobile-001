@@ -64,6 +64,7 @@ import com.greenezone.gzphotoeditor.editor.CollageAspect
 import com.greenezone.gzphotoeditor.editor.CollageBackground
 import com.greenezone.gzphotoeditor.editor.CollageCellMode
 import com.greenezone.gzphotoeditor.editor.CollageDocument
+import com.greenezone.gzphotoeditor.editor.CollageHistory
 import com.greenezone.gzphotoeditor.editor.CollageLayout
 import com.greenezone.gzphotoeditor.editor.CollageMath
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
@@ -112,6 +113,8 @@ fun CollageWorkspaceScreen(
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
     var selected by remember { mutableIntStateOf(0) }
+    var history by remember { mutableStateOf(CollageHistory()) }
+    var layoutGestureStart by remember { mutableStateOf<CollageDocument?>(null) }
     var section by remember { mutableStateOf(CollageSection.TEMPLATES) }
     var control by remember { mutableStateOf(FrameControl.GAP) }
     var toolsVisible by remember { mutableStateOf(true) }
@@ -129,8 +132,42 @@ fun CollageWorkspaceScreen(
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var savedChoice by remember { mutableStateOf<String?>(null) }
 
+    fun commit(next: CollageDocument) {
+        history = history.checkpoint(document, next)
+        onDocument(next)
+        layoutGestureStart = null
+    }
+
     fun changeLayout(layout: CollageLayout) {
+        commit(document.copy(layout = layout))
+    }
+
+    fun slideLayout(layout: CollageLayout) {
+        if (layoutGestureStart == null) layoutGestureStart = document
         onDocument(document.copy(layout = layout))
+    }
+
+    fun finishLayout() {
+        layoutGestureStart?.let {
+            history = history.checkpoint(it, document)
+        }
+        layoutGestureStart = null
+    }
+
+    fun undoCollage() {
+        history.undo(document)?.let { (previous, next) ->
+            history = next
+            onDocument(previous)
+            selected = selected.coerceAtMost(previous.photos.lastIndex).coerceAtLeast(0)
+        }
+    }
+
+    fun redoCollage() {
+        history.redo(document)?.let { (nextDoc, next) ->
+            history = next
+            onDocument(nextDoc)
+            selected = selected.coerceAtMost(nextDoc.photos.lastIndex).coerceAtLeast(0)
+        }
     }
 
     fun retainReadPermission(uri: Uri) {
@@ -153,7 +190,7 @@ fun CollageWorkspaceScreen(
             CollagePhoto(it.toString())
         }
         if (added.isNotEmpty()) {
-            onDocument(document.copy(photos = document.photos + added))
+            commit(document.copy(photos = document.photos + added))
             selected = document.photos.size
             notice = document.photos.size.plus(added.size).toString() + " photos in collage"
         }
@@ -168,7 +205,7 @@ fun CollageWorkspaceScreen(
                 val copy = document.photos.toMutableList()
                 if (index in copy.indices) {
                     copy[index] = item
-                    onDocument(document.copy(photos = copy))
+                    commit(document.copy(photos = copy))
                 }
                 editingTile = -1
             }
@@ -188,7 +225,7 @@ fun CollageWorkspaceScreen(
             retainReadPermission(uri)
             val copy = document.photos.toMutableList()
             copy[selected] = CollagePhoto(uri.toString())
-            onDocument(document.copy(photos = copy))
+            commit(document.copy(photos = copy))
             notice = "Photo replaced; its old adjustments were cleared."
         }
     }
@@ -364,18 +401,34 @@ fun CollageWorkspaceScreen(
             Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)
                 .background(Color(0xF010141C)).statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 7.dp)) {
-                Row(Modifier.fillMaxWidth().height(45.dp),
+                Row(Modifier.fillMaxWidth().height(39.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = onBack) {
-                            Text("Back", color = EditorWhite)
-                        }
-                        TextButton(onClick = { showExport = true },
-                            enabled = document.photos.isNotEmpty() && !exporting) {
-                            Text("Export", color = EditorMint, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { showExport = true },
+                        enabled = document.photos.isNotEmpty() && !exporting) {
+                        Text("Export", color = EditorMint, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().height(42.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = onBack) {
+                        Text("Back", color = EditorWhite)
+                    }
+                    TextButton(onClick = ::undoCollage,
+                        enabled = history.undo.isNotEmpty()) {
+                        Text("↶", color = EditorWhite, fontSize = 24.sp)
+                    }
+                    TextButton(onClick = ::redoCollage,
+                        enabled = history.redo.isNotEmpty()) {
+                        Text("↷", color = EditorWhite, fontSize = 24.sp)
+                    }
+                    if (document.photos.isNotEmpty()) {
+                        TextButton(onClick = ::openMulti,
+                            enabled = document.photos.size < CollageMath.MAX_PHOTOS) {
+                            Text("+ Add", color = EditorMint, fontSize = 13.sp)
                         }
                     }
                 }
@@ -392,6 +445,8 @@ fun CollageWorkspaceScreen(
                     CollageControls(
                         document, selected, section, control,
                         onLayout = ::changeLayout,
+                        onSlideLayout = ::slideLayout,
+                        onLayoutFinished = ::finishLayout,
                         onSection = { section = it },
                         onControl = { control = it },
                         onSelect = { selected = it },
@@ -402,17 +457,17 @@ fun CollageWorkspaceScreen(
                         },
                         onEdit = { if (selected in document.photos.indices) editingTile = selected },
                         onLeft = {
-                            onDocument(document.copy(photos =
+                            commit(document.copy(photos =
                                 CollageMath.move(document.photos, selected, selected - 1)))
                             selected = (selected - 1).coerceAtLeast(0)
                         },
                         onRight = {
-                            onDocument(document.copy(photos =
+                            commit(document.copy(photos =
                                 CollageMath.move(document.photos, selected, selected + 1)))
                             selected = (selected + 1).coerceAtMost(document.photos.lastIndex)
                         },
                         onRemove = {
-                            onDocument(document.copy(photos =
+                            commit(document.copy(photos =
                                 document.photos.filterIndexed { index, _ -> index != selected }))
                             selected = selected.coerceAtMost(document.photos.lastIndex - 1)
                                 .coerceAtLeast(0)
@@ -482,6 +537,8 @@ fun CollageWorkspaceScreen(
                 TextButton(onClick = {
                     val candidate = savedChoice?.let { CollageStore.load(context, it) }
                     if (candidate != null) {
+                        history = CollageHistory()
+                        layoutGestureStart = null
                         onDocument(candidate)
                         selected = 0
                         savedList = false
@@ -514,6 +571,8 @@ private fun CollageControls(
     section: CollageSection,
     control: FrameControl,
     onLayout: (CollageLayout) -> Unit,
+    onSlideLayout: (CollageLayout) -> Unit,
+    onLayoutFinished: () -> Unit,
     onSection: (CollageSection) -> Unit,
     onControl: (FrameControl) -> Unit,
     onSelect: (Int) -> Unit,
@@ -583,8 +642,8 @@ private fun CollageControls(
                 high = control.high,
                 enabled = true,
                 onReset = { onLayout(update(0f)) },
-                onChange = { onLayout(update(it)) },
-                onFinished = {}
+                onChange = { onSlideLayout(update(it)) },
+                onFinished = onLayoutFinished
             )
         }
         CollageSection.BACKGROUND -> {

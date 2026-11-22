@@ -32,3 +32,6 @@ Fix prior screenshots' crop/blur/text/shape guides: editing overlays remain visi
 Next future phase: same-app video editing via independently reviewed Media3 Transformer and frame-indexed edit documents. No video feature is claimed shipped. Source research and legal/patent/license gates live in `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md`.
 
 **Do not alter corporate Greenezone website or other repos.** Test in CI before merging, then one consolidated real-phone check.
+
+## Final integration polishing
+The collage header uses two compact rows to prevent clipping, exposes an always-available Add action once photos exist, plus Undo/Redo. Snapshot history includes tile additions/removals/order/edits and layout operations; slider gestures produce one checkpoint. Source-URI export collision is blocked, nesting a collage while editing a tile is disabled, and coroutine cancellation is propagated. Tests added for history and maximum gap with 20 photos.

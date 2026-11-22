@@ -6,6 +6,7 @@
 - [ ] Pure layout checks: all seven arrangements, counts 1–20, nonoverlap, bounds, tap selection, max spacing and budget.
 - [ ] Android bitmap render checks: 2 independent edits, exactly 20 tiles, no source overwrite, PNG/JPEG image output.
 - [ ] Local collage project encode/decode/save/load with distinct per-tile color, privacy and creative layers.
+- [ ] Collage Undo/Redo restores layout, tile order and per-tile edits, with bounded snapshots and one checkpoint per slider gesture.
 - [ ] Missing photo raises tile-specific error and offers replacement rather than silently omitting content.
 - [ ] Import count hard capped at twenty, including Android picker fallback.
 - [ ] Collage exports via existing seven real file encoders/social sizing choices; no AI, ads, network or watermarks.

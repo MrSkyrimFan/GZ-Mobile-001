@@ -66,6 +66,33 @@ data class CollageDocument(
     val layout: CollageLayout = CollageLayout()
 )
 
+/** Recoverable layout and tile decisions; slider drags receive one checkpoint per gesture. */
+data class CollageHistory(
+    val undo: List<CollageDocument> = emptyList(),
+    val redo: List<CollageDocument> = emptyList()
+) {
+    fun checkpoint(before: CollageDocument, after: CollageDocument): CollageHistory {
+        if (before == after) return this
+        return copy(undo = (undo + before).takeLast(35), redo = emptyList())
+    }
+
+    fun undo(current: CollageDocument): Pair<CollageDocument, CollageHistory>? {
+        if (undo.isEmpty()) return null
+        return undo.last() to copy(
+            undo = undo.dropLast(1),
+            redo = (redo + current).takeLast(35)
+        )
+    }
+
+    fun redo(current: CollageDocument): Pair<CollageDocument, CollageHistory>? {
+        if (redo.isEmpty()) return null
+        return redo.last() to copy(
+            undo = (undo + current).takeLast(35),
+            redo = redo.dropLast(1)
+        )
+    }
+}
+
 data class CollageRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
     val width: Float get() = right - left
     val height: Float get() = bottom - top

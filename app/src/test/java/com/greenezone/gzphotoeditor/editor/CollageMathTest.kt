@@ -99,6 +99,38 @@ class CollageMathTest {
         assertTrue(frames.all { it.width > .0001f && it.height > 0f })
     }
 
+    @Test fun collageUndoRedoIsBoundedAndPreservesIndependentTileEdits() {
+        val first = CollageDocument(photos = listOf(
+            CollagePhoto("content://example/one",
+                EditDocument(grade = Grade(exposure = .2f)))
+        ))
+        val second = first.copy(photos = first.photos + CollagePhoto(
+            "content://example/two", EditDocument(grade = Grade(contrast = .4f))
+        ))
+        val after = second.copy(layout = second.layout.copy(gap = .04f))
+        val original = CollageHistory()
+        val h1 = original.checkpoint(first, second)
+        val h2 = h1.checkpoint(second, after)
+        val back = h2.undo(after)!!
+        assertEquals(second, back.first)
+        val previous = back.second.undo(back.first)!!
+        assertEquals(first, previous.first)
+        val replay = previous.second.redo(previous.first)!!
+        assertEquals(second, replay.first)
+        assertEquals(first.photos[0].edits, replay.first.photos[0].edits)
+        assertEquals(second.photos[1].edits, replay.first.photos[1].edits)
+        val changed = replay.second.checkpoint(replay.first, after)
+        assertTrue(changed.redo.isEmpty())
+        assertEquals(2, changed.undo.size)
+        var history = CollageHistory()
+        for (n in 0..40) {
+            val a = CollageDocument(layout = CollageLayout(gap = n / 1000f))
+            val b = a.copy(layout = a.layout.copy(gap = (n + 1) / 1000f))
+            history = history.checkpoint(a, b)
+        }
+        assertEquals(35, history.undo.size)
+    }
+
     @Test fun gridTwoPhotoLayoutAndSideBySideAreDifferent() {
         val layout = CollageLayout(template = CollageTemplate.SIDE_BY_SIDE)
         val cells = CollageMath.frames(2, layout)
