@@ -18,6 +18,7 @@ import com.greenezone.gzphotoeditor.editor.ImagePipeline
 import com.greenezone.gzphotoeditor.editor.LocalMask
 import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.PrivacyEdit
+import com.greenezone.gzphotoeditor.editor.PrivacyRaster
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import org.junit.Assert.assertEquals
@@ -191,6 +192,41 @@ class AndroidBitmapValidationTest {
         } finally {
             pixelated.recycle()
             blurred.recycle()
+            source.recycle()
+        }
+    }
+
+    @Test fun blurBrushAveragesNeighborsWithoutShiftingWhenAnotherStrokeIsAdded() {
+        val size = 256
+        val pixels = IntArray(size * size) { i ->
+            if (i % size < size / 2) Color.BLACK else Color.WHITE
+        }
+        val source = Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
+        val mark = PrivacyEdit(kind = PrivacyKind.BLUR_BRUSH, strength = 1f, brushSize = .15f,
+            feather = .01f, strokes = listOf(BrushStroke(listOf(BrushPoint(.5f, .5f)))))
+        val more = mark.copy(strokes = mark.strokes + BrushStroke(listOf(BrushPoint(.8f, .8f))))
+        val first = PrivacyRaster.apply(source, listOf(mark))
+        val second = PrivacyRaster.apply(source, listOf(more))
+        val zero = PrivacyRaster.apply(source, listOf(mark.copy(strength = 0f)))
+        val doubled = Bitmap.createScaledBitmap(source, size * 2, size * 2, false)
+        val full = PrivacyRaster.apply(doubled, listOf(mark))
+        try {
+            for (x in 118..138) {
+                assertEquals(first.getPixel(x, 128), second.getPixel(x, 128))
+                val preview = Color.red(first.getPixel(x, 128))
+                val export = Color.red(full.getPixel(x * 2, 256))
+                assertTrue("Preview/export at $x: $preview/$export", kotlin.math.abs(preview - export) <= 8)
+            }
+            assertTrue(Color.red(first.getPixel(126, 128)) in 65..125)
+            assertTrue(Color.red(first.getPixel(130, 128)) in 145..205)
+            assertEquals(source.getPixel(126, 16), first.getPixel(126, 16))
+            assertTrue(source.sameAs(zero))
+        } finally {
+            first.recycle()
+            second.recycle()
+            zero.recycle()
+            full.recycle()
+            doubled.recycle()
             source.recycle()
         }
     }

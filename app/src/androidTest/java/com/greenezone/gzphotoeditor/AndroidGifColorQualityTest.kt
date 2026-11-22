@@ -74,6 +74,61 @@ class AndroidGifColorQualityTest {
         } finally { bitmap.recycle() }
     }
 
+    @Test fun changingColorCountsAndLateTransparencyKeepThePaletteValid() {
+        val palette = GifPalette(257, null, reserveTransparency = false)
+        val indices = ByteArray(257)
+        // Alternate sparse and quantized frames on the same encoder instance.
+        for (distinct in listOf(256, 257, 255, 256, 1)) {
+            for (lateAlpha in listOf(false, true)) {
+                val colors = IntArray(257) { index ->
+                    val value = index % distinct
+                    Color.rgb(value and 255, (value * 17) and 255, value ushr 8)
+                }
+                if (lateAlpha) colors[256] = Color.TRANSPARENT
+                val bitmap = Bitmap.createBitmap(colors, 257, 1, Bitmap.Config.ARGB_8888)
+                try {
+                    palette.index(bitmap, indices)
+                    assertEquals(lateAlpha, palette.transparent)
+                    for (i in colors.indices) {
+                        val index = indices[i].toInt() and 255
+                        if (colors[i] == Color.TRANSPARENT) assertEquals(0, index)
+                        else {
+                            if (lateAlpha) assertTrue(index != 0)
+                            val rgb = colors[i] and 0xffffff
+                            val actual = palette.colors[index]
+                            if (distinct <= (if (lateAlpha) 255 else 256)) assertEquals(rgb, actual)
+                            else {
+                                assertTrue(abs(Color.red(rgb) - Color.red(actual)) <= 8)
+                                assertTrue(abs(Color.green(rgb) - Color.green(actual)) <= 8)
+                                assertTrue(abs(Color.blue(rgb) - Color.blue(actual)) <= 8)
+                            }
+                        }
+                    }
+                } finally { bitmap.recycle() }
+            }
+        }
+    }
+
+    @Test fun sameSizeTransparentPhotoExportsWithItsPreviewBackground() {
+        val doc = GifDocument(frames = listOf("content://qa/first", "content://qa/second"),
+            size = GifSize.SMALL)
+        val (w, h) = GifMath.dimensions(doc)
+        fun photo() = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
+            setPixel(w / 2, h / 2, Color.RED)
+        }
+        val out = ByteArrayOutputStream()
+        GifEncoder.write(out, doc) { photo() }
+        val raw = out.toByteArray()
+        val movie = requireNotNull(Movie.decodeByteArray(raw, 0, raw.size))
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        try {
+            movie.setTime(50)
+            movie.draw(Canvas(bitmap), 0f, 0f)
+            assertEquals(Color.BLACK, bitmap.getPixel(0, 0))
+            assertEquals(Color.RED, bitmap.getPixel(w / 2, h / 2))
+        } finally { bitmap.recycle() }
+    }
+
     @Test fun movingObjectOverTransparentBackgroundLeavesNoGhostedPreviousFrame() {
         val out = ByteArrayOutputStream()
         GifEncoder.writeFrames(out, document(true), 2, 200, loader = { position ->

@@ -144,6 +144,15 @@ class ProductionWaveMathTest {
         assertTrue(encoded.contains("mask.0.stroke.0"))
     }
 
+    @Test fun reopenedProjectKeepsEveryPointOfALongPrivacyBrushAndLocalMask() {
+        val stroke = BrushStroke(List(640) { i -> BrushPoint((i % 32) / 31f, (i / 32) / 19f) })
+        val document = EditDocument(
+            masks = listOf(LocalMask(kind = MaskKind.BRUSH, strokes = listOf(stroke))),
+            privacy = listOf(PrivacyEdit(kind = PrivacyKind.BLUR_BRUSH, strokes = listOf(stroke)))
+        )
+        assertEquals(document, EditDocumentCodec.decode(EditDocumentCodec.encode(document)))
+    }
+
     @Test fun invalidAndOversizedProjectDataFailsClosed() {
         assertNull(EditDocumentCodec.decode("version=999\nrotation=2"))
         assertNull(EditDocumentCodec.decode("version=1" + "X".repeat(510_000)))

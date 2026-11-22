@@ -10,7 +10,8 @@ import java.util.Base64
 object EditDocumentCodec {
     private const val VERSION = "1"
     private const val MAX_STROKES = 40
-    private const val MAX_POINTS = 500
+    private const val MAX_BRUSH_POINTS = 640
+    private const val MAX_INK_POINTS = 500
 
     fun encode(document: EditDocument): String {
         val fields = sortedMapOf<String, String>()
@@ -44,7 +45,7 @@ object EditDocumentCodec {
             fields[prefix + "stroke.count"] = strokes.size.toString()
             strokes.forEachIndexed { strokeIndex, stroke ->
                 fields[prefix + "stroke.$strokeIndex"] =
-                    stroke.points.take(MAX_POINTS).joinToString(";") { "${it.x},${it.y}" }
+                    stroke.points.take(MAX_BRUSH_POINTS).joinToString(";") { "${it.x},${it.y}" }
             }
         }
         val privacy = document.privacy.take(PrivacyRaster.MAX_EDITS)
@@ -64,7 +65,7 @@ object EditDocumentCodec {
             fields[prefix + "stroke.count"] = strokes.size.toString()
             strokes.forEachIndexed { i, stroke ->
                 fields[prefix + "stroke.$i"] =
-                    stroke.points.take(MAX_POINTS).joinToString(";") { "${it.x},${it.y}" }
+                    stroke.points.take(MAX_BRUSH_POINTS).joinToString(";") { "${it.x},${it.y}" }
             }
         }
         document.cropFrame?.let { f ->
@@ -110,7 +111,7 @@ object EditDocumentCodec {
             fields[pre + "opacity"] = stroke.opacity.toString()
             fields[pre + "width"] = stroke.thickness.toString()
             fields[pre + "erase"] = stroke.erase.toString()
-            fields[pre + "points"] = stroke.points.take(MAX_POINTS).joinToString(";") {
+            fields[pre + "points"] = stroke.points.take(MAX_INK_POINTS).joinToString(";") {
                 it.x.toString() + "," + it.y.toString()
             }
         }
@@ -151,7 +152,7 @@ object EditDocumentCodec {
             val defaultRadius = if (kind == MaskKind.BRUSH) .04f else .35f
             val strokes = ArrayList<BrushStroke>()
             for (j in 0 until count(prefix + "stroke.count", MAX_STROKES)) {
-                val pairs = fields[prefix + "stroke.$j"]?.split(';')?.take(MAX_POINTS) ?: continue
+                val pairs = fields[prefix + "stroke.$j"]?.split(';')?.take(MAX_BRUSH_POINTS) ?: continue
                 val points = pairs.mapNotNull { pair ->
                     val coords = pair.split(',')
                     if (coords.size != 2) return@mapNotNull null
@@ -182,7 +183,7 @@ object EditDocumentCodec {
                 ?: continue
             val strokes = ArrayList<BrushStroke>()
             for (j in 0 until count(prefix + "stroke.count", MAX_STROKES)) {
-                val pairs = fields[prefix + "stroke.$j"]?.split(';')?.take(MAX_POINTS) ?: continue
+                val pairs = fields[prefix + "stroke.$j"]?.split(';')?.take(MAX_BRUSH_POINTS) ?: continue
                 val points = pairs.mapNotNull { pair ->
                     val coords = pair.split(',')
                     if (coords.size != 2) return@mapNotNull null
@@ -216,7 +217,7 @@ object EditDocumentCodec {
         }
         fun color(key: String, fallback: Int): Int = fields[key]?.toIntOrNull() ?: fallback
         fun points(key: String): List<BrushPoint> =
-            fields[key]?.split(';')?.take(MAX_POINTS)?.mapNotNull { pair ->
+            fields[key]?.split(';')?.take(MAX_INK_POINTS)?.mapNotNull { pair ->
                 val pieces = pair.split(',')
                 if (pieces.size != 2) return@mapNotNull null
                 val x = pieces[0].toFloatOrNull()

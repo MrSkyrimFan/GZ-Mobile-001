@@ -1,0 +1,29 @@
+# GZ Editor Pro v0.12.2 phone QA
+
+The owner reported missing text controls, an ineffective blur brush and slow GIF playback in v0.12.1. The review started at merge `456cf7747e92204eee00f0f9bf0176b5c53d75ff`. This candidate keeps the established workspace layout, styling and separate 20-photo Collage editor. Its test package is `com.greenezone.gzphotoeditor.phonetest.v14`.
+
+| Area | What the review found | Correction or verification |
+| --- | --- | --- |
+| Regular text | Standalone Regular passed a compact filter into its existing dock. Text, Draw, Shapes and other editing tools were unreachable. The old text UI test opened a prepared tab and skipped this path. | Expose the existing tool row. A regression enters through Open media, scrolls to Text, adds a caption and opens its words again. |
+| Regular blur | Downsampling produced uneven blur. While painting, the preview renderer stopped and the colored stroke guide covered the edited pixels. Long strokes could also lose their last 140 points on project reopen. | Preview the actual blur during painting. Apply a local, scale-aware filter at export. Preserve up to 640 points for brush masks and privacy edits. |
+| GIF playback | Even neutral forward video sought individual frames. Slow decoding extended the presentation clock on reverse and edited previews. | Use continuous Android video playback when the source matches the requested output. Edited and reverse playback use absolute source timing and skip overdue preview frames. Export still processes every scheduled output frame. |
+| GIF export and projects | Exact-color frames required two full bitmap reads. Photographic frames allocated fresh histogram partitions for every split. Transparent same-size photos could export with a different background from the preview. An interrupted project backed only by a legacy backup file disappeared from the project list. | Read pixels in strips, finish exact-color frames in one pass and reuse quantization buffers. Apply the preview background to transparent photo sequences. Recover and overwrite existing backed-up GIF projects, including when the twelve slots are full. |
+| Pro | Hit testing treated an eraser mark as selectable paint. At the project limit, an interrupted save could make a valid overwrite look like a thirteenth project. | Respect drawing order, erase and repaint in layer selection. Recognize a recoverable project when checking capacity. |
+| Collage | The prior twenty-tile test inspected the rendered bitmap but bypassed the screen's actual export action. | New tests save twenty distinct tiles to PNG and two to JPEG through the export action, decode the resulting files and inspect per-tile pixels and the original. |
+
+## What to check on a phone
+
+1. In Regular, open a photo, swipe the bottom dock to **Text**, tap **+ Add text**, type and apply. Edit the words, move the caption and export. Read the actual exported caption.
+2. Under **Blur & cover**, paint over a sharp edge or small lettering. Watch the blur while dragging, lift, undo, then compare the saved image with the preview. Inspect detail just outside the stroke.
+3. In GIF maker, import a local video with clearly directional motion. Compare normal playback to the phone's player. Pause, scrub, trim, reverse, and change speed. Save the GIF, open it in another viewer, then reopen it in the editor. Check direction, duration, framing, and color.
+4. In Pro, erase a hole in a painted layer and select the visible layer underneath. Save, close and reopen the project. In Collage, edit just one tile, save and reopen the project, and inspect an exported copy.
+
+If an issue recurs, record the phone and Android version, the action, and what appeared. For GIFs, include clip length, dimensions and whether the delay occurred opening, playing, scrubbing or saving.
+
+## Performance evidence and remaining work
+
+A desktop JVM comparison used the old and new palette implementations on identical 960 × 540 inputs. The decoded palette RGB and transparency matched at every pixel of a 32-color frame, a dense frame and a frame with late transparency. The number of bitmap reads fell from 1,080 to 17 on the 32-color input and to 34 on the other two. These are bitmap-read counts for palette selection. Handset playback, export duration, peak memory and thermal behavior need separate measurements on representative media.
+
+Production qualification remains open. Major outstanding items include long-GOP, variable-rate and HDR phone footage, Pro layer groups and clipping, brush dynamics and advanced healing, a high-bit-depth RAW/ICC development pipeline, lens corrections, cataloging and batch processing. The video timeline, audio/music and MP4 export follow stabilization of the photo, Pro and GIF systems. See [the professional roadmap](PROFESSIONAL_ENGINEERING_ROADMAP.md) and [the release gate](RELEASE_GATE.md).
+
+Two usability and reliability gaps remain under review. Opening a saved collage from an empty session currently requires importing a photo first. On interrupted Regular or Collage exports, a document provider can leave a partial destination. Cleanup must preserve pre-existing user files.

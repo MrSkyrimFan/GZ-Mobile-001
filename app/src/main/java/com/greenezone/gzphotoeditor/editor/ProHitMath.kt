@@ -43,20 +43,31 @@ object ProHitMath {
                     abs(u) <= width.coerceAtMost(1f) * canvasWidth / 2 &&
                         abs(v) <= height.coerceAtMost(1f) * canvasHeight / 2
                 }
-                ProLayerKind.DRAWING -> layer.edits.creative.strokes.any { stroke ->
-                    val radius = (stroke.thickness / 2f).coerceAtLeast(.008f)
-                    stroke.points.any { point ->
-                        val dx = point.x - x; val dy = point.y - y
-                        dx * dx + dy * dy <= radius * radius
-                    } || stroke.points.zipWithNext().any { (a, b) ->
-                        distanceToSegment(x, y, a.x, a.y, b.x, b.y) <= radius
-                    }
-                }
+                ProLayerKind.DRAWING -> layer.edits.creative.strokes.lastOrNull { stroke ->
+                    (stroke.erase || stroke.opacity > 0f) &&
+                        strokeContains(stroke, x, y, canvasWidth, canvasHeight)
+                }?.erase == false
                 ProLayerKind.ADJUSTMENT -> false
             }
             if (inBounds) return index
         }
         return null
+    }
+
+    private fun strokeContains(stroke: InkStroke, x: Float, y: Float, width: Int, height: Int): Boolean {
+        val points = stroke.points
+        if (points.isEmpty()) return false
+        val halfWidth = stroke.thickness.coerceIn(.0015f, .16f) / 2f
+        val radius = min(width, height) * if (stroke.erase) halfWidth else halfWidth.coerceAtLeast(.008f)
+        val px = x * width
+        val py = y * height
+        var previous = points.first()
+        for (point in points) {
+            if (distanceToSegment(px, py, previous.x * width, previous.y * height,
+                    point.x * width, point.y * height) <= radius) return true
+            previous = point
+        }
+        return false
     }
 
     private fun distanceToSegment(

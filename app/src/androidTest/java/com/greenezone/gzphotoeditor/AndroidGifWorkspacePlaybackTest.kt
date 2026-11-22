@@ -7,6 +7,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Movie
 import android.net.Uri
+import android.os.SystemClock
+import android.util.Log
 import android.provider.MediaStore
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
@@ -16,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityOptionsCompat
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -162,10 +165,16 @@ class AndroidGifWorkspacePlaybackTest {
             val doc = VideoGifSource.document(context, uri)
             show(doc)
             waitFrame(1)
+            val startedAt = SystemClock.elapsedRealtime()
             rule.onNodeWithText("Play").performClick()
             rule.waitUntil(15_000) {
-                rule.onAllNodesWithContentDescription("GIF preview, frame 1").fetchSemanticsNodes().isEmpty()
+                val native = rule.onAllNodesWithTag("gif-native-video").fetchSemanticsNodes().singleOrNull()
+                val label = if (native != null && SemanticsProperties.ContentDescription in native.config)
+                    native.config[SemanticsProperties.ContentDescription].singleOrNull() else null
+                val frame = label?.substringAfterLast(' ')?.toIntOrNull() ?: 0
+                frame >= 5
             }
+            Log.i("GzGifTiming", "2 s, 8 fps MP4: Play to frame 5 or later = ${SystemClock.elapsedRealtime() - startedAt} ms")
             rule.onNodeWithText("Pause").performClick()
             rule.onNodeWithText("Play").assertIsDisplayed()
             rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(

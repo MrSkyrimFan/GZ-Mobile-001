@@ -88,19 +88,21 @@ object GifStore {
             ).takeIf { GifMath.valid(it) }
         } catch (_: Exception) { null }
     }
-    fun names(context: Context): List<String> = folder(context).listFiles()?.mapNotNull {
-        if (!it.isFile || !it.name.endsWith(".gzgif")) return@mapNotNull null
-        try { String(Base64.getUrlDecoder().decode(it.name.removeSuffix(".gzgif")),
+    @Synchronized fun names(context: Context): List<String> = folder(context).listFiles()?.mapNotNull {
+        val projectName = it.name.removeSuffix(".bak")
+        if (!it.isFile || !projectName.endsWith(".gzgif")) return@mapNotNull null
+        try { String(Base64.getUrlDecoder().decode(projectName.removeSuffix(".gzgif")),
             Charsets.UTF_8) } catch (_: Exception) { null }
-    }?.sortedBy { it.lowercase() } ?: emptyList()
+    }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
 
     @Synchronized fun save(context: Context, name: String, doc: GifDocument): Boolean {
         val id = id(name) ?: return false
         val dir = folder(context)
         val file = File(dir, "$id.gzgif")
-        if (!file.exists() && names(context).size >= MAX_FILES) return false
+        if (!file.exists() && !File(file.path + ".bak").isFile && names(context).size >= MAX_FILES) return false
         return try {
             val data = encode(doc).toByteArray(Charsets.UTF_8)
+            require(data.size <= MAX_BYTES)
             val atomic = AtomicFile(file)
             val stream = atomic.startWrite()
             try {
@@ -116,7 +118,10 @@ object GifStore {
     @Synchronized fun load(context: Context, name: String): GifDocument? {
         val id = id(name) ?: return null
         val file = File(folder(context), "$id.gzgif")
-        if (!file.isFile || file.length() > MAX_BYTES) return null
+        // Legacy AtomicFile restores the backup first, including when there is no base file.
+        val backup = File(file.path + ".bak")
+        val recoverable = if (backup.exists()) backup else file
+        if (!recoverable.isFile || recoverable.length() > MAX_BYTES) return null
         return try {
             val doc = AtomicFile(file).openRead().bufferedReader().use { decode(it.readText()) } ?: return null
             val previous = doc.video

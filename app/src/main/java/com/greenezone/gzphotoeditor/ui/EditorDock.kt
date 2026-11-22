@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -135,7 +136,6 @@ fun EditorDock(
     onOpen: () -> Unit,
     onCollage: () -> Unit = {},
     showCollage: Boolean = true,
-    compact: Boolean = false,
     creativeTool: CreativeToolState = CreativeToolState(),
     onCreativeTool: (CreativeToolState) -> Unit = {},
     onNewText: () -> Unit = {},
@@ -196,11 +196,9 @@ fun EditorDock(
         LazyRow(
             contentPadding = PaddingValues(horizontal = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
-            modifier = Modifier.fillMaxWidth().height(47.dp)
+            modifier = Modifier.fillMaxWidth().height(47.dp).testTag("photo-tools")
         ) {
-            items(if (compact) listOf(EditTab.LOOKS, EditTab.LIGHT, EditTab.COLOR,
-                EditTab.DETAIL, EditTab.EFFECTS, EditTab.PRIVACY,
-                EditTab.CROP, EditTab.MORE) else EditTab.entries) { item ->
+            items(EditTab.entries) { item ->
                 DockChip(
                     title = item.title,
                     selected = tab == item,
@@ -736,7 +734,7 @@ private fun MoreDeck(
         modifier = Modifier.padding(horizontal = 15.dp, vertical = 4.dp)
     )
     LazyRow(
-        modifier = Modifier.fillMaxWidth().height(47.dp),
+        modifier = Modifier.fillMaxWidth().height(47.dp).testTag("photo-actions"),
         contentPadding = PaddingValues(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {

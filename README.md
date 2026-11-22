@@ -2,7 +2,9 @@
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-**Status: version 0.12.1 QA hardening candidate. NOT AAA-certified or published on Google Play.**
+**Current phone-test candidate: v0.12.2. Commercial qualification remains open.**
+
+The [v0.12.2 phone QA notes](docs/PHONE_QA_014.md) cover the Regular text and blur regressions, GIF playback and export, Pro saving and selection, and independent collage export checks.
 
 ## Core contract
 - Fully offline. No runtime AI, subscriptions, ads, account, telemetry, in-app purchases, watermarks or network permission.
