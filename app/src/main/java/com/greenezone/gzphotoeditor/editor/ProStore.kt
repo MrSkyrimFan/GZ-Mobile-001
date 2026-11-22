@@ -9,7 +9,7 @@ import java.util.Base64
 
 /** Versioned private JSON holding photo URIs and editable layer settings, never source image bytes. */
 object ProStore {
-    private const val VERSION = 2
+    private const val VERSION = 3
     private const val MAX_BYTES = 3_000_000
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
@@ -24,6 +24,33 @@ object ProStore {
                 put("scale", layer.scale.toDouble()); put("opacity", layer.opacity.toDouble())
                 put("visible", layer.visible); put("blend", layer.blend.name)
                 put("kind", layer.kind.name); put("aspect", layer.aspect.toDouble())
+                put("rotate", layer.rotationDegrees.toDouble())
+                put("effect", layer.effect.name); put("effectAmount", layer.effectAmount.toDouble())
+                layer.mask?.let { mask ->
+                    val obj = JSONObject().apply {
+                        put("kind", mask.kind.name)
+                        put("x", mask.centerX.toDouble()); put("y", mask.centerY.toDouble())
+                        put("width", mask.width.toDouble()); put("height", mask.height.toDouble())
+                        put("invert", mask.inverted)
+                        put("points", JSONArray().also { arr ->
+                            mask.points.forEach { point ->
+                                arr.put(JSONArray().put(point.x.toDouble()).put(point.y.toDouble()))
+                            }
+                        })
+                    }
+                    put("mask", obj)
+                }
+                put("retouches", JSONArray().apply {
+                    layer.retouches.forEach { mark ->
+                        put(JSONObject().apply {
+                            put("kind", mark.kind.name)
+                            put("sx", mark.sourceX.toDouble()); put("sy", mark.sourceY.toDouble())
+                            put("tx", mark.targetX.toDouble()); put("ty", mark.targetY.toDouble())
+                            put("radius", mark.radius.toDouble())
+                            put("strength", mark.strength.toDouble())
+                        })
+                    }
+                })
                 put("edits", EditDocumentCodec.encode(layer.edits))
             })
         }
@@ -54,6 +81,38 @@ object ProStore {
                 val uri = o.optString("uri", "")
                 if (uri.length > 4096) return null
                 val edits = EditDocumentCodec.decode(o.optString("edits", "")) ?: return null
+                val mask = o.optJSONObject("mask")?.let { json ->
+                    val raw = json.optJSONArray("points") ?: JSONArray()
+                    if (raw.length() > ProToolMath.MAX_LASSO_POINTS) return null
+                    val points = (0 until raw.length()).map { k ->
+                        val p = raw.optJSONArray(k) ?: return null
+                        if (p.length() != 2) return null
+                        BrushPoint(p.optDouble(0, Double.NaN).toFloat(),
+                            p.optDouble(1, Double.NaN).toFloat())
+                    }
+                    ProSelection(
+                        kind = value(json.optString("kind", ""), ProSelectionKind.RECTANGLE),
+                        centerX = unit(json, "x", .5, 0f, 1f),
+                        centerY = unit(json, "y", .5, 0f, 1f),
+                        width = unit(json, "width", .6, 0f, 1f),
+                        height = unit(json, "height", .6, 0f, 1f),
+                        points = points, inverted = json.optBoolean("invert", false)
+                    ).takeIf(ProToolMath::valid) ?: return null
+                }
+                val rawRetouch = o.optJSONArray("retouches") ?: JSONArray()
+                if (rawRetouch.length() > ProToolMath.MAX_RETOUCH) return null
+                val retouches = (0 until rawRetouch.length()).map { k ->
+                    val item = rawRetouch.optJSONObject(k) ?: return null
+                    ProRetouchMark(
+                        kind = value(item.optString("kind", ""), ProRetouchKind.CLONE),
+                        sourceX = unit(item, "sx", .5, 0f, 1f),
+                        sourceY = unit(item, "sy", .5, 0f, 1f),
+                        targetX = unit(item, "tx", .5, 0f, 1f),
+                        targetY = unit(item, "ty", .5, 0f, 1f),
+                        radius = unit(item, "radius", .04, .005f, .2f),
+                        strength = unit(item, "strength", .85, .1f, 1f)
+                    ).takeIf(ProToolMath::valid) ?: return null
+                }
                 ProLayer(
                     uri = uri, edits = edits, name = o.optString("name", "").take(42),
                     x = unit(o, "x", .5, 0f, 1f), y = unit(o, "y", .5, 0f, 1f),
@@ -62,7 +121,11 @@ object ProStore {
                     visible = o.optBoolean("visible", true),
                     blend = value(o.optString("blend", ""), ProBlend.NORMAL),
                     kind = value(o.optString("kind", ""), ProLayerKind.IMAGE),
-                    aspect = unit(o, "aspect", 1.0, .1f, 10f)
+                    aspect = unit(o, "aspect", 1.0, .1f, 10f),
+                    rotationDegrees = unit(o, "rotate", 0.0, -180f, 180f),
+                    mask = mask, retouches = retouches,
+                    effect = value(o.optString("effect", ""), ProPixelEffect.NONE),
+                    effectAmount = unit(o, "effectAmount", .5, 0f, 1f)
                 )
             }
             ProDocument(layers,

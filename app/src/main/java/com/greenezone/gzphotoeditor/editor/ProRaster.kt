@@ -51,8 +51,12 @@ object ProRaster {
                 if (!layer.visible || layer.opacity <= 0f) continue
                 if (layer.kind != ProLayerKind.IMAGE) {
                     if (layer.kind == ProLayerKind.ADJUSTMENT) {
-                        val adjusted = ImagePipeline.render(
-                            output, EditDocument(grade = layer.edits.grade), cancel)
+                        val adjusted = if (layer.effect != ProPixelEffect.NONE) {
+                            ProEffectRaster.render(output, layer.effect, layer.effectAmount, cancel)
+                        } else {
+                            ImagePipeline.render(
+                                output, EditDocument(grade = layer.edits.grade), cancel)
+                        }
                         try {
                             if (adjusted !== output) canvas.drawBitmap(adjusted, 0f, 0f,
                                 Paint(Paint.FILTER_BITMAP_FLAG).apply {
@@ -69,12 +73,14 @@ object ProRaster {
                                 it.copy(x = layer.x, y = layer.y,
                                     width = (it.width * layer.scale).coerceIn(.07f, 1f),
                                     height = (it.height * layer.scale).coerceIn(.04f, 1f),
-                                    size = (it.size * layer.scale).coerceIn(.012f, .24f))
+                                    size = (it.size * layer.scale).coerceIn(.012f, .24f),
+                                    rotation = layer.rotationDegrees)
                             })
                             ProLayerKind.SHAPE -> CreativeDocument(shapes = creative.shapes.map {
                                 it.copy(x = layer.x, y = layer.y,
                                     width = (it.width * layer.scale).coerceIn(.018f, 1f),
-                                    height = (it.height * layer.scale).coerceIn(.018f, 1f))
+                                    height = (it.height * layer.scale).coerceIn(.018f, 1f),
+                                    rotation = layer.rotationDegrees)
                             })
                             ProLayerKind.DRAWING -> CreativeDocument(strokes = creative.strokes)
                             else -> CreativeDocument()
@@ -93,6 +99,7 @@ object ProRaster {
                 }
                 var source: Bitmap? = null
                 var edited: Bitmap? = null
+                var retouched: Bitmap? = null
                 try {
                     val edge = (maxOf(width, height) * layer.scale.coerceIn(.1f, 2f) * 1.3f)
                         .roundToInt().coerceIn(96, if (preview) 1400 else 5600)
@@ -106,14 +113,31 @@ object ProRaster {
                         throw MissingLayer(index, error)
                     }
                     edited = ImagePipeline.render(source, layer.edits, cancel)
-                    val frame = ProMath.bounds(layer, width, height, edited.width, edited.height)
+                    val outputImage = if (layer.retouches.isEmpty()) edited
+                        else ProRetouchRaster.apply(edited, layer.retouches, cancel).also {
+                            retouched = it
+                        }
+                    val frame = ProMath.bounds(layer, width, height,
+                        outputImage.width, outputImage.height)
                     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                         alpha = (layer.opacity * 255).roundToInt().coerceIn(0, 255)
                         blendMode = blend(layer.blend)
                     }
-                    canvas.drawBitmap(edited, null,
-                        RectF(frame.left, frame.top, frame.right, frame.bottom), paint)
+                    val saved = canvas.save()
+                    try {
+                        layer.mask?.let { mask ->
+                            val path = ProToolMath.path(mask, width, height)
+                            if (mask.inverted) canvas.clipOutPath(path) else canvas.clipPath(path)
+                        }
+                        if (layer.rotationDegrees != 0f) {
+                            canvas.rotate(layer.rotationDegrees,
+                                layer.x * width, layer.y * height)
+                        }
+                        canvas.drawBitmap(outputImage, null,
+                            RectF(frame.left, frame.top, frame.right, frame.bottom), paint)
+                    } finally { canvas.restoreToCount(saved) }
                 } finally {
+                    retouched?.let { if (it !== edited && !it.isRecycled) it.recycle() }
                     edited?.let { if (it !== source && !it.isRecycled) it.recycle() }
                     source?.let { if (!it.isRecycled) it.recycle() }
                 }
