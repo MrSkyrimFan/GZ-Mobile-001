@@ -132,6 +132,15 @@ class AndroidBackNavigationTest {
         rule.waitForIdle()
     }
 
+    private fun waitForTextOrTimeout(text: String, timeoutMillis: Long): Boolean = try {
+        rule.waitUntil(timeoutMillis) {
+            rule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+        true
+    } catch (_: ComposeTimeoutException) {
+        false
+    }
+
     private fun singlePhotoPicker(uri: Uri): ActivityResultRegistryOwner =
         object : ActivityResultRegistryOwner {
             override val activityResultRegistry = object : ActivityResultRegistry() {
@@ -791,11 +800,10 @@ class AndroidBackNavigationTest {
                     rule.onNodeWithText("Save").performClick()
                     rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
 
-                    // Project naming may leave the IME owning the first system Back.
-                    // Send another only when the tile editor did not receive it.
+                    // Project naming can leave the system IME owning the first Back.
+                    // Wait for the application prompt before deciding the IME consumed it.
                     pressSystemBack()
-                    if (rule.onAllNodesWithText("Apply tile changes?")
-                            .fetchSemanticsNodes().isEmpty()) {
+                    if (!waitForTextOrTimeout("Apply tile changes?", 5_000)) {
                         pressSystemBack()
                     }
                     rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
