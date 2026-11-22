@@ -42,6 +42,25 @@ class AndroidProGifValidationTest {
         assertNull(ProStore.decode("{}"))
         assertNull(GifStore.decode("{}"))
     }
+    @Test fun gifPreviewAndExportUseIdenticalFitFillCanvasComposition() {
+        val src = solid(Color.RED)
+        val doc = GifDocument(listOf("content://one", "content://two"),
+            size = GifSize.MEDIUM, aspect = GifAspect.LANDSCAPE, fit = GifFit.FIT)
+        val fitted = GifEncoder.renderFrame(src, doc)
+        val filled = GifEncoder.renderFrame(src, doc.copy(fit = GifFit.FILL))
+        try {
+            assertEquals(480, fitted.width)
+            assertEquals(270, fitted.height)
+            assertEquals(Color.BLACK, fitted.getPixel(0, 135))
+            assertEquals(Color.RED, fitted.getPixel(240, 135))
+            assertEquals(Color.RED, filled.getPixel(0, 135))
+        } finally {
+            fitted.recycle()
+            filled.recycle()
+            src.recycle()
+        }
+    }
+
     @Test fun exportedGifIsActualDecodableAnimatedGif89a() {
         val gif = GifDocument(listOf("content://one","content://two"),
             delayMs = 400, size = GifSize.SMALL)

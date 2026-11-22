@@ -85,6 +85,30 @@ object GifEncoder {
         output.byte(0)
     }
 
+    /** One shared composition recipe for animated preview and final GIF frames. */
+    fun renderFrame(source: Bitmap, doc: GifDocument): Bitmap {
+        require(source.width > 0 && source.height > 0 && !source.isRecycled)
+        val (w, h) = GifMath.dimensions(doc)
+        require(w > 0 && h > 0 && w.toLong() * h <= 640L * 640L)
+        val target = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = Canvas(target)
+            canvas.drawColor(Color.BLACK)
+            val scale = if (doc.fit == GifFit.FIT) {
+                min(w.toFloat() / source.width, h.toFloat() / source.height)
+            } else max(w.toFloat() / source.width, h.toFloat() / source.height)
+            val rw = source.width * scale
+            val rh = source.height * scale
+            canvas.drawBitmap(source, null,
+                RectF((w - rw) / 2f, (h - rh) / 2f, (w + rw) / 2f, (h + rh) / 2f),
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            return target
+        } catch (failed: Throwable) {
+            target.recycle()
+            throw failed
+        }
+    }
+
     /** Caller owns output stream; loader transfers ownership of each temporary bitmap. */
     fun write(
         output: OutputStream,
@@ -120,17 +144,7 @@ object GifEncoder {
             try {
                 source = loader(frameIndex)
                 require(source.width > 0 && source.height > 0)
-                target = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(target)
-                canvas.drawColor(Color.BLACK)
-                val scale = if (doc.fit == GifFit.FIT) {
-                    min(w.toFloat() / source.width, h.toFloat() / source.height)
-                } else max(w.toFloat() / source.width, h.toFloat() / source.height)
-                val rw = source.width * scale
-                val rh = source.height * scale
-                canvas.drawBitmap(source, null,
-                    RectF((w - rw) / 2f, (h - rh) / 2f, (w + rw) / 2f, (h + rh) / 2f),
-                    Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                target = renderFrame(source, doc)
                 val pixels = ByteArray(w * h)
                 for (y in 0 until h) {
                     if ((y and 31) == 0) cancel?.invoke()

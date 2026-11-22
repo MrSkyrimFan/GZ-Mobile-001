@@ -406,7 +406,7 @@ fun CollageWorkspaceScreen(
                 Row(Modifier.fillMaxWidth().height(39.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Collage", color = EditorWhite, fontSize = 18.sp,
+                    Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold)
                     WorkspaceModeMenu(WorkspaceMode.COLLAGE, !exporting, onSwitch)
                     TextButton(onClick = { showExport = true },

@@ -184,13 +184,20 @@ fun GifMakerScreen(
         })
     }
 
-    LaunchedEffect(document.frames, index) {
+    LaunchedEffect(document.frames, index, document.fit, document.aspect, document.size) {
         val uri = document.frames.getOrNull(index)
         if (uri == null) { preview = null; return@LaunchedEffect }
         try {
-            preview = withContext(Dispatchers.IO) {
-                ImagePipeline.decode(resolver, Uri.parse(uri), 850, 800_000L)
+            val frame = withContext(Dispatchers.Default) {
+                val source = ImagePipeline.decode(
+                    resolver, Uri.parse(uri), document.size.maxEdge * 2, 1_100_000L)
+                try {
+                    GifEncoder.renderFrame(source, document)
+                } finally {
+                    if (!source.isRecycled) source.recycle()
+                }
             }
+            preview = frame
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
