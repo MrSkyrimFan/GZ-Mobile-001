@@ -181,6 +181,7 @@ fun PhotoEditorScreen(
     var closeAfterProjectSave by remember { mutableStateOf(false) }
 
     var showExport by remember { mutableStateOf(false) }
+    var showHistogram by remember { mutableStateOf(false) }
     var showSaveLook by remember { mutableStateOf(false) }
     var showSaveProject by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
@@ -756,7 +757,7 @@ fun PhotoEditorScreen(
         requestTileBack()
     }
     BackHandler(
-        enabled = onDoneCollagePhoto == null &&
+        enabled = onDoneCollagePhoto == null && !showHistogram &&
             workspaceNavigation.current == WorkspaceMode.PHOTO &&
             (workspaceNavigation.previewBack() != null || original != null || busy || exporting)
     ) {
@@ -1273,7 +1274,10 @@ fun PhotoEditorScreen(
                         onNewText = { editWords(true) },
                         onEditText = { editWords(false) },
                         cropImageWidth = cropImageSize?.first ?: 1,
-                        cropImageHeight = cropImageSize?.second ?: 1
+                        cropImageHeight = cropImageSize?.second ?: 1,
+                        onHistogram = if (tileEntryBaseline == null && onDoneCollagePhoto == null) {
+                            { showHistogram = true }
+                        } else null
                     )
                 }
             }
@@ -1297,6 +1301,9 @@ fun PhotoEditorScreen(
         }
     }
 
+    if (showHistogram && selectedImage != null) {
+        PhotoHistogramDialog(selectedImage, compare) { showHistogram = false }
+    }
     if (showExport) {
         ExportDialog(
             settings = exportSettings,

@@ -46,6 +46,9 @@ data class ProDocument(
 ) {
     val canvasAspectRatio: Float get() = sourceAspectRatio ?: aspect.ratio
 }
+internal fun ProLayer.withBrushStroke(stroke: InkStroke): ProLayer =
+    copy(edits = edits.copy(creative = edits.creative.copy(strokes = edits.creative.strokes + stroke)))
+
 /** Captures the working document and the workspace state needed to restore it safely. */
 data class ProHistoryEntry(
     val document: ProDocument,

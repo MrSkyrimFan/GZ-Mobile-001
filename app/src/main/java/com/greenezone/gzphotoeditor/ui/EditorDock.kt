@@ -132,7 +132,8 @@ fun EditorDock(
     onNewText: () -> Unit = {},
     onEditText: () -> Unit = {},
     cropImageWidth: Int = 1,
-    cropImageHeight: Int = 1
+    cropImageHeight: Int = 1,
+    onHistogram: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -176,7 +177,7 @@ fun EditorDock(
             )
             EditTab.MORE -> MoreDeck(
                 !busy, onAutoTone, onAutoWB, onSaveLook, onSaveProject, onProjects, onOpen,
-                onCollage, showCollage, onCommit, document
+                onCollage, showCollage, onCommit, document, onHistogram
             )
         }
 
@@ -593,7 +594,8 @@ private fun MoreDeck(
     onCollage: () -> Unit,
     showCollage: Boolean,
     onCommit: (EditDocument) -> Unit,
-    document: EditDocument
+    document: EditDocument,
+    onHistogram: (() -> Unit)?
 ) {
     var helpOpen by remember { mutableStateOf(false) }
     if (helpOpen) PhotoHelpDialog { helpOpen = false }
@@ -618,6 +620,7 @@ private fun MoreDeck(
         item { DockChip("New photo", false, enabled, onOpen) }
         if (showCollage) item { DockChip("Create collage", false, enabled, onCollage) }
         item { DockChip("Reset all edits", false, enabled) { onCommit(EditDocument()) } }
+        if (onHistogram != null) item { DockChip("Histogram", false, enabled, onHistogram) }
     }
     Text(
         "Edits are non-destructive. Your original photo stays untouched.",

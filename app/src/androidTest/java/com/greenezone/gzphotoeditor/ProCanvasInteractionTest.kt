@@ -3,7 +3,9 @@ package com.greenezone.gzphotoeditor
 import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.SystemClock
 import android.provider.MediaStore
+import android.util.Log
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,6 +88,115 @@ class ProCanvasInteractionTest {
         rule.runOnIdle { assertTrue(result.layers.single().edits.creative.strokes.isEmpty()) }
         rule.onNodeWithText("Redo").performClick()
         rule.runOnIdle { assertEquals(1, result.layers.single().edits.creative.strokes.size) }
+    }
+
+    @Test fun brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, "gz-pro-live-occlusion.png")
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }))
+        try {
+            val photo = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+            photo.eraseColor(Color.BLUE)
+            try {
+                resolver.openOutputStream(uri)!!.use { assertTrue(photo.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            } finally { photo.recycle() }
+            resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+
+            val lower = ProLayer(uri = "", name = "Lower brush", kind = ProLayerKind.DRAWING,
+                opacity = .8f)
+            val upper = ProLayer(uri = uri.toString(), name = "Upper blue photo", scale = .32f,
+                mask = ProSelection(ProSelectionKind.RECTANGLE, width = .22f, height = .5f))
+            val original = ProDocument(listOf(lower, upper))
+            open(original)
+            tool("Brush")
+            val startedAt = SystemClock.elapsedRealtime()
+            canvas.performTouchInput {
+                val radius = minOf(width, height) * .36f
+                down(0, center - Offset(radius, 0f))
+                moveTo(0, center + Offset(radius, 0f))
+            }
+
+            rule.waitUntil(10_000) {
+                val frame = canvas.captureToImage()
+                val pixels = frame.toPixelMap()
+                val middle = pixels[frame.width / 2, frame.height / 2]
+                val left = pixels[frame.width / 2 - (minOf(frame.width, frame.height) * .28f).toInt(),
+                    frame.height / 2]
+                val exposed = pixels[frame.width / 2 - (minOf(frame.width, frame.height) * .14f).toInt(),
+                    frame.height / 2]
+                middle.blue > .9f && middle.red < .1f && middle.green < .1f &&
+                    left.red in .63f.. .72f && left.green in .87f.. .96f &&
+                    exposed.red in .63f.. .72f && exposed.green in .87f.. .96f
+            }
+            Log.i("GzProPaintTiming", "Live masked brush pixels observed in ${SystemClock.elapsedRealtime() - startedAt}ms")
+            rule.runOnIdle { assertEquals("The active brush must stay out of the saved recipe", original, result) }
+            canvas.performTouchInput {
+                down(1, center + Offset(0f, 24f))
+                up(1)
+                up(0)
+            }
+            rule.waitUntil(10_000) {
+                val frame = canvas.captureToImage()
+                val pixels = frame.toPixelMap()
+                val left = pixels[frame.width / 2 - (minOf(frame.width, frame.height) * .28f).toInt(),
+                    frame.height / 2]
+                left.red > .95f && left.green > .95f && left.blue > .95f
+            }
+            rule.runOnIdle { assertEquals(original, result) }
+            rule.onNodeWithText("Undo").assertIsNotEnabled()
+        } finally { resolver.delete(uri, null, null) }
+    }
+
+    @Test fun eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke() {
+        val ink = InkStroke(listOf(BrushPoint(.10f, .5f), BrushPoint(.90f, .5f)),
+            color = Color.BLUE, thickness = .075f)
+        open(ProDocument(listOf(ProLayer(uri = "", name = "Ink", kind = ProLayerKind.DRAWING,
+            edits = EditDocument(creative = CreativeDocument(strokes = listOf(ink)))))))
+        tool("Brush")
+        rule.onNodeWithText("Eraser").performClick()
+        rule.waitUntil(10_000) {
+            val prior = canvas.captureToImage()
+            val previousCenter = prior.toPixelMap()[prior.width / 2, prior.height / 2]
+            previousCenter.blue > .9f && previousCenter.red < .1f
+        }
+
+        val startedAt = SystemClock.elapsedRealtime()
+        canvas.performTouchInput {
+            val radius = minOf(width, height) * .2f
+            down(center - Offset(radius, 0f))
+            moveTo(center + Offset(radius, 0f))
+        }
+        rule.waitUntil(10_000) {
+            val frame = canvas.captureToImage()
+            val pixels = frame.toPixelMap()
+            val middle = pixels[frame.width / 2, frame.height / 2]
+            val left = pixels[frame.width / 2 - (minOf(frame.width, frame.height) * .32f).toInt(),
+                frame.height / 2]
+            middle.red > .95f && middle.green > .95f && middle.blue > .95f &&
+                left.blue > .9f && left.red < .1f && left.green < .1f
+        }
+        Log.i("GzProPaintTiming", "Live erased pixels observed in ${SystemClock.elapsedRealtime() - startedAt}ms")
+        rule.runOnIdle { assertEquals(listOf(ink), result.layers.single().edits.creative.strokes) }
+        canvas.performTouchInput { up() }
+        rule.runOnIdle {
+            val saved = result.layers.single().edits.creative.strokes
+            assertEquals(2, saved.size)
+            assertTrue(saved.last().erase)
+            val alpha = ProRaster.renderWithLoader(result.copy(background = ProBackground.TRANSPARENT),
+                100, 100, false) { _, _, _ -> error("A drawing-only project needs no media source") }
+            try {
+                assertEquals(0, Color.alpha(alpha.getPixel(50, 50)))
+                assertEquals(Color.BLUE, alpha.getPixel(18, 50))
+            } finally { alpha.recycle() }
+        }
+        rule.onNodeWithText("Undo").performClick()
+        rule.runOnIdle { assertEquals(listOf(ink), result.layers.single().edits.creative.strokes) }
+        rule.onNodeWithText("Redo").performClick()
+        rule.runOnIdle { assertTrue(result.layers.single().edits.creative.strokes.last().erase) }
     }
 
     @Test fun maskDraftSurvivesHiddenCanvasAndCommitsOnTheSelectedAdjustmentLayer() {

@@ -14,7 +14,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
@@ -45,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,6 +74,9 @@ import kotlinx.coroutines.withContext
 internal enum class ProTransform(val title: String) {
     SIZE("Size"), OPACITY("Opacity"), HORIZONTAL("X"), VERTICAL("Y"), ROTATE("Rotate")
 }
+
+private data class ProBrushDraft(val id: Long, val layer: Int, val stroke: InkStroke)
+private data class ProBrushFrame(val draftId: Long, val bitmap: Bitmap)
 
 internal data class ProWorkspaceSession(
     val documentEstablished: Boolean = false,
@@ -153,7 +159,9 @@ internal fun ProWorkspaceScreenContent(
     var lastSliderValue by remember { mutableStateOf<ProDocument?>(null) }
     var lastDragValue by remember { mutableStateOf<ProDocument?>(null) }
     var dragStart by remember { mutableStateOf<ProHistoryEntry?>(null) }
-    var activeStroke by remember { mutableStateOf<InkStroke?>(null) }
+    var activeStroke by remember { mutableStateOf<ProBrushDraft?>(null) }
+    var nextBrushId by remember { mutableLongStateOf(0L) }
+    var brushFrame by remember { mutableStateOf<ProBrushFrame?>(null) }
     var brushColor by remember { mutableIntStateOf(session.brushColor) }
     var brushSize by remember { mutableFloatStateOf(session.brushSize) }
     var brushOpacity by remember { mutableFloatStateOf(session.brushOpacity) }
@@ -193,6 +201,7 @@ internal fun ProWorkspaceScreenContent(
         retouchSource = null
         retouchSourceImage = null
         activeStroke = null
+        brushFrame = null
     }
     fun selectLayer(index: Int) {
         if (index != selected) clearToolDrafts()
@@ -203,6 +212,8 @@ internal fun ProWorkspaceScreenContent(
             selectionStart = null
             retouchSource = null
             retouchSourceImage = null
+            activeStroke = null
+            brushFrame = null
         }
         section = tool
         expanded = true
@@ -583,6 +594,12 @@ internal fun ProWorkspaceScreenContent(
     val artboardSize = remember(document.canvasAspectRatio, previewEdge, maxPreviewPixels) {
         ProMath.dimensions(document, previewEdge, maxPreviewPixels)
     }
+    fun reportMissingSource(missing: ProRaster.MissingLayer) {
+        // A failed layer must not inherit another layer's selection or pending tool.
+        clearToolDrafts()
+        preview = null
+        notice = "Source for image layer " + (missing.position + 1) + " is unavailable."
+    }
     LaunchedEffect(document, artboardSize, resolver, resetGeneration) {
         if (pristine) {
             preview = null
@@ -608,16 +625,66 @@ internal fun ProWorkspaceScreenContent(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (missing: ProRaster.MissingLayer) {
-            // A renderer failure is not a user selection change. Do not carry a
-            // pending tool into a different layer or display a stale composition.
-            clearToolDrafts()
-            preview = null
-            notice = "Source for image layer " + (missing.position + 1) + " is unavailable."
+            reportMissingSource(missing)
         } catch (_: OutOfMemoryError) {
             notice = "Preview has too many pixels for available memory."
         } catch (failure: Exception) {
             notice = "Preview failed: " + (failure.message ?: "unknown problem")
         } finally { rendering = false }
+    }
+    val brushLayer = selected.takeIf {
+        section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
+            active.visible && active.opacity > 0f
+    }
+    val brushSizePixels = remember(document.canvasAspectRatio, maxPreviewPixels) {
+        ProMath.dimensions(document, 640, minOf(maxPreviewPixels, 409_600L))
+    }
+    LaunchedEffect(document, brushLayer, brushSizePixels, resolver, resetGeneration) {
+        if (brushLayer == null) return@LaunchedEffect
+        val (width, height) = brushSizePixels
+        val renderer = ProRaster.BrushPreview(resolver, document, brushLayer, width, height)
+        fun ownsDraft(draft: ProBrushDraft): Boolean =
+            activeStroke?.id == draft.id && draft.layer == brushLayer && selected == brushLayer &&
+                section == ProSection.PAINT && latestDocument == document
+        try {
+            // Let the current frame finish when the pointer moves again. A long drag
+            // still shows frames continuously and the next render uses the newest sample.
+            snapshotFlow { activeStroke }.conflate().collect { draft ->
+                if (draft == null || draft.stroke.points.size < 2 || !ownsDraft(draft)) return@collect
+                try {
+                    val bitmap = withContext(Dispatchers.Default) {
+                        val job = currentCoroutineContext()
+                        val image = renderer.render(draft.stroke) { job.ensureActive() }
+                        try {
+                            job.ensureActive()
+                            image
+                        } catch (cancelled: CancellationException) {
+                            image.recycle()
+                            throw cancelled
+                        }
+                    }
+                    if (ownsDraft(draft)) {
+                        brushFrame = ProBrushFrame(draft.id, bitmap)
+                        // Avoid allocating a full preview for every high-rate touch sample.
+                        delay(16L)
+                    } else bitmap.recycle()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (missing: ProRaster.MissingLayer) {
+                    if (ownsDraft(draft)) reportMissingSource(missing)
+                } catch (_: OutOfMemoryError) {
+                    if (ownsDraft(draft)) {
+                        clearToolDrafts()
+                        notice = "Preview has too many pixels for available memory."
+                    }
+                } catch (failure: Exception) {
+                    if (ownsDraft(draft)) {
+                        clearToolDrafts()
+                        notice = "Preview failed: " + (failure.message ?: "unknown problem")
+                    }
+                }
+            }
+        } finally { renderer.close() }
     }
     LaunchedEffect(notice) {
         if (notice.isNotBlank()) {
@@ -692,12 +759,16 @@ internal fun ProWorkspaceScreenContent(
                     }
                 } else {
                     val bitmap = if (pristine) null else preview
+                    val live = brushFrame?.takeIf {
+                        it.draftId == activeStroke?.id && selected == brushLayer &&
+                            dragStart?.document == document
+                    }?.bitmap
                     val (canvasW, canvasH) = artboardSize
                     val canEdit = available && (pristine || bitmap != null ||
                         document.layers.none { it.kind == ProLayerKind.IMAGE && it.visible })
-                    ProCanvasSurface(bitmap, artboardSize, document.background.argb,
+                    ProCanvasSurface(live ?: bitmap, artboardSize, document.background.argb,
                         section, active, viewport, chrome, canEdit,
-                        draftSelection, activeStroke, retouchSource,
+                        draftSelection, retouchSource,
                         actions = ProCanvasActions(
                             toggleControls = { chrome = !chrome },
                             hold = { point ->
@@ -735,9 +806,12 @@ internal fun ProWorkspaceScreenContent(
                                 dragStart = historyEntry()
                                 if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
                                     active.visible && active.opacity > 0f &&
-                                    active.edits.creative.strokes.size < CreativeRaster.MAX_INK)
-                                    activeStroke = InkStroke(listOf(point), color = brushColor,
-                                        thickness = brushSize, opacity = brushOpacity, erase = eraserMode)
+                                    active.edits.creative.strokes.size < CreativeRaster.MAX_INK) {
+                                    nextBrushId += 1
+                                    activeStroke = ProBrushDraft(nextBrushId, selected,
+                                        InkStroke(listOf(point), color = brushColor,
+                                            thickness = brushSize, opacity = brushOpacity, erase = eraserMode))
+                                }
                                 if (section == ProSection.SELECT && active?.visible == true && active.opacity > 0f &&
                                     (active.kind == ProLayerKind.IMAGE || active.kind == ProLayerKind.ADJUSTMENT)) {
                                     selectionStart = point
@@ -760,9 +834,12 @@ internal fun ProWorkspaceScreenContent(
                                         lastDragValue = next
                                         onDocument(next)
                                     }
-                                    ProSection.PAINT -> activeStroke?.let { stroke ->
-                                        if (stroke.points.size < 500 && stroke.points.last() != point)
-                                            activeStroke = stroke.copy(points = stroke.points + point)
+                                    ProSection.PAINT -> activeStroke?.let { draft ->
+                                        val stroke = draft.stroke
+                                        if (draft.layer == selected && stroke.points.size < 500 &&
+                                            stroke.points.last() != point) {
+                                            activeStroke = draft.copy(stroke = stroke.copy(points = stroke.points + point))
+                                        }
                                     }
                                     ProSection.SELECT -> if (selectionStart != null) {
                                         draftSelection = if (selectionKind == ProSelectionKind.LASSO) {
@@ -782,16 +859,21 @@ internal fun ProWorkspaceScreenContent(
                                     if (selectionStart != null) draftSelection = null
                                 } else if (before != null && section == ProSection.MOVE) {
                                     history = history.checkpoint(before, historyEntry(lastDragValue ?: before.document))
-                                } else if (section == ProSection.PAINT) {
-                                    activeStroke?.let { stroke ->
-                                        changeLayer { layer -> layer.copy(edits = layer.edits.copy(
-                                            creative = layer.edits.creative.copy(strokes =
-                                                layer.edits.creative.strokes + stroke))) }
+                                } else if (section == ProSection.PAINT && before?.document == document) {
+                                    activeStroke?.let { draft ->
+                                        if (draft.layer == selected && draft.stroke.points.size > 1) {
+                                            // Keep the last real draft pixels visible until the
+                                            // committed preview at full resolution is ready.
+                                            brushFrame?.takeIf { it.draftId == draft.id }
+                                                ?.let { preview = it.bitmap }
+                                            changeLayer { it.withBrushStroke(draft.stroke) }
+                                        }
                                     }
                                 }
                                 lastDragValue = null
                                 dragStart = null
                                 activeStroke = null
+                                brushFrame = null
                                 selectionStart = null
                             },
                             changeView = { viewport = it }
