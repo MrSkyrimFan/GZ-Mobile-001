@@ -134,21 +134,87 @@ object ProRaster {
         } finally { feather?.recycle(); bottom.recycle(); top.recycle() }
     }
 
+    /**
+     * A brush gesture changes only one drawing layer. Reuse immutable, already corrected
+     * source images while the same document is live and re-composite in stack order.
+     * The cache owns its images and is confined to one sequential preview job.
+     */
+    internal class BrushPreview(
+        private val resolver: ContentResolver,
+        private val document: ProDocument,
+        private val selectedLayer: Int,
+        private val width: Int,
+        private val height: Int
+    ) : AutoCloseable {
+        private val images = PreparedImages(document.layers.count {
+            it.kind == ProLayerKind.IMAGE && it.visible && it.opacity > 0f
+        })
+
+        fun render(stroke: InkStroke, cancel: () -> Unit): Bitmap =
+            renderComposition(document, width, height, preview = true, cancel = cancel,
+                images = images, draftLayer = selectedLayer, draftStroke = stroke) { layer, edge, pixels ->
+                decodeSource(resolver, layer, edge, pixels)
+            }
+
+        override fun close() = images.close()
+    }
+
+    private class PreparedImages(layerCount: Int) : AutoCloseable {
+        // Budget before decoding as well as when keeping the actual allocations.
+        val pixelsPerSource = MAX_BRUSH_SOURCE_BYTES / 4L / layerCount.coerceAtLeast(1)
+        private val retained = mutableMapOf<Int, Bitmap>()
+        private var bytes = 0L
+
+        operator fun get(index: Int): Bitmap? = retained[index]
+
+        fun keep(index: Int, bitmap: Bitmap): Boolean {
+            val size = bitmap.allocationByteCount.toLong()
+            if (bytes + size > MAX_BRUSH_SOURCE_BYTES) return false
+            retained[index] = bitmap
+            bytes += size
+            return true
+        }
+
+        override fun close() {
+            retained.values.forEach { it.recycle() }
+            retained.clear()
+            bytes = 0L
+        }
+    }
+
+    private const val MAX_BRUSH_SOURCE_BYTES = 8L * 1024 * 1024
+
+    private fun decodeSource(
+        resolver: ContentResolver, layer: ProLayer, edge: Int, pixels: Long
+    ): Bitmap {
+        val uri = Uri.parse(layer.uri)
+        require(uri.scheme == "content")
+        return ImagePipeline.decode(resolver, uri, edge, pixels)
+    }
+
     fun render(
         resolver: ContentResolver,
         document: ProDocument,
         width: Int, height: Int, preview: Boolean,
         cancel: (() -> Unit)? = null
     ): Bitmap = renderWithLoader(document, width, height, preview, cancel) { layer, edge, pixels ->
-        val uri = Uri.parse(layer.uri)
-        require(uri.scheme == "content")
-        ImagePipeline.decode(resolver, uri, edge, pixels)
+        decodeSource(resolver, layer, edge, pixels)
     }
 
     fun renderWithLoader(
         document: ProDocument,
         width: Int, height: Int, preview: Boolean,
         cancel: (() -> Unit)? = null,
+        loader: (ProLayer, Int, Long) -> Bitmap
+    ): Bitmap = renderComposition(document, width, height, preview, cancel, loader = loader)
+
+    private fun renderComposition(
+        document: ProDocument,
+        width: Int, height: Int, preview: Boolean,
+        cancel: (() -> Unit)?,
+        images: PreparedImages? = null,
+        draftLayer: Int = -1,
+        draftStroke: InkStroke? = null,
         loader: (ProLayer, Int, Long) -> Bitmap
     ): Bitmap {
         require(ProMath.valid(document))
@@ -158,9 +224,12 @@ object ProRaster {
         val canvas = Canvas(output)
         canvas.drawColor(document.background.argb)
         try {
-            for ((index, layer) in document.layers.withIndex()) {
+            for ((index, committed) in document.layers.withIndex()) {
                 cancel?.invoke()
-                if (!layer.visible || layer.opacity <= 0f) continue
+                if (!committed.visible || committed.opacity <= 0f) continue
+                val layer = if (index == draftLayer && draftStroke != null &&
+                    committed.kind == ProLayerKind.DRAWING) committed.withBrushStroke(draftStroke)
+                else committed
                 if (layer.kind != ProLayerKind.IMAGE) {
                     if (layer.kind == ProLayerKind.ADJUSTMENT) {
                         renderAdjustment(output, canvas, layer, cancel)
@@ -195,26 +264,12 @@ object ProRaster {
                     }
                     continue
                 }
-                var source: Bitmap? = null
-                var edited: Bitmap? = null
-                var retouched: Bitmap? = null
+                val prepared = images?.get(index)
+                val outputImage = prepared ?: prepareImage(index, layer, width, height, preview,
+                    images?.pixelsPerSource, cancel, loader)
+                var retained = prepared != null
                 try {
-                    val edge = (maxOf(width, height) * layer.scale.coerceIn(.1f, 2f) * 1.3f)
-                        .roundToInt().coerceIn(96, if (preview) 2048 else 5600)
-                    val pixels = if (preview) (width.toLong() * height * 2).coerceIn(250_000L, 3_000_000L) else
-                        (width.toLong() * height * 2).coerceIn(250_000L, 12_000_000L)
-                    source = try {
-                        loader(layer, edge, pixels)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (error: Exception) {
-                        throw MissingLayer(index, error)
-                    }
-                    edited = ImagePipeline.render(source, layer.edits, cancel)
-                    val outputImage = if (layer.retouches.isEmpty()) edited
-                        else ProRetouchRaster.apply(edited, layer.retouches, cancel).also {
-                            retouched = it
-                        }
+                    if (!retained) retained = images?.keep(index, outputImage) == true
                     val frame = ProMath.bounds(layer, width, height,
                         outputImage.width, outputImage.height)
                     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
@@ -243,15 +298,44 @@ object ProRaster {
                         feather?.recycle()
                     }
                 } finally {
-                    retouched?.let { if (it !== edited && !it.isRecycled) it.recycle() }
-                    edited?.let { if (it !== source && !it.isRecycled) it.recycle() }
-                    source?.let { if (!it.isRecycled) it.recycle() }
+                    if (!retained) outputImage.recycle()
                 }
             }
             return output
         } catch (problem: Throwable) {
             output.recycle()
             throw problem
+        }
+    }
+
+    private fun prepareImage(
+        index: Int, layer: ProLayer, width: Int, height: Int, preview: Boolean,
+        previewSourceLimit: Long?, cancel: (() -> Unit)?,
+        loader: (ProLayer, Int, Long) -> Bitmap
+    ): Bitmap {
+        val edge = (maxOf(width, height) * layer.scale.coerceIn(.1f, 2f) * 1.3f)
+            .roundToInt().coerceIn(96, if (preview) 2048 else 5600)
+        val pixels = (width.toLong() * height * 2)
+            .coerceIn(250_000L, if (preview) 3_000_000L else 12_000_000L)
+        val source = try {
+            loader(layer, edge, minOf(pixels, previewSourceLimit ?: pixels))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            throw MissingLayer(index, error)
+        }
+        var edited: Bitmap? = null
+        var result: Bitmap? = null
+        try {
+            val corrected = ImagePipeline.render(source, layer.edits, cancel)
+            edited = corrected
+            val prepared = if (layer.retouches.isEmpty()) corrected
+                else ProRetouchRaster.apply(corrected, layer.retouches, cancel)
+            result = prepared
+            return prepared
+        } finally {
+            if (source !== edited && source !== result) source.recycle()
+            edited?.let { if (it !== result) it.recycle() }
         }
     }
 }

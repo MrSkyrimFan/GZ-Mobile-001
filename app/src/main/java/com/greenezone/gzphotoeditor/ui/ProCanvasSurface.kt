@@ -3,7 +3,6 @@ package com.greenezone.gzphotoeditor.ui
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -67,7 +66,6 @@ internal fun ProCanvasSurface(
     controlsVisible: Boolean,
     enabled: Boolean,
     draft: ProSelection?,
-    stroke: InkStroke?,
     source: BrushPoint?,
     actions: ProCanvasActions,
     modifier: Modifier = Modifier
@@ -175,19 +173,6 @@ internal fun ProCanvasSurface(
                     guide.color = android.graphics.Color.YELLOW
                     canvas.drawPath(ProToolMath.path(draft, width, height), guide)
                 }
-            }
-            if (section == ProSection.PAINT && stroke != null && stroke.points.isNotEmpty()) {
-                val path = Path()
-                stroke.points.forEachIndexed { i, p ->
-                    if (i == 0) path.moveTo(p.x * width, p.y * height)
-                    else path.lineTo(p.x * width, p.y * height)
-                }
-                guide.color = if (stroke.erase) android.graphics.Color.GRAY else stroke.color
-                guide.alpha = if (stroke.erase) 255 else (stroke.opacity * 255).toInt()
-                guide.strokeWidth = stroke.thickness * min(width, height)
-                guide.strokeCap = Paint.Cap.ROUND
-                guide.strokeJoin = Paint.Join.ROUND
-                canvas.drawPath(path, guide)
             }
             if (section == ProSection.RETOUCH && source != null) {
                 val x = source.x * width

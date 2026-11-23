@@ -33,6 +33,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -40,6 +41,7 @@ import com.greenezone.gzphotoeditor.editor.CollagePhoto
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.LocalMask
 import com.greenezone.gzphotoeditor.editor.MaskKind
+import com.greenezone.gzphotoeditor.editor.PhotoHistogram
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 import org.junit.Assert.assertArrayEquals
@@ -49,6 +51,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.Base64
+import java.util.Locale
 
 @RunWith(AndroidJUnit4::class)
 class AndroidRegularToolsTest {
@@ -144,6 +147,71 @@ class AndroidRegularToolsTest {
         val source = encoder.encodeToString(uri.toString().toByteArray())
         val store = context.getSharedPreferences("gzphotoeditor.projects.v1", Context.MODE_PRIVATE)
         assertTrue(store.edit().putString(key, source + "\n" + recipe).commit())
+    }
+
+    @Test fun photoHistogramCountsVisibleChannelsAndLuminance() {
+        val pixels = intArrayOf(
+            Color.TRANSPARENT, Color.BLACK, Color.WHITE, Color.RED,
+            Color.GREEN, Color.BLUE, Color.argb(128, 255, 0, 0), Color.rgb(128, 128, 128)
+        )
+        val bitmap = Bitmap.createBitmap(pixels, 4, 2, Bitmap.Config.ARGB_8888)
+        try {
+            val histogram = PhotoHistogram.fromPreview(bitmap) {}
+            assertEquals(7, histogram.visiblePixels)
+            assertEquals(1, histogram.blackPixels)
+            assertEquals(1, histogram.whitePixels)
+            assertEquals(3, histogram.red[0])
+            assertEquals(3, histogram.red[255])
+            assertEquals(4, histogram.green[0])
+            assertEquals(2, histogram.green[255])
+            assertEquals(4, histogram.blue[0])
+            assertEquals(2, histogram.blue[255])
+            for (bins in listOf(histogram.red, histogram.green, histogram.blue, histogram.luminance)) {
+                assertEquals(7, bins.sum())
+            }
+            assertEquals(1, histogram.luminance[18])
+            assertEquals(2, histogram.luminance[54])
+            assertEquals(1, histogram.luminance[128])
+            assertEquals(1, histogram.luminance[182])
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test fun regularHistogramFollowsExposureAndBeforeView() = withRegularPhoto {
+        fun openHistogram() {
+            rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("More"))
+            rule.onNodeWithText("More").performClick()
+            rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Histogram"))
+            rule.onNodeWithText("Histogram").performClick()
+        }
+        fun expectClipping(white: Double) {
+            val label = String.format(Locale.getDefault(), "Black %.1f%%  ·  White %.1f%%", 50.0, white)
+            rule.waitUntil(10_000) { rule.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithText(label).assertIsDisplayed()
+        }
+        openHistogram()
+        expectClipping(50.0)
+        rule.onNodeWithContentDescription("RGB photo histogram").assertIsDisplayed()
+        rule.onNodeWithText("Luminance").performClick()
+        rule.onNodeWithContentDescription("Luminance photo histogram").assertIsDisplayed()
+        rule.onNodeWithText("Close").performClick()
+
+        rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Light"))
+        rule.onNodeWithText("Light").performClick()
+        rule.onNodeWithContentDescription("Adjust Exposure").performTouchInput {
+            swipe(center, Offset(width * .18f, center.y), 350)
+        }
+        openHistogram()
+        rule.onNodeWithText("Edited preview").assertIsDisplayed()
+        expectClipping(0.0)
+        rule.onNodeWithText("Close").performClick()
+
+        rule.onNodeWithText("Before").performClick()
+        openHistogram()
+        rule.onNodeWithText("Before preview").assertIsDisplayed()
+        expectClipping(50.0)
+        rule.onNodeWithText("Close").performClick()
     }
 
     @Test fun regularOmitsMaskAuthoringAndPreservesOldProjectAppearanceAndRecipe() {
