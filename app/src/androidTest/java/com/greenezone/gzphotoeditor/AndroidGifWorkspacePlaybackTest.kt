@@ -435,6 +435,7 @@ class AndroidGifWorkspacePlaybackTest {
                     trimmed.startMs in 1_700L..2_600L)
                 assertEquals(clip.endMs, trimmed.endMs)
             }
+            val reverseSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
             rule.onNodeWithText("Reverse").performClick()
             rule.onNodeWithText("Looks").performScrollTo().performClick()
             rule.onNodeWithText("B&W").performScrollTo().performClick()
@@ -484,6 +485,12 @@ class AndroidGifWorkspacePlaybackTest {
                 return try { showsMarker(image, visibleAt, clearAt) } finally { image.recycle() }
             }
             rule.waitUntil(15_000) { previewShowsMarker(late, early) }
+            assertTrue("The paused reverse preview must prepare the first source frame before Play",
+                GifPreviewDiagnostics.snapshot().any {
+                    it.sequence > reverseSequence && it.kind == GifDiagnosticKind.FRAME_SETTLED &&
+                        it.stage == GifDiagnosticStage.G4_SEEK && it.frameIndex == 0 &&
+                        it.route == GifPreviewRoute.BITMAP_CODEC
+                })
 
             fun sampleMotion(): List<Int> {
                 val image = rule.onNodeWithTag("gif-frame").captureToImage().asAndroidBitmap()
@@ -620,6 +627,25 @@ class AndroidGifWorkspacePlaybackTest {
                     assertTrue(Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
                 } finally { expected.recycle() }
             } finally { actual.recycle() }
+
+            val shortReverse = edited.copy(startMs = source.sourceTimesMs[75])
+            val reverseTimes = GifVideoMath.frameTimesMs(shortReverse)
+            val window = EditedVideoPreviewReader.ReversePreviewWindow()
+            val paused = EditedVideoPreviewReader.open(context, shortReverse, reversePreviewWindow = window) {}
+                .use { it.frame(reverseTimes[0], 480) }
+            try {
+                assertTrue("The prepared first frame must survive reader closure",
+                    window.contains(source.sourceTimesMs.indexOf(reverseTimes[0])))
+                assertTrue("The next reverse frame must also be prepared",
+                    window.contains(source.sourceTimesMs.indexOf(reverseTimes[1])))
+                EditedVideoPreviewReader.open(context, shortReverse, prefetchReverseFrames = true,
+                    reversePreviewWindow = window) {}.use { reader ->
+                    val resumed = reader.frame(reverseTimes[0], 480)
+                    try {
+                        assertTrue("The prepared first frame must preserve the paused pixels", paused.sameAs(resumed))
+                    } finally { resumed.recycle() }
+                }
+            } finally { paused.recycle() }
         } finally { resolver.delete(uri, null, null) }
     }
 

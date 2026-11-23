@@ -68,7 +68,14 @@ internal fun GifFramePreview(
             override fun sizeOf(key: Int, value: Bitmap) = value.allocationByteCount
         }
     }
-    val sourceCache = remember(operationId, clip.uri) {
+    val reversePreviewWindow = remember(
+        operationId, clip.uri, clip.startMs, clip.endMs, clip.reverse, clip.isGif,
+        clip.width, clip.height, clip.sourceTimesMs
+    ) {
+        if (clip.reverse && !clip.isGif) EditedVideoPreviewReader.ReversePreviewWindow() else null
+    }
+    // A still from a different reverse range cannot supply its neighboring frames.
+    val sourceCache = remember(operationId, clip.uri, reversePreviewWindow) {
         object : LruCache<Long, Bitmap>(4 * 1024 * 1024) {
             override fun sizeOf(key: Long, value: Bitmap) = value.allocationByteCount
         }
@@ -77,11 +84,14 @@ internal fun GifFramePreview(
     var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
     val generationCounter = remember(operationId) { AtomicLong() }
     val activeGeneration = remember(operationId) { AtomicLong() }
-    val generation = remember(operationId, clip.uri, document, playing, nativeFailed) {
+    val prepareReverseStill = !playing && startFrame == 0 && reversePreviewWindow != null &&
+        clip.sourceTimesMs.isNotEmpty()
+    val generation = remember(operationId, clip.uri, document, playing, nativeFailed, prepareReverseStill) {
         generationCounter.incrementAndGet()
     }
-    val preferredRoute = remember(document, playing, nativeFailed) {
-        document.previewRoute(playing, nativeFailed)
+    val preferredRoute = remember(document, playing, nativeFailed, prepareReverseStill) {
+        if (prepareReverseStill) GifPreviewRoute.BITMAP_CODEC
+        else document.previewRoute(playing, nativeFailed)
     }
     val route = remember(operationId, generation) {
         preferredRoute.afterBitmapCodecFailure(editedCodecFailed.get())
@@ -163,7 +173,7 @@ internal fun GifFramePreview(
                     fun openReader(): GifFrameReader {
                         val opened = if (bitmapRoute == GifPreviewRoute.BITMAP_CODEC) {
                             EditedVideoPreviewReader.open(context, clip, prefetchReverseFrames = playing,
-                                checkActive = ::checkCurrent)
+                                reversePreviewWindow = reversePreviewWindow, checkActive = ::checkCurrent)
                         } else {
                             VideoGifSource.open(context, clip, batchFrames = playing,
                                 allowScaledBatches = playing && preferredRoute == GifPreviewRoute.BITMAP_CODEC)
@@ -288,9 +298,9 @@ internal fun GifFramePreview(
                             }
                             val clock = GifPreviewClock(GifVideoMath.frameDelaysMs(clip))
                             val first = (resumeFrom ?: requestedFrame).coerceIn(times.indices)
-                            // A paused display bitmap can satisfy the first frame without
-                            // preparing the codec. Start the playback clock after the first
-                            // window is ready so a long GOP cannot consume the start of Play.
+                            // A displayed still alone does not prepare a reverse sequence.
+                            // The reader can use the paused decoder's prepared pictures.
+                            // Start the clock once that sequence can supply moving frames.
                             present(decode(first, warmDecoder = bitmapRoute == GifPreviewRoute.BITMAP_CODEC))
                             var position = clock.startOf(first)
                             val origin = SystemClock.uptimeMillis() - position
