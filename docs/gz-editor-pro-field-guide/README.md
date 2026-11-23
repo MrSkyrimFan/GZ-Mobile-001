@@ -1,0 +1,11 @@
+# GitHub copy of GZ Editor Pro engineering field guide
+
+**Purpose:** Direct repo-readable Codex research and workflow guide. This is a docs-and-synthetic-fixtures-only copy of the guide authored at the November 22, 2026, 10:45 PM Mountain checkpoint. The repo may advance while engineering continues; always inspect live `main` and open PRs. **No Android application code is changed by this folder.**
+
+Start with [`00_START_HERE.md`](00_START_HERE.md). The chapters retain the original guide and include corrections to the repository evidence links and current engineering checkpoint. `fixtures/` includes reference media and independent checker. The fixture images and 5-second MP4 were independently generated and contain no personal photographs.
+
+**History/ archive deliberately not republished:** The original guide bundle contains `history/GZ_EDITOR_PRO_CODEX_P0_CORRECTION_HANDOFF_REV4.zip` (~14.3MB), which itself contains owner-provided personal field screenshots and older handoff ZIPs. Publishing those photos into the public repository could unnecessarily expose personal media. Use the private original guide already shared in the owner's ChatGPT Library at `/Modding/GZ_Editor_Pro_Codex_Engineering_Field_Guide.zip` if historical screenshots are needed. Do not assume missing screenshots are part of this repo. Refer to the source code, reproducible fixtures and the author's report first. The original source ZIP SHA-256 is `5351f72c4508cc2798b07503c79c2fdc19a17277d4150e4600a075c250fd7dec`.
+
+**Build expectation:** The guide is advisory reference material, not a replacement for the existing Android CI suite or the owner's product requirements. Codex owns engineering and may refactor, fix, test and merge work; it need not request approval from this guide's author. No feature is considered complete merely because a button exists or a test discovered a case.
+
+**Integrity:** `REPO_FILE_SHA256SUMS.txt` lists all committed guide files, excluding itself. PNG and MP4 fixtures are actual binary assets in Git, not base64 placeholder files. `SHA256SUMS.txt` preserves the original ZIP ledger for provenance, including its private `history/` reference. Use `REPO_FILE_SHA256SUMS.txt` to validate the current repository files.
