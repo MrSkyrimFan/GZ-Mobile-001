@@ -81,7 +81,7 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 ## Build and test
 GitHub Actions **GZ Editor Pro Android CI** runs Android compilation, JVM geometry/codec tests, Android emulator image/format/Compose tests and uploads debug-signed artifact `gz-editor-pro-debug` containing `app-debug.apk`. A passing automated build does **not** establish physical-device usability, commercial readiness or professional color fidelity.
 
-See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`, `docs/PHONE_TEST_WAVE6.md`.
+See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`.
 
 **Boundaries:** do not change Greenezone corporate website, DNS, hosting, XForge, GZFX, Beside-Me or any unrelated repository.
 
