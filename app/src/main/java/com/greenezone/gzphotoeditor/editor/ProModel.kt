@@ -41,8 +41,11 @@ data class ProLayer(
 data class ProDocument(
     val layers: List<ProLayer> = emptyList(),
     val aspect: ProAspect = ProAspect.SQUARE,
-    val background: ProBackground = ProBackground.WHITE
-)
+    val background: ProBackground = ProBackground.WHITE,
+    val sourceAspectRatio: Float? = null
+) {
+    val canvasAspectRatio: Float get() = sourceAspectRatio ?: aspect.ratio
+}
 data class ProHistory(
     val undo: List<ProDocument> = emptyList(),
     val redo: List<ProDocument> = emptyList()
@@ -58,8 +61,12 @@ data class ProRect(val left: Float, val top: Float, val right: Float, val bottom
 
 object ProMath {
     const val MAX_LAYERS = 12
+    const val MIN_SOURCE_ASPECT = 1f / 12_000f
+    const val MAX_SOURCE_ASPECT = 12_000f
     fun valid(document: ProDocument): Boolean =
-        document.layers.size in 1..MAX_LAYERS &&
+        (document.sourceAspectRatio == null ||
+            document.sourceAspectRatio in MIN_SOURCE_ASPECT..MAX_SOURCE_ASPECT) &&
+            document.layers.size in 1..MAX_LAYERS &&
             document.layers.all { item ->
                 val sourceValid = when (item.kind) {
                     ProLayerKind.IMAGE -> item.uri.startsWith("content://") && item.uri.length <= 4096
@@ -89,10 +96,17 @@ object ProMath {
                         item.kind == ProLayerKind.ADJUSTMENT)
             }
 
-    fun dimensions(aspect: ProAspect, maxEdge: Int, maxPixels: Long): Pair<Int, Int> {
+    fun dimensions(aspect: ProAspect, maxEdge: Int, maxPixels: Long): Pair<Int, Int> =
+        dimensions(aspect.ratio, maxEdge, maxPixels)
+
+    fun dimensions(document: ProDocument, maxEdge: Int, maxPixels: Long): Pair<Int, Int> =
+        dimensions(document.canvasAspectRatio, maxEdge, maxPixels)
+
+    private fun dimensions(ratio: Float, maxEdge: Int, maxPixels: Long): Pair<Int, Int> {
         require(maxEdge in 64..5600 && maxPixels in 1024L..24_000_000L)
-        val w = if (aspect.ratio >= 1f) maxEdge else (maxEdge * aspect.ratio).toInt()
-        val h = if (aspect.ratio >= 1f) (maxEdge / aspect.ratio).toInt() else maxEdge
+        require(ratio in MIN_SOURCE_ASPECT..MAX_SOURCE_ASPECT)
+        val w = if (ratio >= 1f) maxEdge else (maxEdge * ratio).toInt().coerceAtLeast(1)
+        val h = if (ratio >= 1f) (maxEdge / ratio).toInt().coerceAtLeast(1) else maxEdge
         val k = kotlin.math.min(1.0, kotlin.math.sqrt(maxPixels.toDouble() / (w.toLong() * h)))
         return ((w * k).toInt().coerceAtLeast(1)) to ((h * k).toInt().coerceAtLeast(1))
     }

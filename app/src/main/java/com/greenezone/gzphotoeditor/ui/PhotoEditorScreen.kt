@@ -68,6 +68,7 @@ import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.CropFrame
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
+import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProDocument
 import com.greenezone.gzphotoeditor.editor.ProLayer
 import com.greenezone.gzphotoeditor.editor.GifDocument
@@ -150,7 +151,6 @@ fun PhotoEditorScreen(
     var chromeVisible by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(EditTab.LOOKS) }
     var activeLook by remember { mutableStateOf("none") }
-    var selectedMask by remember { mutableIntStateOf(0) }
     var selectedPrivacy by remember { mutableIntStateOf(0) }
     var compare by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -170,6 +170,7 @@ fun PhotoEditorScreen(
     var baselineUri by remember { mutableStateOf<String?>(null) }
     var baselineDocument by remember { mutableStateOf(EditDocument()) }
     var showRegularExit by remember { mutableStateOf(false) }
+    var showProHandoff by remember { mutableStateOf(false) }
     var showTileExit by remember { mutableStateOf(false) }
     var closeAfterProjectSave by remember { mutableStateOf(false) }
 
@@ -244,7 +245,6 @@ fun PhotoEditorScreen(
                 }
                 history = EditHistory()
                 gestureStart = null
-                selectedMask = 0
                 selectedPrivacy = 0
                 selectedTab = EditTab.LOOKS
                 creativeTools = CreativeToolState()
@@ -326,29 +326,63 @@ fun PhotoEditorScreen(
             notice = "Video editing is coming later, after the photo and GIF tools."
             return
         }
-        if (mode == WorkspaceMode.PRO &&
-            workspaceNavigation.current != WorkspaceMode.PRO &&
-            !proSession.documentEstablished) {
-            val sessionHasRevision = proDocument.layers.isNotEmpty() ||
-                proSession.history.undo.isNotEmpty() ||
-                proSession.history.redo.isNotEmpty()
-            val current = sourceUri
-            when {
-                sessionHasRevision -> {
-                    proSession = proSession.copy(documentEstablished = true)
-                }
-                current != null -> {
-                    proDocument = ProDocument(layers = listOf(ProLayer(
-                        uri = current.toString(), edits = document, name = "Original photo",
-                        aspect = (processed ?: original)?.let { frame ->
-                            frame.width.toFloat() / frame.height.coerceAtLeast(1)
-                        }?.coerceIn(.1f, 10f) ?: 1f
-                    )))
-                    proSession = ProWorkspaceSession(documentEstablished = true)
-                }
-            }
+        if (mode == WorkspaceMode.PHOTO && workspaceNavigation.current == WorkspaceMode.PRO &&
+            workspaceNavigation.previewBack() == WorkspaceMode.PHOTO) {
+            workspaceNavigation.commitBack()?.let { workspaceNavigation = it }
+            return
+        }
+        if (mode == WorkspaceMode.PRO && workspaceNavigation.current == WorkspaceMode.PHOTO &&
+            sourceUri != null && original != null) {
+            showProHandoff = true
+            return
         }
         workspaceNavigation = workspaceNavigation.open(mode)
+    }
+
+    fun openProWithRegularEdits() {
+        val uri = sourceUri ?: return
+        val input = original ?: return
+        if (busy || exporting) return
+        showProHandoff = false
+        finishSlide()
+        val edits = document
+        busy = true
+        scope.launch {
+            try {
+                val editedRatio = withContext(Dispatchers.Default) {
+                    // The current preview may still show the previous frame or the
+                    // uncropped Crop view. Use the committed edit geometry instead.
+                    val frame = ImagePipeline.geometry(input, edits)
+                    try {
+                        frame.width.toFloat() / frame.height
+                    } finally {
+                        if (frame !== input) frame.recycle()
+                    }
+                }
+                val originalRatio = input.width.toFloat() / input.height
+                val source = ProLayer(uri = uri.toString(), name = "Original photo",
+                    aspect = originalRatio.coerceIn(.1f, 10f))
+                val resetDocument = ProDocument(
+                    layers = listOf(source),
+                    background = ProBackground.TRANSPARENT,
+                    sourceAspectRatio = originalRatio
+                )
+                proDocument = resetDocument.copy(
+                    layers = listOf(source.copy(edits = edits, aspect = editedRatio.coerceIn(.1f, 10f))),
+                    sourceAspectRatio = editedRatio
+                )
+                proSession = ProWorkspaceSession(documentEstablished = true, resetDocument = resetDocument)
+                workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: OutOfMemoryError) {
+                notice = "There is not enough memory to open this photo in Pro."
+            } catch (_: Exception) {
+                notice = "Could not open the edited photo in Pro."
+            } finally {
+                busy = false
+            }
+        }
     }
 
     fun leaveWorkspace() {
@@ -390,7 +424,6 @@ fun PhotoEditorScreen(
         chromeVisible = true
         selectedTab = EditTab.LOOKS
         activeLook = "none"
-        selectedMask = 0
         selectedPrivacy = 0
         compare = false
         zoom = 1f
@@ -469,37 +502,6 @@ fun PhotoEditorScreen(
         }
     }
 
-    fun addMask(kind: MaskKind) {
-        if (document.masks.size >= 4) {
-            notice = "Maximum of four masks per photo."
-            return
-        }
-        val mask = if (kind == MaskKind.BRUSH) {
-            LocalMask(kind = kind, radius = .045f, feather = .45f, exposure = .55f)
-        } else LocalMask(kind = kind)
-        selectedMask = document.masks.size
-        commit(document.copy(masks = document.masks + mask))
-        if (kind == MaskKind.BRUSH) {
-            zoom = 1f
-            panX = 0f
-            panY = 0f
-            notice = "Brush selected. Drag on your photo to paint."
-        }
-    }
-    fun removeMask() {
-        if (selectedMask !in document.masks.indices) return
-        val updated = document.masks.filterIndexed { i, _ -> i != selectedMask }
-        commit(document.copy(masks = updated))
-        selectedMask = selectedMask.coerceAtMost(updated.lastIndex).coerceAtLeast(0)
-    }
-    fun brushEdit(clearAll: Boolean) {
-        val mask = document.masks.getOrNull(selectedMask) ?: return
-        if (mask.kind != MaskKind.BRUSH) return
-        val updated = mask.copy(strokes = if (clearAll) emptyList() else mask.strokes.dropLast(1))
-        val values = document.masks.toMutableList()
-        values[selectedMask] = updated
-        commit(document.copy(masks = values))
-    }
     fun addPrivacy(kind: PrivacyKind) {
         if (document.privacy.size >= PrivacyRaster.MAX_EDITS) {
             notice = "Maximum of twelve privacy layers per photo."
@@ -542,62 +544,35 @@ fun PhotoEditorScreen(
     }
 
     fun startPaint(point: BrushPoint) {
-        if (selectedTab == EditTab.PRIVACY) {
-            val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
-            if (!mark.kind.usesBrush) return
-            if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 640) {
-                notice = "Brush limit reached. Undo a stroke or add another brush."
-                return
-            }
-            gestureStart = document
-            painting = true
-            val updated = document.privacy.toMutableList()
-            updated[selectedPrivacy] = mark.copy(strokes =
-                mark.strokes + BrushStroke(listOf(point)))
-            document = document.copy(privacy = updated)
-        } else {
-            val mask = document.masks.getOrNull(selectedMask) ?: return
-            if (mask.kind != MaskKind.BRUSH) return
-            if (mask.strokes.size >= 40 || mask.strokes.sumOf { it.points.size } >= 640) {
-                notice = "Brush limit reached. Undo a stroke or add another mask."
-                return
-            }
-            gestureStart = document
-            painting = true
-            val updated = document.masks.toMutableList()
-            updated[selectedMask] = mask.copy(strokes =
-                mask.strokes + BrushStroke(listOf(point)))
-            document = document.copy(masks = updated)
+        if (selectedTab != EditTab.PRIVACY) return
+        val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
+        if (!mark.kind.usesBrush) return
+        if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 640) {
+            notice = "Brush limit reached. Undo a stroke or add another brush."
+            return
         }
+        gestureStart = document
+        painting = true
+        val updated = document.privacy.toMutableList()
+        updated[selectedPrivacy] = mark.copy(strokes =
+            mark.strokes + BrushStroke(listOf(point)))
+        document = document.copy(privacy = updated)
     }
 
     fun continuePaint(point: BrushPoint) {
         if (!painting || gestureStart == null) return
-        if (selectedTab == EditTab.PRIVACY) {
-            val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
-            val last = mark.strokes.lastOrNull() ?: return
-            if (mark.strokes.sumOf { it.points.size } >= 640) return
-            val previous = last.points.last()
-            val dx = point.x - previous.x
-            val dy = point.y - previous.y
-            if (dx * dx + dy * dy < .000012f) return
-            val updated = document.privacy.toMutableList()
-            updated[selectedPrivacy] = mark.copy(strokes =
-                mark.strokes.dropLast(1) + last.copy(points = last.points + point))
-            document = document.copy(privacy = updated)
-        } else {
-            val mask = document.masks.getOrNull(selectedMask) ?: return
-            val last = mask.strokes.lastOrNull() ?: return
-            if (mask.strokes.sumOf { it.points.size } >= 640) return
-            val previous = last.points.last()
-            val dx = point.x - previous.x
-            val dy = point.y - previous.y
-            if (dx * dx + dy * dy < .000012f) return
-            val updated = document.masks.toMutableList()
-            updated[selectedMask] = mask.copy(strokes =
-                mask.strokes.dropLast(1) + last.copy(points = last.points + point))
-            document = document.copy(masks = updated)
-        }
+        if (selectedTab != EditTab.PRIVACY) return
+        val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
+        val last = mark.strokes.lastOrNull() ?: return
+        if (mark.strokes.sumOf { it.points.size } >= 640) return
+        val previous = last.points.last()
+        val dx = point.x - previous.x
+        val dy = point.y - previous.y
+        if (dx * dx + dy * dy < .000012f) return
+        val updated = document.privacy.toMutableList()
+        updated[selectedPrivacy] = mark.copy(strokes =
+            mark.strokes.dropLast(1) + last.copy(points = last.points + point))
+        document = document.copy(privacy = updated)
     }
 
     fun finishPaint() {
@@ -752,10 +727,17 @@ fun PhotoEditorScreen(
     }
 
     fun moveCrop(frame: CropFrame) {
-        slide(document.copy(
+        if (gestureStart == null) gestureStart = document
+        document = document.copy(
             crop = if (document.crop == CropRatio.ORIGINAL) CropRatio.FREE else document.crop,
             cropFrame = frame
-        ))
+        )
+    }
+
+    fun cancelCrop() {
+        gestureStart?.let { document = it }
+        gestureStart = null
+        liveGesture = false
     }
 
     LaunchedEffect(initialCollagePhoto?.uri) {
@@ -811,18 +793,19 @@ fun PhotoEditorScreen(
         }
     }
 
-    LaunchedEffect(original, if (painting) null else document, liveGesture, quickSource, painting, selectedTab) {
+    val previewEdits = if (selectedTab == EditTab.CROP) {
+        document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f, cropCenterY = .5f)
+    } else document
+    LaunchedEffect(original, if (painting) null else previewEdits, liveGesture, quickSource, painting) {
         val input = original ?: run { processed = null; return@LaunchedEffect }
         if (painting) return@LaunchedEffect
-        val imageDocument = if (selectedTab == EditTab.CROP)
-            document.copy(crop = CropRatio.ORIGINAL, cropFrame = null) else document
         delay(if (liveGesture) 20L else 45L)
         try {
             val fast = quickSource
             if (fast != null && fast !== input) {
                 val preview = withContext(Dispatchers.Default) {
                     val running = currentCoroutineContext()
-                    ImagePipeline.render(fast, imageDocument) { running.ensureActive() }
+                    ImagePipeline.render(fast, previewEdits) { running.ensureActive() }
                 }
                 processed = preview
             }
@@ -830,7 +813,7 @@ fun PhotoEditorScreen(
                 if (fast != null && fast !== input) delay(140L)
                 val quality = withContext(Dispatchers.Default) {
                     val running = currentCoroutineContext()
-                    ImagePipeline.render(input, imageDocument) { running.ensureActive() }
+                    ImagePipeline.render(input, previewEdits) { running.ensureActive() }
                 }
                 processed = quality
             }
@@ -842,14 +825,13 @@ fun PhotoEditorScreen(
     }
 
     // Keep before/after geometry identical; compute outside the UI thread.
-    LaunchedEffect(original, document.quarterTurns, document.mirrored,
-        document.flipVertical, document.crop, document.cropFrame, document.cropCenterX,
-        document.cropCenterY, document.straightenDegrees, selectedTab) {
+    LaunchedEffect(original, previewEdits.quarterTurns, previewEdits.mirrored,
+        previewEdits.flipVertical, previewEdits.crop, previewEdits.cropFrame, previewEdits.cropCenterX,
+        previewEdits.cropCenterY, previewEdits.straightenDegrees) {
         val input = original ?: run { beforeImage = null; return@LaunchedEffect }
         try {
             val result = withContext(Dispatchers.Default) {
-                ImagePipeline.geometry(input, if (selectedTab == EditTab.CROP)
-                    document.copy(crop = CropRatio.ORIGINAL, cropFrame = null) else document)
+                ImagePipeline.geometry(input, previewEdits)
             }
             beforeImage = result
         } catch (cancelled: CancellationException) {
@@ -935,12 +917,8 @@ fun PhotoEditorScreen(
     val drawingActive = selectedTab == EditTab.DRAW && !compare && !busy && !exporting &&
         zoom <= 1.001f
     val activePrivacy = document.privacy.getOrNull(selectedPrivacy)
-    val maskBrushActive = selectedTab == EditTab.MASKS &&
-        document.masks.getOrNull(selectedMask)?.kind == MaskKind.BRUSH
-    val privacyBrushActive = selectedTab == EditTab.PRIVACY &&
-        activePrivacy?.kind?.usesBrush == true
     val brushSelected = !compare && !busy && !exporting && zoom <= 1.001f &&
-        (maskBrushActive || privacyBrushActive)
+        selectedTab == EditTab.PRIVACY && activePrivacy?.kind?.usesBrush == true
     val privacyRegionSelected = !compare && !busy && !exporting &&
         selectedTab == EditTab.PRIVACY && activePrivacy != null &&
         !activePrivacy.kind.usesBrush && zoom <= 1.001f
@@ -984,28 +962,23 @@ fun PhotoEditorScreen(
                         translationY = panY
                     }
             )
-            if (brushSelected) {
-                val active = if (privacyBrushActive) activePrivacy?.let {
-                    LocalMask(
+            if (brushSelected && activePrivacy != null) {
+                BrushOverlay(
+                    bitmapWidth = stableCoordinates.width,
+                    bitmapHeight = stableCoordinates.height,
+                    mask = LocalMask(
                         kind = MaskKind.BRUSH,
-                        strokes = it.strokes,
-                        radius = it.brushSize,
-                        feather = it.feather
-                    )
-                } else document.masks.getOrNull(selectedMask)
-                if (active != null) {
-                    BrushOverlay(
-                        bitmapWidth = stableCoordinates.width,
-                        bitmapHeight = stableCoordinates.height,
-                        mask = active,
-                        enabled = !busy,
-                        onStart = ::startPaint,
-                        onContinue = ::continuePaint,
-                        onFinish = ::finishPaint,
-                        onTap = { chromeVisible = !chromeVisible },
-                        showGuides = !editingBlurBrush
-                    )
-                }
+                        strokes = activePrivacy.strokes,
+                        radius = activePrivacy.brushSize,
+                        feather = activePrivacy.feather
+                    ),
+                    enabled = !busy,
+                    onStart = ::startPaint,
+                    onContinue = ::continuePaint,
+                    onFinish = ::finishPaint,
+                    onTap = { chromeVisible = !chromeVisible },
+                    showGuides = !editingBlurBrush
+                )
             }
             if (privacyRegionSelected && activePrivacy != null) {
                 PrivacyRegionOverlay(
@@ -1021,15 +994,16 @@ fun PhotoEditorScreen(
             }
             if (cropEditing) {
                 CropFrameOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
+                    imageWidth = selectedImage.width,
+                    imageHeight = selectedImage.height,
                     frame = document.cropFrame ?: CropMath.initial(
-                        stableCoordinates.width, stableCoordinates.height, document.crop
+                        selectedImage.width, selectedImage.height, document.crop
                     ),
                     aspectRatio = document.crop.ratio,
                     showGuides = true,
                     onChange = ::moveCrop,
                     onFinished = ::finishSlide,
+                    onCanceled = ::cancelCrop,
                     onTap = { chromeVisible = !chromeVisible }
                 )
             }
@@ -1224,8 +1198,7 @@ fun PhotoEditorScreen(
                         tab = selectedTab,
                         onTab = {
                             selectedTab = it
-                            if (it == EditTab.MASKS || it == EditTab.PRIVACY ||
-                                it == EditTab.TEXT || it == EditTab.DRAW ||
+                            if (it == EditTab.PRIVACY || it == EditTab.TEXT || it == EditTab.DRAW ||
                                 it == EditTab.SHAPES || it == EditTab.CROP) {
                                 zoom = 1f; panX = 0f; panY = 0f
                             }
@@ -1236,8 +1209,6 @@ fun PhotoEditorScreen(
                         savedLooks = savedLooks,
                         activeLook = activeLook,
                         busy = busy || exporting,
-                        selectedMaskIndex = selectedMask,
-                        onSelectMask = { selectedMask = it },
                         selectedPrivacyIndex = selectedPrivacy,
                         onSelectPrivacy = { selectedPrivacy = it },
                         onAddPrivacy = ::addPrivacy,
@@ -1251,10 +1222,6 @@ fun PhotoEditorScreen(
                         onSlide = ::slide,
                         onSlideFinished = ::finishSlide,
                         onSelectLook = ::applyLook,
-                        onAddMask = ::addMask,
-                        onDeleteMask = ::removeMask,
-                        onUndoBrush = { brushEdit(false) },
-                        onClearBrush = { brushEdit(true) },
                         onAutoTone = ::autoTone,
                         onAutoWB = ::autoWB,
                         onSaveLook = ::saveLook,
@@ -1396,6 +1363,42 @@ fun PhotoEditorScreen(
             dismissButton = {
                 TextButton(onClick = { closeCurrentPhoto() }) {
                     Text("Discard")
+                }
+            }
+        )
+    }
+    if (showProHandoff) {
+        val hasProWork = proDocument.layers.isNotEmpty() ||
+            proSession.history.undo.isNotEmpty() || proSession.history.redo.isNotEmpty()
+        AlertDialog(
+            onDismissRequest = { showProHandoff = false },
+            title = { Text("Continue editing in Photo Pro?") },
+            text = {
+                Column {
+                    Text("Bring this photo and its current edits into Pro. Your Regular photo stays open.")
+                    if (hasProWork) {
+                        Text("Starting a new session replaces the current Pro work. Saved projects stay available.")
+                        TextButton(onClick = {
+                            showProHandoff = false
+                            finishSlide()
+                            workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
+                        }) { Text("Resume Pro work") }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = ::openProWithRegularEdits) { Text("Yes, continue") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { showProHandoff = false }) { Text("Cancel") }
+                    TextButton(onClick = {
+                        showProHandoff = false
+                        finishSlide()
+                        proDocument = ProDocument()
+                        proSession = ProWorkspaceSession(documentEstablished = true)
+                        workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
+                    }) { Text("No, open blank") }
                 }
             }
         )

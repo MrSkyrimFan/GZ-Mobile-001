@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -35,6 +36,11 @@ import com.greenezone.gzphotoeditor.editor.CollagePhoto
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.ProjectStore
+import com.greenezone.gzphotoeditor.editor.ProBackground
+import com.greenezone.gzphotoeditor.editor.ProDocument
+import com.greenezone.gzphotoeditor.editor.ProLayer
+import com.greenezone.gzphotoeditor.editor.ProMath
+import com.greenezone.gzphotoeditor.editor.ProStore
 import com.greenezone.gzphotoeditor.ui.CollageWorkspaceScreen
 import com.greenezone.gzphotoeditor.ui.CollageWorkspaceScreenContent
 import com.greenezone.gzphotoeditor.ui.CollageWorkspaceSession
@@ -187,6 +193,24 @@ class AndroidBackNavigationTest {
         }
     }
 
+    private fun requestProHandoff() {
+        rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+        rule.onNodeWithText("Photo editing Pro").performClick()
+        rule.onNodeWithText("Continue editing in Photo Pro?").assertIsDisplayed()
+    }
+
+    private fun photoSample(node: SemanticsNodeInteraction): Int {
+        val frame = node.captureToImage().asAndroidBitmap()
+        val fittedWidth = minOf(frame.width, frame.height * 3 / 2)
+        val sampleX = (frame.width - fittedWidth) / 2 + fittedWidth / 4
+        return frame.getPixel(sampleX, frame.height / 2)
+    }
+
+    private fun pixelDistance(left: Int, right: Int): Int =
+        kotlin.math.abs(Color.red(left) - Color.red(right)) +
+            kotlin.math.abs(Color.green(left) - Color.green(right)) +
+            kotlin.math.abs(Color.blue(left) - Color.blue(right))
+
     private fun mountTile(
         uri: Uri,
         onDone: (CollagePhoto) -> Unit,
@@ -293,8 +317,8 @@ class AndroidBackNavigationTest {
     @Test fun loadedRegularProGifBackRestoresProThenLoadedRegular() = withLoadedRegular { _, _ ->
         rule.onNodeWithText("Golden").performClick()
         rule.onNodeWithContentDescription("Undo").assertIsEnabled()
-        rule.onNodeWithContentDescription("Choose editing workspace").performClick()
-        rule.onNodeWithText("Photo editing Pro").performClick()
+        requestProHandoff()
+        rule.onNodeWithText("Yes, continue").performClick()
         rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
 
         rule.onNodeWithText("+ Add layer").performClick()
@@ -594,7 +618,7 @@ class AndroidBackNavigationTest {
             }
         }
 
-    @Test fun emptyNoOpProVisitStillAllowsLaterRegularSeed() {
+    @Test fun emptyProVisitWithoutRegularPhotoDoesNotSuppressLaterHandoff() {
         val uri = createPhoto("gz-back-pro-seed-" + System.nanoTime())
         val picker = singlePhotoPicker(uri)
         val mounted = mutableStateOf(true)
@@ -619,8 +643,8 @@ class AndroidBackNavigationTest {
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
             }
-            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
-            rule.onNodeWithText("Photo editing Pro").performClick()
+            requestProHandoff()
+            rule.onNodeWithText("Yes, continue").performClick()
             rule.onNodeWithText("Original photo", substring = true).assertIsDisplayed()
         } finally {
             if (contentSet) {
@@ -631,54 +655,58 @@ class AndroidBackNavigationTest {
         }
     }
 
-    @Test fun intentionalEmptyProHistoryIsNotReseededFromRegular() {
-        val uri = createPhoto("gz-back-pro-established-" + System.nanoTime())
-        val picker = singlePhotoPicker(uri)
-        val mounted = mutableStateOf(true)
-        try {
-            rule.setContent {
-                CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
-                    MaterialTheme(colorScheme = darkColorScheme()) {
-                        if (mounted.value) PhotoEditorScreen()
-                    }
-                }
-            }
+    @Test fun declinedHandoffOpensBlankProAndExplicitRegularSwitchRestoresTheDraft() =
+        withLoadedRegular { uri, original ->
+            rule.onNodeWithText("Golden").performClick()
+            requestProHandoff()
+            rule.onNodeWithText("Cancel").performClick()
+            rule.onNodeWithText("Continue editing in Photo Pro?").assertDoesNotExist()
+            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
 
-            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
-            rule.onNodeWithText("Photo editing Pro").performClick()
-            rule.onNodeWithText("Or start with a blank canvas").performClick()
-            rule.onNodeWithText("+ Add layer").performClick()
-            rule.onNodeWithText("Shape").performClick()
-            rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
-
-            rule.onNodeWithText("Tools ▾").performClick()
-            rule.onNodeWithText("Canvas").performClick()
-            rule.onNodeWithText("New project").performScrollTo().performClick()
-            rule.onNodeWithText("Start new").performClick()
-            rule.onNodeWithText("Add first photo").assertIsDisplayed()
-            rule.onNodeWithText("Undo").assertIsEnabled()
-
+            requestProHandoff()
+            rule.onNodeWithText("No, open blank").performClick()
+            rule.onNodeWithText("Select an image to edit").assertIsDisplayed()
+            rule.onNodeWithText("Original photo", substring = true).assertDoesNotExist()
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing").performClick()
-            rule.onNodeWithText("Open media").performClick()
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
-            }
-
-            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
-            rule.onNodeWithText("Photo editing Pro").performClick()
-            rule.onNodeWithText("Original photo", substring = true).assertDoesNotExist()
-            rule.onNodeWithText("Add first photo").assertIsDisplayed()
-            rule.onNodeWithText("Undo").performClick()
-            rule.onNodeWithText("Stack (2)").assertIsDisplayed()
-            rule.onNodeWithText("Stack (2)").performClick()
-            rule.onNodeWithText("Shape 2").assertIsDisplayed()
-            rule.onNodeWithText("Done").performClick()
-        } finally {
-            rule.runOnIdle { mounted.value = false }
-            rule.waitForIdle()
-            resolver.delete(uri, null, null)
+            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+            pressBackThroughDispatcher()
+            rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
+            rule.onNodeWithText("Keep editing").performClick()
+            assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
         }
+
+    @Test fun acceptedHandoffRendersTheCurrentEditedPhotoInPro() = withLoadedRegular { uri, original ->
+        val regular = rule.onNodeWithContentDescription("Photo editing canvas", substring = true)
+        val before = photoSample(regular)
+        rule.onNodeWithText("Golden").performClick()
+        rule.waitUntil(15_000) { pixelDistance(photoSample(regular), before) > 16 }
+        val edited = photoSample(regular)
+        requestProHandoff()
+        rule.onNodeWithText("Yes, continue").performClick()
+        rule.onNodeWithText("Original photo", substring = true).assertIsDisplayed()
+        rule.waitUntil(15_000) {
+            val preview = rule.onAllNodesWithContentDescription("Pro editable composition")
+            preview.fetchSemanticsNodes().isNotEmpty() && pixelDistance(photoSample(preview[0]), edited) <= 8
+        }
+        pressBackThroughDispatcher()
+        rule.onNodeWithTag("photo-tools").assertIsDisplayed()
+        rule.waitUntil(15_000) { pixelDistance(photoSample(regular), edited) <= 8 }
+        rule.onNodeWithContentDescription("Undo").performClick()
+        rule.waitUntil(15_000) { pixelDistance(photoSample(regular), before) <= 8 }
+        assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
+    }
+
+    @Test fun sourceMatchedProCanvasSurvivesAProjectRoundTrip() {
+        val original = ProDocument(
+            layers = listOf(ProLayer(uri = "content://fixture/original", aspect = 1.5f)),
+            background = ProBackground.TRANSPARENT,
+            sourceAspectRatio = 1.5f
+        )
+        val restored = requireNotNull(ProStore.decode(ProStore.encode(original)))
+        assertEquals(original, restored)
+        assertEquals(96 to 64, ProMath.dimensions(restored, 96, 24_000_000L))
     }
 
     @Test fun cleanLoadedRegularBackReturnsToEmptyStart() = withLoadedRegular { uri, original ->

@@ -1,6 +1,8 @@
 package com.greenezone.gzphotoeditor.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.CropFrame
 import com.greenezone.gzphotoeditor.editor.CropHandle
@@ -50,53 +54,55 @@ fun CropFrameOverlay(
     showGuides: Boolean,
     onChange: (CropFrame) -> Unit,
     onFinished: () -> Unit,
+    onCanceled: () -> Unit,
     onTap: () -> Unit
 ) {
     val latestFrame by rememberUpdatedState(frame)
+    val imageDimensions by rememberUpdatedState(imageWidth to imageHeight)
     val change by rememberUpdatedState(onChange)
     val finished by rememberUpdatedState(onFinished)
+    val canceled by rememberUpdatedState(onCanceled)
     val tapped by rememberUpdatedState(onTap)
     Canvas(
         Modifier.fillMaxSize()
-            .pointerInput(Unit) { detectTapGestures(onTap = { tapped() }) }
-            .pointerInput(imageWidth, imageHeight, aspectRatio) {
-                var active: CropHandle? = null
-                val img = imageSpace(size.width.toFloat(), size.height.toFloat(), imageWidth, imageHeight)
-                detectDragGestures(
-                    onDragStart = { p ->
-                        val point = img.point(p)
-                        val f = latestFrame
-                        active = if (point == null) null else {
-                            val nearX = 32f / img.w
-                            val nearY = 32f / img.h
-                            when {
-                                abs(point.x - f.left) < nearX && abs(point.y - f.top) < nearY ->
-                                    CropHandle.TOP_LEFT
-                                abs(point.x - f.right) < nearX && abs(point.y - f.top) < nearY ->
-                                    CropHandle.TOP_RIGHT
-                                abs(point.x - f.left) < nearX && abs(point.y - f.bottom) < nearY ->
-                                    CropHandle.BOTTOM_LEFT
-                                abs(point.x - f.right) < nearX && abs(point.y - f.bottom) < nearY ->
-                                    CropHandle.BOTTOM_RIGHT
-                                point.x in f.left..f.right && point.y in f.top..f.bottom ->
-                                    CropHandle.MOVE
-                                else -> null
+            .testTag("crop-frame")
+            .pointerInput(aspectRatio) {
+                val radius = 32.dp.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val (imageW, imageH) = imageDimensions
+                    val img = imageSpace(size.width.toFloat(), size.height.toFloat(), imageW, imageH)
+                    val start = CropMath.sanitize(latestFrame)
+                    val handle = CropMath.hitTest(start, down.position.x - img.left,
+                        down.position.y - img.top, img.w, img.h, radius)
+                    down.consume()
+                    var moved = false
+                    var changed = false
+                    var completed = false
+                    try {
+                        do {
+                            val event = awaitPointerEvent()
+                            val pointer = event.changes.singleOrNull() ?: return@awaitEachGesture
+                            if (pointer.id != down.id || pointer.isConsumed) return@awaitEachGesture
+                            val delta = pointer.position - down.position
+                            moved = moved || delta.getDistance() > viewConfiguration.touchSlop
+                            if (moved && handle != null) {
+                                val next = CropMath.drag(start, handle, delta.x / img.w, delta.y / img.h,
+                                    imageW, imageH, aspectRatio)
+                                if (changed || next != start) {
+                                    changed = true
+                                    change(next)
+                                }
                             }
-                        }
-                    },
-                    onDragEnd = { if (active != null) finished(); active = null },
-                    onDragCancel = { if (active != null) finished(); active = null },
-                    onDrag = { event, delta ->
-                        val handle = active
-                        if (handle != null) {
-                            val next = CropMath.drag(latestFrame, handle,
-                                delta.x / img.w, delta.y / img.h,
-                                imageWidth, imageHeight, aspectRatio)
-                            change(next)
-                            event.consume()
-                        }
+                            pointer.consume()
+                        } while (pointer.pressed)
+                        completed = true
+                        if (changed) finished()
+                        else if (!moved && (handle == null || handle == CropHandle.MOVE)) tapped()
+                    } finally {
+                        if (!completed && changed) canceled()
                     }
-                )
+                }
             }
     ) {
         if (!showGuides) return@Canvas
@@ -111,16 +117,21 @@ fun CropFrameOverlay(
         drawRect(shade, Offset(space.left, b), Size(space.w, space.top + space.h - b))
         drawRect(shade, Offset(space.left, t), Size(l - space.left, b - t))
         drawRect(shade, Offset(r, t), Size(space.left + space.w - r, b - t))
-        drawRect(Color.White, Offset(l, t), Size(r - l, b - t), style = Stroke(2.2f))
+        drawRect(Color.White, Offset(l, t), Size(r - l, b - t), style = Stroke(1.5.dp.toPx()))
         for (n in 1..2) {
             val xx = l + (r - l) * n / 3f
             val yy = t + (b - t) * n / 3f
-            drawLine(Color.White.copy(alpha = .58f), Offset(xx, t), Offset(xx, b), 1f)
-            drawLine(Color.White.copy(alpha = .58f), Offset(l, yy), Offset(r, yy), 1f)
+            drawLine(Color.White.copy(alpha = .58f), Offset(xx, t), Offset(xx, b), 1.dp.toPx())
+            drawLine(Color.White.copy(alpha = .58f), Offset(l, yy), Offset(r, yy), 1.dp.toPx())
         }
-        for (p in listOf(Offset(l, t), Offset(r, t), Offset(l, b), Offset(r, b))) {
-            drawCircle(Color.White, radius = 9f, center = p)
-            drawCircle(Color(0xFF253A37), radius = 4f, center = p)
+        val handles = listOf(
+            Offset(l, t), Offset(r, t), Offset(l, b), Offset(r, b),
+            Offset((l + r) / 2f, t), Offset((l + r) / 2f, b),
+            Offset(l, (t + b) / 2f), Offset(r, (t + b) / 2f)
+        )
+        for (p in handles) {
+            drawCircle(Color.White, radius = 6.dp.toPx(), center = p)
+            drawCircle(Color(0xFF253A37), radius = 2.5.dp.toPx(), center = p)
         }
     }
 }

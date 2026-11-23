@@ -10,7 +10,7 @@ import java.util.Base64
 
 /** Versioned private JSON holding photo URIs and editable layer settings, never source image bytes. */
 object ProStore {
-    private const val VERSION = 5
+    private const val VERSION = 6
     private const val MAX_BYTES = 3_000_000
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
@@ -67,8 +67,9 @@ object ProStore {
             })
         }
         return JSONObject().apply {
-            put("version", VERSION)
+            put("version", if (document.sourceAspectRatio == null) 5 else VERSION)
             put("aspect", document.aspect.name)
+            document.sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
             put("background", document.background.name)
             put("layers", layers)
         }.toString().also { require(it.toByteArray(StandardCharsets.UTF_8).size <= MAX_BYTES) }
@@ -153,9 +154,13 @@ object ProStore {
                     effectAmount = unit(o, "effectAmount", .5, 0f, 1f)
                 )
             }
+            val sourceAspectRatio = if (version >= 6 && obj.has("sourceAspectRatio")) {
+                unit(obj, "sourceAspectRatio", Double.NaN, ProMath.MIN_SOURCE_ASPECT, ProMath.MAX_SOURCE_ASPECT)
+            } else null
             ProDocument(layers,
                 value(obj.optString("aspect", ""), ProAspect.SQUARE),
-                value(obj.optString("background", ""), ProBackground.WHITE))
+                value(obj.optString("background", ""), ProBackground.WHITE),
+                sourceAspectRatio)
                 .takeIf { ProMath.valid(it) }
         } catch (_: Exception) { null }
     }
