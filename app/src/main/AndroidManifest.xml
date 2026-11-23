@@ -5,6 +5,7 @@
         android:icon="@drawable/ic_app"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".MainActivity"
