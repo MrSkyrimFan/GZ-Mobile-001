@@ -70,6 +70,7 @@ object EditDocumentCodec {
         }
         document.cropFrame?.let { f ->
             fields["crop.frame"] = listOf(f.left, f.top, f.right, f.bottom).joinToString(",")
+            if (document.cropFrameRatioLocked) fields["crop.frame.locked"] = "true"
         }
         val creative = document.creative
         fields["creative.text.count"] = creative.text.take(CreativeRaster.MAX_TEXT).size.toString()
@@ -299,7 +300,8 @@ object EditDocumentCodec {
             masks = masks,
             privacy = privacy,
             cropFrame = frame,
-            creative = CreativeDocument(texts, ink, shapes)
+            creative = CreativeDocument(texts, ink, shapes),
+            cropFrameRatioLocked = frame != null && fields["crop.frame.locked"] == "true"
         )
     }
 }

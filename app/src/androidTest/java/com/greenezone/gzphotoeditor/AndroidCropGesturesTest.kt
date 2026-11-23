@@ -14,10 +14,14 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.greenezone.gzphotoeditor.editor.CropFrame
+import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.EditDocumentCodec
 import com.greenezone.gzphotoeditor.editor.ExportSettings
 import com.greenezone.gzphotoeditor.editor.ImageExportFormat
 import com.greenezone.gzphotoeditor.editor.ImageExportWriter
@@ -39,13 +43,18 @@ class AndroidCropGesturesTest {
     private var canceled = 0
     private var tapped = 0
 
-    private fun show(imageWidth: Int, imageHeight: Int, density: Float, ratio: Float? = null) {
+    private val changedImageWidth = mutableStateOf<Int?>(null)
+
+    private fun show(
+        imageWidth: Int, imageHeight: Int, density: Float, ratio: Float? = null, inset: Dp = 0.dp
+    ) {
         rule.setContent {
             CompositionLocalProvider(LocalDensity provides Density(density)) {
                 Box(Modifier.fillMaxSize()) {
                     CropFrameOverlay(
-                        imageWidth = imageWidth,
+                        imageWidth = changedImageWidth.value ?: imageWidth,
                         imageHeight = imageHeight,
+                        imageInset = inset,
                         frame = frame.value,
                         aspectRatio = ratio,
                         showGuides = true,
@@ -66,9 +75,9 @@ class AndroidCropGesturesTest {
         fun screen(x: Float, y: Float) = Offset(left + w * x, top + h * y)
     }
 
-    private fun image(width: Int, height: Int): CanvasImage {
+    private fun image(width: Int, height: Int, insetPx: Float = 0f): CanvasImage {
         val node = rule.onNodeWithTag("crop-frame").fetchSemanticsNode()
-        val scale = min(node.size.width.toFloat() / width, node.size.height.toFloat() / height)
+        val scale = min((node.size.width - 2 * insetPx) / width, (node.size.height - 2 * insetPx) / height)
         val w = width * scale
         val h = height * scale
         return CanvasImage((node.size.width - w) / 2f, (node.size.height - h) / 2f, w, h)
@@ -168,6 +177,99 @@ class AndroidCropGesturesTest {
             assertEquals(1, finished)
             assertEquals(1, canceled)
             assertEquals(0, tapped)
+        }
+    }
+
+    @Test fun smallFrameCanResizeOneEdgeAndMoveWithoutActivatingACorner() {
+        show(300, 300, 1f)
+        val photo = image(300, 300)
+        val half = 20f / photo.w
+        val start = CropFrame(.5f - half, .5f - half, .5f + half, .5f + half)
+        rule.runOnIdle { frame.value = start }
+        rule.onNodeWithTag("crop-frame").performTouchInput {
+            val top = photo.screen(.5f, start.top)
+            down(top)
+            moveTo(top + Offset(28f, -36f))
+            up()
+        }
+        val stretched = start.copy(top = start.top - 36f / photo.h)
+        assertFrame(stretched)
+        rule.onNodeWithTag("crop-frame").performTouchInput {
+            val interior = photo.screen(.5f, (stretched.top + stretched.bottom) / 2f)
+            down(interior)
+            moveTo(interior + Offset(32f, 40f))
+            up()
+        }
+        assertFrame(CropFrame(stretched.left + 32f / photo.w, stretched.top + 40f / photo.h,
+            stretched.right + 32f / photo.w, stretched.bottom + 40f / photo.h))
+        rule.runOnIdle { assertEquals(2, finished) }
+    }
+
+    @Test fun insetKeepsTheFullFrameEdgeReachableFromInsideAndOutsideThePhoto() {
+        val full = CropFrame(0f, 0f, 1f, 1f)
+        frame.value = full
+        show(300, 300, 1f, inset = 16.dp)
+        val photo = image(300, 300, 16f)
+        for (fromRightEdge in listOf(-31.5f, 15.5f)) {
+            rule.runOnIdle { frame.value = full }
+            rule.onNodeWithTag("crop-frame").performTouchInput {
+                val point = photo.screen(1f, .5f) + Offset(fromRightEdge, 0f)
+                down(point)
+                moveTo(point + Offset(-photo.w / 10f, 0f))
+                up()
+            }
+            assertFrame(full.copy(right = .9f))
+        }
+        rule.runOnIdle { assertEquals(2, finished) }
+    }
+
+    @Test fun changingImageGeometryCancelsThePendingPointerCrop() {
+        val original = frame.value
+        show(300, 200, 1f)
+        val photo = image(300, 200)
+        rule.onNodeWithTag("crop-frame").performTouchInput {
+            val point = photo.screen(.8f, .5f)
+            down(point)
+            moveTo(point + Offset(-photo.w / 10f, 0f))
+        }
+        assertFrame(original.copy(right = .7f))
+        rule.runOnIdle { changedImageWidth.value = 100 }
+        assertFrame(original)
+        rule.onNodeWithTag("crop-frame").performTouchInput { up() }
+        rule.runOnIdle {
+            assertEquals(0, finished)
+            assertEquals(1, canceled)
+        }
+    }
+
+    @Test fun lockedPanoramaKeepsExactSquarePixelsAfterReopeningAndPngExport() {
+        val width = 4000
+        val height = 100
+        val pixels = IntArray(width * height) { i ->
+            Color.rgb(i % width % 251, i / width, i % 197)
+        }
+        val original = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        val draft = EditDocument(crop = CropRatio.SQUARE,
+            cropFrame = CropMath.initial(width, height, CropRatio.SQUARE),
+            cropFrameRatioLocked = true)
+        val reopened = requireNotNull(EditDocumentCodec.decode(EditDocumentCodec.encode(draft)))
+        val result = ImagePipeline.render(original, reopened)
+        try {
+            val buffer = ByteArrayOutputStream()
+            check(ImageExportWriter.write(result, ExportSettings(format = ImageExportFormat.PNG), buffer))
+            val bytes = buffer.toByteArray()
+            val png = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+            try {
+                assertEquals(100 to 100, png.width to png.height)
+                for (y in 0 until png.height) for (x in 0 until png.width) {
+                    assertEquals(pixels[y * width + 1950 + x], png.getPixel(x, y))
+                }
+            } finally {
+                png.recycle()
+            }
+        } finally {
+            if (result !== original) result.recycle()
+            original.recycle()
         }
     }
 

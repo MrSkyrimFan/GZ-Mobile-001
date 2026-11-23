@@ -111,6 +111,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 private data class ExportRequest(val settings: ExportSettings, val edits: EditDocument)
+private data class CropPreview(val source: Bitmap, val edits: EditDocument, val bitmap: Bitmap)
 
 /**
  * Image-first editor. The image covers the entire canvas behind lightweight chrome.
@@ -141,6 +142,7 @@ fun PhotoEditorScreen(
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
     var processed by remember { mutableStateOf<Bitmap?>(null) }
+    var cropPreview by remember { mutableStateOf<CropPreview?>(null) }
     var beforeImage by remember { mutableStateOf<Bitmap?>(null) }
     var filterThumbs by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var quickSource by remember { mutableStateOf<Bitmap?>(null) }
@@ -733,7 +735,9 @@ fun PhotoEditorScreen(
         if (gestureStart == null) gestureStart = document
         document = document.copy(
             crop = if (document.crop == CropRatio.ORIGINAL) CropRatio.FREE else document.crop,
-            cropFrame = frame
+            cropFrame = frame,
+            cropFrameRatioLocked = document.crop.ratio != null &&
+                (document.cropFrameRatioLocked || document.cropFrame == null)
         )
     }
 
@@ -796,16 +800,19 @@ fun PhotoEditorScreen(
         }
     }
 
-    val previewEdits = if (selectedTab == EditTab.CROP) {
-        document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f, cropCenterY = .5f)
+    val cropTab = selectedTab == EditTab.CROP
+    val previewEdits = if (cropTab) {
+        document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f,
+            cropCenterY = .5f, cropFrameRatioLocked = false)
     } else document
-    LaunchedEffect(original, if (painting) null else previewEdits, liveGesture, quickSource, painting) {
-        val input = original ?: run { processed = null; return@LaunchedEffect }
+    LaunchedEffect(original, if (painting) null else previewEdits, liveGesture, quickSource, painting, cropTab) {
+        if (!cropTab) cropPreview = null
+        val input = original ?: run { processed = null; cropPreview = null; return@LaunchedEffect }
         if (painting) return@LaunchedEffect
         delay(if (liveGesture) 20L else 45L)
         try {
             val fast = quickSource
-            if (fast != null && fast !== input) {
+            if (fast != null && fast !== input && (!cropTab || liveGesture)) {
                 val preview = withContext(Dispatchers.Default) {
                     val running = currentCoroutineContext()
                     ImagePipeline.render(fast, previewEdits) { running.ensureActive() }
@@ -813,12 +820,13 @@ fun PhotoEditorScreen(
                 processed = preview
             }
             if (!liveGesture || fast == null || fast === input) {
-                if (fast != null && fast !== input) delay(140L)
+                if (fast != null && fast !== input && !cropTab) delay(140L)
                 val quality = withContext(Dispatchers.Default) {
                     val running = currentCoroutineContext()
                     ImagePipeline.render(input, previewEdits) { running.ensureActive() }
                 }
                 processed = quality
+                if (cropTab) cropPreview = CropPreview(input, previewEdits, quality)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -830,7 +838,7 @@ fun PhotoEditorScreen(
     // Keep before/after geometry identical; compute outside the UI thread.
     LaunchedEffect(original, previewEdits.quarterTurns, previewEdits.mirrored,
         previewEdits.flipVertical, previewEdits.crop, previewEdits.cropFrame, previewEdits.cropCenterX,
-        previewEdits.cropCenterY, previewEdits.straightenDegrees) {
+        previewEdits.cropCenterY, previewEdits.straightenDegrees, previewEdits.cropFrameRatioLocked) {
         val input = original ?: run { beforeImage = null; return@LaunchedEffect }
         try {
             val result = withContext(Dispatchers.Default) {
@@ -910,9 +918,17 @@ fun PhotoEditorScreen(
         return
     }
 
-    val selectedImage = if (compare) beforeImage ?: original else processed ?: original
-    val cropEditing = selectedTab == EditTab.CROP && !compare && !busy && !exporting &&
-        zoom <= 1.001f
+    // The last processed image may be a cropped preview from another tool.
+    // Only attach handles when the matching uncropped image is actually shown.
+    val readyCrop = cropPreview?.takeIf { cropTab && it.source === original && it.edits == previewEdits }
+    val selectedImage = if (compare) beforeImage ?: original
+        else readyCrop?.bitmap ?: processed ?: original
+    val cropEditing = readyCrop != null && !compare && !busy && !exporting && zoom <= 1.001f
+    val cropInset = if (cropTab) 16.dp else 0.dp
+    val cropImageSize = readyCrop?.bitmap?.let { it.width to it.height } ?: original?.let {
+        val (width, height) = if (document.quarterTurns % 2 == 0) it.width to it.height else it.height to it.width
+        GeometryMath.safeStraightenCrop(width, height, document.straightenDegrees)
+    }
     val textEditing = selectedTab == EditTab.TEXT && !compare && !busy && !exporting &&
         zoom <= 1.001f && document.creative.text.getOrNull(creativeTools.textIndex) != null
     val shapeEditing = selectedTab == EditTab.SHAPES && !compare && !busy && !exporting &&
@@ -947,6 +963,7 @@ fun PhotoEditorScreen(
                     contentDescription = "Photo editing canvas. Tap to hide or show tools.",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize()
+                        .padding(cropInset)
                         .semantics {
                             onClick(label = "Hide or show editing controls") {
                                 chromeVisible = !chromeVisible
@@ -958,7 +975,7 @@ fun PhotoEditorScreen(
                         }
                         .pointerInput(selectedImage, brushSelected) {
                             detectTransformGestures { _, pan, pinch, _ ->
-                                if (!brushSelected && !cropEditing && !textEditing &&
+                                if (!brushSelected && (!cropTab || compare) && !textEditing &&
                                     !shapeEditing && !drawingActive) {
                                     zoom = (zoom * pinch).coerceIn(1f, 6f)
                                     val maxX = size.width * (zoom - 1f) / 2f
@@ -1009,10 +1026,11 @@ fun PhotoEditorScreen(
                     CropFrameOverlay(
                         imageWidth = selectedImage.width,
                         imageHeight = selectedImage.height,
-                        frame = document.cropFrame ?: CropMath.initial(
-                            selectedImage.width, selectedImage.height, document.crop
-                        ),
-                        aspectRatio = document.crop.ratio,
+                        frame = CropMath.displayFrame(selectedImage.width, selectedImage.height, document),
+                        aspectRatio = document.crop.ratio.takeIf {
+                            document.cropFrameRatioLocked || document.cropFrame == null
+                        },
+                        imageInset = cropInset,
                         showGuides = true,
                         onChange = ::moveCrop,
                         onFinished = ::finishSlide,
@@ -1254,10 +1272,8 @@ fun PhotoEditorScreen(
                         onCreativeTool = { creativeTools = it },
                         onNewText = { editWords(true) },
                         onEditText = { editWords(false) },
-                        cropImageWidth = if (document.quarterTurns % 2 == 0)
-                            (original?.width ?: 1) else (original?.height ?: 1),
-                        cropImageHeight = if (document.quarterTurns % 2 == 0)
-                            (original?.height ?: 1) else (original?.width ?: 1)
+                        cropImageWidth = cropImageSize?.first ?: 1,
+                        cropImageHeight = cropImageSize?.second ?: 1
                     )
                 }
             }

@@ -78,16 +78,8 @@ object ImagePipeline {
         }
     }
 
-    fun centerCropSize(width: Int, height: Int, ratio: CropRatio): Pair<Int, Int> {
-        require(width > 0 && height > 0)
-        val wanted = ratio.ratio ?: return width to height
-        val current = width.toFloat() / height
-        return if (current > wanted) {
-            (height * wanted).roundToInt().coerceIn(1, width) to height
-        } else {
-            width to (width / wanted).roundToInt().coerceIn(1, height)
-        }
-    }
+    fun centerCropSize(width: Int, height: Int, ratio: CropRatio): Pair<Int, Int> =
+        CropMath.presetSize(width, height, ratio)
 
     /**
      * Each result owns its new cropped/rotated bitmaps; borrowed input is never recycled.
@@ -140,29 +132,11 @@ object ImagePipeline {
                 }
             }
 
-            val cropRect = document.cropFrame?.let {
-                CropMath.pixelBounds(working.width, working.height, it)
-            }
-            val cropWidth: Int
-            val cropHeight: Int
-            val originX: Int
-            val originY: Int
-            if (cropRect != null) {
-                originX = cropRect[0]
-                originY = cropRect[1]
-                cropWidth = cropRect[2]
-                cropHeight = cropRect[3]
-            } else {
-                val (cw, ch) = centerCropSize(working.width, working.height, document.crop)
-                cropWidth = cw
-                cropHeight = ch
-                val (cx, cy) = GeometryMath.cropOrigin(
-                    working.width, working.height, cw, ch,
-                    document.cropCenterX, document.cropCenterY
-                )
-                originX = cx
-                originY = cy
-            }
+            val (originX, originY, cropWidth, cropHeight) = document.cropFrame?.let {
+                CropMath.pixelBounds(working.width, working.height, it,
+                    document.crop.takeIf { document.cropFrameRatioLocked })
+            } ?: CropMath.presetBounds(working.width, working.height, document.crop,
+                document.cropCenterX, document.cropCenterY)
             if (cropWidth < working.width || cropHeight < working.height) {
                 val crop = Bitmap.createBitmap(working, originX, originY, cropWidth, cropHeight)
                 if (working !== input && working !== crop) working.recycle()
