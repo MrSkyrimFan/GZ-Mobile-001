@@ -84,11 +84,14 @@ internal fun GifFramePreview(
     var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
     val generationCounter = remember(operationId) { AtomicLong() }
     val activeGeneration = remember(operationId) { AtomicLong() }
-    val generation = remember(operationId, clip.uri, document, playing, nativeFailed) {
+    val prepareReverseStill = !playing && startFrame == 0 && reversePreviewWindow != null &&
+        clip.sourceTimesMs.isNotEmpty()
+    val generation = remember(operationId, clip.uri, document, playing, nativeFailed, prepareReverseStill) {
         generationCounter.incrementAndGet()
     }
-    val preferredRoute = remember(document, playing, nativeFailed) {
-        document.previewRoute(playing, nativeFailed)
+    val preferredRoute = remember(document, playing, nativeFailed, prepareReverseStill) {
+        if (prepareReverseStill) GifPreviewRoute.BITMAP_CODEC
+        else document.previewRoute(playing, nativeFailed)
     }
     val route = remember(operationId, generation) {
         preferredRoute.afterBitmapCodecFailure(editedCodecFailed.get())

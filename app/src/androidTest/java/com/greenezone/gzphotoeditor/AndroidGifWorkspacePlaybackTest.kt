@@ -435,6 +435,7 @@ class AndroidGifWorkspacePlaybackTest {
                     trimmed.startMs in 1_700L..2_600L)
                 assertEquals(clip.endMs, trimmed.endMs)
             }
+            val reverseSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
             rule.onNodeWithText("Reverse").performClick()
             rule.onNodeWithText("Looks").performScrollTo().performClick()
             rule.onNodeWithText("B&W").performScrollTo().performClick()
@@ -484,6 +485,12 @@ class AndroidGifWorkspacePlaybackTest {
                 return try { showsMarker(image, visibleAt, clearAt) } finally { image.recycle() }
             }
             rule.waitUntil(15_000) { previewShowsMarker(late, early) }
+            assertTrue("The paused reverse preview must prepare the first source frame before Play",
+                GifPreviewDiagnostics.snapshot().any {
+                    it.sequence > reverseSequence && it.kind == GifDiagnosticKind.FRAME_SETTLED &&
+                        it.stage == GifDiagnosticStage.G4_SEEK && it.frameIndex == 0 &&
+                        it.route == GifPreviewRoute.BITMAP_CODEC
+                })
 
             fun sampleMotion(): List<Int> {
                 val image = rule.onNodeWithTag("gif-frame").captureToImage().asAndroidBitmap()
