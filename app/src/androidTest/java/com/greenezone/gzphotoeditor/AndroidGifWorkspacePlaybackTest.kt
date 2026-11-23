@@ -197,10 +197,10 @@ class AndroidGifWorkspacePlaybackTest {
                 taggedFrame(scheduledTag) >= 5 || taggedFrame(bitmapTag) >= 5
             }
 
-            val pausedForCapture =
-                rule.onAllNodesWithText("Pause").fetchSemanticsNodes().isNotEmpty()
-            if (pausedForCapture) rule.onNodeWithText("Pause").performClick()
-            rule.waitUntil(15_000) { taggedFrame(bitmapTag) >= 5 }
+            // Playback can reach the end between a Pause query and a click.
+            // These color patches are invariant, so capture the stable final still.
+            rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
+            waitFrame(times.size)
 
             // These patches remain cyan and blue through the moving test pattern.
             // Their positions come from independently decoding the rotated MP4 fixture.
@@ -255,10 +255,6 @@ class AndroidGifWorkspacePlaybackTest {
                     assertTrue(bitmapAdvanced)
                 }
             }
-
-            if (pausedForCapture) rule.onNodeWithText("Play").performClick()
-            rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
-            waitFrame(times.size)
 
             val small = doc.copy(size = GifSize.SMALL)
             val baseline = java.io.ByteArrayOutputStream()
