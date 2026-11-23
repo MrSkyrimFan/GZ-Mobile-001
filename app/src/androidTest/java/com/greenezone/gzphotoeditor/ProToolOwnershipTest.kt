@@ -120,6 +120,7 @@ class ProToolOwnershipTest {
         val uri = photo(48, 48)
         val owner = ProLayer("", name = "Mask owner", kind = ProLayerKind.ADJUSTMENT)
         val source = ProLayer(uri.toString(), name = "Imported photo")
+        var removedSource = false
         try {
             open(ProDocument(listOf(owner, source)))
             rule.waitUntil(15_000) {
@@ -131,7 +132,8 @@ class ProToolOwnershipTest {
                 swipe(center - Offset(distance, distance), center + Offset(distance, distance))
             }
             rule.onNodeWithText("Apply layer mask").assertIsEnabled()
-            assertEquals(1, resolver.delete(uri, null, null))
+            removedSource = resolver.delete(uri, null, null) == 1
+            assertTrue(removedSource)
 
             // Changing the adjustment schedules a new preview while the unapplied mask still exists.
             tool("Layer effects")
@@ -145,7 +147,7 @@ class ProToolOwnershipTest {
             rule.onNodeWithText("Apply layer mask").assertIsNotEnabled()
             rule.runOnIdle { assertTrue(current.layers.all { it.mask == null }) }
         } finally {
-            resolver.delete(uri, null, null)
+            if (!removedSource) resolver.delete(uri, null, null)
         }
     }
 

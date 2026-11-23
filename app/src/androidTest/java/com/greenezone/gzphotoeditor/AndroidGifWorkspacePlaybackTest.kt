@@ -497,6 +497,7 @@ class AndroidGifWorkspacePlaybackTest {
             }
             val samples = mutableSetOf(sampleMotion())
             val startingSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
+            val playStartedNanos = System.nanoTime()
             val playAt = SystemClock.elapsedRealtime()
             rule.onNodeWithText("Play").performClick()
             try {
@@ -506,6 +507,17 @@ class AndroidGifWorkspacePlaybackTest {
                 }
             } finally {
                 Log.i("GzGifTiming", "Trim + reverse + B&W, 1080x1920: ${samples.size} distinct visible samples in ${SystemClock.elapsedRealtime() - playAt}ms")
+                val frames = GifPreviewDiagnostics.snapshot().filter {
+                    it.sequence > startingSequence && it.stage == GifDiagnosticStage.G3_CONTINUOUS_PLAY &&
+                        it.kind == GifDiagnosticKind.FRAME_SETTLED && it.route in setOf(
+                            GifPreviewRoute.BITMAP_CODEC, GifPreviewRoute.BITMAP_RETRIEVER)
+                }
+                val timeline = frames.take(30).joinToString { frame ->
+                    val elapsedMs = (frame.timestampNanos - playStartedNanos) / 1_000_000
+                    val decodeMs = (frame.latencyNanos ?: 0L) / 1_000_000
+                    "${frame.frameIndex}@${elapsedMs}ms/${decodeMs}ms"
+                }
+                Log.i("GzGifTiming", "Edited reverse decode (${frames.firstOrNull()?.route}): $timeline")
             }
             val count = GifVideoMath.frameCount(reversed)
             rule.waitUntil(15_000) {
@@ -522,6 +534,7 @@ class AndroidGifWorkspacePlaybackTest {
 
             rule.onNodeWithText("Canvas").performScrollTo().performClick()
             rule.onNodeWithText(GifSize.SMALL.label).performScrollTo().performClick()
+            val exportAt = SystemClock.elapsedRealtime()
             rule.onNodeWithText("Save GIF").performClick()
             rule.waitUntil(120_000) {
                 rule.onAllNodesWithText("Edit saved GIF").fetchSemanticsNodes().isNotEmpty()
@@ -531,6 +544,7 @@ class AndroidGifWorkspacePlaybackTest {
             assertEquals(180 to 320, exported.width to exported.height)
             assertEquals(count, exported.sourceTimesMs.size)
             assertEquals(GifVideoMath.frameDelaysMs(reversed).sum().toLong(), exported.durationMs)
+            Log.i("GzGifTiming", "Edited export: ${exported.width}x${exported.height}, $count frames, ${exported.durationMs}ms duration, saved in ${SystemClock.elapsedRealtime() - exportAt}ms")
             val movie = requireNotNull(Movie.decodeByteArray(bytes, 0, bytes.size))
             val pixels = Bitmap.createBitmap(exported.width, exported.height, Bitmap.Config.ARGB_8888)
             try {

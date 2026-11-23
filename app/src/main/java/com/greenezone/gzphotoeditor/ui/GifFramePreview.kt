@@ -162,7 +162,8 @@ internal fun GifFramePreview(
                     }
                     fun openReader(): GifFrameReader {
                         val opened = if (bitmapRoute == GifPreviewRoute.BITMAP_CODEC) {
-                            EditedVideoPreviewReader.open(context, clip, ::checkCurrent)
+                            EditedVideoPreviewReader.open(context, clip, prefetchReverseFrames = playing,
+                                checkActive = ::checkCurrent)
                         } else {
                             VideoGifSource.open(context, clip, batchFrames = playing,
                                 allowScaledBatches = playing && preferredRoute == GifPreviewRoute.BITMAP_CODEC)
