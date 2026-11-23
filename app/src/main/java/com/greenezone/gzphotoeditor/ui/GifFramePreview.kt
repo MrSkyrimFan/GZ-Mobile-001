@@ -54,7 +54,7 @@ internal fun GifFramePreview(
 ) {
     val clip = document.video ?: return
     val context = LocalContext.current
-    var shown by remember(clip.uri) { mutableStateOf<PreviewFrame?>(null) }
+    var shown by remember(operationId, clip.uri) { mutableStateOf<PreviewFrame?>(null) }
     val requestedFrame by rememberUpdatedState(startFrame)
     val reportFrame by rememberUpdatedState(onFrame)
     val reportEnd by rememberUpdatedState(onEnd)
@@ -67,12 +67,12 @@ internal fun GifFramePreview(
     // A cancelled native read can still be inside a codec call. Keep one bitmap reader
     // alive at a time even when slider events invalidate several generations rapidly.
     val readerOwner = remember { Mutex() }
-    val sourceCache = remember(clip.uri) {
+    val sourceCache = remember(operationId, clip.uri) {
         object : LruCache<Long, Bitmap>(4 * 1024 * 1024) {
             override fun sizeOf(key: Long, value: Bitmap) = value.allocationByteCount
         }
     }
-    var nativeFailed by remember(clip.uri) { mutableStateOf(false) }
+    var nativeFailed by remember(operationId, clip.uri) { mutableStateOf(false) }
     var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
     val generationCounter = remember(operationId) { AtomicLong() }
     val activeGeneration = remember(operationId) { AtomicLong() }
@@ -194,11 +194,10 @@ internal fun GifFramePreview(
                         }
                     }
                     try {
-                        suspend fun decode(index: Int): PreviewFrame {
-                            val job = currentCoroutineContext()
-                            job.ensureActive()
+                        suspend fun decode(index: Int, warmDecoder: Boolean = false): PreviewFrame {
+                            checkCurrent()
                             val startedAt = System.nanoTime()
-                            val cached = cache.get(index)
+                            val cached = if (warmDecoder) null else cache.get(index)
                             if (cached != null) {
                                 if (activeGeneration.get() != generation) {
                                     GifPreviewDiagnostics.record(operationId, generation,
@@ -281,7 +280,10 @@ internal fun GifFramePreview(
                             }
                             val clock = GifPreviewClock(GifVideoMath.frameDelaysMs(clip))
                             val first = (resumeFrom ?: requestedFrame).coerceIn(times.indices)
-                            present(decode(first))
+                            // A paused display bitmap can satisfy the first frame without
+                            // preparing the codec. Start the playback clock after the first
+                            // window is ready so a long GOP cannot consume the start of Play.
+                            present(decode(first, warmDecoder = bitmapRoute == GifPreviewRoute.BITMAP_CODEC))
                             var position = clock.startOf(first)
                             val origin = SystemClock.uptimeMillis() - position
                             val end = clock.endTime(document.loopCount)

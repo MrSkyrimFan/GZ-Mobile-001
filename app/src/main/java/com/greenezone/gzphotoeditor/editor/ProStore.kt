@@ -11,6 +11,8 @@ import java.util.Base64
 /** Versioned private JSON holding photo URIs and editable layer settings, never source image bytes. */
 object ProStore {
     private const val VERSION = 6
+    private const val LEGACY_ASPECT_MIN = .1f
+    private const val LEGACY_ASPECT_MAX = 10f
     private const val MAX_BYTES = 3_000_000
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
@@ -66,8 +68,15 @@ object ProStore {
                 put("edits", EditDocumentCodec.encode(layer.edits))
             })
         }
+        val legacyAspectRange = LEGACY_ASPECT_MIN..LEGACY_ASPECT_MAX
+        val extendedAspect = document.sourceAspectRatio != null || document.layers.any { layer ->
+            val anchor = layer.mask?.anchor
+            layer.aspect !in legacyAspectRange ||
+                (anchor != null && (anchor.canvasAspect !in legacyAspectRange ||
+                    anchor.imageAspect !in legacyAspectRange))
+        }
         return JSONObject().apply {
-            put("version", if (document.sourceAspectRatio == null) 5 else VERSION)
+            put("version", if (extendedAspect) VERSION else 5)
             put("aspect", document.aspect.name)
             document.sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
             put("background", document.background.name)
@@ -90,6 +99,8 @@ object ProStore {
                 if (!raw.isFinite() || raw < lo || raw > hi) throw IllegalArgumentException(key)
                 return raw
             }
+            val aspectMin = if (version >= 6) ProMath.MIN_SOURCE_ASPECT else LEGACY_ASPECT_MIN
+            val aspectMax = if (version >= 6) ProMath.MAX_SOURCE_ASPECT else LEGACY_ASPECT_MAX
             val layers = (0 until array.length()).map { idx ->
                 val o = array.optJSONObject(idx) ?: return null
                 val uri = o.optString("uri", "")
@@ -119,8 +130,8 @@ object ProStore {
                                 unit(anchor, "y", Double.NaN, 0f, 1f),
                                 unit(anchor, "scale", Double.NaN, .1f, 2f),
                                 unit(anchor, "rotation", Double.NaN, -180f, 180f),
-                                unit(anchor, "canvasAspect", Double.NaN, .1f, 10f),
-                                unit(anchor, "imageAspect", Double.NaN, .1f, 10f)
+                                unit(anchor, "canvasAspect", Double.NaN, aspectMin, aspectMax),
+                                unit(anchor, "imageAspect", Double.NaN, aspectMin, aspectMax)
                             )
                         } else null
                     ).takeIf(ProToolMath::valid) ?: return null
@@ -147,7 +158,7 @@ object ProStore {
                     visible = o.optBoolean("visible", true),
                     blend = value(o.optString("blend", ""), ProBlend.NORMAL),
                     kind = value(o.optString("kind", ""), ProLayerKind.IMAGE),
-                    aspect = unit(o, "aspect", 1.0, .1f, 10f),
+                    aspect = unit(o, "aspect", 1.0, aspectMin, aspectMax),
                     rotationDegrees = unit(o, "rotate", 0.0, -180f, 180f),
                     mask = mask, retouches = retouches,
                     effect = value(o.optString("effect", ""), ProPixelEffect.NONE),

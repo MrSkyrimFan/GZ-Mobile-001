@@ -54,6 +54,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -65,7 +66,7 @@ class AndroidBackNavigationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val resolver get() = instrumentation.targetContext.contentResolver
 
-    private fun createPhoto(label: String): Uri {
+    private fun createPhoto(label: String, width: Int = 96, height: Int = 64): Uri {
         val uri = requireNotNull(resolver.insert(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             ContentValues().apply {
@@ -74,8 +75,6 @@ class AndroidBackNavigationTest {
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         ))
-        val width = 96
-        val height = 64
         val pixels = IntArray(width * height) { index ->
             if (index % width < width / 2) Color.rgb(24, 72, 120)
             else Color.rgb(232, 184, 72)
@@ -164,8 +163,12 @@ class AndroidBackNavigationTest {
             }
         }
 
-    private fun withLoadedRegular(test: (Uri, ByteArray) -> Unit) {
-        val uri = createPhoto("gz-back-regular-" + System.nanoTime())
+    private fun withLoadedRegular(
+        width: Int = 96,
+        height: Int = 64,
+        test: (Uri, ByteArray) -> Unit
+    ) {
+        val uri = createPhoto("gz-back-regular-" + System.nanoTime(), width, height)
         val mounted = mutableStateOf(true)
         var contentSet = false
         try {
@@ -199,10 +202,17 @@ class AndroidBackNavigationTest {
         rule.onNodeWithText("Continue editing in Photo Pro?").assertIsDisplayed()
     }
 
+    private fun acceptProHandoff() {
+        rule.onNodeWithText("Yes, continue").performClick()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Photo Pro ▾").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     private fun photoSample(node: SemanticsNodeInteraction): Int {
         val frame = node.captureToImage().asAndroidBitmap()
         val fittedWidth = minOf(frame.width, frame.height * 3 / 2)
-        val sampleX = (frame.width - fittedWidth) / 2 + fittedWidth / 4
+        val sampleX = (frame.width - fittedWidth) / 2 + fittedWidth * 3 / 4
         return frame.getPixel(sampleX, frame.height / 2)
     }
 
@@ -318,7 +328,7 @@ class AndroidBackNavigationTest {
         rule.onNodeWithText("Golden").performClick()
         rule.onNodeWithContentDescription("Undo").assertIsEnabled()
         requestProHandoff()
-        rule.onNodeWithText("Yes, continue").performClick()
+        acceptProHandoff()
         rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
 
         rule.onNodeWithText("+ Add layer").performClick()
@@ -644,7 +654,7 @@ class AndroidBackNavigationTest {
                 rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
             }
             requestProHandoff()
-            rule.onNodeWithText("Yes, continue").performClick()
+            acceptProHandoff()
             rule.onNodeWithText("Original photo", substring = true).assertIsDisplayed()
         } finally {
             if (contentSet) {
@@ -684,7 +694,7 @@ class AndroidBackNavigationTest {
         rule.waitUntil(15_000) { pixelDistance(photoSample(regular), before) > 16 }
         val edited = photoSample(regular)
         requestProHandoff()
-        rule.onNodeWithText("Yes, continue").performClick()
+        acceptProHandoff()
         rule.onNodeWithText("Original photo", substring = true).assertIsDisplayed()
         rule.waitUntil(15_000) {
             val preview = rule.onAllNodesWithContentDescription("Pro editable composition")
@@ -697,6 +707,42 @@ class AndroidBackNavigationTest {
         rule.waitUntil(15_000) { pixelDistance(photoSample(regular), before) <= 8 }
         assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
     }
+
+    @Test fun portraitCropTopAndBottomEdgesStayReachableWithEditorControlsVisible() =
+        withLoadedRegular(width = 64, height = 120) { uri, original ->
+            rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Crop"))
+            rule.onNodeWithText("Crop").performClick()
+            val overlay = rule.onNodeWithTag("crop-frame")
+            val frame = overlay.fetchSemanticsNode().boundsInRoot
+            val topControl = rule.onNodeWithText("Open media").fetchSemanticsNode().boundsInRoot
+            val bottomControls = rule.onNodeWithTag("photo-tools").fetchSemanticsNode().boundsInRoot
+            assertTrue(frame.top >= topControl.bottom - 1f)
+            assertTrue(frame.bottom <= bottomControls.top + 1f)
+
+            fun dragEdge(top: Boolean) {
+                overlay.performTouchInput {
+                    val fittedHeight = minOf(height.toFloat(), width * (120f / 64f))
+                    val inset = (height - fittedHeight) / 2f
+                    val direction = if (top) 1f else -1f
+                    val border = if (top) inset else height - inset
+                    val start = Offset(center.x, border + direction * fittedHeight / 80f)
+                    down(start)
+                    moveTo(start + Offset(0f, direction * fittedHeight / 10f))
+                    up()
+                }
+            }
+            val undo = rule.onNodeWithContentDescription("Undo")
+            undo.assertIsNotEnabled()
+            dragEdge(top = true)
+            undo.assertIsEnabled()
+            dragEdge(top = false)
+            undo.performClick()
+            undo.assertIsEnabled()
+            undo.performClick()
+            undo.assertIsNotEnabled()
+            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
+            assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
+        }
 
     @Test fun sourceMatchedProCanvasSurvivesAProjectRoundTrip() {
         val original = ProDocument(

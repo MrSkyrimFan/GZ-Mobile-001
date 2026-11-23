@@ -7,7 +7,8 @@ import kotlin.math.sqrt
 /** Deterministic hit-testing for the topmost visible Pro object. */
 object ProHitMath {
     fun pick(document: ProDocument, x: Float, y: Float,
-        canvasWidth: Int = (1000 * document.aspect.ratio).toInt(), canvasHeight: Int = 1000
+        canvasWidth: Int = (1000 * document.canvasAspectRatio).toInt().coerceAtLeast(1),
+        canvasHeight: Int = 1000
     ): Int? {
         if (!x.isFinite() || !y.isFinite() || x !in 0f..1f || y !in 0f..1f)
             return null

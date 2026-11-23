@@ -63,9 +63,11 @@ object ProMath {
     const val MAX_LAYERS = 12
     const val MIN_SOURCE_ASPECT = 1f / 12_000f
     const val MAX_SOURCE_ASPECT = 12_000f
+
+    fun validSourceAspect(ratio: Float): Boolean = ratio in MIN_SOURCE_ASPECT..MAX_SOURCE_ASPECT
     fun valid(document: ProDocument): Boolean =
         (document.sourceAspectRatio == null ||
-            document.sourceAspectRatio in MIN_SOURCE_ASPECT..MAX_SOURCE_ASPECT) &&
+            validSourceAspect(document.sourceAspectRatio)) &&
             document.layers.size in 1..MAX_LAYERS &&
             document.layers.all { item ->
                 val sourceValid = when (item.kind) {
@@ -83,7 +85,7 @@ object ProMath {
                     item.x.isFinite() && item.y.isFinite() && item.x in 0f..1f &&
                     item.y in 0f..1f && item.scale.isFinite() &&
                     item.scale in .1f..2f && item.opacity.isFinite() && item.opacity in 0f..1f &&
-                    item.aspect.isFinite() && item.aspect in .1f..10f &&
+                    validSourceAspect(item.aspect) &&
                     item.rotationDegrees.isFinite() && item.rotationDegrees in -180f..180f &&
                     (item.mask == null || ((item.kind == ProLayerKind.IMAGE ||
                         (item.kind == ProLayerKind.ADJUSTMENT && item.mask.anchor == null)) &&
@@ -104,7 +106,7 @@ object ProMath {
 
     private fun dimensions(ratio: Float, maxEdge: Int, maxPixels: Long): Pair<Int, Int> {
         require(maxEdge in 64..5600 && maxPixels in 1024L..24_000_000L)
-        require(ratio in MIN_SOURCE_ASPECT..MAX_SOURCE_ASPECT)
+        require(validSourceAspect(ratio))
         val w = if (ratio >= 1f) maxEdge else (maxEdge * ratio).toInt().coerceAtLeast(1)
         val h = if (ratio >= 1f) (maxEdge / ratio).toInt().coerceAtLeast(1) else maxEdge
         val k = kotlin.math.min(1.0, kotlin.math.sqrt(maxPixels.toDouble() / (w.toLong() * h)))
@@ -114,8 +116,23 @@ object ProMath {
     fun bounds(layer: ProLayer, canvasW: Int, canvasH: Int, imageW: Int, imageH: Int): ProRect {
         require(canvasW > 0 && canvasH > 0 && imageW > 0 && imageH > 0)
         val fit = kotlin.math.min(canvasW.toFloat() / imageW, canvasH.toFloat() / imageH)
-        val halfW = imageW * fit * layer.scale.coerceIn(.1f, 2f) / 2f
-        val halfH = imageH * fit * layer.scale.coerceIn(.1f, 2f) / 2f
+        return fittedBounds(layer, canvasW, canvasH, imageW * fit, imageH * fit)
+    }
+
+    /** Geometry for layer guides and hit targets uses the stored source ratio. */
+    fun bounds(layer: ProLayer, canvasW: Int, canvasH: Int): ProRect {
+        require(canvasW > 0 && canvasH > 0 && validSourceAspect(layer.aspect))
+        val fittedWidth = minOf(canvasW.toFloat(), canvasH * layer.aspect)
+        val fittedHeight = fittedWidth / layer.aspect
+        return fittedBounds(layer, canvasW, canvasH, fittedWidth, fittedHeight)
+    }
+
+    private fun fittedBounds(
+        layer: ProLayer, canvasW: Int, canvasH: Int, fittedWidth: Float, fittedHeight: Float
+    ): ProRect {
+        val scale = layer.scale.coerceIn(.1f, 2f)
+        val halfW = fittedWidth * scale / 2f
+        val halfH = fittedHeight * scale / 2f
         val x = layer.x.coerceIn(0f, 1f) * canvasW
         val y = layer.y.coerceIn(0f, 1f) * canvasH
         return ProRect(x - halfW, y - halfH, x + halfW, y + halfH)
@@ -131,10 +148,10 @@ object ProMath {
         canvasHeight: Int,
         canvasPoint: BrushPoint
     ): BrushPoint? {
-        if (layer.kind != ProLayerKind.IMAGE || canvasWidth <= 0 || canvasHeight <= 0)
+        if (layer.kind != ProLayerKind.IMAGE || canvasWidth <= 0 || canvasHeight <= 0 ||
+            !validSourceAspect(layer.aspect))
             return null
-        val iw = (1000f * layer.aspect).toInt().coerceAtLeast(1)
-        val rect = bounds(layer, canvasWidth, canvasHeight, iw, 1000)
+        val rect = bounds(layer, canvasWidth, canvasHeight)
         val centerX = layer.x * canvasWidth
         val centerY = layer.y * canvasHeight
         val rx = canvasPoint.x * canvasWidth - centerX

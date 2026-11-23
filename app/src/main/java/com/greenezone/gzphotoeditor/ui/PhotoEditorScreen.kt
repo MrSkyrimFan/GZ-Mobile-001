@@ -53,7 +53,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onClick
@@ -149,6 +151,8 @@ fun PhotoEditorScreen(
     var gestureStart by remember { mutableStateOf<EditDocument?>(null) }
 
     var chromeVisible by remember { mutableStateOf(true) }
+    var topChromeHeight by remember { mutableIntStateOf(0) }
+    var bottomChromeHeight by remember { mutableIntStateOf(0) }
     var selectedTab by remember { mutableStateOf(EditTab.LOOKS) }
     var activeLook by remember { mutableStateOf("none") }
     var selectedPrivacy by remember { mutableIntStateOf(0) }
@@ -360,15 +364,14 @@ fun PhotoEditorScreen(
                     }
                 }
                 val originalRatio = input.width.toFloat() / input.height
-                val source = ProLayer(uri = uri.toString(), name = "Original photo",
-                    aspect = originalRatio.coerceIn(.1f, 10f))
+                val source = ProLayer(uri = uri.toString(), name = "Original photo", aspect = originalRatio)
                 val resetDocument = ProDocument(
                     layers = listOf(source),
                     background = ProBackground.TRANSPARENT,
                     sourceAspectRatio = originalRatio
                 )
                 proDocument = resetDocument.copy(
-                    layers = listOf(source.copy(edits = edits, aspect = editedRatio.coerceIn(.1f, 10f))),
+                    layers = listOf(source.copy(edits = edits, aspect = editedRatio)),
                     sourceAspectRatio = editedRatio
                 )
                 proSession = ProWorkspaceSession(documentEstablished = true, resetDocument = resetDocument)
@@ -928,121 +931,132 @@ fun PhotoEditorScreen(
         contentAlignment = Alignment.Center
     ) {
         if (selectedImage != null) {
-            val stableCoordinates = beforeImage ?: selectedImage
-            Image(
-                bitmap = selectedImage.asImageBitmap(),
-                contentDescription = "Photo editing canvas. Tap to hide or show tools.",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
-                    .semantics {
-                        onClick(label = "Hide or show editing controls") {
-                            chromeVisible = !chromeVisible
-                            true
-                        }
-                    }
-                    .pointerInput(selectedImage) {
-                        detectTapGestures(onTap = { chromeVisible = !chromeVisible })
-                    }
-                    .pointerInput(selectedImage, brushSelected) {
-                        detectTransformGestures { _, pan, pinch, _ ->
-                            if (!brushSelected && !cropEditing && !textEditing &&
-                                !shapeEditing && !drawingActive) {
-                                zoom = (zoom * pinch).coerceIn(1f, 6f)
-                                val maxX = size.width * (zoom - 1f) / 2f
-                                val maxY = size.height * (zoom - 1f) / 2f
-                                panX = (panX + pan.x).coerceIn(-maxX, maxX)
-                                panY = (panY + pan.y).coerceIn(-maxY, maxY)
+            val viewportInsets = when {
+                selectedTab != EditTab.CROP -> Modifier
+                chromeVisible -> with(LocalDensity.current) {
+                    Modifier.padding(top = topChromeHeight.toDp(), bottom = bottomChromeHeight.toDp())
+                }
+                else -> Modifier.statusBarsPadding().navigationBarsPadding()
+            }
+            // Fit the crop image, Before image, and gesture coordinates inside the
+            // same viewport so visible handles stay clear of the header and dock.
+            Box(Modifier.fillMaxSize().then(viewportInsets)) {
+                val stableCoordinates = beforeImage ?: selectedImage
+                Image(
+                    bitmap = selectedImage.asImageBitmap(),
+                    contentDescription = "Photo editing canvas. Tap to hide or show tools.",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                        .semantics {
+                            onClick(label = "Hide or show editing controls") {
+                                chromeVisible = !chromeVisible
+                                true
                             }
                         }
-                    }
-                    .graphicsLayer {
-                        scaleX = zoom
-                        scaleY = zoom
-                        translationX = panX
-                        translationY = panY
-                    }
-            )
-            if (brushSelected && activePrivacy != null) {
-                BrushOverlay(
-                    bitmapWidth = stableCoordinates.width,
-                    bitmapHeight = stableCoordinates.height,
-                    mask = LocalMask(
-                        kind = MaskKind.BRUSH,
-                        strokes = activePrivacy.strokes,
-                        radius = activePrivacy.brushSize,
-                        feather = activePrivacy.feather
-                    ),
-                    enabled = !busy,
-                    onStart = ::startPaint,
-                    onContinue = ::continuePaint,
-                    onFinish = ::finishPaint,
-                    onTap = { chromeVisible = !chromeVisible },
-                    showGuides = !editingBlurBrush
+                        .pointerInput(selectedImage) {
+                            detectTapGestures(onTap = { chromeVisible = !chromeVisible })
+                        }
+                        .pointerInput(selectedImage, brushSelected) {
+                            detectTransformGestures { _, pan, pinch, _ ->
+                                if (!brushSelected && !cropEditing && !textEditing &&
+                                    !shapeEditing && !drawingActive) {
+                                    zoom = (zoom * pinch).coerceIn(1f, 6f)
+                                    val maxX = size.width * (zoom - 1f) / 2f
+                                    val maxY = size.height * (zoom - 1f) / 2f
+                                    panX = (panX + pan.x).coerceIn(-maxX, maxX)
+                                    panY = (panY + pan.y).coerceIn(-maxY, maxY)
+                                }
+                            }
+                        }
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = panX
+                            translationY = panY
+                        }
                 )
-            }
-            if (privacyRegionSelected && activePrivacy != null) {
-                PrivacyRegionOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    mark = activePrivacy,
-                    canMove = true,
-                    showGuides = true,
-                    onMove = ::movePrivacy,
-                    onFinished = ::finishSlide,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            if (cropEditing) {
-                CropFrameOverlay(
-                    imageWidth = selectedImage.width,
-                    imageHeight = selectedImage.height,
-                    frame = document.cropFrame ?: CropMath.initial(
-                        selectedImage.width, selectedImage.height, document.crop
-                    ),
-                    aspectRatio = document.crop.ratio,
-                    showGuides = true,
-                    onChange = ::moveCrop,
-                    onFinished = ::finishSlide,
-                    onCanceled = ::cancelCrop,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            if (textEditing) {
-                val layer = document.creative.text.getOrNull(creativeTools.textIndex)
-                if (layer != null) EditableObjectOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    centerX = layer.x, centerY = layer.y,
-                    width = layer.width, height = layer.height,
-                    showGuides = true,
-                    onChanged = ::moveCreative,
-                    onFinished = ::finishSlide,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            if (shapeEditing) {
-                val layer = document.creative.shapes.getOrNull(creativeTools.shapeIndex)
-                if (layer != null) EditableObjectOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    centerX = layer.x, centerY = layer.y,
-                    width = layer.width, height = layer.height,
-                    showGuides = true,
-                    onChanged = ::moveCreative,
-                    onFinished = ::finishSlide,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            if (drawingActive) {
-                DrawTouchOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    ink = currentInk,
-                    onStart = ::startInk,
-                    onMove = ::continueInk,
-                    onFinish = ::finishInk,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
+                if (brushSelected && activePrivacy != null) {
+                    BrushOverlay(
+                        bitmapWidth = stableCoordinates.width,
+                        bitmapHeight = stableCoordinates.height,
+                        mask = LocalMask(
+                            kind = MaskKind.BRUSH,
+                            strokes = activePrivacy.strokes,
+                            radius = activePrivacy.brushSize,
+                            feather = activePrivacy.feather
+                        ),
+                        enabled = !busy,
+                        onStart = ::startPaint,
+                        onContinue = ::continuePaint,
+                        onFinish = ::finishPaint,
+                        onTap = { chromeVisible = !chromeVisible },
+                        showGuides = !editingBlurBrush
+                    )
+                }
+                if (privacyRegionSelected && activePrivacy != null) {
+                    PrivacyRegionOverlay(
+                        imageWidth = stableCoordinates.width,
+                        imageHeight = stableCoordinates.height,
+                        mark = activePrivacy,
+                        canMove = true,
+                        showGuides = true,
+                        onMove = ::movePrivacy,
+                        onFinished = ::finishSlide,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
+                if (cropEditing) {
+                    CropFrameOverlay(
+                        imageWidth = selectedImage.width,
+                        imageHeight = selectedImage.height,
+                        frame = document.cropFrame ?: CropMath.initial(
+                            selectedImage.width, selectedImage.height, document.crop
+                        ),
+                        aspectRatio = document.crop.ratio,
+                        showGuides = true,
+                        onChange = ::moveCrop,
+                        onFinished = ::finishSlide,
+                        onCanceled = ::cancelCrop,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
+                if (textEditing) {
+                    val layer = document.creative.text.getOrNull(creativeTools.textIndex)
+                    if (layer != null) EditableObjectOverlay(
+                        imageWidth = stableCoordinates.width,
+                        imageHeight = stableCoordinates.height,
+                        centerX = layer.x, centerY = layer.y,
+                        width = layer.width, height = layer.height,
+                        showGuides = true,
+                        onChanged = ::moveCreative,
+                        onFinished = ::finishSlide,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
+                if (shapeEditing) {
+                    val layer = document.creative.shapes.getOrNull(creativeTools.shapeIndex)
+                    if (layer != null) EditableObjectOverlay(
+                        imageWidth = stableCoordinates.width,
+                        imageHeight = stableCoordinates.height,
+                        centerX = layer.x, centerY = layer.y,
+                        width = layer.width, height = layer.height,
+                        showGuides = true,
+                        onChanged = ::moveCreative,
+                        onFinished = ::finishSlide,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
+                if (drawingActive) {
+                    DrawTouchOverlay(
+                        imageWidth = stableCoordinates.width,
+                        imageHeight = stableCoordinates.height,
+                        ink = currentInk,
+                        onStart = ::startInk,
+                        onMove = ::continueInk,
+                        onFinish = ::finishInk,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
             }
         } else {
             Column(
@@ -1095,6 +1109,7 @@ fun PhotoEditorScreen(
             Column(
                 Modifier.align(Alignment.TopCenter)
                     .fillMaxWidth()
+                    .onSizeChanged { topChromeHeight = it.height }
                     .background(Brush.verticalGradient(
                         listOf(Color(0xE5090C13), Color(0xC5090C13), Color.Transparent)
                     ))
@@ -1192,6 +1207,7 @@ fun PhotoEditorScreen(
                 Box(
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .onSizeChanged { bottomChromeHeight = it.height }
                         .navigationBarsPadding()
                 ) {
                     EditorDock(

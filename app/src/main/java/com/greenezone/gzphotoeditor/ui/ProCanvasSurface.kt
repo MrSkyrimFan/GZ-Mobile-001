@@ -206,7 +206,7 @@ private fun drawLayerBounds(canvas: Canvas, layer: ProLayer, w: Int, h: Int, pai
     val cx = layer.x * w
     val cy = layer.y * h
     val rect = when (layer.kind) {
-        ProLayerKind.IMAGE -> ProMath.bounds(layer, w, h, (1000 * layer.aspect).toInt(), 1000)
+        ProLayerKind.IMAGE -> ProMath.bounds(layer, w, h)
             .let { RectF(it.left, it.top, it.right, it.bottom) }
         ProLayerKind.TEXT, ProLayerKind.SHAPE -> {
             val text = layer.edits.creative.text.firstOrNull()

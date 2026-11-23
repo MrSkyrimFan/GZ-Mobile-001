@@ -33,7 +33,8 @@ data class ProMaskAnchor(
     val canvasAspect: Float, val imageAspect: Float
 ) {
     fun valid() = x in 0f..1f && y in 0f..1f && scale in .1f..2f &&
-        rotation in -180f..180f && canvasAspect in .1f..10f && imageAspect in .1f..10f
+        rotation in -180f..180f && ProMath.validSourceAspect(canvasAspect) &&
+        ProMath.validSourceAspect(imageAspect)
 }
 
 enum class ProRetouchKind(val label: String) {

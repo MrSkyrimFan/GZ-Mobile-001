@@ -87,7 +87,8 @@ class ProWorkingDocumentTest {
             val saved = original.copy(layers = listOf(original.layers.single().copy(opacity = .5f)))
             assertTrue(ProStore.save(context, name, saved))
             open(original, reset = original)
-            rule.onNodeWithText("Hide").performClick()
+            rule.onNodeWithText("Hide").performScrollTo().performClick()
+            rule.runOnIdle { assertFalse(current.layers.single().visible) }
             rule.onNodeWithText("Undo").assertIsEnabled()
             openReset()
             rule.onNodeWithText("Cancel").performClick()

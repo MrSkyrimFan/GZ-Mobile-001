@@ -45,9 +45,11 @@ internal class EditedVideoPreviewReader private constructor(
         val scale = minOf(1.0, edge.toDouble() / maxOf(clip.width, clip.height))
         val width = (clip.width * scale).roundToInt().coerceAtLeast(1)
         val height = (clip.height * scale).roundToInt().coerceAtLeast(1)
-        val window = (8L * 1024 * 1024 / (4L * width * height)).coerceIn(1, 24).toInt()
+        // Larger reverse windows avoid repeatedly decoding the same long GOP while
+        // the presentation clock is running. Bound by both memory and frame count.
+        val window = (16L * 1024 * 1024 / (4L * width * height)).coerceIn(1, 32).toInt()
         val first = if (clip.reverse) (target - window + 1).coerceAtLeast(0) else target
-        if (!started || first <= lastIndex || clip.reverse ||
+        if (!started || lastIndex < 0 || first <= lastIndex || clip.reverse ||
             times[first] - times[lastIndex] > 1_000L) {
             if (started) decoder.flush()
             extractor.seekTo(times[first] * 1_000L, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
