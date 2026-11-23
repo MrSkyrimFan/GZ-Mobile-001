@@ -186,11 +186,15 @@ class ProCanvasInteractionTest {
             val saved = result.layers.single().edits.creative.strokes
             assertEquals(2, saved.size)
             assertTrue(saved.last().erase)
+            // At the default eraser width a 100px render samples antialias
+            // coverage. At 512px the center lies inside the fully cleared path.
+            val rasterSize = 512
             val alpha = ProRaster.renderWithLoader(result.copy(background = ProBackground.TRANSPARENT),
-                100, 100, false) { _, _, _ -> error("A drawing-only project needs no media source") }
+                rasterSize, rasterSize, false) { _, _, _ -> error("A drawing-only project needs no media source") }
             try {
-                assertEquals(0, Color.alpha(alpha.getPixel(50, 50)))
-                assertEquals(Color.BLUE, alpha.getPixel(18, 50))
+                val middle = rasterSize / 2
+                assertEquals(0, Color.alpha(alpha.getPixel(middle, middle)))
+                assertEquals(Color.BLUE, alpha.getPixel(rasterSize * 18 / 100, middle))
             } finally { alpha.recycle() }
         }
         rule.onNodeWithText("Undo").performClick()
