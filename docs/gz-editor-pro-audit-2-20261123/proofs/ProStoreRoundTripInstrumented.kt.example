@@ -1,0 +1,51 @@
+package com.greenezone.gzphotoeditor
+
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.greenezone.gzphotoeditor.editor.BrushPoint
+import com.greenezone.gzphotoeditor.editor.CreativeDocument
+import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.EditDocumentCodec
+import com.greenezone.gzphotoeditor.editor.InkStroke
+import com.greenezone.gzphotoeditor.editor.ProDocument
+import com.greenezone.gzphotoeditor.editor.ProLayer
+import com.greenezone.gzphotoeditor.editor.ProLayerKind
+import com.greenezone.gzphotoeditor.editor.ProMath
+import com.greenezone.gzphotoeditor.editor.ProStore
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+
+// Proposed Android instrumentation. API signatures were checked in pinned source.
+// The audit did not compile or execute this file on Android.
+@RunWith(AndroidJUnit4::class)
+class ProStoreRoundTripInstrumented {
+    @Test fun reportedSaveRemainsReadableAndRejectedSavePreservesPriorProject() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val points = List(500) { index ->
+            val a = 0.00012345678f
+            val b = 0.00045678912f
+            if (index % 2 == 0) BrushPoint(a, b) else BrushPoint(b, a)
+        }
+        val dense = EditDocument(creative = CreativeDocument(strokes = List(160) { InkStroke(points) }))
+        val freshLayer = ProLayer(uri = "", name = "QA ink", kind = ProLayerKind.DRAWING)
+        val healthy = ProDocument(layers = listOf(freshLayer))
+        val candidate = healthy.copy(layers = listOf(freshLayer.copy(edits = dense)))
+        val name = "qa-cap-" + System.nanoTime()
+        try {
+            assertTrue(ProMath.valid(candidate))
+            assertTrue(ProStore.save(context, name, healthy))
+            assertEquals(healthy, ProStore.load(context, name))
+            val nestedCharacters = EditDocumentCodec.encode(dense).length
+            val saved = ProStore.save(context, name, candidate)
+            val reopened = ProStore.load(context, name)
+            val diagnostic = "saved=$saved, recipeChars=$nestedCharacters, heap=" + Runtime.getRuntime().maxMemory()
+            assertNotNull(diagnostic, reopened)
+            assertEquals(diagnostic, if (saved) candidate else healthy, reopened)
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+}

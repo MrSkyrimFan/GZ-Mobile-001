@@ -1,0 +1,781 @@
+[
+  {
+    "id": 14784147197,
+    "run": 45097323174,
+    "sha": "c023c303ed27e75b004dd479cbd91963dd6475ca",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 395099,
+    "digest": "sha256:797eb37571b1dd4ef1a7ebcbfdcb1a27dfbb27a0947c2d429106a2b6b1588ce5",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45097323174/artifacts/14784147197",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 99,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest#sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds",
+        "failure",
+        "java.lang.AssertionError: rotated cyan patch = -16250096"
+      ]
+    ],
+    "selected_log_lines": []
+  },
+  {
+    "id": 14787488271,
+    "run": 45105527984,
+    "sha": "8995713e6cb71905a5fd56e76e27e80da7e7648e",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 406839,
+    "digest": "sha256:07490d63e891cc41b2bba361837219ed7fdf3c79cbda2c98e07a99b76a0846c0",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45105527984/artifacts/14787488271",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 100,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest#portraitVideoPlaysAgainAfterTrimAndRapidScrub",
+        "failure",
+        "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=36757ms batched=14438ms"
+      }
+    ]
+  },
+  {
+    "id": 14786974893,
+    "run": 45105527984,
+    "sha": "8995713e6cb71905a5fd56e76e27e80da7e7648e",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 976037,
+    "digest": "sha256:009a88ae4e7d04b12d900fe312e4caf2ee7baac8a7ae96520f1f70bd3cf1e34c",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45105527984/artifacts/14786974893",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 100,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest#sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds",
+        "failure",
+        "java.lang.AssertionError: Failed to inject touch input."
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 4123ms"
+      }
+    ]
+  },
+  {
+    "id": 14788215820,
+    "run": 45106340541,
+    "sha": "d3c16bee3893b5c3ceff617bceaf6fef3da6db1c",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 409738,
+    "digest": "sha256:f3d20f8bd251425f2ae4d006efaf7701c4bd18fc9d29ba6d80a4e023ac6ba8b6",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45106340541/artifacts/14788215820",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 113,
+      "failures": 2,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidBackNavigationTest#acceptedHandoffRendersTheCurrentEditedPhotoInPro",
+        "failure",
+        "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms"
+      ],
+      [
+        "com.greenezone.gzphotoeditor.ProWorkingDocumentTest#deleteCurrentWorkCancelsOrRestoresOriginalWithoutDeletingSave",
+        "failure",
+        "java.lang.AssertionError: Failed to assert the following: (is enabled)"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 3501ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=17965ms batched=8468ms"
+      }
+    ]
+  },
+  {
+    "id": 14786984891,
+    "run": 45106340541,
+    "sha": "d3c16bee3893b5c3ceff617bceaf6fef3da6db1c",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 1223701,
+    "digest": "sha256:593d4e36e32ab0a3024fba11416c1dba8ebd4a79a5163e0bd164e0f3fdd4e2e0",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45106340541/artifacts/14786984891",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 113,
+      "failures": 3,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidBackNavigationTest#acceptedHandoffRendersTheCurrentEditedPhotoInPro",
+        "failure",
+        "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms"
+      ],
+      [
+        "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest#portraitVideoPlaysAgainAfterTrimAndRapidScrub",
+        "failure",
+        "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 6000 ms"
+      ],
+      [
+        "com.greenezone.gzphotoeditor.ProWorkingDocumentTest#deleteCurrentWorkCancelsOrRestoresOriginalWithoutDeletingSave",
+        "failure",
+        "java.lang.AssertionError: Failed to assert the following: (is enabled)"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 4 distinct visible samples in 6088ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=11812ms batched=6054ms"
+      }
+    ]
+  },
+  {
+    "id": 14790117185,
+    "run": 45111717022,
+    "sha": "90ab68f22a5ad4427406e6ccc78af2a4d7cd22a3",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 823369,
+    "digest": "sha256:27debf82722f84e02e082b2c0d4deb3523d005e08315cb17cb7a48a1853afb62",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45111717022/artifacts/14790117185",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 131,
+      "failures": 2,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest#portraitVideoPlaysAgainAfterTrimAndRapidScrub",
+        "failure",
+        "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 6000 ms"
+      ],
+      [
+        "com.greenezone.gzphotoeditor.ProToolOwnershipTest#missingSourceCannotRedirectAnotherLayersUnappliedMask",
+        "failure",
+        "java.lang.SecurityException: com.greenezone.gzphotoeditor.phonetest.v16 has no access to content://media/external/images/media/1000000102"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 4 distinct visible samples in 6059ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=17611ms batched=9546ms"
+      }
+    ]
+  },
+  {
+    "id": 14789543810,
+    "run": 45111717022,
+    "sha": "90ab68f22a5ad4427406e6ccc78af2a4d7cd22a3",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 504884,
+    "digest": "sha256:a439207357cbe9ed7fc822fbef0e94ed154962b2deeec867d756959b46705569",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45111717022/artifacts/14789543810",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 131,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.ProToolOwnershipTest#missingSourceCannotRedirectAnotherLayersUnappliedMask",
+        "failure",
+        "java.lang.SecurityException: com.greenezone.gzphotoeditor.phonetest.v16 has no access to content://media/external/images/media/96"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 3069ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=23281ms batched=12644ms"
+      }
+    ]
+  },
+  {
+    "id": 14791861096,
+    "run": 45114713078,
+    "sha": "433c4ce5e120c5a9b2204f5bf13c486793c6eb81",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 500569,
+    "digest": "sha256:9637c07b42c2074a16fbbb10d4973b186f84408c1d5fb405c35e8f49485e042b",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45114713078/artifacts/14791861096",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 131,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 3070ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@2318ms/2295ms, 1@2354ms/35ms, 2@2462ms/103ms, 4@2523ms/49ms, 6@2579ms/54ms, 8@2648ms/60ms, 9@2730ms/69ms, 12@2783ms/51ms, 13@2886ms/102ms, 17@2922ms/30ms, 18@3006ms/83ms, 20@3045ms/38ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 77091ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=21487ms batched=11353ms"
+      }
+    ]
+  },
+  {
+    "id": 14791711028,
+    "run": 45114713078,
+    "sha": "433c4ce5e120c5a9b2204f5bf13c486793c6eb81",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 1059105,
+    "digest": "sha256:fed0b296240deaac6153d1bb5eff9eba6253a7e8fee4cf6cd0fa333c8197fa61",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45114713078/artifacts/14791711028",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 131,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 3203ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@2430ms/2403ms, 1@2497ms/66ms, 2@2615ms/117ms, 5@2742ms/126ms, 9@2833ms/90ms, 12@2907ms/73ms, 14@2977ms/69ms, 16@3053ms/75ms, 18@3119ms/65ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 39102ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=14862ms batched=7853ms"
+      }
+    ]
+  },
+  {
+    "id": 14792912641,
+    "run": 45119204940,
+    "sha": "390bd45116b655b7030ca9d6a12e4488c34dd9d1",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 467841,
+    "digest": "sha256:2be4a4797d5f48f849d30ca148588d28152e2ab20d0edc30b4d9cba0ad283737",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45119204940/artifacts/14792912641",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 131,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 2397ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@1608ms/1580ms, 1@1686ms/77ms, 2@1825ms/133ms, 6@1935ms/109ms, 9@2055ms/119ms, 13@2154ms/98ms, 16@2261ms/107ms, 19@2383ms/120ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 5128ms, staged in 5032ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=20506ms production=2755ms"
+      }
+    ]
+  },
+  {
+    "id": 14792883104,
+    "run": 45119204940,
+    "sha": "390bd45116b655b7030ca9d6a12e4488c34dd9d1",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 1217773,
+    "digest": "sha256:a9a0f49741c2a96eb541ed8b7329c5f4a36b552e7887dedef48b61d3bac5cf38",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45119204940/artifacts/14792883104",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 131,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 4454ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@3114ms/3083ms, 1@3288ms/173ms, 5@3288ms/0ms, 6@3412ms/123ms, 8@3542ms/129ms, 12@3670ms/127ms, 16@3798ms/127ms, 20@3915ms/116ms, 24@4039ms/123ms, 27@4161ms/122ms, 31@4282ms/120ms, 34@4416ms/132ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 6210ms, staged in 6062ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=17743ms production=2575ms"
+      }
+    ]
+  },
+  {
+    "id": 14793387102,
+    "run": 45119141835,
+    "sha": "87d0caf3e76b700e4a080f8cfe436df40da204cf",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 529863,
+    "digest": "sha256:d3ce07b261bfb8136d005eeedf61c9d2f99d4df10a4e85f88391d24c91a682e2",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45119141835/artifacts/14793387102",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 135,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.ProCanvasInteractionTest#eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke",
+        "failure",
+        "java.lang.AssertionError: expected:<0> but was:<127>"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 5503ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@4460ms/4413ms, 1@4567ms/106ms, 3@4748ms/177ms, 8@4875ms/124ms, 12@5009ms/133ms, 16@5364ms/355ms, 27@5490ms/124ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 6259ms, staged in 6064ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=26685ms production=1790ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt.txt",
+        "line": "GzProPaintTiming: Live masked brush pixels observed in 394ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke.txt",
+        "line": "GzProPaintTiming: Live erased pixels observed in 141ms"
+      }
+    ]
+  },
+  {
+    "id": 14793267536,
+    "run": 45119141835,
+    "sha": "87d0caf3e76b700e4a080f8cfe436df40da204cf",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 1253695,
+    "digest": "sha256:c2a9dc33da88d203b5fccce01b96452cbcfb5b461814fd00fe9dc3c6dee9b213",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45119141835/artifacts/14793267536",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 135,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.ProCanvasInteractionTest#eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke",
+        "failure",
+        "java.lang.AssertionError: expected:<0> but was:<127>"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 5201ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@3154ms/3116ms, 1@3330ms/168ms, 4@3474ms/142ms, 9@3663ms/188ms, 15@3811ms/147ms, 19@3960ms/148ms, 23@4090ms/129ms, 27@4283ms/192ms, 33@4426ms/142ms, 37@4586ms/159ms, 42@4735ms/148ms, 47@4867ms/131ms, 51@4989ms/121ms, 54@5114ms/124ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 6447ms, staged in 6296ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=17779ms production=2831ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt.txt",
+        "line": "GzProPaintTiming: Live masked brush pixels observed in 484ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke.txt",
+        "line": "GzProPaintTiming: Live erased pixels observed in 85ms"
+      }
+    ]
+  },
+  {
+    "id": 14794321837,
+    "run": 45121820609,
+    "sha": "3a70471701877fc2713995e3fda5aa7fed3a6a84",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 516395,
+    "digest": "sha256:329f480c9d6c814dbbf9d98ebee2d3ec290d29b8236522ee2cc2a5f759aaca0b",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45121820609/artifacts/14794321837",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 135,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest#portraitVideoPlaysAgainAfterTrimAndRapidScrub",
+        "failure",
+        "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 6000 ms"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 4 distinct visible samples in 6081ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@5221ms/5171ms, 1@5375ms/152ms, 4@5526ms/150ms, 9@5801ms/272ms, 17@5973ms/166ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=24019ms production=2015ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt.txt",
+        "line": "GzProPaintTiming: Live masked brush pixels observed in 644ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke.txt",
+        "line": "GzProPaintTiming: Live erased pixels observed in 150ms"
+      }
+    ]
+  },
+  {
+    "id": 14794877499,
+    "run": 45122428539,
+    "sha": "dc67de64e4f916492e7a918dec55990ac7c3c2d2",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 1280618,
+    "digest": "sha256:4bc29bfec54ded0ddc4a9d67a85042071d49161b59b9bddaf34ab023a0b840fd",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45122428539/artifacts/14794877499",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 135,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidRegularToolsTest#regularHistogramFollowsExposureAndBeforeView",
+        "failure",
+        "androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 5100ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@3770ms/3732ms, 1@3922ms/150ms, 4@4050ms/127ms, 8@4192ms/141ms, 12@4366ms/172ms, 17@4497ms/131ms, 21@4670ms/171ms, 27@4792ms/120ms, 30@4919ms/125ms, 34@5020ms/100ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 6861ms, staged in 6701ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=18229ms production=2731ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt.txt",
+        "line": "GzProPaintTiming: Live masked brush pixels observed in 376ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke.txt",
+        "line": "GzProPaintTiming: Live erased pixels observed in 112ms"
+      }
+    ]
+  },
+  {
+    "id": 14794313135,
+    "run": 45122428539,
+    "sha": "dc67de64e4f916492e7a918dec55990ac7c3c2d2",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 591628,
+    "digest": "sha256:394424850a4f9d497b2fc0770138e7d1bb1c12ea4c7d97d727323f08a62e22a6",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45122428539/artifacts/14794313135",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 58,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [
+      [
+        "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest#editedBitmapCodecMatchesRetrieverOnMetadataRotatedVideo",
+        "failure",
+        "(empty failure detail)"
+      ]
+    ],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-editedBitmapCodecMatchesRetrieverOnMetadataRotatedVideo.txt",
+        "line": "AndroidRuntime: *** FATAL EXCEPTION IN SYSTEM PROCESS: Thread-118"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 5752ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@4460ms/4422ms, 1@4615ms/154ms, 5@4654ms/0ms, 6@4955ms/296ms, 14@5173ms/216ms, 21@5330ms/155ms, 26@5408ms/77ms, 28@5554ms/145ms, 33@5698ms/126ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 9616ms, staged in 9288ms"
+      }
+    ]
+  },
+  {
+    "id": 14796316382,
+    "run": 45125499836,
+    "sha": "1825bcbaf6c98f7ceced44e2012f97c2f8128d3f",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 509284,
+    "digest": "sha256:3fec021df9c8dc7ddb72959c41de39c3251e237f4644edd9d4172b2a2b0b56e5",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45125499836/artifacts/14796316382",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 135,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 1458ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@268ms/212ms, 1@372ms/102ms, 3@475ms/97ms, 6@561ms/80ms, 8@644ms/80ms, 11@747ms/100ms, 14@824ms/73ms, 16@947ms/120ms, 20@1019ms/70ms, 22@1086ms/65ms, 24@1159ms/72ms, 26@1273ms/105ms, 30@1339ms/64ms, 32@1421ms/81ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 5131ms, staged in 4972ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=23511ms production=1923ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt.txt",
+        "line": "GzProPaintTiming: Live masked brush pixels observed in 467ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke.txt",
+        "line": "GzProPaintTiming: Live erased pixels observed in 122ms"
+      }
+    ]
+  },
+  {
+    "id": 14796246301,
+    "run": 45125499836,
+    "sha": "1825bcbaf6c98f7ceced44e2012f97c2f8128d3f",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 1151744,
+    "digest": "sha256:176057cde433d6a04d3d4e33119225a4de0588567cbae8e38fbc1d335387c28e",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45125499836/artifacts/14796246301",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 135,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 1470ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@213ms/175ms, 1@299ms/84ms, 2@362ms/62ms, 4@438ms/72ms, 6@517ms/78ms, 9@579ms/60ms, 10@650ms/71ms, 12@748ms/97ms, 15@853ms/104ms, 19@912ms/57ms, 20@973ms/60ms, 22@1059ms/81ms, 25@1113ms/54ms, 27@1178ms/64ms, 28@1236ms/56ms, 30@1308ms/71ms, 33@1383ms/51ms, 35@1456ms/72ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 4065ms, staged in 3965ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=13431ms production=1728ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt.txt",
+        "line": "GzProPaintTiming: Live masked brush pixels observed in 465ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke.txt",
+        "line": "GzProPaintTiming: Live erased pixels observed in 125ms"
+      }
+    ]
+  },
+  {
+    "id": 14796696168,
+    "run": 45126868951,
+    "sha": "14df73926c6f7063a488f84e367268168e8e5444",
+    "name": "gz-editor-pro-emulator-receipts",
+    "size": 1070736,
+    "digest": "sha256:3d7b2d68f4a13aa544505e507402990fec48dd75ed2a49a474e46be66693600d",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45126868951/artifacts/14796696168",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 15.xml",
+    "counts": {
+      "tests": 135,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 1632ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@304ms/254ms, 1@408ms/103ms, 3@499ms/89ms, 5@587ms/87ms, 8@700ms/112ms, 11@787ms/86ms, 14@888ms/98ms, 17@1035ms/146ms, 21@1124ms/88ms, 24@1252ms/126ms, 28@1374ms/121ms, 32@1474ms/99ms, 35@1573ms/98ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 4927ms, staged in 4784ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=15318ms production=2252ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt.txt",
+        "line": "GzProPaintTiming: Live masked brush pixels observed in 470ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke.txt",
+        "line": "GzProPaintTiming: Live erased pixels observed in 96ms"
+      }
+    ]
+  },
+  {
+    "id": 14796482327,
+    "run": 45126868951,
+    "sha": "14df73926c6f7063a488f84e367268168e8e5444",
+    "name": "gz-editor-pro-emulator-api29-receipts",
+    "size": 513576,
+    "digest": "sha256:54cfc58519a09bcfd6c66614792768a1b5d74a8d8e95e2df9b5400d9485854b2",
+    "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45126868951/artifacts/14796482327",
+    "xml": "outputs/androidTest-results/connected/debug/TEST-test(AVD) - 10.xml",
+    "counts": {
+      "tests": 135,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "observed_failures": [],
+    "selected_log_lines": [
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Trim + reverse + B&W, 1080x1920: 5 distinct visible samples in 1117ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited reverse decode (BITMAP_CODEC): 0@272ms/185ms, 1@382ms/109ms, 3@543ms/160ms, 8@631ms/86ms, 10@747ms/115ms, 14@884ms/135ms, 18@1004ms/119ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "line": "GzGifTiming: Edited export: 180x320, 88 frames, 2950ms duration, saved in 4797ms, staged in 4660ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds.txt",
+        "line": "GzGifExportPerf: 720p60 long GOP to 180x320, 80 frames: timestamp=23577ms production=1980ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-brushIsCompositedUnderTheUpperPhotoDuringDragAndSecondPointerCancelsIt.txt",
+        "line": "GzProPaintTiming: Live masked brush pixels observed in 467ms"
+      },
+      {
+        "case_log": "com.greenezone.gzphotoeditor.ProCanvasInteractionTest-eraserRevealsUnderlyingPixelsBeforeReleaseAndCommitsOneEditableStroke.txt",
+        "line": "GzProPaintTiming: Live erased pixels observed in 122ms"
+      }
+    ]
+  }
+]

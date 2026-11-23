@@ -1,0 +1,5 @@
+accepted safe-split.gif
+rejected one-tick-tail.gif
+accepted square.gif
+rejected wrong-header.gif
+rejected wrong-shape.gif

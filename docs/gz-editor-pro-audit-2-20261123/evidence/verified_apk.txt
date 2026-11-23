@@ -1,0 +1,9 @@
+v2 signers 1
+signed field lengths [44, 748, 0, 0]
+C=US,O=Android,CN=Android Debug
+signature algorithm 0x103
+signed APK content digest and signature valid 33 chunks
+manifest {'versionCode': 19, 'versionName': '0.12.7', 'package': 'com.greenezone.gzphotoeditor.phonetest.v19'}
+uses-sdk {'minSdkVersion': 29, 'targetSdkVersion': 36}
+uses-permission {'name': 'com.greenezone.gzphotoeditor.phonetest.v19.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
+application {'label': 'GZ Editor Pro 0.12.7 Test', 'debuggable': 4294967295, 'enableOnBackInvokedCallback': 4294967295}

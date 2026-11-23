@@ -1,0 +1,5 @@
+flip the protected image: accepted
+flip then paint the old coordinates: rejected
+omit the flip: rejected
+omit the cover: rejected
+blanket cover: rejected

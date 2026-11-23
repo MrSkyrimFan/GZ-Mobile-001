@@ -1,0 +1,2 @@
+Pinned two-line step: [('clean', 0), ('old brand', 0), ('permission', 1), ('both', 1)]
+Explicit status control: [('clean', 0), ('old brand', 1), ('permission', 1), ('both', 1)]
