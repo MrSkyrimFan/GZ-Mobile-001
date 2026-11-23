@@ -15,7 +15,7 @@ python3 check_gif.py forward.gif
 python3 check_gif.py reversed.gif --reverse
 ```
 
-For the specified recipe the expected result is 18 frames, 100 ms each, with the IDs traveling approximately 66 through 117 in steps of three. The reader allows one source frame of rounding at each expected sample and checks that successive IDs progress by two to four frames. This catches drift in the middle even when both endpoints match. It will reject reversed order, a frozen run, incorrect count or a missing frame delay. The reader assumes full-frame 9:16 composition and well-separated black and white patches. Severe grading, layout changes or intentional holds need a different expectation. It does not measure interactivity, color fidelity or power. Those require separate observations. An independent viewer should also play the delivered file.
+For the specified recipe the expected result is 18 frames, 100 ms each, with the IDs traveling approximately 66 through 117 in steps of three. The reader allows one source frame of rounding at each expected sample and checks that successive IDs progress by two to four frames. This catches drift in the middle even when both endpoints match. It will reject reversed order, a frozen run, incorrect count or a missing frame delay. The reader assumes full-frame 9:16 composition and well-separated black and white patches. Severe grading, layout changes or intentional holds need a different expectation. Inspect loop count, disposal, transparency and color separately. Measure playback responsiveness and resource use through the app. An independent viewer should also play the delivered file.
 
 ## Four still inputs
 

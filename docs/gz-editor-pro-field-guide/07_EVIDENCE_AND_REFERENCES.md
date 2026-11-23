@@ -1,12 +1,12 @@
 # Evidence and reference index
 
-## Project evidence in this package
+## Project evidence
 
-[Original Rev 4 correction handoff](history/GZ_EDITOR_PRO_CODEX_P0_CORRECTION_HANDOFF_REV4.zip) is reproduced byte-for-byte. Its SHA-256 is `f84511e3e1286e1e5e2e12f489fa6a9b4bb3e1d677f0ca2fc50f36c7246de6b8`. It includes 16 field screenshots, their provenance and the Rev 3.1 handoff at `evidence/prior_handoff/GZ_EDITOR_PRO_CODEX_FIELD_HANDOFF_REV3_1.zip`. That inner archive contains the 33 earlier supplied images and the design catalog at `GZEPro_Codex_Field_Handoff_V3_1/tables/STICKER_LIBRARY_DESIGN_CATALOG.csv`. Its 648 concepts across 27 categories are design work. A finished catalog consists of usable artwork, accurate metadata, licenses, and assets actually rendered by the app.
+The original Rev 4 correction handoff is available in the private delivery identified in the [repository README](README.md). The public guide includes the independently generated fixtures. Its SHA-256 is `f84511e3e1286e1e5e2e12f489fa6a9b4bb3e1d677f0ca2fc50f36c7246de6b8`. It includes 16 field screenshots, their provenance and the Rev 3.1 handoff at `evidence/prior_handoff/GZ_EDITOR_PRO_CODEX_FIELD_HANDOFF_REV3_1.zip`. That inner archive contains the 33 earlier supplied images and the design catalog at `GZEPro_Codex_Field_Handoff_V3_1/tables/STICKER_LIBRARY_DESIGN_CATALOG.csv`. Its 648 concepts across 27 categories are design work. A finished catalog consists of usable artwork, accurate metadata, licenses, and assets actually rendered by the app.
 
 The historic archives are reference copies of the owner's original material. Their old branch starting points, progress labels and starter prompts were written before the repairs in [the engineering checkpoint](01_ENGINEERING_CHECKPOINT.md). Use the current [start page](00_START_HERE.md) when resuming. The user’s field photos document visible states; by themselves they cannot establish elapsed time, byte content, exact installed commit or the cause of a freeze. The generated fixtures in this bundle answer narrower questions with known source pixels and times. We did not have the owner's original camera clip or access to their phone during this review.
 
-PRs, Actions jobs and receipt links are recorded beside each result in chapter 01. The app’s project files and APK are maintained and built in its authorized repository. This bundle contains product guidance, selected historical supporting material and synthetic test media. The quality targets, worked examples and proposed experiments in chapters 02–06 are engineering guidance and product intent unless a dated result is identified.
+PRs, Actions jobs and receipt links are recorded beside each result in chapter 01. The app’s project files and APK are maintained and built in its authorized repository. This repository copy contains product guidance, historical references and synthetic test media. The quality targets, worked examples and proposed experiments in chapters 02–06 are engineering guidance and product intent unless a dated result is identified.
 
 ## Primary technical references and how to apply them
 

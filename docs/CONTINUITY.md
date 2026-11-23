@@ -2,6 +2,8 @@
 
 ## Current owner direction (2026-11-22)
 
+The [engineering field guide](gz-editor-pro-field-guide/00_START_HERE.md) records verified repair revisions, known-answer fixtures, and end-to-end checks for the current workspaces. Use the live repository and the [release gates](RELEASE_GATE.md) to confirm which results apply to the build under review.
+
 [Product requirements](PRODUCT_SPEC.md) reflect the owner's latest instructions and Revision 4. Use these to resolve conflicts with earlier handoffs and version records. Check live GitHub refs before issuing builds or relying on historical branch IDs. Work directly in the authorized GitHub repository. Keep owner evidence and the active task package in the supplemental intake until the work it governs is complete. Keep original handoff archives intact.
 
 The 0.12.3 handset test is the Revision 4 baseline. The follow-up repair verifies the issues found in its post-merge audit, including limited GIF trim budgets, small Crop hit targets, and Pro reset and layer ownership across Undo. Field qualification still includes real post-edit GIF motion, finger-friendly Regular crop, workspace tool ownership, Pro File reset and Back, and the confirmation-based Regular-to-Pro handoff. Protect working Regular and independent Collage workflows. Pro tools may be reorganized where the existing interface obstructs the job. Follow [Release gates](RELEASE_GATE.md) for engineering verification and owner acceptance.
