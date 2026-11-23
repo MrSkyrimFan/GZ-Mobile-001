@@ -45,6 +45,7 @@ internal enum class GifPreviewRoute {
     NATIVE_SOURCE,
     SCHEDULED_CODEC,
     BITMAP_RETRIEVER,
+    BITMAP_CODEC,
     GIF_MOVIE
 }
 
@@ -57,5 +58,9 @@ internal fun GifDocument.previewRoute(
         return if (canPlaySourceDirectly()) GifPreviewRoute.NATIVE_SOURCE
         else GifPreviewRoute.SCHEDULED_CODEC
     }
-    return if (clip.isGif) GifPreviewRoute.GIF_MOVIE else GifPreviewRoute.BITMAP_RETRIEVER
+    if (clip.isGif) return GifPreviewRoute.GIF_MOVIE
+    if (playing && clip.sourceTimesMs.isNotEmpty() && !canPlayContinuousVideo()) {
+        return GifPreviewRoute.BITMAP_CODEC
+    }
+    return GifPreviewRoute.BITMAP_RETRIEVER
 }

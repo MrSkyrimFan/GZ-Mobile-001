@@ -31,19 +31,19 @@ class GifPreviewClockTest {
             sourceTimesMs = (0L until 120L step 10L).toList()))
         assertEquals(GifPreviewRoute.SCHEDULED_CODEC,
             sampled.previewRoute(playing = true, nativeFailed = false))
-        assertEquals(GifPreviewRoute.BITMAP_RETRIEVER,
+        assertEquals(GifPreviewRoute.BITMAP_CODEC,
             neutral.copy(video = clip.copy(reverse = true))
                 .previewRoute(playing = true, nativeFailed = false))
-        assertEquals(GifPreviewRoute.BITMAP_RETRIEVER,
+        assertEquals(GifPreviewRoute.BITMAP_CODEC,
             neutral.copy(video = clip.copy(startMs = 40L))
                 .previewRoute(playing = true, nativeFailed = false))
-        assertEquals(GifPreviewRoute.BITMAP_RETRIEVER,
+        assertEquals(GifPreviewRoute.BITMAP_CODEC,
             neutral.copy(video = clip.copy(speedPercent = 200))
                 .previewRoute(playing = true, nativeFailed = false))
-        assertEquals(GifPreviewRoute.BITMAP_RETRIEVER,
+        assertEquals(GifPreviewRoute.BITMAP_CODEC,
             neutral.copy(edits = neutral.edits.copy(quarterTurns = 1))
                 .previewRoute(playing = true, nativeFailed = false))
-        assertEquals(GifPreviewRoute.BITMAP_RETRIEVER,
+        assertEquals(GifPreviewRoute.BITMAP_CODEC,
             neutral.copy(aspect = GifAspect.SQUARE)
                 .previewRoute(playing = true, nativeFailed = false))
         val importedGif = neutral.copy(video = clip.copy(isGif = true))

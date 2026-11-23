@@ -545,11 +545,11 @@ class AndroidGifWorkspacePlaybackTest {
                 })
                 assertTrue(events.any {
                     it.kind == GifDiagnosticKind.PREVIEW_ROUTE_SELECTED &&
-                        it.route == GifPreviewRoute.BITMAP_RETRIEVER
+                        (it.route == GifPreviewRoute.BITMAP_CODEC || it.route == GifPreviewRoute.BITMAP_RETRIEVER)
                 })
                 val editedFrames = events.filter {
                     it.kind == GifDiagnosticKind.FRAME_SETTLED &&
-                        it.route == GifPreviewRoute.BITMAP_RETRIEVER
+                        (it.route == GifPreviewRoute.BITMAP_CODEC || it.route == GifPreviewRoute.BITMAP_RETRIEVER)
                 }.mapNotNull { it.frameIndex }.distinct()
                 assertTrue("Edited preview did not settle three distinct frames: $editedFrames",
                     editedFrames.size >= 3)
