@@ -207,8 +207,16 @@ class AndroidGifWorkspacePlaybackTest {
             val visible = rule.onNodeWithTag(bitmapTag).captureToImage().asAndroidBitmap()
             fun verifyPortraitPatches(image: Bitmap) {
                 assertTrue(image.height > image.width)
-                val cyan = image.getPixel(image.width / 5, image.height / 10)
-                val blue = image.getPixel(image.width / 5, image.height * 45 / 100)
+                // captureToImage() includes the whole ContentScale.Fit node, including
+                // any letterbox gutters. Map fixture coordinates into the centered 9:16
+                // content rectangle so different API insets cannot turn this into a UI
+                // background-color assertion.
+                val contentWidth = minOf(image.width, image.height * 9 / 16)
+                val contentHeight = minOf(image.height, image.width * 16 / 9)
+                val left = (image.width - contentWidth) / 2
+                val top = (image.height - contentHeight) / 2
+                val cyan = image.getPixel(left + contentWidth / 5, top + contentHeight / 10)
+                val blue = image.getPixel(left + contentWidth / 5, top + contentHeight * 45 / 100)
                 assertTrue("rotated cyan patch = $cyan", Color.red(cyan) < 80 && Color.green(cyan) > 170 && Color.blue(cyan) > 170)
                 assertTrue("rotated blue patch = $blue", Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
             }
