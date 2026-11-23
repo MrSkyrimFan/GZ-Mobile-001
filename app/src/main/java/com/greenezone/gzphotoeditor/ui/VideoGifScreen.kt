@@ -30,6 +30,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -91,8 +92,8 @@ internal fun VideoGifScreenContent(
             stage = GifDiagnosticStage.G0_SOURCE_PICKED,
             kind = GifDiagnosticKind.OPERATION_STARTED)
     }
-    // Keep ownership and fallback across export, which temporarily unmounts the preview.
-    val previewReaderOwner = remember { Mutex() }
+    // Preview and export share decoder ownership. Export first unmounts preview.
+    val videoReaderOwner = remember { Mutex() }
     val editedCodecFailed = remember(diagnosticOperation, clip?.uri) { AtomicBoolean() }
     val latestDiagnosticOperation by rememberUpdatedState(diagnosticOperation)
     DisposableEffect(Unit) {
@@ -261,13 +262,15 @@ internal fun VideoGifScreenContent(
                     if (quota < GifExportGuard.MIN_EXPORT_BYTES) {
                         throw IOException("Not enough free storage to safely create a GIF. Free at least 72 MB.")
                     }
-                    GifExportGuard.limit(file.outputStream(), quota).buffered(65536).use { stream ->
-                        VideoGifSource.write(context, saved, stream, cancel = { job.ensureActive() },
-                            onProgress = { index, count ->
-                                if (index == count || index % 8 == 0) {
-                                    scope.launch(Dispatchers.Main) { progress = "Writing frame $index of $count…" }
-                                }
-                            })
+                    videoReaderOwner.withLock {
+                        GifExportGuard.limit(file.outputStream(), quota).buffered(65536).use { stream ->
+                            VideoGifSource.write(context, saved, stream, cancel = { job.ensureActive() },
+                                onProgress = { index, count ->
+                                    if (index == count || index % 8 == 0) {
+                                        scope.launch(Dispatchers.Main) { progress = "Writing frame $index of $count…" }
+                                    }
+                                })
+                        }
                     }
                 }
                 GifPreviewDiagnostics.record(exportOperation,
@@ -441,7 +444,7 @@ internal fun VideoGifScreenContent(
                     Box(Modifier.weight(1f).fillMaxWidth())
                 } else {
                     GifFramePreview(document, diagnosticOperation, playing, seek,
-                        editedCodecFailed = editedCodecFailed, readerOwner = previewReaderOwner,
+                        editedCodecFailed = editedCodecFailed, readerOwner = videoReaderOwner,
                         onFrame = { position = it },
                         onEnd = { pauseAt(it) },
                         onError = { playing = false; notice = "Preview unavailable. $it" },

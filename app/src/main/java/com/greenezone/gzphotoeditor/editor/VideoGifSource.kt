@@ -11,6 +11,7 @@ import android.net.Uri
 import java.io.Closeable
 import java.io.IOException
 import java.io.OutputStream
+import java.util.concurrent.CancellationException
 import kotlin.math.roundToInt
 
 data class GifVideoClip(
@@ -393,22 +394,115 @@ object VideoGifSource {
             onProgress?.invoke(count, count)
             return
         }
-        writeVideoFrames(context, doc, out, allowScaledBatches = true, cancel = cancel, onProgress = onProgress)
+        val (width, height) = GifMath.dimensions(doc)
+        val sourceEdge = maxOf(clip.width, clip.height)
+        val decodedScale = minOf(1.0, maxOf(width, height).toDouble() / sourceEdge)
+        val decodedPixels = (clip.width * decodedScale).roundToInt().coerceAtLeast(1).toLong() *
+            (clip.height * decodedScale).roundToInt().coerceAtLeast(1)
+        // Keep the codec's reverse window and working planes bounded even at Original size.
+        val canStream = !clip.isGif && clip.sourceTimesMs.isNotEmpty() && decodedPixels <= 2_073_600L
+        if (canStream) {
+            writeWithReader(doc, out, cancel, onProgress) {
+                openStreamingExport(context, clip, cancel)
+            }
+        } else {
+            writeVideoFrames(context, doc, out, allowScaledBatches = true, cancel = cancel, onProgress = onProgress)
+        }
+    }
+
+    private fun openStreamingExport(context: Context, clip: GifVideoClip,
+                                    cancel: (() -> Unit)?): GifFrameReader = object : GifFrameReader {
+        private var codec = try {
+            EditedVideoPreviewReader.open(context, clip, prefetchReverseFrames = clip.reverse,
+                filterDownscaling = true) { cancel?.invoke() }
+        } catch (failed: Exception) {
+            if (failed is CancellationException) throw failed
+            cancel?.invoke()
+            null
+        }
+        private var retriever: GifFrameReader? = null
+        private val schedule = GifVideoMath.frameTimesMs(clip)
+        private var nextIndex = 0
+        private var repeatedPicture: Bitmap? = null
+
+        private fun readFallback(time: Long, edge: Int): Bitmap {
+            val reader = retriever ?: open(context, clip, batchFrames = true, allowScaledBatches = true)
+                .also { retriever = it }
+            return reader.frame(time, edge)
+        }
+
+        override fun frame(atMs: Long, edge: Int): Bitmap {
+            cancel?.invoke()
+            val picture = repeatedPicture?.also { repeatedPicture = null } ?: readFrame(atMs, edge)
+            val next = schedule.getOrNull(++nextIndex)
+            if (next != null && sourceIndex(next) == sourceIndex(atMs)) {
+                // The encoder owns and recycles every delivered bitmap. Keep the original
+                // only across consecutive holds of this same physical video picture.
+                repeatedPicture = picture
+                return picture.copy(Bitmap.Config.ARGB_8888, false)
+                    ?: throw IOException("Cannot copy the repeated video picture")
+            }
+            return picture
+        }
+
+        private fun sourceIndex(time: Long): Int {
+            val found = clip.sourceTimesMs.binarySearch(time)
+            return if (found >= 0) found else (-found - 2).coerceAtLeast(0)
+        }
+
+        private fun readFrame(atMs: Long, edge: Int): Bitmap {
+            val streaming = codec ?: return readFallback(atMs, edge)
+            return try {
+                streaming.frame(atMs, edge)
+            } catch (failed: Exception) {
+                if (failed is CancellationException) throw failed
+                cancel?.invoke()
+                codec = null
+                try { streaming.close() } catch (closeFailed: Exception) {
+                    failed.addSuppressed(closeFailed)
+                }
+                // GIF blocks already written remain valid. Retry this picture before encoding it.
+                try { readFallback(atMs, edge) } catch (fallbackFailed: Exception) {
+                    fallbackFailed.addSuppressed(failed)
+                    throw fallbackFailed
+                }
+            }
+        }
+
+        override fun close() {
+            repeatedPicture?.recycle()
+            repeatedPicture = null
+            try { codec?.close() } finally { retriever?.close() }
+        }
     }
 
     internal fun writeVideoFrames(context: Context, doc: GifDocument, out: OutputStream,
-        allowScaledBatches: Boolean, cancel: (() -> Unit)? = null,
-        onProgress: ((Int, Int) -> Unit)? = null) {
+         allowScaledBatches: Boolean, cancel: (() -> Unit)? = null,
+         onProgress: ((Int, Int) -> Unit)? = null) {
+        val clip = requireNotNull(doc.video)
+        writeWithReader(doc, out, cancel, onProgress) {
+            open(context, clip, batchFrames = true, allowScaledBatches = allowScaledBatches)
+        }
+    }
+
+    private fun writeWithReader(doc: GifDocument, out: OutputStream,
+                                cancel: (() -> Unit)?, onProgress: ((Int, Int) -> Unit)?,
+                                openReader: () -> GifFrameReader) {
         val clip = requireNotNull(doc.video)
         val times = GifVideoMath.frameTimesMs(clip)
         val delays = GifVideoMath.frameDelaysMs(clip)
         val (w, h) = GifMath.dimensions(doc)
-        open(context, clip, batchFrames = true, allowScaledBatches = allowScaledBatches).use { reader ->
+        openReader().use { reader ->
             GifEncoder.writeFrames(out, doc, times.size, delays.first(), cancel,
                 delayAt = { delays[it] }) { index ->
-                val frame = reader.frame(times[index], maxOf(w,h))
-                onProgress?.invoke(index + 1, times.size)
-                frame
+                val frame = reader.frame(times[index], maxOf(w, h))
+                try {
+                    onProgress?.invoke(index + 1, times.size)
+                    frame
+                } catch (failed: Throwable) {
+                    frame.recycle()
+                    throw failed
+                }
             }
         }
     }

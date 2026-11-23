@@ -153,6 +153,34 @@ class AndroidVideoGifDecodeTest {
                 }
                 assertTrue("Exported GIF must have different visual frames",differences > 5)
             } finally { first.recycle(); later.recycle() }
+
+            val repeatedClip = clip.copy(fps = 30, reverse = true)
+            val repeatedTimes = GifVideoMath.frameTimesMs(repeatedClip)
+            val repeatedHolds = GifVideoMath.frameDelaysMs(repeatedClip)
+            fun sourceIndex(time: Long): Int = clip.sourceTimesMs.indexOfLast { it <= time }.coerceAtLeast(0)
+            val repeatedAt = (0 until repeatedTimes.lastIndex).first {
+                sourceIndex(repeatedTimes[it]) == sourceIndex(repeatedTimes[it + 1])
+            }
+            val repeatedBytes = ByteArrayOutputStream().also {
+                VideoGifSource.write(context, untouched.copy(video = repeatedClip), it)
+            }.toByteArray()
+            val repeatedExport = GifSourceMetadata.read(repeatedBytes.inputStream(), "content://test/repeated")
+            assertEquals(repeatedHolds, GifVideoMath.frameDelaysMs(repeatedExport))
+            val repeatedMovie = requireNotNull(Movie.decodeByteArray(repeatedBytes, 0, repeatedBytes.size))
+            val originalHold = Bitmap.createBitmap(32, 24, Bitmap.Config.ARGB_8888)
+            val nextHold = Bitmap.createBitmap(32, 24, Bitmap.Config.ARGB_8888)
+            try {
+                val start = repeatedHolds.take(repeatedAt).sum()
+                repeatedMovie.setTime(start + repeatedHolds[repeatedAt] / 2)
+                repeatedMovie.draw(Canvas(originalHold), 0f, 0f)
+                repeatedMovie.setTime(start + repeatedHolds[repeatedAt] + repeatedHolds[repeatedAt + 1] / 2)
+                repeatedMovie.draw(Canvas(nextHold), 0f, 0f)
+                assertTrue("Consecutive GIF holds of the same source frame must have identical pixels",
+                    originalHold.sameAs(nextHold))
+            } finally {
+                originalHold.recycle()
+                nextHold.recycle()
+            }
         } finally {
             if (uri != null) resolver.delete(uri, null, null)
         }
