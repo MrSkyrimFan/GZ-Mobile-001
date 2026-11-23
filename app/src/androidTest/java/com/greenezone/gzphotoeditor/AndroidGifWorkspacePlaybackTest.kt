@@ -620,6 +620,25 @@ class AndroidGifWorkspacePlaybackTest {
                     assertTrue(Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
                 } finally { expected.recycle() }
             } finally { actual.recycle() }
+
+            val shortReverse = edited.copy(startMs = source.sourceTimesMs[75])
+            val reverseTimes = GifVideoMath.frameTimesMs(shortReverse)
+            val window = EditedVideoPreviewReader.ReversePreviewWindow()
+            val paused = EditedVideoPreviewReader.open(context, shortReverse, reversePreviewWindow = window) {}
+                .use { it.frame(reverseTimes[0], 480) }
+            try {
+                assertTrue("The prepared first frame must survive reader closure",
+                    window.contains(source.sourceTimesMs.indexOf(reverseTimes[0])))
+                assertTrue("The next reverse frame must also be prepared",
+                    window.contains(source.sourceTimesMs.indexOf(reverseTimes[1])))
+                EditedVideoPreviewReader.open(context, shortReverse, prefetchReverseFrames = true,
+                    reversePreviewWindow = window) {}.use { reader ->
+                    val resumed = reader.frame(reverseTimes[0], 480)
+                    try {
+                        assertTrue("The prepared first frame must preserve the paused pixels", paused.sameAs(resumed))
+                    } finally { resumed.recycle() }
+                }
+            } finally { paused.recycle() }
         } finally { resolver.delete(uri, null, null) }
     }
 

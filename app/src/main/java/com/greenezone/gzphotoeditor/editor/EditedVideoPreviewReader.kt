@@ -38,34 +38,38 @@ internal class EditedVideoPreviewReader private constructor(
     private val rotation: Int,
     private val prefetchReverseFrames: Boolean,
     private val filterDownscaling: Boolean,
+    private val reversePreviewWindow: ReversePreviewWindow?,
     private val checkActive: () -> Unit
 ) : GifFrameReader {
     private val times = clip.sourceTimesMs
     private val info = MediaCodec.BufferInfo()
     private val firstTrimmedIndex = indexAtOrBefore(clip.startMs)
-    private val pending = linkedMapOf<Int, ReversePicture>()
-    private var pendingBytes = 0
+    private val localWindow = ReversePreviewWindow()
+    private val reverseFirstTime = if (reversePreviewWindow != null && clip.reverse)
+        GifVideoMath.frameTimesMs(clip).firstOrNull() else null
     private var sampleAxes: SampleAxes? = null
     private var reverseStorage: ReverseStorage? = null
     private var inputEnded = false
     private var lastIndex = -1
     private var started = false
-    private var windowEdge = 0
 
     override fun frame(atMs: Long, edge: Int): Bitmap {
         checkActive()
         val target = indexAtOrBefore(atMs)
-        if (edge == windowEdge) pending.remove(target)?.let { picture ->
-            pendingBytes -= picture.samples.size
-            return requireNotNull(reverseStorage).render(picture, checkActive)
-        }
-        clearWindow()
-        windowEdge = edge
-
+        val shared = reversePreviewWindow?.takeIf { clip.reverse }
+        val window = shared ?: localWindow
+        window.setEdge(edge)
         val scale = minOf(1.0, edge.toDouble() / maxOf(clip.width, clip.height))
         val width = (clip.width * scale).roundToInt().coerceAtLeast(1)
         val height = (clip.height * scale).roundToInt().coerceAtLeast(1)
-        val first = if (clip.reverse && prefetchReverseFrames) {
+        window.picture(target, consume = shared == null)?.let {
+            return storage(width, height).render(it, checkActive)
+        }
+        if (shared == null) window.clear()
+        // A paused first reverse picture must already decode through the same GOP.
+        // Keep that pass's pictures for Play, independent of the current grade.
+        val prefetch = clip.reverse && (prefetchReverseFrames || atMs == reverseFirstTime)
+        val first = if (prefetch) {
             // Export can produce much larger pictures. Bound the scan by the number of
             // packed planes that fit even when noisy footage does not compress.
             val window = if (filterDownscaling)
@@ -73,10 +77,7 @@ internal class EditedVideoPreviewReader private constructor(
                 else MAX_REVERSE_PICTURES
             (target - window + 1).coerceIn(firstTrimmedIndex.coerceAtMost(target), target)
         } else target
-        if (first < target && (reverseStorage?.width != width || reverseStorage?.height != height)) {
-            reverseStorage?.close()
-            reverseStorage = ReverseStorage(width, height)
-        }
+        val packed = if (first < target || shared != null && prefetch) storage(width, height) else null
         if (!started || lastIndex < 0 || first <= lastIndex || clip.reverse ||
             times[first] - times[lastIndex] > 1_000L) {
             if (started) decoder.flush()
@@ -88,7 +89,7 @@ internal class EditedVideoPreviewReader private constructor(
         var lastOutput = SystemClock.uptimeMillis()
         while (true) {
             checkActive()
-            feedInput()
+            feedAvailableInput()
             val output = decoder.dequeueOutputBuffer(info, 3_000)
             if (output < 0) {
                 if (SystemClock.uptimeMillis() - lastOutput > 2_500L) {
@@ -106,13 +107,15 @@ internal class EditedVideoPreviewReader private constructor(
                     val index = times.binarySearch(pts)
                     if (index >= 0) lastIndex = index
                     if (pts > times[target]) throw IOException("Video decoder missed the requested frame")
-                    if (index in first..target) {
+                    if (index in first..target && !window.contains(index)) {
                         val image = decoder.getOutputImage(output)
                             ?: throw IOException("Video decoder cannot supply editable pictures")
                         image.use {
                             val picture = samplePicture(it, decoder.getOutputFormat(output), width, height)
-                            if (index == target) return picture.toBitmap(checkActive)
-                            requireNotNull(reverseStorage).sample(picture, checkActive)
+                            if (index == target && (shared == null || !prefetch)) {
+                                return picture.toBitmap(checkActive)
+                            }
+                            requireNotNull(packed).sample(picture, checkActive)
                             retainedIndex = index
                             retainedColor = picture.color
                         }
@@ -122,7 +125,10 @@ internal class EditedVideoPreviewReader private constructor(
                 decoder.releaseOutputBuffer(output, false)
             }
             retainedColor?.let { color ->
-                retain(retainedIndex, requireNotNull(reverseStorage).compress(color, checkActive))
+                val storage = requireNotNull(packed)
+                val picture = storage.compress(color, checkActive)
+                window.retain(retainedIndex, picture)
+                if (retainedIndex == target) return storage.render(picture, checkActive)
             }
             if (end) throw IOException("Video ended before the requested frame")
         }
@@ -133,26 +139,28 @@ internal class EditedVideoPreviewReader private constructor(
         return if (found >= 0) found else (-found - 2).coerceAtLeast(0)
     }
 
-    private fun retain(index: Int, picture: ReversePicture) {
-        pending.put(index, picture)?.let { pendingBytes -= it.samples.size }
-        pendingBytes += picture.samples.size
-        val oldest = pending.values.iterator()
-        while (pendingBytes > REVERSE_CACHE_BYTES && oldest.hasNext()) {
-            pendingBytes -= oldest.next().samples.size
-            oldest.remove()
-        }
+    private fun storage(width: Int, height: Int): ReverseStorage {
+        val existing = reverseStorage
+        if (existing != null && existing.width == width && existing.height == height) return existing
+        existing?.close()
+        return ReverseStorage(width, height).also { reverseStorage = it }
     }
 
-    private fun feedInput() {
+    private fun feedAvailableInput() {
         if (inputEnded) return
-        val input = decoder.dequeueInputBuffer(2_000)
-        if (input < 0) return
-        val buffer = requireNotNull(decoder.getInputBuffer(input))
-        val size = extractor.readSampleData(buffer, 0)
-        if (size < 0) {
-            decoder.queueInputBuffer(input, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-            inputEnded = true
-        } else {
+        // B-frame reordering needs packets ahead of the output frame. Refill the
+        // available codec slots without waiting on input while output is ready.
+        repeat(8) {
+            checkActive()
+            val input = decoder.dequeueInputBuffer(0)
+            if (input < 0) return
+            val buffer = requireNotNull(decoder.getInputBuffer(input))
+            val size = extractor.readSampleData(buffer, 0)
+            if (size < 0) {
+                decoder.queueInputBuffer(input, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                inputEnded = true
+                return
+            }
             decoder.queueInputBuffer(input, 0, size, extractor.sampleTime, 0)
             extractor.advance()
         }
@@ -260,7 +268,7 @@ internal class EditedVideoPreviewReader private constructor(
         }
     }
 
-    private class PreviewColor(hd: Boolean, fullRange: Boolean) {
+    internal class PreviewColor(hd: Boolean, fullRange: Boolean) {
         private val uToBlue = if (hd) 1.8556 else 1.772
         private val vToRed = if (hd) 1.5748 else 1.402
         private val uToGreen = if (hd) -.1873 else -.344136
@@ -282,7 +290,41 @@ internal class EditedVideoPreviewReader private constructor(
         private fun channel(value: Double) = value.roundToInt().coerceIn(0, 255)
     }
 
-    private data class ReversePicture(val samples: ByteArray, val color: PreviewColor)
+    internal data class ReversePicture(val samples: ByteArray, val color: PreviewColor)
+
+    /** Packed pixels only. Preview owns this across seek/play readers under its reader lock. */
+    internal class ReversePreviewWindow {
+        private val pictures = linkedMapOf<Int, ReversePicture>()
+        private var bytes = 0
+        private var edge = 0
+
+        internal fun setEdge(requested: Int) {
+            if (edge == requested) return
+            clear()
+            edge = requested
+        }
+
+        internal fun contains(index: Int): Boolean = pictures.containsKey(index)
+
+        internal fun picture(index: Int, consume: Boolean): ReversePicture? =
+            if (consume) pictures.remove(index)?.also { bytes -= it.samples.size }
+            else pictures[index]
+
+        internal fun retain(index: Int, picture: ReversePicture) {
+            pictures.put(index, picture)?.let { bytes -= it.samples.size }
+            bytes += picture.samples.size
+            val oldest = pictures.values.iterator()
+            while (bytes > REVERSE_CACHE_BYTES || pictures.size > MAX_REVERSE_PICTURES) {
+                bytes -= oldest.next().samples.size
+                oldest.remove()
+            }
+        }
+
+        internal fun clear() {
+            pictures.clear()
+            bytes = 0
+        }
+    }
 
     /**
      * Retain exact source samples at the preview dimensions and render color only when needed.
@@ -359,13 +401,8 @@ internal class EditedVideoPreviewReader private constructor(
         }
     }
 
-    private fun clearWindow() {
-        pending.clear()
-        pendingBytes = 0
-    }
-
     override fun close() {
-        clearWindow()
+        localWindow.clear()
         try { reverseStorage?.close() } finally {
             try { decoder.release() } finally { extractor.release() }
         }
@@ -400,6 +437,7 @@ internal class EditedVideoPreviewReader private constructor(
             clip: GifVideoClip,
             prefetchReverseFrames: Boolean = false,
             filterDownscaling: Boolean = false,
+            reversePreviewWindow: ReversePreviewWindow? = null,
             checkActive: () -> Unit
         ): EditedVideoPreviewReader {
             if (clip.isGif || clip.sourceTimesMs.isEmpty()) throw IOException("Video timestamps unavailable")
@@ -426,7 +464,7 @@ internal class EditedVideoPreviewReader private constructor(
                     decoder.configure(format, null, null, 0)
                     decoder.start()
                     return EditedVideoPreviewReader(clip, extractor, decoder, format, rotation,
-                        prefetchReverseFrames, filterDownscaling, checkActive)
+                        prefetchReverseFrames, filterDownscaling, reversePreviewWindow, checkActive)
                 } catch (error: Throwable) {
                     decoder.release()
                     throw error
