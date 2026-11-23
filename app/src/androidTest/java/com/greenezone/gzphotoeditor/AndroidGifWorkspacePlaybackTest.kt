@@ -404,6 +404,80 @@ class AndroidGifWorkspacePlaybackTest {
             waitFrame(GifVideoMath.frameCount(doc.video!!))
         } finally { resolver.delete(uri, null, null) }
     }
+    @Test fun portraitVideoPlaysAgainAfterTrimAndRapidScrub() {
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            "gz-portrait-motion.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_portrait_motion_fixture.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val source = VideoGifSource.document(context, uri)
+            val clip = requireNotNull(source.video)
+            assertEquals(1080 to 1920, clip.width to clip.height)
+            assertEquals(150, clip.sourceTimesMs.size)
+            var latest = source
+            show(source) { latest = it }
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            rule.waitUntil(15_000) {
+                taggedFrame("gif-native-video") >= 12 || taggedFrame("gif-scheduled-video") >= 12
+            }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty()
+            }
+            waitFrame(GifVideoMath.frameCount(clip))
+            rule.onNodeWithContentDescription("Trim start and end").performScrollTo().performTouchInput {
+                swipe(androidx.compose.ui.geometry.Offset(width * .04f, center.y),
+                    androidx.compose.ui.geometry.Offset(width * .44f, center.y), 450)
+            }
+            rule.runOnIdle {
+                val trimmed = requireNotNull(latest.video)
+                assertTrue("Trim thumb did not move to the intended range: ${trimmed.startMs}",
+                    trimmed.startMs in 1_700L..2_600L)
+                assertEquals(clip.endMs, trimmed.endMs)
+            }
+            rule.onNodeWithText("Reverse").performClick()
+            rule.onNodeWithText("Looks").performScrollTo().performClick()
+            rule.onNodeWithText("B&W").performScrollTo().performClick()
+            rule.onNodeWithText("Timeline").performScrollTo().performClick()
+            val scrub = rule.onNodeWithContentDescription("Scrub GIF frames").performScrollTo()
+            scrub.performTouchInput {
+                swipe(androidx.compose.ui.geometry.Offset(width * .06f, center.y),
+                    androidx.compose.ui.geometry.Offset(width * .77f, center.y), 260)
+                swipe(androidx.compose.ui.geometry.Offset(width * .77f, center.y),
+                    androidx.compose.ui.geometry.Offset(width * .06f, center.y), 260)
+            }
+            scrub.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(0f) }
+            waitFrame(1)
+            rule.runOnIdle {
+                assertTrue(requireNotNull(latest.video).reverse)
+                assertEquals(-1f, latest.edits.grade.saturation, .001f)
+            }
+            fun sampleMotion(): List<Int> {
+                val image = rule.onNodeWithTag("gif-frame").captureToImage().asAndroidBitmap()
+                return (1..13).flatMap { row ->
+                    (1..7).map { column ->
+                        val x = image.width / 4 + image.width * column / 16
+                        val y = image.height / 12 + image.height * row / 17
+                        Color.red(image.getPixel(x, y)) / 24
+                    }
+                }
+            }
+            val samples = mutableSetOf(sampleMotion())
+            val playAt = SystemClock.elapsedRealtime()
+            rule.onNodeWithText("Play").performClick()
+            try {
+                rule.waitUntil(6_000) {
+                    if (taggedFrame("gif-frame") > 0) samples.add(sampleMotion())
+                    samples.size >= 5
+                }
+            } finally {
+                Log.i("GzGifTiming", "Trim + reverse + B&W, 1080x1920: ${samples.size} distinct visible samples in ${SystemClock.elapsedRealtime() - playAt}ms")
+            }
+        } finally {
+            resolver.delete(uri, null, null)
+        }
+    }
+
     @Test fun editedVideoKeepsAdvancingAcrossReverseLookAndSpeedChanges() {
         val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             "gz-edited-preview.mp4", "video/mp4") { out ->
