@@ -618,12 +618,17 @@ private fun GifTimeline(clip: GifVideoClip, index: Int, count: Int, enabled: Boo
         onValueChange = { onSeek(it.roundToInt().coerceIn(0, count - 1)) })
     Text("Trim  ${timeLabel(clip.startMs)} – ${timeLabel(clip.endMs)}", Modifier.padding(start = 14.dp),
         color = EditorWhite, fontSize = 12.sp)
+    val maxSpan = GifVideoMath.maxTrimDurationMs(clip)
+    if (maxSpan < clip.durationMs) {
+        Text("Maximum trim at this frame rate: ${timeLabel(maxSpan)}",
+            Modifier.padding(start = 14.dp), color = EditorMuted, fontSize = 12.sp)
+    }
     RangeSlider(value = clip.startMs.toFloat()..clip.endMs.toFloat(),
         onValueChange = { range ->
-            val startChanged = range.start.roundToLong() != clip.startMs
-            val start = range.start.roundToLong().coerceIn(0, clip.durationMs - 1)
-            val end = range.endInclusive.roundToLong().coerceIn(start + 1, clip.durationMs)
-            onTrim(clip.copy(startMs = start, endMs = end), !startChanged)
+            val movingEnd = range.start == clip.startMs.toFloat()
+            val requested = if (movingEnd) range.endInclusive else range.start
+            val trimmed = GifVideoMath.trimWithinFrameBudget(clip, requested.roundToLong(), movingEnd)
+            if (trimmed != clip) onTrim(trimmed, movingEnd)
         }, onValueChangeFinished = onFinish, valueRange = 0f..clip.durationMs.toFloat(),
         enabled = enabled, modifier = label("Trim start and end"))
 }

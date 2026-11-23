@@ -40,12 +40,32 @@ object GifVideoMath {
     val FRAME_RATES = listOf(0, 4, 6, 8, 10, 12, 15, 20, 24, 30)
     val SPEEDS = listOf(50, 100, 200)
 
-    /** Avoid secretly reducing requested FPS on long footage. */
-    fun fitsFrameBudget(clip: GifVideoClip, fps: Int = clip.fps): Boolean {
-        if (fps !in FRAME_RATES || clip.endMs <= clip.startMs) return false
-        if (fps == 0 && clip.sourceTimesMs.isNotEmpty()) return true
+    /** Keep the selected rate and clamp authored trims to the frame budget. */
+    internal fun maxTrimDurationMs(clip: GifVideoClip, fps: Int = clip.fps): Long {
+        require(fps in FRAME_RATES)
+        if (fps == 0 && clip.sourceTimesMs.isNotEmpty()) return clip.durationMs
         val effective = if (fps == 0) 24 else fps
-        return (clip.endMs - clip.startMs).toDouble() * effective / 1000.0 <= MAX_OUTPUT_FRAMES
+        return minOf(clip.durationMs, MAX_OUTPUT_FRAMES * 1_000L / effective)
+    }
+
+    fun fitsFrameBudget(clip: GifVideoClip, fps: Int = clip.fps): Boolean =
+        fps in FRAME_RATES && clip.endMs > clip.startMs &&
+            clip.endMs - clip.startMs <= maxTrimDurationMs(clip, fps)
+
+    /** The dragged endpoint stops at the limit; the opposite endpoint stays put. */
+    internal fun trimWithinFrameBudget(
+        clip: GifVideoClip,
+        requestedMs: Long,
+        movingEnd: Boolean
+    ): GifVideoClip {
+        val maxSpan = maxTrimDurationMs(clip)
+        return if (movingEnd) {
+            val ceiling = minOf(clip.durationMs, clip.startMs + maxSpan)
+            clip.copy(endMs = requestedMs.coerceIn(clip.startMs + 1, ceiling))
+        } else {
+            val floor = maxOf(0L, clip.endMs - maxSpan)
+            clip.copy(startMs = requestedMs.coerceIn(floor, clip.endMs - 1))
+        }
     }
 
     fun valid(clip: GifVideoClip): Boolean =

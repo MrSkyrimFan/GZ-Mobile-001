@@ -405,13 +405,15 @@ class AndroidGifWorkspacePlaybackTest {
             "gz-portrait-motion.mp4", "video/mp4") { out ->
             instrument.context.assets.open("gif_portrait_motion_fixture.mp4").use { it.copyTo(out) }
         }
+        val destination = publish(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            "gz-portrait-edited.gif", "image/gif") {}
         try {
             val source = VideoGifSource.document(context, uri)
             val clip = requireNotNull(source.video)
             assertEquals(1080 to 1920, clip.width to clip.height)
             assertEquals(150, clip.sourceTimesMs.size)
             var latest = source
-            show(source) { latest = it }
+            show(source, destination) { latest = it }
             waitFrame(1)
             rule.onNodeWithText("Play").performClick()
             rule.waitUntil(15_000) {
@@ -434,6 +436,10 @@ class AndroidGifWorkspacePlaybackTest {
             rule.onNodeWithText("Reverse").performClick()
             rule.onNodeWithText("Looks").performScrollTo().performClick()
             rule.onNodeWithText("B&W").performScrollTo().performClick()
+            rule.onNodeWithText("Adjust").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("Adjust Exposure").performScrollTo().performTouchInput {
+                swipe(center, center + androidx.compose.ui.geometry.Offset(width * .07f, 0f), 300)
+            }
             rule.onNodeWithText("Timeline").performScrollTo().performClick()
             val scrub = rule.onNodeWithContentDescription("Scrub GIF frames").performScrollTo()
             scrub.performTouchInput {
@@ -444,21 +450,53 @@ class AndroidGifWorkspacePlaybackTest {
             }
             scrub.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(0f) }
             waitFrame(1)
-            rule.runOnIdle {
-                assertTrue(requireNotNull(latest.video).reverse)
-                assertEquals(-1f, latest.edits.grade.saturation, .001f)
+            val edited = rule.runOnIdle { latest }
+            val reversed = requireNotNull(edited.video)
+            assertTrue(reversed.reverse)
+            assertEquals(-1f, edited.edits.grade.saturation, .001f)
+            assertTrue("The Adjust slider did not apply exposure: ${edited.edits.grade.exposure}",
+                edited.edits.grade.exposure in 0.1f..0.6f)
+
+            // Evaluate the marker positions from the fixture's generating geometry,
+            // independent of the reverse preview/export schedule.
+            val forward = GifVideoMath.frameTimesMs(reversed.copy(reverse = false))
+            val early = forward.first()
+            val late = forward.last()
+            fun markerAt(image: Bitmap, sourceMs: Long): Int {
+                val width = minOf(image.width, image.height * 9 / 16)
+                val height = minOf(image.height, image.width * 16 / 9)
+                val x = (210.0 + 125.0 * sourceMs / 1_000) / 1080
+                val y = (430.0 + 190.0 * sourceMs / 1_000) / 1920
+                return image.getPixel((image.width - width) / 2 + (width * x).toInt(),
+                    (image.height - height) / 2 + (height * y).toInt())
             }
+            fun showsMarker(image: Bitmap, visibleAt: Long, clearAt: Long): Boolean {
+                val marker = markerAt(image, visibleAt)
+                val background = markerAt(image, clearAt)
+                val channels = listOf(Color.red(marker), Color.green(marker), Color.blue(marker))
+                return channels.min() > 175 && channels.max() - channels.min() <= 12 &&
+                    Color.red(background) < 100
+            }
+            fun previewShowsMarker(visibleAt: Long, clearAt: Long): Boolean {
+                val image = rule.onNodeWithTag("gif-frame").captureToImage().asAndroidBitmap()
+                return try { showsMarker(image, visibleAt, clearAt) } finally { image.recycle() }
+            }
+            rule.waitUntil(15_000) { previewShowsMarker(late, early) }
+
             fun sampleMotion(): List<Int> {
                 val image = rule.onNodeWithTag("gif-frame").captureToImage().asAndroidBitmap()
-                return (1..13).flatMap { row ->
-                    (1..7).map { column ->
-                        val x = image.width / 4 + image.width * column / 16
-                        val y = image.height / 12 + image.height * row / 17
-                        Color.red(image.getPixel(x, y)) / 24
+                return try {
+                    (1..13).flatMap { row ->
+                        (1..7).map { column ->
+                            val x = image.width / 4 + image.width * column / 16
+                            val y = image.height / 12 + image.height * row / 17
+                            Color.red(image.getPixel(x, y)) / 24
+                        }
                     }
-                }
+                } finally { image.recycle() }
             }
             val samples = mutableSetOf(sampleMotion())
+            val startingSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
             val playAt = SystemClock.elapsedRealtime()
             rule.onNodeWithText("Play").performClick()
             try {
@@ -469,9 +507,85 @@ class AndroidGifWorkspacePlaybackTest {
             } finally {
                 Log.i("GzGifTiming", "Trim + reverse + B&W, 1080x1920: ${samples.size} distinct visible samples in ${SystemClock.elapsedRealtime() - playAt}ms")
             }
+            val count = GifVideoMath.frameCount(reversed)
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty()
+            }
+            waitFrame(count)
+            rule.waitUntil(15_000) { previewShowsMarker(early, late) }
+            val playbackEnded = GifPreviewDiagnostics.snapshot().any {
+                it.sequence > startingSequence && it.kind == GifDiagnosticKind.PLAYBACK_ENDED &&
+                    it.frameIndex == count - 1 && it.route in setOf(
+                        GifPreviewRoute.BITMAP_CODEC, GifPreviewRoute.BITMAP_RETRIEVER)
+            }
+            assertTrue("Edited reverse playback did not reach the original trim start", playbackEnded)
+
+            rule.onNodeWithText("Canvas").performScrollTo().performClick()
+            rule.onNodeWithText(GifSize.SMALL.label).performScrollTo().performClick()
+            rule.onNodeWithText("Save GIF").performClick()
+            rule.waitUntil(120_000) {
+                rule.onAllNodesWithText("Edit saved GIF").fetchSemanticsNodes().isNotEmpty()
+            }
+            val bytes = requireNotNull(resolver.openInputStream(destination)).use { it.readBytes() }
+            val exported = GifSourceMetadata.read(bytes.inputStream(), destination.toString())
+            assertEquals(180 to 320, exported.width to exported.height)
+            assertEquals(count, exported.sourceTimesMs.size)
+            assertEquals(GifVideoMath.frameDelaysMs(reversed).sum().toLong(), exported.durationMs)
+            val movie = requireNotNull(Movie.decodeByteArray(bytes, 0, bytes.size))
+            val pixels = Bitmap.createBitmap(exported.width, exported.height, Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = android.graphics.Canvas(pixels)
+                movie.setTime(0)
+                movie.draw(canvas, 0f, 0f)
+                assertTrue("Saved GIF must begin at the late, B&W marker",
+                    showsMarker(pixels, late, early))
+                movie.setTime(movie.duration() - 5)
+                movie.draw(canvas, 0f, 0f)
+                assertTrue("Saved GIF must end at the early, B&W marker",
+                    showsMarker(pixels, early, late))
+            } finally { pixels.recycle() }
+            rule.onNodeWithText("Edit saved GIF").performClick()
+            rule.waitUntil(15_000) { latest.video?.uri == destination.toString() }
+            rule.runOnIdle {
+                assertTrue(requireNotNull(latest.video).isGif)
+                assertEquals(count, GifVideoMath.frameCount(requireNotNull(latest.video)))
+            }
         } finally {
+            resolver.delete(destination, null, null)
             resolver.delete(uri, null, null)
         }
+    }
+
+    @Test fun editedBitmapCodecMatchesRetrieverOnMetadataRotatedVideo() {
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-edited-rotated.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_phone_60fps_bframes.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val source = requireNotNull(VideoGifSource.document(context, uri).video)
+            assertEquals(720 to 1280, source.width to source.height)
+            val edited = source.copy(startMs = source.sourceTimesMs[10],
+                endMs = source.sourceTimesMs[95], reverse = true)
+            val at = GifVideoMath.frameTimesMs(edited).first()
+            val actual = EditedVideoPreviewReader.open(context, edited) {}.use { it.frame(at, 480) }
+            try {
+                val expected = VideoGifSource.open(context, edited).use { it.frame(at, 480) }
+                try {
+                    assertEquals(270 to 480, actual.width to actual.height)
+                    assertEquals(expected.width to expected.height, actual.width to actual.height)
+                    fun rgb(color: Int) = listOf(Color.red(color), Color.green(color), Color.blue(color))
+                    for (y in listOf(actual.height / 10, actual.height * 45 / 100)) {
+                        val x = actual.width / 5
+                        val delta = rgb(actual.getPixel(x, y)).zip(rgb(expected.getPixel(x, y)))
+                            .sumOf { (a, b) -> kotlin.math.abs(a - b) }
+                        assertTrue("Edited codec color/orientation differs at ($x, $y): $delta", delta < 60)
+                    }
+                    val cyan = actual.getPixel(actual.width / 5, actual.height / 10)
+                    assertTrue(Color.red(cyan) < 80 && Color.green(cyan) > 170 && Color.blue(cyan) > 170)
+                    val blue = actual.getPixel(actual.width / 5, actual.height * 45 / 100)
+                    assertTrue(Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
+                } finally { expected.recycle() }
+            } finally { actual.recycle() }
+        } finally { resolver.delete(uri, null, null) }
     }
 
     @Test fun editedVideoKeepsAdvancingAcrossReverseLookAndSpeedChanges() {

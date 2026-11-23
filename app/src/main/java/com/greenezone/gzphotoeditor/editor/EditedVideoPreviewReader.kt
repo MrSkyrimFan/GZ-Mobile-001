@@ -13,6 +13,15 @@ import android.os.SystemClock
 import java.io.IOException
 import kotlin.math.roundToInt
 
+/** Android uses zero for unspecified output color metadata. */
+internal fun gifColorMetadata(output: Int?, source: Int?): Int? =
+    output?.takeIf { it > 0 } ?: source?.takeIf { it > 0 }
+
+private fun requiresAndroidColorConversion(standard: Int?, transfer: Int?): Boolean =
+    standard == MediaFormat.COLOR_STANDARD_BT2020 ||
+        transfer == MediaFormat.COLOR_TRANSFER_HLG ||
+        transfer == MediaFormat.COLOR_TRANSFER_ST2084
+
 /**
  * Bitmap preview for edited SDR video. Forward play decodes packets in order. Reverse
  * decodes bounded windows forward and consumes the selected pictures backwards.
@@ -115,10 +124,12 @@ internal class EditedVideoPreviewReader private constructor(
         val y = Plane(image.planes[0])
         val u = Plane(image.planes[1])
         val v = Plane(image.planes[2])
-        val standard = format.number(MediaFormat.KEY_COLOR_STANDARD)
-            ?: trackFormat.number(MediaFormat.KEY_COLOR_STANDARD)
-        val fullRange = (format.number(MediaFormat.KEY_COLOR_RANGE)
-            ?: trackFormat.number(MediaFormat.KEY_COLOR_RANGE)) == MediaFormat.COLOR_RANGE_FULL
+        fun colorMetadata(key: String) = gifColorMetadata(format.number(key), trackFormat.number(key))
+        val standard = colorMetadata(MediaFormat.KEY_COLOR_STANDARD)
+        if (requiresAndroidColorConversion(standard, colorMetadata(MediaFormat.KEY_COLOR_TRANSFER))) {
+            throw IOException("Use Android's image conversion for wide-gamut or HDR video")
+        }
+        val fullRange = colorMetadata(MediaFormat.KEY_COLOR_RANGE) == MediaFormat.COLOR_RANGE_FULL
         val hd = standard == MediaFormat.COLOR_STANDARD_BT709 ||
             (standard == null && maxOf(clip.width, clip.height) >= 1280)
         val uToBlue = if (hd) 1.8556 else 1.772
@@ -187,9 +198,7 @@ internal class EditedVideoPreviewReader private constructor(
                 val format = extractor.getTrackFormat(track)
                 val transfer = format.number(MediaFormat.KEY_COLOR_TRANSFER)
                 val standard = format.number(MediaFormat.KEY_COLOR_STANDARD)
-                if (transfer == MediaFormat.COLOR_TRANSFER_HLG ||
-                    transfer == MediaFormat.COLOR_TRANSFER_ST2084 ||
-                    standard == MediaFormat.COLOR_STANDARD_BT2020) {
+                if (requiresAndroidColorConversion(standard, transfer)) {
                     throw IOException("Use Android's image conversion for wide-gamut or HDR video")
                 }
                 val rotation = (format.number(MediaFormat.KEY_ROTATION) ?: 0).mod(360)

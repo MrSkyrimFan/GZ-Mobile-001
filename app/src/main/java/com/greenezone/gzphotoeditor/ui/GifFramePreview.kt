@@ -26,6 +26,7 @@ import com.greenezone.gzphotoeditor.editor.GifDiagnosticStage
 import com.greenezone.gzphotoeditor.editor.GifPreviewRoute
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
+import com.greenezone.gzphotoeditor.editor.afterBitmapCodecFailure
 import com.greenezone.gzphotoeditor.editor.previewRoute
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 private data class PreviewFrame(val index: Int, val bitmap: Bitmap)
@@ -73,14 +75,18 @@ internal fun GifFramePreview(
         }
     }
     var nativeFailed by remember(operationId, clip.uri) { mutableStateOf(false) }
+    val editedCodecFailed = remember(operationId, clip.uri) { AtomicBoolean() }
     var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
     val generationCounter = remember(operationId) { AtomicLong() }
     val activeGeneration = remember(operationId) { AtomicLong() }
-    val generation = remember(operationId, document, playing, nativeFailed) {
+    val generation = remember(operationId, clip.uri, document, playing, nativeFailed) {
         generationCounter.incrementAndGet()
     }
-    val route = remember(document, playing, nativeFailed) {
+    val preferredRoute = remember(document, playing, nativeFailed) {
         document.previewRoute(playing, nativeFailed)
+    }
+    val route = remember(operationId, generation) {
+        preferredRoute.afterBitmapCodecFailure(editedCodecFailed.get())
     }
     DisposableEffect(operationId, generation) {
         activeGeneration.set(generation)
@@ -147,7 +153,9 @@ internal fun GifFramePreview(
                     val (width, height) = GifMath.dimensions(document, maxEdge = 480)
                     val neutral = document.edits == EditDocument()
                     var reader: GifFrameReader? = null
-                    var bitmapRoute = route
+                    // Reread after taking ownership in case the previous reader failed
+                    // while this effect was queued behind it.
+                    var bitmapRoute = route.afterBitmapCodecFailure(editedCodecFailed.get())
                     val playbackJob = currentCoroutineContext()
                     fun checkCurrent() {
                         playbackJob.ensureActive()
@@ -159,7 +167,7 @@ internal fun GifFramePreview(
                             EditedVideoPreviewReader.open(context, clip, ::checkCurrent)
                         } else {
                             VideoGifSource.open(context, clip, batchFrames = playing,
-                                allowScaledBatches = playing && route == GifPreviewRoute.BITMAP_CODEC)
+                                allowScaledBatches = playing && preferredRoute == GifPreviewRoute.BITMAP_CODEC)
                         }
                         reader = opened
                         GifPreviewDiagnostics.record(operationId, generation,
@@ -186,6 +194,7 @@ internal fun GifFramePreview(
                             GifPreviewDiagnostics.record(operationId, generation,
                                 GifDiagnosticStage.G2_PLAY, GifDiagnosticKind.FALLBACK_STARTED, bitmapRoute,
                                 failure = error)
+                            editedCodecFailed.set(true)
                             closeReader()
                             bitmapRoute = GifPreviewRoute.BITMAP_RETRIEVER
                             GifPreviewDiagnostics.record(operationId, generation,
