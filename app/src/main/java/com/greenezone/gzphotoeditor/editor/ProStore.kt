@@ -20,6 +20,9 @@ object ProStore {
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
 
+    private fun projectReadLimit(): Long =
+        (Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(MAX_PROJECT_BYTES.toLong())
+
     fun encode(document: ProDocument): String {
         require(ProMath.valid(document))
         val layers = JSONArray()
@@ -248,6 +251,7 @@ object ProStore {
         if (!file.exists() && !recoverableBackup.isFile && names(context).size >= MAX_SAVED) return false
         return try {
             val payload = encodeProject(document, resetDocument)
+            if (payload.size.toLong() > projectReadLimit()) return false
             val atomic = AtomicFile(file)
             val stream = atomic.startWrite()
             try {
@@ -270,8 +274,7 @@ object ProStore {
         // Fail before allocating strings or reading hostile oversize projects.
         // On legacy backup-only recovery AtomicFile will rename the backup to base.
         val recoverable = if (backup.exists()) backup else base
-        val memoryBound = (Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(MAX_PROJECT_BYTES.toLong())
-        if (!recoverable.isFile || recoverable.length() > memoryBound) return null
+        if (!recoverable.isFile || recoverable.length() > projectReadLimit()) return null
         val atomic = AtomicFile(base)
         return try {
             val data = atomic.openRead().bufferedReader(Charsets.UTF_8).use { reader ->

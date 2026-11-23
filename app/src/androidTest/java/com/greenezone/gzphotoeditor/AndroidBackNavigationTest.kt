@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -739,12 +740,16 @@ class AndroidBackNavigationTest {
                 val edge = minOf(shown.width, shown.height)
                 val left = (shown.width - edge) / 2
                 val top = (shown.height - edge) / 2
-                return probes.all { y ->
-                    probes.all { x ->
-                        val actual = shown.getPixel(left + (x * edge).toInt(), top + (y * edge).toInt())
-                        val reference = expected.getPixel((x * 80).toInt(), (y * 80).toInt())
-                        pixelDistance(actual, reference) <= 12
+                return try {
+                    probes.all { y ->
+                        probes.all { x ->
+                            val actual = shown.getPixel(left + (x * edge).toInt(), top + (y * edge).toInt())
+                            val reference = expected.getPixel((x * 80).toInt(), (y * 80).toInt())
+                            pixelDistance(actual, reference) <= 12
+                        }
                     }
+                } finally {
+                    shown.recycle()
                 }
             }
 
@@ -754,8 +759,11 @@ class AndroidBackNavigationTest {
                 rule.onNodeWithText("Crop").performClick()
                 rule.onNodeWithText("1:1").performScrollTo().performClick()
                 rule.waitUntil(15_000) { rule.onAllNodesWithTag("crop-frame").fetchSemanticsNodes().isNotEmpty() }
+                val gutter = with(rule.density) { 16.dp.roundToPx() }
                 rule.onNodeWithTag("crop-frame").performTouchInput {
-                    val fittedWidth = minOf(width.toFloat(), height * (120f / 80f))
+                    val fittedWidth = minOf(
+                        (width - 2 * gutter).toFloat(), (height - 2 * gutter) * (120f / 80f)
+                    )
                     down(center)
                     moveTo(center + Offset(fittedWidth / 10f, 0f))
                     up()
@@ -786,6 +794,7 @@ class AndroidBackNavigationTest {
                 assertEquals(1f, saved.canvasAspectRatio, .001f)
                 assertEquals(1f, layer.aspect, .001f)
                 assertEquals(CropRatio.SQUARE, layer.edits.crop)
+                assertTrue(layer.edits.cropFrameRatioLocked)
                 assertEquals(look, layer.edits.grade)
                 val frame = requireNotNull(layer.edits.cropFrame)
                 assertEquals(32f / 120f, frame.left, .01f)
@@ -810,8 +819,10 @@ class AndroidBackNavigationTest {
         withLoadedRegular(width = 64, height = 120) { uri, original ->
             rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Crop"))
             rule.onNodeWithText("Crop").performClick()
+            rule.waitUntil(15_000) { rule.onAllNodesWithTag("crop-frame").fetchSemanticsNodes().isNotEmpty() }
             val overlay = rule.onNodeWithTag("crop-frame")
             val frame = overlay.fetchSemanticsNode().boundsInRoot
+            val gutter = with(rule.density) { 16.dp.roundToPx() }
             val topControl = rule.onNodeWithText("Open media").fetchSemanticsNode().boundsInRoot
             val bottomControls = rule.onNodeWithTag("photo-tools").fetchSemanticsNode().boundsInRoot
             assertTrue(frame.top >= topControl.bottom - 1f)
@@ -819,11 +830,13 @@ class AndroidBackNavigationTest {
 
             fun dragEdge(top: Boolean) {
                 overlay.performTouchInput {
-                    val fittedHeight = minOf(height.toFloat(), width * (120f / 64f))
+                    val fittedHeight = minOf(
+                        (height - 2 * gutter).toFloat(), (width - 2 * gutter) * (120f / 64f)
+                    )
                     val inset = (height - fittedHeight) / 2f
                     val direction = if (top) 1f else -1f
                     val border = if (top) inset else height - inset
-                    val start = Offset(center.x, border + direction * fittedHeight / 80f)
+                    val start = Offset(center.x, border - direction * gutter * .75f)
                     down(start)
                     moveTo(start + Offset(0f, direction * fittedHeight / 10f))
                     up()

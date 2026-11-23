@@ -300,8 +300,8 @@ internal fun ProWorkspaceScreenContent(
     }
 
     fun restoreHistory(undo: Boolean) {
+        val current = historyEntry(lastDragValue ?: lastSliderValue ?: document)
         finishPendingHistory()
-        val current = historyEntry()
         val (restored, nextHistory) = (if (undo) history.undo(current) else history.redo(current))
             ?: return
         clearToolDrafts()
@@ -1243,7 +1243,7 @@ internal fun ProWorkspaceScreenContent(
         onSave = {
             if (ProStore.save(context, draftName, document, resetDocument)) {
                 showSave = false; notice = "Editable Pro project saved"
-            } else notice = "Could not save. Name required; 12 projects maximum."
+            } else notice = "Could not save. Check the name, project limit, and available storage."
         },
         onDismiss = { showSave = false }
     )

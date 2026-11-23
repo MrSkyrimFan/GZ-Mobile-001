@@ -49,6 +49,8 @@ internal fun GifFramePreview(
     operationId: Long,
     playing: Boolean,
     startFrame: Int,
+    editedCodecFailed: AtomicBoolean,
+    readerOwner: Mutex,
     onFrame: (Int) -> Unit,
     onEnd: (Int) -> Unit,
     onError: (String) -> Unit,
@@ -66,16 +68,12 @@ internal fun GifFramePreview(
             override fun sizeOf(key: Int, value: Bitmap) = value.allocationByteCount
         }
     }
-    // A cancelled native read can still be inside a codec call. Keep one bitmap reader
-    // alive at a time even when slider events invalidate several generations rapidly.
-    val readerOwner = remember { Mutex() }
     val sourceCache = remember(operationId, clip.uri) {
         object : LruCache<Long, Bitmap>(4 * 1024 * 1024) {
             override fun sizeOf(key: Long, value: Bitmap) = value.allocationByteCount
         }
     }
     var nativeFailed by remember(operationId, clip.uri) { mutableStateOf(false) }
-    val editedCodecFailed = remember(operationId, clip.uri) { AtomicBoolean() }
     var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
     val generationCounter = remember(operationId) { AtomicLong() }
     val activeGeneration = remember(operationId) { AtomicLong() }

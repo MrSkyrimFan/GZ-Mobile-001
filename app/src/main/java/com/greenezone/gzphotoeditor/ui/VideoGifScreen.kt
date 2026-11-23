@@ -29,10 +29,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -89,6 +91,9 @@ internal fun VideoGifScreenContent(
             stage = GifDiagnosticStage.G0_SOURCE_PICKED,
             kind = GifDiagnosticKind.OPERATION_STARTED)
     }
+    // Keep ownership and fallback across export, which temporarily unmounts the preview.
+    val previewReaderOwner = remember { Mutex() }
+    val editedCodecFailed = remember(diagnosticOperation, clip?.uri) { AtomicBoolean() }
     val latestDiagnosticOperation by rememberUpdatedState(diagnosticOperation)
     DisposableEffect(Unit) {
         onDispose {
@@ -436,6 +441,7 @@ internal fun VideoGifScreenContent(
                     Box(Modifier.weight(1f).fillMaxWidth())
                 } else {
                     GifFramePreview(document, diagnosticOperation, playing, seek,
+                        editedCodecFailed = editedCodecFailed, readerOwner = previewReaderOwner,
                         onFrame = { position = it },
                         onEnd = { pauseAt(it) },
                         onError = { playing = false; notice = "Preview unavailable. $it" },
