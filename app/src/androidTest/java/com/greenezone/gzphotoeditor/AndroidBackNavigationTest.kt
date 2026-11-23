@@ -7,7 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.provider.MediaStore
-import android.view.KeyEvent
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
@@ -26,7 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -54,7 +54,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class AndroidBackNavigationTest {
-    @get:Rule val rule = createComposeRule()
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val resolver get() = instrumentation.targetContext.contentResolver
@@ -127,8 +127,10 @@ class AndroidBackNavigationTest {
             .single { it.startsWith("Frame ") && " of " in it }
     }
 
-    private fun pressSystemBack() {
-        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+    private fun pressBackThroughDispatcher() {
+        rule.runOnIdle {
+            rule.activity.onBackPressedDispatcher.onBackPressed()
+        }
         rule.waitForIdle()
     }
 
@@ -331,7 +333,7 @@ class AndroidBackNavigationTest {
         rule.onNodeWithText("GIF maker").performClick()
         rule.onNodeWithText("GIF ▾").assertIsDisplayed()
 
-        pressSystemBack()
+        pressBackThroughDispatcher()
         rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
         rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
         rule.onNodeWithText("Transform ▴").assertIsDisplayed()
@@ -353,7 +355,7 @@ class AndroidBackNavigationTest {
         }
         rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
 
-        pressSystemBack()
+        pressBackThroughDispatcher()
         rule.onNodeWithText("Photo ▾").assertIsDisplayed()
         rule.onNodeWithTag("photo-tools").assertIsDisplayed()
         rule.onNodeWithContentDescription("Undo").assertIsEnabled()
@@ -396,7 +398,7 @@ class AndroidBackNavigationTest {
             rule.onNodeWithText("Photo editing Pro").performClick()
             rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
 
-            pressSystemBack()
+            pressBackThroughDispatcher()
             rule.onNodeWithText("GIF ▾").assertIsDisplayed()
             rule.onNodeWithText("Source timing").assertIsDisplayed()
             rule.onNodeWithText("Play").assertIsDisplayed()
@@ -415,7 +417,7 @@ class AndroidBackNavigationTest {
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithText("GIF maker").fetchSemanticsNodes().isEmpty()
             }
-            pressSystemBack()
+            pressBackThroughDispatcher()
             rule.onNodeWithText("GIF ▾").assertIsDisplayed()
             rule.onNodeWithText("Source timing").assertIsDisplayed()
             rule.onNodeWithText("Play").assertIsDisplayed()
@@ -491,9 +493,9 @@ class AndroidBackNavigationTest {
                         .isEmpty()
                 }
 
-                pressSystemBack()
+                pressBackThroughDispatcher()
                 rule.onNodeWithText("Other workspace").assertIsDisplayed()
-                pressSystemBack()
+                pressBackThroughDispatcher()
                 rule.onNodeWithContentDescription("Adjust Outside margin").assertIsDisplayed()
                 rule.onNodeWithText("↶").assertIsEnabled()
                 rule.onNodeWithText("↶").performClick()
@@ -571,9 +573,9 @@ class AndroidBackNavigationTest {
                     }
                 rule.onNodeWithText("Frame duration: 800 ms").assertIsDisplayed()
 
-                pressSystemBack()
+                pressBackThroughDispatcher()
                 rule.onNodeWithText("Other workspace").assertIsDisplayed()
-                pressSystemBack()
+                pressBackThroughDispatcher()
                 rule.onNodeWithText("Frame duration: 800 ms").assertIsDisplayed()
                 rule.onNodeWithText("Undo").assertIsEnabled()
                 rule.onNodeWithText("Undo").performClick()
@@ -610,7 +612,7 @@ class AndroidBackNavigationTest {
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
             rule.onNodeWithText("Add first photo").assertIsDisplayed()
-            pressSystemBack()
+            pressBackThroughDispatcher()
             rule.onNodeWithText("Photo ▾").assertIsDisplayed()
 
             rule.onNodeWithText("Open media").performClick()
@@ -680,7 +682,7 @@ class AndroidBackNavigationTest {
     }
 
     @Test fun cleanLoadedRegularBackReturnsToEmptyStart() = withLoadedRegular { uri, original ->
-        pressSystemBack()
+        pressBackThroughDispatcher()
         rule.onNodeWithText("Create collage").assertIsDisplayed()
         rule.onNodeWithTag("photo-tools").assertDoesNotExist()
         assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
@@ -698,13 +700,13 @@ class AndroidBackNavigationTest {
                 }
             }
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
-            pressSystemBack()
+            pressBackThroughDispatcher()
             rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
 
             rule.onNodeWithText("Keep editing").performClick()
             rule.onNodeWithTag("photo-tools").assertIsDisplayed()
 
-            pressSystemBack()
+            pressBackThroughDispatcher()
             rule.onNodeWithText("Discard").performClick()
             rule.onNodeWithText("Create collage").assertIsDisplayed()
             rule.onNodeWithTag("photo-tools").assertDoesNotExist()
@@ -717,7 +719,7 @@ class AndroidBackNavigationTest {
         var cancelCount = 0
         try {
             mountTile(uri, onDone = { doneCount++ }, onCancel = { cancelCount++ })
-            pressSystemBack()
+            pressBackThroughDispatcher()
             rule.onNodeWithText("Tile host").assertIsDisplayed()
             rule.runOnIdle {
                 assertEquals(0, doneCount)
@@ -735,7 +737,7 @@ class AndroidBackNavigationTest {
         try {
             mountTile(uri, onDone = { doneCount++ }, onCancel = { cancelCount++ })
             rule.onNodeWithText("Golden").performClick()
-            pressSystemBack()
+            pressBackThroughDispatcher()
             rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
             rule.onNodeWithText("Discard").performClick()
             rule.onNodeWithText("Tile host").assertIsDisplayed()
@@ -759,7 +761,7 @@ class AndroidBackNavigationTest {
                 applied = it
             }, onCancel = { cancelCount++ })
             rule.onNodeWithText("Golden").performClick()
-            pressSystemBack()
+            pressBackThroughDispatcher()
             rule.onNodeWithText("Apply").performClick()
             rule.onNodeWithText("Tile host").assertIsDisplayed()
             rule.runOnIdle {
@@ -802,9 +804,9 @@ class AndroidBackNavigationTest {
 
                     // Project naming can leave the system IME owning the first Back.
                     // Wait for the application prompt before deciding the IME consumed it.
-                    pressSystemBack()
+                    pressBackThroughDispatcher()
                     if (!waitForTextOrTimeout("Apply tile changes?", 5_000)) {
-                        pressSystemBack()
+                        pressBackThroughDispatcher()
                     }
                     rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
                     rule.onNodeWithText("Discard").performClick()
@@ -835,7 +837,7 @@ class AndroidBackNavigationTest {
                     commitCount++
                 }
             ) {
-                pressSystemBack()
+                pressBackThroughDispatcher()
                 rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
                 rule.onNodeWithText("Discard").performClick()
                 rule.onNodeWithText("Collage ▾").assertIsDisplayed()
@@ -862,12 +864,12 @@ class AndroidBackNavigationTest {
                     commitCount++
                 }
             ) {
-                pressSystemBack()
+                pressBackThroughDispatcher()
                 rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
                 rule.onNodeWithText("Keep editing").performClick()
                 rule.onNodeWithTag("photo-tools").assertIsDisplayed()
 
-                pressSystemBack()
+                pressBackThroughDispatcher()
                 rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
                 rule.onNodeWithText("Apply").performClick()
                 rule.onNodeWithText("Collage ▾").assertIsDisplayed()
