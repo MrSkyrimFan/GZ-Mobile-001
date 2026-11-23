@@ -68,7 +68,10 @@ internal fun GifFramePreview(
             override fun sizeOf(key: Int, value: Bitmap) = value.allocationByteCount
         }
     }
-    val reversePreviewWindow = remember(operationId, clip.uri, clip.startMs, clip.endMs, clip.reverse) {
+    val reversePreviewWindow = remember(
+        operationId, clip.uri, clip.startMs, clip.endMs, clip.reverse, clip.isGif,
+        clip.width, clip.height, clip.sourceTimesMs
+    ) {
         if (clip.reverse && !clip.isGif) EditedVideoPreviewReader.ReversePreviewWindow() else null
     }
     // A still from a different reverse range cannot supply its neighboring frames.
