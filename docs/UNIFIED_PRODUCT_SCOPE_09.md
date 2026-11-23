@@ -1,4 +1,6 @@
-# GZ Editor Pro | Owner-directed non-AI product scope
+# GZ Editor Pro | Owner-directed non-AI product scope (0.9 record)
+
+For current engineering, follow [Revision 4 product requirements](PRODUCT_SPEC.md). This record predates the Regular Masks and Pro Text authoring restrictions, confirmation-based Regular-to-Pro handoff, and formal pre-Video workspace locks. Read its dated inventories as historical.
 
 **Approved direction: November 21, 2026.** Android first; $2.99 **one-time** final retail target. No AI or inference at runtime, accounts, cloud, ads, subscriptions, watermarks, credits, hidden unlocks, or telemetry. Original source media never overwritten. iPhone separately in the future. The design goal is a $100-class perceived value from excellent working features and usable UI, **not a claim of an appraised $100 market value**.
 

@@ -1,6 +1,8 @@
 # W0 navigation correction 001
 
-Status: implementation candidate on `feature/w0-system-back-navigation`. Implementation head `3a40059ae7bf8faa7a1de88b80f393bed2073e37` passed exact-head automated CI in run `#191` (`45080614667`), and both emulator XML receipts were inspected. Physical-device qualification and final acceptance remain open.
+This document records the W0 navigation work. Follow [current product requirements](PRODUCT_SPEC.md) for the explicit Regular-to-Pro handoff and current Masks/Text ownership. Earlier automatic seeding described below is historical W0 behavior.
+
+Implementation head `3a40059ae7bf8faa7a1de88b80f393bed2073e37` passed [run #191](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45080614667). Later W0 head `d2036e19bcca8fd572220acf0736a6ca94297a1c` enabled predictive Back in the manifest and exercised app Back via AndroidX dispatcher in [run #200](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45097321859). The 98 cases passed on each API. Physical-device qualification and final acceptance remain open.
 
 Baseline: `main` at `1b995e8987ae96a841bf56dd22910deb784af054` (tree `026267872f3f1a98fa840effde4357378334a47e`).
 
@@ -32,7 +34,7 @@ The current Pro route is seeded from the in-memory Regular source URI and recipe
 
 Pro's Tone & color entry adapts the shared grade deck to a selected Pro object. Existing Pro v1–v5 records embed legacy grade data through the current Pro model/store/renderer. The revision-2 owner rule moves new full-photo development to Regular while requiring old Pro grades to render and remain editable. No shared grade code, stored field or public Pro route is removed in this correction.
 
-Regular remains the owner of photographic Looks, Mix, Grading, Curves, local develop masks, RAW, optics, catalog and batch. Pro remains the owner of layers, selections, masks, transforms, retouching and compositing.
+Regular owns photographic Looks, Mix, Grading, Curves, RAW, optics, catalog and batch. Pro owns layers, selections, masking authoring, transforms, retouching and compositing. Preserve historical Regular mask data and render behavior.
 
 ## Automated evidence required
 
@@ -43,7 +45,7 @@ The JVM route-policy suite must prove:
 - Previewing Back does not mutate committed navigation.
 - Empty PHOTO root delegates to Android and unavailable Video does not route.
 
-The Android API 29 and API 35 suites must exercise a real system Back event and prove:
+The Android API 29 and API 35 suites exercise application Back ownership through the AndroidX dispatcher. The emulator cases check:
 
 - loaded Regular → Pro → GIF → Back → Pro → Back → the same loaded Regular, including Regular dirty history, Pro selected layer, active tool and non-default viewport, plus an Undo/Redo operation that changes the actual Pro document;
 - a paused video-backed GIF returns from Pro to the same active tab and exact playhead; a separate actively playing round trip resumes paused, and Undo/Redo changes the actual Reverse state;

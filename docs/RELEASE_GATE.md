@@ -1,6 +1,14 @@
-# GZ Editor Pro 0.8 — collage engineering and release gates
+# GZ Editor Pro engineering and release gates
 
-## Mandatory automated verification
+## Current field-correction acceptance
+
+- [ ] Open a rights-cleared 1080×1920 portrait video of approximately five seconds from the GIF workspace. Compare untouched playback with trim around 2.19–4.99 seconds, Reverse, B&W or Punch, speed, crop, Undo/Redo and rapid edits. Confirm changing picture content, correct direction and responsive controls. Reopen a saved project and decode the exported animation independently to check orientation, motion, color, duration and frame schedule. Include 720p60 B-frames and representative phone media.
+- [ ] Enter Regular Crop through the normal UI. Drag four corners, four edges and the interior in Freeform and fixed ratio with touch input. Verify predictable anchoring, pointer-down acquisition, letterbox interactions, expected crop pixels and saved-project reopen. Confirm Regular and Collage tile editing omit Masks authoring and retain Text, Blur & cover and old mask-bearing projects.
+- [ ] Enter Pro from an edited portrait in Regular. Confirm Yes transfers the current appearance and geometry. Confirm No opens an empty editor and dismissal keeps Regular open. Switch back via the menu and Back, and verify Regular's source, edits, history and output still match. Check Pro Text authoring is absent and legacy text still renders, and exercise File → Delete current work with Cancel and Confirm. Verify originals, Regular edits and named saved projects survive.
+- [ ] Exercise Pro layer selection, transform, masks, opacity/blend, painting and repair through pixel change, Undo/Redo, save/reopen and export. Check Back through active tools, menus, dialogs, keyboard and workspaces. Verify physical gestures from both edges, half-cancel and rapid double Back on a handset, including picker/IME ownership.
+- [ ] Run JVM and complete API 29/API 35 instrumentation on the repair commit, including independent Collage tile rendering and save/reopen. For a combined phone build, provide the commit, run, APK artifact, APK hash, signing/package/version details, and one compact phone script. Engineering merge authority and owner acceptance are separate. Mark physical-device and formal workspace acceptance only from the corresponding results.
+
+## Retained automated Collage and photo verification (0.8)
 - [ ] Main original photo edit screen unchanged aside from GZ brand on landing and Create collage entry.
 - [ ] Crop/blur/text/shapes/brush active guides persist while main toolbar is hidden, and editing remains possible.
 - [ ] Pure layout checks: all seven arrangements, counts 1–20, nonoverlap, bounds, tap selection, max spacing and budget.
