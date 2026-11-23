@@ -43,6 +43,12 @@ internal fun ProSelectionPanel(
             modifier = Modifier.padding(horizontal = 13.dp))
         return
     }
+    if (!layer.visible || layer.opacity <= 0f) {
+        Text("Show this layer and raise its opacity to preview the mask.",
+            color = EditorMuted, fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 13.dp))
+        return
+    }
     Text("Drag on the canvas to select an area. Tap Apply mask to keep it.",
         color = EditorWhite, fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 13.dp))
@@ -85,6 +91,12 @@ internal fun ProRetouchPanel(
 ) {
     if (layer.kind != ProLayerKind.IMAGE) {
         Text("Choose an image layer to use Clone stamp or Soft repair.",
+            color = EditorMuted, fontSize = 12.sp,
+            modifier = Modifier.padding(horizontal = 13.dp))
+        return
+    }
+    if (!layer.visible || layer.opacity <= 0f) {
+        Text("Show this image and raise its opacity to preview retouching.",
             color = EditorMuted, fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 13.dp))
         return
@@ -139,7 +151,7 @@ internal fun ProPixelEffectPanel(
         modifier = Modifier.padding(horizontal = 13.dp))
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
         .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        ProPixelEffect.entries.filter { it != ProPixelEffect.NONE }.forEach { effect ->
+        ProPixelEffect.entries.forEach { effect ->
             DockChip(effect.label, layer.effect == effect) { onEffect(effect) }
         }
     }

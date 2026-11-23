@@ -1109,7 +1109,9 @@ fun PhotoEditorScreen(
             Column(
                 Modifier.align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .onSizeChanged { topChromeHeight = it.height }
+                    .then(if (selectedTab == EditTab.CROP) {
+                        Modifier.onSizeChanged { topChromeHeight = it.height }
+                    } else Modifier)
                     .background(Brush.verticalGradient(
                         listOf(Color(0xE5090C13), Color(0xC5090C13), Color.Transparent)
                     ))
@@ -1207,7 +1209,9 @@ fun PhotoEditorScreen(
                 Box(
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .onSizeChanged { bottomChromeHeight = it.height }
+                        .then(if (selectedTab == EditTab.CROP) {
+                            Modifier.onSizeChanged { bottomChromeHeight = it.height }
+                        } else Modifier)
                         .navigationBarsPadding()
                 ) {
                     EditorDock(

@@ -169,7 +169,7 @@ internal fun ProCanvasSurface(
             }
             if ((section == ProSection.LAYERS || section == ProSection.MOVE) && layer?.visible == true)
                 drawLayerBounds(canvas, layer, width, height, guide)
-            if (section == ProSection.SELECT) {
+            if (section == ProSection.SELECT && layer?.visible == true && layer.opacity > 0f) {
                 layer?.mask?.let { canvas.drawPath(ProToolMath.projectedPath(it, layer, width, height), guide) }
                 if (draft != null && ProToolMath.valid(draft)) {
                     guide.color = android.graphics.Color.YELLOW

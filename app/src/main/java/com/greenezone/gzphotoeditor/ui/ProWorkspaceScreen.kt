@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -163,7 +164,8 @@ internal fun ProWorkspaceScreenContent(
     var retouchKind by remember { mutableStateOf(session.retouchKind) }
     var retouchRadius by remember { mutableFloatStateOf(session.retouchRadius) }
     var retouchStrength by remember { mutableFloatStateOf(session.retouchStrength) }
-    var replacingImage by remember { mutableIntStateOf(-1) }
+    var replacement by remember { mutableStateOf<Pair<ProDocument, Int>?>(null) }
+    val latestDocument by rememberUpdatedState(document)
     var showAdd by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
@@ -346,7 +348,7 @@ internal fun ProWorkspaceScreenContent(
         lastSliderValue = null
         dragStart = null
         lastDragValue = null
-        replacingImage = -1
+        replacement = null
         history = ProHistory()
         selected = 0
         section = ProSection.LAYERS
@@ -398,7 +400,7 @@ internal fun ProWorkspaceScreenContent(
                             resetDocument = document.copy(layers = listOf(layers.first()))
                         }
                         commit(document.copy(layers = document.layers + layers))
-                        selected = document.layers.size + layers.lastIndex
+                        selectLayer(document.layers.size + layers.lastIndex)
                         section = ProSection.LAYERS
                         showAdd = false
                     }
@@ -417,33 +419,49 @@ internal fun ProWorkspaceScreenContent(
     }
     val replacePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        val index = replacingImage
-        replacingImage = -1
-        if (uri != null && index in document.layers.indices &&
-            document.layers[index].kind == ProLayerKind.IMAGE) {
+    ) replacementResult@{ uri ->
+        val request = replacement ?: return@replacementResult
+        replacement = null
+        if (uri == null) return@replacementResult
+        val (requestedDocument, index) = request
+        val layer = requestedDocument.layers.getOrNull(index)
+        if (layer?.kind != ProLayerKind.IMAGE || latestDocument !== requestedDocument || busy || exporting) {
+            notice = "The layer changed. Select it and try Replace image again."
+            return@replacementResult
+        }
+        busy = true
+        scope.launch {
             try {
-                resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: SecurityException) {}
-            scope.launch {
-                busy = true
-                try {
-                    val aspect = withContext(Dispatchers.IO) {
-                        val sample = ImagePipeline.decode(resolver, uri, 200, 50_000L)
-                        try { (sample.width.toFloat() / sample.height).coerceIn(.1f, 10f) }
-                        finally { sample.recycle() }
-                    }
-                    commit(document.copy(layers = document.layers.toMutableList().also {
-                        it[index] = it[index].copy(uri = uri.toString(), aspect = aspect)
-                    }))
-                    selected = index
-                    clearToolDrafts()
-                    notice = "Source replaced. Layer edits preserved."
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (failure: Exception) {
-                    notice = "Could not read replacement image."
-                } finally { busy = false }
+                val aspect = withContext(Dispatchers.IO) {
+                    try {
+                        resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    } catch (_: SecurityException) {}
+                    val sample = ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L)
+                    try {
+                        val image = ImagePipeline.geometry(sample, layer.edits)
+                        try { image.width.toFloat() / image.height }
+                        finally { if (image !== sample) image.recycle() }
+                    } finally { sample.recycle() }
+                }
+                if (latestDocument !== requestedDocument) {
+                    notice = "The layer changed. Select it and try Replace image again."
+                    return@launch
+                }
+                check(ProMath.validSourceAspect(aspect))
+                commit(requestedDocument.copy(layers = requestedDocument.layers.toMutableList().also {
+                    it[index] = layer.copy(uri = uri.toString(), aspect = aspect)
+                }))
+                clearToolDrafts()
+                selected = index
+                notice = "Source replaced. Layer edits preserved."
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: OutOfMemoryError) {
+                notice = "There is not enough memory to replace this image."
+            } catch (_: Exception) {
+                notice = "Could not read replacement image."
+            } finally {
+                busy = false
             }
         }
     }
@@ -674,7 +692,8 @@ internal fun ProWorkspaceScreenContent(
                                 if (section == ProSection.LAYERS) {
                                     ProHitMath.pick(document, point.x, point.y, canvasW, canvasH)
                                         ?.let(::selectLayer)
-                                } else if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING && !eraserMode) {
+                                } else if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
+                                    active.visible && active.opacity > 0f && !eraserMode) {
                                     if (pristine || bitmap != null) {
                                         brushColor = (bitmap?.let {
                                             val x = (point.x * it.width).toInt().coerceIn(0, it.width - 1)
@@ -683,7 +702,8 @@ internal fun ProWorkspaceScreenContent(
                                         } ?: document.background.argb) or -0x1000000
                                         notice = "Brush color sampled from canvas."
                                     }
-                                } else if (section == ProSection.RETOUCH && active?.kind == ProLayerKind.IMAGE) {
+                                } else if (section == ProSection.RETOUCH && active?.kind == ProLayerKind.IMAGE &&
+                                    active.visible && active.opacity > 0f) {
                                     val target = ProMath.canvasToImageNormalized(active, canvasW, canvasH, point)
                                     val source = retouchSourceImage
                                     if (target == null) notice = "Press inside the selected image."
@@ -702,11 +722,12 @@ internal fun ProWorkspaceScreenContent(
                                 lastDragValue = null
                                 dragStart = document
                                 if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
-                                    active.visible && active.edits.creative.strokes.size < CreativeRaster.MAX_INK)
+                                    active.visible && active.opacity > 0f &&
+                                    active.edits.creative.strokes.size < CreativeRaster.MAX_INK)
                                     activeStroke = InkStroke(listOf(point), color = brushColor,
                                         thickness = brushSize, opacity = brushOpacity, erase = eraserMode)
-                                if (section == ProSection.SELECT && (active?.kind == ProLayerKind.IMAGE ||
-                                        active?.kind == ProLayerKind.ADJUSTMENT)) {
+                                if (section == ProSection.SELECT && active?.visible == true && active.opacity > 0f &&
+                                    (active.kind == ProLayerKind.IMAGE || active.kind == ProLayerKind.ADJUSTMENT)) {
                                     selectionStart = point
                                     draftSelection = if (selectionKind == ProSelectionKind.LASSO)
                                         ProSelection(selectionKind, points = listOf(point))
@@ -717,7 +738,7 @@ internal fun ProWorkspaceScreenContent(
                                 val before = dragStart
                                 val item = before?.layers?.getOrNull(selected)
                                 if (before != null && item != null) when (section) {
-                                    ProSection.MOVE -> if (item.visible && item.kind in listOf(
+                                    ProSection.MOVE -> if (item.visible && item.opacity > 0f && item.kind in listOf(
                                         ProLayerKind.IMAGE, ProLayerKind.TEXT, ProLayerKind.SHAPE)) {
                                         val moved = item.copy(x = (item.x + point.x - start.x).coerceIn(0f, 1f),
                                             y = (item.y + point.y - start.y).coerceIn(0f, 1f))
@@ -802,13 +823,16 @@ internal fun ProWorkspaceScreenContent(
                                         TextButton(onClick = {
                                             section = ProSection.RETOUCH
                                         }) { Text("Clone / repair", color = EditorMint) }
-                                        TextButton(onClick = {
-                                            replacingImage = selected
+                                        TextButton(enabled = available && replacement == null, onClick = {
+                                            replacement = document to selected
                                             replacePicker.launch(PickVisualMediaRequest(
                                                 ActivityResultContracts.PickVisualMedia.ImageOnly))
                                         }) { Text("Replace image", color = EditorWhite) }
                                     }
-                                    TextButton(onClick = { changeLayer { it.copy(visible = !it.visible) } }) {
+                                    TextButton(onClick = {
+                                        if (active.visible) clearToolDrafts()
+                                        changeLayer { it.copy(visible = !it.visible) }
+                                    }) {
                                         Text(if (active.visible) "Hide" else "Show", color = EditorWhite)
                                     }
                                     TextButton(enabled = selected > 0,
@@ -831,11 +855,12 @@ internal fun ProWorkspaceScreenContent(
                                                 it.add(selected + 1, copy)
                                             }
                                             commit(document.copy(layers = next))
-                                            selected++
+                                            selectLayer(selected + 1)
                                         }) { Text("Duplicate", color = EditorWhite) }
                                     TextButton(onClick = {
                                         commit(document.copy(layers =
                                             document.layers.filterIndexed { index, _ -> index != selected }))
+                                        clearToolDrafts()
                                         selected = selected.coerceAtMost(document.layers.size - 2).coerceAtLeast(0)
                                     }) { Text("Delete layer", color = Color(0xFFFF9D9D)) }
                                 }
@@ -846,15 +871,25 @@ internal fun ProWorkspaceScreenContent(
                                     Text("Use Transform on image or shape layers. Draw directly in Brush.",
                                         color = EditorMuted, fontSize = 12.sp,
                                         modifier = Modifier.padding(horizontal = 14.dp))
+                                } else if (!active.visible) {
+                                    Text("Show this layer in Layers before transforming it.",
+                                        color = EditorMuted, fontSize = 12.sp,
+                                        modifier = Modifier.padding(horizontal = 14.dp))
                                 } else {
+                                    if (active.opacity == 0f) {
+                                        Text("Raise opacity above zero to see this layer move.",
+                                            color = EditorMuted, fontSize = 12.sp,
+                                            modifier = Modifier.padding(horizontal = 14.dp))
+                                    }
                                     Row(Modifier.horizontalScroll(rememberScrollState())
                                         .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         ProTransform.entries.forEach { option ->
-                                            DockChip(option.title, transform == option) {
+                                            DockChip(option.title, transform == option,
+                                                enabled = active.opacity > 0f || option == ProTransform.OPACITY) {
                                                 transform = option
                                             }
                                         }
-                                        DockChip("Center on canvas", false) {
+                                        DockChip("Center on canvas", false, enabled = active.opacity > 0f) {
                                             val already = active.x == .5f && active.y == .5f
                                             changeLayer { it.copy(x = .5f, y = .5f) }
                                             notice = if (already) "Layer already centered."
@@ -874,6 +909,7 @@ internal fun ProWorkspaceScreenContent(
                                         else -> 0f..1f
                                     }
                                     Slider(value = value.coerceIn(range.start, range.endInclusive),
+                                        enabled = active.opacity > 0f || transform == ProTransform.OPACITY,
                                         valueRange = range, onValueChange = { x ->
                                             changeLayer({ layer -> when (transform) {
                                                 ProTransform.SIZE -> layer.copy(scale = x)
@@ -916,7 +952,11 @@ internal fun ProWorkspaceScreenContent(
                                 }
                             }
                             ProSection.PAINT -> {
-                                if (active.kind == ProLayerKind.DRAWING) {
+                                if (active.kind == ProLayerKind.DRAWING && (!active.visible || active.opacity <= 0f)) {
+                                    Text("Show this brush layer and raise its opacity to paint or erase.",
+                                        color = EditorMuted, fontSize = 12.sp,
+                                        modifier = Modifier.padding(horizontal = 13.dp))
+                                } else if (active.kind == ProLayerKind.DRAWING) {
                                     Row(Modifier.horizontalScroll(rememberScrollState())
                                         .padding(horizontal = 9.dp),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1143,7 +1183,9 @@ internal fun ProWorkspaceScreenContent(
         selectLayer(it); showStack = false; selectTool(ProSection.LAYERS)
     }, onVisibility = { index ->
         val layers = document.layers.toMutableList()
-        layers[index] = layers[index].copy(visible = !layers[index].visible)
+        val layer = layers[index]
+        if (index == selected && layer.visible) clearToolDrafts()
+        layers[index] = layer.copy(visible = !layer.visible)
         commit(document.copy(layers = layers))
     }, onAdd = { showStack = false; showAdd = true }, onDismiss = { showStack = false })
     rename?.let { name ->
