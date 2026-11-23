@@ -1,0 +1,82 @@
+[
+  {
+    "number": 16,
+    "title": "W0: make Android Back state-safe across editor workspaces",
+    "state": "closed",
+    "merged": true,
+    "head": "d2036e19bcca8fd572220acf0736a6ca94297a1c",
+    "merge": "df72426541d0ad0d1cf2b8c0d2798f6b8e652bfc",
+    "files": 12,
+    "link": "https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/16"
+  },
+  {
+    "number": 17,
+    "title": "GIF P0: add local preview diagnostics and edited playback coverage",
+    "state": "closed",
+    "merged": false,
+    "head": "b1ccb2d65ec078442d59463d0c59cefd47f198ec",
+    "merge": "1e0f7f64221ab538ae8bd0f39cb0c168f947bf29",
+    "files": 7,
+    "link": "https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/17"
+  },
+  {
+    "number": 18,
+    "title": "Repair edited GIF playback, crop gestures, and Pro workflows",
+    "state": "closed",
+    "merged": true,
+    "head": "4d90351e024cd5457a22811e18728b10fb69ea6d",
+    "merge": "593a37dcc9208516913700776feaa5e8ec812348",
+    "files": 44,
+    "link": "https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/18"
+  },
+  {
+    "number": 19,
+    "title": "Fix the Revision 4 crop, Pro history, and GIF audit findings",
+    "state": "closed",
+    "merged": true,
+    "head": "e5dafdfe2c07956f69a56eb0e0d1c3445bc04748",
+    "merge": "433c4ce5e120c5a9b2204f5bf13c486793c6eb81",
+    "files": 26,
+    "link": "https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/19"
+  },
+  {
+    "number": 20,
+    "title": "Stream decoded video frames for faster GIF export",
+    "state": "closed",
+    "merged": true,
+    "head": "e077be43d11b63634c6a0a9d74a136a89e06bff7",
+    "merge": "390bd45116b655b7030ca9d6a12e4488c34dd9d1",
+    "files": 7,
+    "link": "https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/20"
+  },
+  {
+    "number": 21,
+    "title": "Add Regular photo histograms and true live Pro paint",
+    "state": "closed",
+    "merged": true,
+    "head": "34ec0b9459c3b1f9f4c1859e169cec6983944018",
+    "merge": "3a70471701877fc2713995e3fda5aa7fed3a6a84",
+    "files": 12,
+    "link": "https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/21"
+  },
+  {
+    "number": 22,
+    "title": "Docs: GZ Editor Pro field guide for Codex (research, workflows and QA fixtures)",
+    "state": "closed",
+    "merged": true,
+    "head": "7c5d40b099484c338e4d4cf63dca7ba083482ba3",
+    "merge": "dc67de64e4f916492e7a918dec55990ac7c3c2d2",
+    "files": 20,
+    "link": "https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/22"
+  },
+  {
+    "number": 23,
+    "title": "Eliminate a repeated decode when starting reverse GIF playback",
+    "state": "closed",
+    "merged": true,
+    "head": "1825bcbaf6c98f7ceced44e2012f97c2f8128d3f",
+    "merge": "14df73926c6f7063a488f84e367268168e8e5444",
+    "files": 4,
+    "link": "https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/23"
+  }
+]

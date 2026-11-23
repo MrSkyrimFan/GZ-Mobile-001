@@ -1,0 +1,3 @@
+PRO-05: 2079840 ASCII coordinate characters before field names, using 1.2345678E-4 and 4.5678913E-4.
+PRO-03: image height 25.0 px, guide height 100.0 px. At y=530 the guide hits empty canvas.
+PRO-04: with a 128 MiB memory class, the computed square edge is 1831 for an 80 px crop.
