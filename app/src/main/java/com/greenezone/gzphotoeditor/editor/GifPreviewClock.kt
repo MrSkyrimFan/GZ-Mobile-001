@@ -39,3 +39,23 @@ internal fun GifDocument.canPlaySourceDirectly(): Boolean {
     val clip = video ?: return false
     return canPlayContinuousVideo() && GifVideoMath.frameCount(clip) == clip.sourceTimesMs.size
 }
+
+internal enum class GifPreviewRoute {
+    NONE,
+    NATIVE_SOURCE,
+    SCHEDULED_CODEC,
+    BITMAP_RETRIEVER,
+    GIF_MOVIE
+}
+
+internal fun GifDocument.previewRoute(
+    playing: Boolean,
+    nativeFailed: Boolean
+): GifPreviewRoute {
+    val clip = video ?: return GifPreviewRoute.NONE
+    if (playing && !nativeFailed && canPlayContinuousVideo()) {
+        return if (canPlaySourceDirectly()) GifPreviewRoute.NATIVE_SOURCE
+        else GifPreviewRoute.SCHEDULED_CODEC
+    }
+    return if (clip.isGif) GifPreviewRoute.GIF_MOVIE else GifPreviewRoute.BITMAP_RETRIEVER
+}

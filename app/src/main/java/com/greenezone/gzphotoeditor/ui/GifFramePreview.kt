@@ -19,10 +19,13 @@ import com.greenezone.gzphotoeditor.editor.GifEncoder
 import com.greenezone.gzphotoeditor.editor.GifFrameReader
 import com.greenezone.gzphotoeditor.editor.GifMath
 import com.greenezone.gzphotoeditor.editor.GifPreviewClock
+import com.greenezone.gzphotoeditor.editor.GifPreviewDiagnostics
+import com.greenezone.gzphotoeditor.editor.GifDiagnosticKind
+import com.greenezone.gzphotoeditor.editor.GifDiagnosticStage
+import com.greenezone.gzphotoeditor.editor.GifPreviewRoute
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
-import com.greenezone.gzphotoeditor.editor.canPlayContinuousVideo
-import com.greenezone.gzphotoeditor.editor.canPlaySourceDirectly
+import com.greenezone.gzphotoeditor.editor.previewRoute
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -31,12 +34,14 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 
 private data class PreviewFrame(val index: Int, val bitmap: Bitmap)
 
 @Composable
 internal fun GifFramePreview(
     document: GifDocument,
+    operationId: Long,
     playing: Boolean,
     startFrame: Int,
     onFrame: (Int) -> Unit,
@@ -58,16 +63,70 @@ internal fun GifFramePreview(
     }
     var nativeFailed by remember(clip.uri) { mutableStateOf(false) }
     var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
-    if (playing && !nativeFailed && remember(document) { document.canPlayContinuousVideo() }) {
-        val fallback: (Int) -> Unit = { resumeFrom = it; nativeFailed = true }
-        if (remember(document) { document.canPlaySourceDirectly() }) {
-            NativeGifPlayback(clip, startFrame, document.loopCount, onFrame, onEnd, fallback, modifier)
+    val generationCounter = remember(operationId) { AtomicLong() }
+    val activeGeneration = remember(operationId) { AtomicLong() }
+    val generation = remember(operationId, document, playing, nativeFailed) {
+        generationCounter.incrementAndGet()
+    }
+    val route = remember(document, playing, nativeFailed) {
+        document.previewRoute(playing, nativeFailed)
+    }
+    DisposableEffect(operationId, generation) {
+        activeGeneration.set(generation)
+        onDispose {
+            activeGeneration.compareAndSet(generation, 0L)
+            GifPreviewDiagnostics.record(operationId, generation,
+                GifDiagnosticStage.G7_LIFECYCLE, GifDiagnosticKind.PREVIEW_CLOSED, route)
+        }
+    }
+    LaunchedEffect(operationId, generation, route) {
+        GifPreviewDiagnostics.record(operationId, generation,
+            if (playing) GifDiagnosticStage.G2_PLAY else GifDiagnosticStage.G4_SEEK,
+            GifDiagnosticKind.PREVIEW_ROUTE_SELECTED, route)
+    }
+    if (route == GifPreviewRoute.NATIVE_SOURCE ||
+            route == GifPreviewRoute.SCHEDULED_CODEC) {
+        val frameCount = GifVideoMath.frameCount(clip)
+        val continuousFrame: (Int) -> Unit = { frame ->
+            if (activeGeneration.get() == generation) {
+                GifPreviewDiagnostics.record(operationId, generation,
+                    GifDiagnosticStage.G3_CONTINUOUS_PLAY, GifDiagnosticKind.FRAME_SETTLED,
+                    route, frameIndex = frame, frameCount = frameCount)
+                reportFrame(frame)
+            } else {
+                GifPreviewDiagnostics.record(operationId, generation,
+                    GifDiagnosticStage.G3_CONTINUOUS_PLAY,
+                    GifDiagnosticKind.STALE_FRAME_DISCARDED, route,
+                    frameIndex = frame, frameCount = frameCount)
+            }
+        }
+        val continuousEnd: (Int) -> Unit = { frame ->
+            if (activeGeneration.get() == generation) {
+                GifPreviewDiagnostics.record(operationId, generation,
+                    GifDiagnosticStage.G3_CONTINUOUS_PLAY, GifDiagnosticKind.PLAYBACK_ENDED,
+                    route, frameIndex = frame, frameCount = frameCount)
+                reportEnd(frame)
+            }
+        }
+        val fallback: (Int) -> Unit = { frame ->
+            if (activeGeneration.get() == generation) {
+                GifPreviewDiagnostics.record(operationId, generation,
+                    GifDiagnosticStage.G2_PLAY, GifDiagnosticKind.FALLBACK_STARTED,
+                    route, frameIndex = frame, frameCount = frameCount)
+                resumeFrom = frame
+                nativeFailed = true
+            }
+        }
+        if (route == GifPreviewRoute.NATIVE_SOURCE) {
+            NativeGifPlayback(clip, startFrame, document.loopCount,
+                continuousFrame, continuousEnd, fallback, modifier)
         } else {
-            ScheduledGifPlayback(clip, startFrame, document.loopCount, onFrame, onEnd, fallback, modifier)
+            ScheduledGifPlayback(clip, startFrame, document.loopCount,
+                continuousFrame, continuousEnd, fallback, modifier)
         }
         return
     }
-    LaunchedEffect(document, playing) {
+    LaunchedEffect(operationId, generation, document, playing) {
         try {
             withContext(Dispatchers.IO) {
                 val times = GifVideoMath.frameTimesMs(clip)
@@ -78,33 +137,93 @@ internal fun GifFramePreview(
                     suspend fun decode(index: Int): PreviewFrame {
                         val job = currentCoroutineContext()
                         job.ensureActive()
-                        val bitmap = cache.get(index) ?: run {
-                            val decoder = reader ?: VideoGifSource.open(context, clip, batchFrames = playing)
-                                .also { reader = it }
-                            val source = decoder.frame(times[index], 480)
-                            val result = if (neutral && source.width == width && source.height == height) source
-                                else try {
-                                    GifEncoder.renderFrame(source, document, maxEdge = 480,
-                                        cancel = { job.ensureActive() })
-                                } finally {
-                                    source.recycle()
-                                }
-                            cache.put(index, result)
-                            result
+                        val startedAt = System.nanoTime()
+                        val cached = cache.get(index)
+                        if (cached != null) {
+                            if (activeGeneration.get() != generation) {
+                                GifPreviewDiagnostics.record(operationId, generation,
+                                    if (playing) GifDiagnosticStage.G3_CONTINUOUS_PLAY
+                                    else GifDiagnosticStage.G4_SEEK,
+                                    GifDiagnosticKind.STALE_FRAME_DISCARDED, route,
+                                    frameIndex = index, frameCount = times.size)
+                                throw CancellationException("Superseded GIF preview generation")
+                            }
+                            GifPreviewDiagnostics.record(operationId, generation,
+                                if (playing) GifDiagnosticStage.G3_CONTINUOUS_PLAY
+                                else GifDiagnosticStage.G4_SEEK,
+                                GifDiagnosticKind.FRAME_SETTLED, route,
+                                frameIndex = index, frameCount = times.size,
+                                latencyNanos = System.nanoTime() - startedAt)
+                            return PreviewFrame(index, cached)
                         }
-                        return PreviewFrame(index, bitmap)
+                        val decoder = reader ?: VideoGifSource.open(context, clip, batchFrames = playing)
+                            .also {
+                                reader = it
+                                GifPreviewDiagnostics.record(operationId, generation,
+                                    GifDiagnosticStage.G7_LIFECYCLE,
+                                    GifDiagnosticKind.READER_OPENED, route)
+                            }
+                        val source = decoder.frame(times[index], 480)
+                        if (activeGeneration.get() != generation) {
+                            if (!source.isRecycled) source.recycle()
+                            GifPreviewDiagnostics.record(operationId, generation,
+                                if (playing) GifDiagnosticStage.G3_CONTINUOUS_PLAY
+                                else GifDiagnosticStage.G4_SEEK,
+                                GifDiagnosticKind.STALE_FRAME_DISCARDED, route,
+                                frameIndex = index, frameCount = times.size)
+                            throw CancellationException("Superseded GIF preview generation")
+                        }
+                        val result = if (neutral && source.width == width && source.height == height) source
+                            else try {
+                                GifEncoder.renderFrame(source, document, maxEdge = 480,
+                                    cancel = { job.ensureActive() })
+                            } finally {
+                                source.recycle()
+                            }
+                        if (activeGeneration.get() != generation) {
+                            if (!result.isRecycled) result.recycle()
+                            GifPreviewDiagnostics.record(operationId, generation,
+                                if (playing) GifDiagnosticStage.G3_CONTINUOUS_PLAY
+                                else GifDiagnosticStage.G4_SEEK,
+                                GifDiagnosticKind.STALE_FRAME_DISCARDED, route,
+                                frameIndex = index, frameCount = times.size)
+                            throw CancellationException("Superseded GIF preview generation")
+                        }
+                        cache.put(index, result)
+                        GifPreviewDiagnostics.record(operationId, generation,
+                            if (playing) GifDiagnosticStage.G3_CONTINUOUS_PLAY
+                            else GifDiagnosticStage.G4_SEEK,
+                            GifDiagnosticKind.FRAME_SETTLED, route,
+                            frameIndex = index, frameCount = times.size,
+                            latencyNanos = System.nanoTime() - startedAt)
+                        return PreviewFrame(index, result)
                     }
                     if (!playing) {
                         snapshotFlow { requestedFrame }.conflate().collect { request ->
                             val frame = decode(request.coerceIn(times.indices))
                             withContext(Dispatchers.Main.immediate) {
-                                if (requestedFrame == request) shown = frame
+                                if (requestedFrame == request &&
+                                    activeGeneration.get() == generation) {
+                                    shown = frame
+                                } else {
+                                    GifPreviewDiagnostics.record(operationId, generation,
+                                        GifDiagnosticStage.G4_SEEK,
+                                        GifDiagnosticKind.STALE_FRAME_DISCARDED, route,
+                                        frameIndex = frame.index, frameCount = times.size)
+                                }
                             }
                         }
                     } else {
                         suspend fun present(frame: PreviewFrame) = withContext(Dispatchers.Main.immediate) {
-                            shown = frame
-                            reportFrame(frame.index)
+                            if (activeGeneration.get() == generation) {
+                                shown = frame
+                                reportFrame(frame.index)
+                            } else {
+                                GifPreviewDiagnostics.record(operationId, generation,
+                                    GifDiagnosticStage.G3_CONTINUOUS_PLAY,
+                                    GifDiagnosticKind.STALE_FRAME_DISCARDED, route,
+                                    frameIndex = frame.index, frameCount = times.size)
+                            }
                         }
                         val clock = GifPreviewClock(GifVideoMath.frameDelaysMs(clip))
                         val first = (resumeFrom ?: requestedFrame).coerceIn(times.indices)
@@ -122,18 +241,40 @@ internal fun GifFramePreview(
                             present(frame)
                         }
                         delay((origin + end - SystemClock.uptimeMillis()).coerceAtLeast(0))
-                        withContext(Dispatchers.Main.immediate) { reportEnd(times.lastIndex) }
+                        withContext(Dispatchers.Main.immediate) {
+                            if (activeGeneration.get() == generation) {
+                                GifPreviewDiagnostics.record(operationId, generation,
+                                    GifDiagnosticStage.G3_CONTINUOUS_PLAY,
+                                    GifDiagnosticKind.PLAYBACK_ENDED, route,
+                                    frameIndex = times.lastIndex, frameCount = times.size)
+                                reportEnd(times.lastIndex)
+                            }
+                        }
                     }
                 } finally {
-                    reader?.close()
+                    reader?.let { opened ->
+                        try {
+                            opened.close()
+                        } finally {
+                            GifPreviewDiagnostics.record(operationId, generation,
+                                GifDiagnosticStage.G7_LIFECYCLE,
+                                GifDiagnosticKind.READER_CLOSED, route)
+                        }
+                    }
                 }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
+            GifPreviewDiagnostics.record(operationId, generation,
+                GifDiagnosticStage.G2_PLAY, GifDiagnosticKind.PREVIEW_FAILED,
+                route, failure = error)
             shown = null
             reportError(error.message ?: "Cannot decode the selected frame")
-        } catch (_: OutOfMemoryError) {
+        } catch (error: OutOfMemoryError) {
+            GifPreviewDiagnostics.record(operationId, generation,
+                GifDiagnosticStage.G2_PLAY, GifDiagnosticKind.PREVIEW_FAILED,
+                route, failure = error)
             cache.evictAll()
             shown = null
             reportError("There is not enough memory to preview this source")

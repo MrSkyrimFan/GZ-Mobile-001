@@ -61,6 +61,17 @@ class AndroidGifWorkspacePlaybackTest {
         }
     }
 
+    private fun taggedFrame(tag: String): Int {
+        val node = rule.onAllNodesWithTag(tag).fetchSemanticsNodes().singleOrNull() ?: return 0
+        val label = if (SemanticsProperties.ContentDescription in node.config)
+            node.config[SemanticsProperties.ContentDescription].singleOrNull() else null
+        return label?.substringAfterLast(' ')?.toIntOrNull() ?: 0
+    }
+
+    private fun waitTaggedFrameAtLeast(tag: String, frame: Int) {
+        rule.waitUntil(15_000) { taggedFrame(tag) >= frame }
+    }
+
     private fun centerColor(): Int {
         val frame = rule.onNodeWithTag("gif-frame").captureToImage().asAndroidBitmap()
         return frame.getPixel(frame.width / 2, frame.height / 2)
@@ -336,4 +347,86 @@ class AndroidGifWorkspacePlaybackTest {
             waitFrame(GifVideoMath.frameCount(doc.video!!))
         } finally { resolver.delete(uri, null, null) }
     }
+    @Test fun editedVideoKeepsAdvancingAcrossReverseLookAndSpeedChanges() {
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            "gz-edited-preview.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_sample_2sec_h264.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val startingSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
+            val doc = VideoGifSource.document(context, uri)
+            show(doc)
+            waitFrame(1)
+            var operationId = 0L
+            rule.runOnIdle {
+                operationId = requireNotNull(GifPreviewDiagnostics.snapshot().lastOrNull {
+                    it.sequence > startingSequence &&
+                        it.kind == GifDiagnosticKind.OPERATION_STARTED
+                }).operationId
+            }
+
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-native-video", 4)
+            rule.onNodeWithText("Pause").performClick()
+            rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
+                androidx.compose.ui.semantics.SemanticsActions.SetProgress
+            ) { it(0f) }
+
+            rule.onNodeWithText("Reverse").performClick()
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-frame", 4)
+            rule.onNodeWithText("Pause").performClick()
+
+            rule.onNodeWithText("Looks").performScrollTo().performClick()
+            rule.onNodeWithText("B&W").performScrollTo().performClick()
+            rule.onNodeWithText("Timeline").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
+                androidx.compose.ui.semantics.SemanticsActions.SetProgress
+            ) { it(0f) }
+            rule.waitUntil(15_000) {
+                val gray = centerColor()
+                kotlin.math.abs(Color.red(gray) - Color.green(gray)) < 12 &&
+                    kotlin.math.abs(Color.green(gray) - Color.blue(gray)) < 12
+            }
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-frame", 4)
+            rule.onNodeWithText("Pause").performClick()
+
+            rule.onNodeWithText("Playback").performScrollTo().performClick()
+            rule.onNodeWithText("200%").performScrollTo().performClick()
+            rule.onNodeWithText("Timeline").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
+                androidx.compose.ui.semantics.SemanticsActions.SetProgress
+            ) { it(0f) }
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-frame", 4)
+            rule.onNodeWithText("Pause").performClick()
+
+            rule.runOnIdle {
+                val events = GifPreviewDiagnostics.snapshot().filter {
+                    it.sequence > startingSequence && it.operationId == operationId
+                }
+                assertTrue(events.any {
+                    it.kind == GifDiagnosticKind.PREVIEW_ROUTE_SELECTED &&
+                        it.route == GifPreviewRoute.NATIVE_SOURCE
+                })
+                assertTrue(events.any {
+                    it.kind == GifDiagnosticKind.PREVIEW_ROUTE_SELECTED &&
+                        it.route == GifPreviewRoute.BITMAP_RETRIEVER
+                })
+                val editedFrames = events.filter {
+                    it.kind == GifDiagnosticKind.FRAME_SETTLED &&
+                        it.route == GifPreviewRoute.BITMAP_RETRIEVER
+                }.mapNotNull { it.frameIndex }.distinct()
+                assertTrue("Edited preview did not settle three distinct frames: $editedFrames",
+                    editedFrames.size >= 3)
+                assertFalse(events.any { it.kind == GifDiagnosticKind.PREVIEW_FAILED })
+            }
+        } finally {
+            resolver.delete(uri, null, null)
+        }
+    }
+
 }
