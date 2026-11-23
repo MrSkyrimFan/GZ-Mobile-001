@@ -54,6 +54,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -145,12 +147,12 @@ internal fun ProWorkspaceScreenContent(
     var history by remember { mutableStateOf(session.history) }
     // An untouched landing screen can acquire its first source.
     var resetDocument by remember {
-        mutableStateOf(session.resetDocument ?: if (document.layers.isNotEmpty()) ProDocument() else null)
+        mutableStateOf(session.resetDocument ?: document.takeIf { it.layers.isNotEmpty() })
     }
-    var sliderStart by remember { mutableStateOf<ProDocument?>(null) }
+    var sliderStart by remember { mutableStateOf<ProHistoryEntry?>(null) }
     var lastSliderValue by remember { mutableStateOf<ProDocument?>(null) }
     var lastDragValue by remember { mutableStateOf<ProDocument?>(null) }
-    var dragStart by remember { mutableStateOf<ProDocument?>(null) }
+    var dragStart by remember { mutableStateOf<ProHistoryEntry?>(null) }
     var activeStroke by remember { mutableStateOf<InkStroke?>(null) }
     var brushColor by remember { mutableIntStateOf(session.brushColor) }
     var brushSize by remember { mutableFloatStateOf(session.brushSize) }
@@ -178,6 +180,7 @@ internal fun ProWorkspaceScreenContent(
     var pendingExport by remember { mutableStateOf<Pair<ProDocument, ExportSettings>?>(null) }
     var showSave by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
+    var pendingSavedDelete by remember { mutableStateOf<String?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf("") }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -205,9 +208,14 @@ internal fun ProWorkspaceScreenContent(
         expanded = true
         showTools = false
     }
-    fun commit(next: ProDocument) {
-        history = history.checkpoint(document, next)
+    fun historyEntry(current: ProDocument = document) =
+        ProHistoryEntry(current, resetDocument, selected)
+
+    fun commit(next: ProDocument, nextReset: ProDocument? = resetDocument) {
+        history = history.checkpoint(historyEntry(), historyEntry(next).copy(resetDocument = nextReset))
+        resetDocument = nextReset
         sliderStart = null
+        lastSliderValue = null
         onDocument(next)
     }
     fun changeLayer(transformer: (ProLayer) -> ProLayer, sliding: Boolean = false) {
@@ -216,7 +224,7 @@ internal fun ProWorkspaceScreenContent(
             it[selected] = transformer(it[selected])
         })
         if (sliding) {
-            if (sliderStart == null) sliderStart = document
+            if (sliderStart == null) sliderStart = historyEntry()
             lastSliderValue = next
             onDocument(next)
         } else commit(next)
@@ -226,14 +234,14 @@ internal fun ProWorkspaceScreenContent(
         changeLayer(transformer, false)
     }
     fun finishSlider() {
-        sliderStart?.let { history = history.checkpoint(it, lastSliderValue ?: document) }
+        sliderStart?.let { history = history.checkpoint(it, historyEntry(lastSliderValue ?: document)) }
         lastSliderValue = null
         sliderStart = null
     }
     fun addLayer(layer: ProLayer) {
         val next = ProMath.insert(document, layer)
         if (next == null) { notice = "A project supports up to 12 layers."; return }
-        commit(next)
+        commit(next, resetDocument ?: ProDocument())
         selectLayer(next.layers.lastIndex)
         expanded = true
         section = when (layer.kind) {
@@ -250,7 +258,6 @@ internal fun ProWorkspaceScreenContent(
             EditDocument(creative = CreativeDocument(
                 shapes = listOf(ShapeOverlay(kind = ShapeKind.RECTANGLE, color = 0xFF111111.toInt()))))
         } else EditDocument()
-        if (resetDocument == null) resetDocument = ProDocument()
         addLayer(ProLayer(uri = "", kind = kind, edits = edits, name = label,
             effect = if (kind == ProLayerKind.ADJUSTMENT)
                 ProPixelEffect.GRAYSCALE else ProPixelEffect.NONE))
@@ -286,10 +293,22 @@ internal fun ProWorkspaceScreenContent(
     fun finishPendingHistory() {
         finishSlider()
         dragStart?.let { before ->
-            history = history.checkpoint(before, lastDragValue ?: document)
+            history = history.checkpoint(before, historyEntry(lastDragValue ?: document))
         }
         dragStart = null
         lastDragValue = null
+    }
+
+    fun restoreHistory(undo: Boolean) {
+        finishPendingHistory()
+        val current = historyEntry()
+        val (restored, nextHistory) = (if (undo) history.undo(current) else history.redo(current))
+            ?: return
+        clearToolDrafts()
+        history = nextHistory
+        resetDocument = restored.resetDocument
+        selected = restored.selectionAfter(current)
+        onDocument(restored.document)
     }
 
     fun hasUnresolvedToolDraft(): Boolean {
@@ -396,10 +415,8 @@ internal fun ProWorkspaceScreenContent(
                         }
                     }
                     if (layers.isNotEmpty()) {
-                        if (resetDocument == null) {
-                            resetDocument = document.copy(layers = listOf(layers.first()))
-                        }
-                        commit(document.copy(layers = document.layers + layers))
+                        val original = resetDocument ?: document.copy(layers = listOf(layers.first()))
+                        commit(document.copy(layers = document.layers + layers), original)
                         selectLayer(document.layers.size + layers.lastIndex)
                         section = ProSection.LAYERS
                         showAdd = false
@@ -591,7 +608,10 @@ internal fun ProWorkspaceScreenContent(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (missing: ProRaster.MissingLayer) {
-            selected = missing.position
+            // A renderer failure is not a user selection change. Do not carry a
+            // pending tool into a different layer or display a stale composition.
+            clearToolDrafts()
+            preview = null
             notice = "Source for image layer " + (missing.position + 1) + " is unavailable."
         } catch (_: OutOfMemoryError) {
             notice = "Preview has too many pixels for available memory."
@@ -642,18 +662,10 @@ internal fun ProWorkspaceScreenContent(
                         }
                         TextButton(onClick = { showAdd = true }, enabled = available &&
                             document.layers.size < ProMath.MAX_LAYERS) { Text("+ Add layer", color = EditorMint) }
-                        TextButton(enabled = available && history.undo.isNotEmpty(), onClick = {
-                            history.undo(document)?.let { (before, next) ->
-                                clearToolDrafts(); history = next; onDocument(before)
-                                selected = selected.coerceIn(0, before.layers.lastIndex.coerceAtLeast(0))
-                            }
-                        }) { Text("Undo") }
-                        TextButton(enabled = available && history.redo.isNotEmpty(), onClick = {
-                            history.redo(document)?.let { (after, next) ->
-                                clearToolDrafts(); history = next; onDocument(after)
-                                selected = selected.coerceIn(0, after.layers.lastIndex.coerceAtLeast(0))
-                            }
-                        }) { Text("Redo") }
+                        TextButton(enabled = available && history.undo.isNotEmpty(),
+                            onClick = { restoreHistory(undo = true) }) { Text("Undo") }
+                        TextButton(enabled = available && history.redo.isNotEmpty(),
+                            onClick = { restoreHistory(undo = false) }) { Text("Redo") }
                     }
                     WorkspaceModeMenu(WorkspaceMode.PRO, available, ::requestSwitch)
                 }
@@ -720,7 +732,7 @@ internal fun ProWorkspaceScreenContent(
                             },
                             dragStart = { point ->
                                 lastDragValue = null
-                                dragStart = document
+                                dragStart = historyEntry()
                                 if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
                                     active.visible && active.opacity > 0f &&
                                     active.edits.creative.strokes.size < CreativeRaster.MAX_INK)
@@ -735,7 +747,7 @@ internal fun ProWorkspaceScreenContent(
                                 }
                             },
                             drag = { start, point ->
-                                val before = dragStart
+                                val before = dragStart?.document
                                 val item = before?.layers?.getOrNull(selected)
                                 if (before != null && item != null) when (section) {
                                     ProSection.MOVE -> if (item.visible && item.opacity > 0f && item.kind in listOf(
@@ -766,10 +778,10 @@ internal fun ProWorkspaceScreenContent(
                             dragEnd = { cancel ->
                                 val before = dragStart
                                 if (cancel) {
-                                    if (section == ProSection.MOVE && before != null) onDocument(before)
+                                    if (section == ProSection.MOVE && before != null) onDocument(before.document)
                                     if (selectionStart != null) draftSelection = null
                                 } else if (before != null && section == ProSection.MOVE) {
-                                    history = history.checkpoint(before, lastDragValue ?: before)
+                                    history = history.checkpoint(before, historyEntry(lastDragValue ?: before.document))
                                 } else if (section == ProSection.PAINT) {
                                     activeStroke?.let { stroke ->
                                         changeLayer { layer -> layer.copy(edits = layer.edits.copy(
@@ -1229,13 +1241,13 @@ internal fun ProWorkspaceScreenContent(
         description = "Preserves individual layers, order, adjustments and local image references.",
         name = draftName, onName = { draftName = it },
         onSave = {
-            if (ProStore.save(context, draftName, document)) {
+            if (ProStore.save(context, draftName, document, resetDocument)) {
                 showSave = false; notice = "Editable Pro project saved"
             } else notice = "Could not save. Name required; 12 projects maximum."
         },
         onDismiss = { showSave = false }
     )
-    if (showProjects) AlertDialog(
+    if (showProjects && pendingSavedDelete == null) AlertDialog(
         onDismissRequest = { showProjects = false },
         title = { Text("Saved Pro projects") },
         text = {
@@ -1244,20 +1256,22 @@ internal fun ProWorkspaceScreenContent(
                 savedNames.forEach { name ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = {
-                            val restored = ProStore.load(context, name)
+                            val restored = ProStore.loadProject(context, name)
                             if (restored == null) notice = "Project unreadable or invalid."
                             else {
-                                resetDocument = ProDocument()
+                                finishPendingHistory()
                                 clearToolDrafts()
-                                commit(restored); selected = 0; showProjects = false
+                                commit(restored.document, restored.resetDocument)
+                                selected = 0
+                                showProjects = false
                                 notice = "Pro project opened"
                             }
                         }) { Text(name, color = EditorMint) }
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = {
-                            ProStore.delete(context, name)
-                            savedNames = ProStore.names(context)
-                        }) { Text("Delete", color = Color(0xFFFF9D9D)) }
+                        TextButton(
+                            onClick = { pendingSavedDelete = name },
+                            modifier = Modifier.semantics { contentDescription = "Delete saved project $name" }
+                        ) { Text("Delete", color = Color(0xFFFF9D9D)) }
                     }
                 }
             }
@@ -1266,12 +1280,28 @@ internal fun ProWorkspaceScreenContent(
             Text("Close")
         } }
     )
+    pendingSavedDelete?.let { name ->
+        AlertDialog(
+            onDismissRequest = { pendingSavedDelete = null },
+            title = { Text("Delete saved Pro project?") },
+            text = { Text("Delete the saved project “$name” permanently? Your open work and source photos will be kept.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val deleted = ProStore.delete(context, name)
+                    savedNames = ProStore.names(context)
+                    pendingSavedDelete = null
+                    notice = if (deleted) "Saved Pro project deleted." else "Could not delete saved Pro project."
+                }) { Text("Delete saved project", color = Color(0xFFFF9D9D)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingSavedDelete = null }) { Text("Cancel") } }
+        )
+    }
     if (confirmReset) AlertDialog(
         onDismissRequest = { confirmReset = false },
         title = { Text("Delete current Pro work?") },
         text = { Text(
             (if (resetDocument?.layers?.isNotEmpty() == true)
-                "This discards the current Pro changes and returns to the original photo."
+                "This discards the current Pro changes and restores the work's starting version."
             else "This discards the current Pro changes and returns to an empty workspace.") +
                 " Original photos and saved projects will be kept.",
             color = EditorMuted

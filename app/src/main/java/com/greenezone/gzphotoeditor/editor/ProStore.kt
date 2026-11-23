@@ -14,6 +14,9 @@ object ProStore {
     private const val LEGACY_ASPECT_MIN = .1f
     private const val LEGACY_ASPECT_MAX = 10f
     private const val MAX_BYTES = 3_000_000
+    // A named save can carry one bounded document and one bounded reset baseline.
+    private const val MAX_PROJECT_BYTES = MAX_BYTES * 2 + 512
+    private const val RESET_DOCUMENT = "resetDocument"
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
 
@@ -176,6 +179,42 @@ object ProStore {
         } catch (_: Exception) { null }
     }
 
+    internal data class SavedProject(val document: ProDocument, val resetDocument: ProDocument)
+
+    private fun encodeProject(document: ProDocument, resetDocument: ProDocument?): ByteArray {
+        val encoded = encode(document)
+        if (resetDocument == null || resetDocument == document) return encoded.toByteArray(Charsets.UTF_8)
+        val baseline = if (resetDocument.layers.isEmpty()) {
+            JSONObject().apply {
+                put("empty", true)
+                put("aspect", resetDocument.aspect.name)
+                put("background", resetDocument.background.name)
+                resetDocument.sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
+            }
+        } else JSONObject(encode(resetDocument))
+        // The optional field leaves the existing root document and codec version intact.
+        return JSONObject(encoded).put(RESET_DOCUMENT, baseline).toString().toByteArray(Charsets.UTF_8)
+            .also { require(it.size <= MAX_PROJECT_BYTES) }
+    }
+
+    private fun decodeProject(data: String): SavedProject? {
+        val json = JSONObject(data)
+        val reset = json.remove(RESET_DOCUMENT) as? JSONObject
+        val document = decode(if (reset == null) data else json.toString()) ?: return null
+        val baseline = reset?.let {
+            if (it.optBoolean("empty")) {
+                ProDocument(
+                    aspect = value(it.optString("aspect"), ProAspect.SQUARE),
+                    background = value(it.optString("background"), ProBackground.WHITE),
+                    sourceAspectRatio = it.optDouble("sourceAspectRatio").toFloat()
+                        .takeIf(ProMath::validSourceAspect)
+                )
+            } else decode(it.toString())
+        }
+        // A legacy or unreadable optional baseline must never clear the user's saved work.
+        return SavedProject(document, baseline ?: document)
+    }
+
     private fun dir(context: Context): File = File(context.filesDir, DIR).also { it.mkdirs() }
     private fun key(name: String): String? {
         val cleaned = name.trim().replace(Regex("\\s+"), " ").take(32)
@@ -197,13 +236,18 @@ object ProStore {
             } catch (_: Exception) { null }
         }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
 
-    @Synchronized fun save(context: Context, name: String, document: ProDocument): Boolean {
+    @Synchronized fun save(
+        context: Context,
+        name: String,
+        document: ProDocument,
+        resetDocument: ProDocument? = null
+    ): Boolean {
         val id = key(name) ?: return false
         val file = File(dir(context), "$id.gzpro")
         val recoverableBackup = File(file.path + ".bak")
         if (!file.exists() && !recoverableBackup.isFile && names(context).size >= MAX_SAVED) return false
         return try {
-            val payload = encode(document).toByteArray(StandardCharsets.UTF_8)
+            val payload = encodeProject(document, resetDocument)
             val atomic = AtomicFile(file)
             val stream = atomic.startWrite()
             try {
@@ -217,14 +261,16 @@ object ProStore {
         } catch (_: Exception) { false }
     }
 
-    @Synchronized fun load(context: Context, name: String): ProDocument? {
+    fun load(context: Context, name: String): ProDocument? = loadProject(context, name)?.document
+
+    @Synchronized internal fun loadProject(context: Context, name: String): SavedProject? {
         val id = key(name) ?: return null
         val base = File(dir(context), "$id.gzpro")
         val backup = File(base.path + ".bak")
         // Fail before allocating strings or reading hostile oversize projects.
         // On legacy backup-only recovery AtomicFile will rename the backup to base.
         val recoverable = if (backup.exists()) backup else base
-        val memoryBound = (Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(MAX_BYTES.toLong())
+        val memoryBound = (Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(MAX_PROJECT_BYTES.toLong())
         if (!recoverable.isFile || recoverable.length() > memoryBound) return null
         val atomic = AtomicFile(base)
         return try {
@@ -234,21 +280,21 @@ object ProStore {
                 while (true) {
                     val n = reader.read(buf)
                     if (n < 0) break
-                    if (text.length + n > MAX_BYTES) return null
+                    if (text.length + n > MAX_PROJECT_BYTES) return null
                     text.append(buf, 0, n)
                 }
                 text.toString()
             }
-            decode(data)
+            decodeProject(data)
         } catch (_: Exception) { null }
     }
 
     @Synchronized fun delete(context: Context, name: String): Boolean {
         val id = key(name) ?: return false
         val file = File(dir(context), "$id.gzpro")
-        val existed = file.exists() || File(file.path + ".bak").exists() ||
-            File(file.path + ".new").exists()
+        val projectFiles = listOf(file, File(file.path + ".bak"), File(file.path + ".new"))
+        if (projectFiles.none { it.exists() }) return false
         AtomicFile(file).delete()
-        return existed
+        return projectFiles.none { it.exists() }
     }
 }

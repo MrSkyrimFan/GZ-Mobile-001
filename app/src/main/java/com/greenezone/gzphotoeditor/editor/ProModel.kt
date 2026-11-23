@@ -46,16 +46,46 @@ data class ProDocument(
 ) {
     val canvasAspectRatio: Float get() = sourceAspectRatio ?: aspect.ratio
 }
-data class ProHistory(
-    val undo: List<ProDocument> = emptyList(),
-    val redo: List<ProDocument> = emptyList()
+/** Captures the working document and the workspace state needed to restore it safely. */
+data class ProHistoryEntry(
+    val document: ProDocument,
+    val resetDocument: ProDocument? = null,
+    val selectedLayer: Int = 0
 ) {
-    fun checkpoint(before: ProDocument, after: ProDocument): ProHistory =
-        if (before == after) this else copy(undo = (undo + before).takeLast(35), redo = emptyList())
-    fun undo(now: ProDocument): Pair<ProDocument, ProHistory>? =
+    fun selectionAfter(current: ProHistoryEntry): Int {
+        val active = current.document.layers.getOrNull(current.selectedLayer)
+        if (active != null) {
+            // Undoing a reorder retains the very same immutable layer object. If the
+            // transaction replaced it (or opened a different project), use the saved slot.
+            val retainedIndex = document.layers.indexOfFirst { it === active }
+            if (retainedIndex >= 0) return retainedIndex
+        }
+        return selectedLayer.coerceIn(0, document.layers.lastIndex.coerceAtLeast(0))
+    }
+}
+
+data class ProHistory(
+    val undo: List<ProHistoryEntry> = emptyList(),
+    val redo: List<ProHistoryEntry> = emptyList()
+) {
+    fun checkpoint(before: ProHistoryEntry, after: ProHistoryEntry): ProHistory =
+        if (before.document == after.document && before.resetDocument == after.resetDocument) this
+        else copy(undo = (undo + before).takeLast(35), redo = emptyList())
+
+    fun undo(now: ProHistoryEntry): Pair<ProHistoryEntry, ProHistory>? =
         undo.lastOrNull()?.let { it to copy(undo = undo.dropLast(1), redo = (redo + now).takeLast(35)) }
-    fun redo(now: ProDocument): Pair<ProDocument, ProHistory>? =
+
+    fun redo(now: ProHistoryEntry): Pair<ProHistoryEntry, ProHistory>? =
         redo.lastOrNull()?.let { it to copy(redo = redo.dropLast(1), undo = (undo + now).takeLast(35)) }
+
+    fun checkpoint(before: ProDocument, after: ProDocument): ProHistory =
+        checkpoint(ProHistoryEntry(before), ProHistoryEntry(after))
+
+    fun undo(now: ProDocument): Pair<ProDocument, ProHistory>? =
+        undo(ProHistoryEntry(now))?.let { (entry, history) -> entry.document to history }
+
+    fun redo(now: ProDocument): Pair<ProDocument, ProHistory>? =
+        redo(ProHistoryEntry(now))?.let { (entry, history) -> entry.document to history }
 }
 data class ProRect(val left: Float, val top: Float, val right: Float, val bottom: Float)
 

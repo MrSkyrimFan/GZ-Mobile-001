@@ -94,6 +94,61 @@ class ProToolOwnershipTest {
         rule.runOnIdle { assertEquals(second, current.layers.single()) }
     }
 
+    @Test fun reorderUndoAndRedoKeepTheSameSelectedLayer() {
+        val first = ProLayer("", name = "First adjustment", kind = ProLayerKind.ADJUSTMENT)
+        val second = ProLayer("", name = "Second adjustment", kind = ProLayerKind.ADJUSTMENT)
+        open(ProDocument(listOf(first, second)))
+        rule.onNodeWithText("Stack (2)").performClick()
+        rule.onNodeWithText(second.name).performScrollTo().performClick()
+        rule.onNodeWithText("↓ Behind").performScrollTo().performClick()
+        rule.runOnIdle { assertEquals(listOf(second, first), current.layers) }
+
+        rule.onNodeWithText("Undo").performClick()
+        rule.runOnIdle { assertEquals(listOf(first, second), current.layers) }
+        rule.onNodeWithText("Second adjustment · Adjustment").assertIsDisplayed()
+
+        rule.onNodeWithText("Redo").performClick()
+        rule.runOnIdle { assertEquals(listOf(second, first), current.layers) }
+        rule.onNodeWithText("Second adjustment · Adjustment").assertIsDisplayed()
+
+        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithText("Hide").performScrollTo().performClick()
+        rule.runOnIdle { assertEquals(listOf(first, second.copy(visible = false)), current.layers) }
+    }
+
+    @Test fun missingSourceCannotRedirectAnotherLayersUnappliedMask() {
+        val uri = photo(48, 48)
+        val owner = ProLayer("", name = "Mask owner", kind = ProLayerKind.ADJUSTMENT)
+        val source = ProLayer(uri.toString(), name = "Imported photo")
+        try {
+            open(ProDocument(listOf(owner, source)))
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithContentDescription("Pro editable composition").fetchSemanticsNodes().isNotEmpty()
+            }
+            tool("Select & mask")
+            rule.onNodeWithTag("pro-canvas").performTouchInput {
+                val distance = minOf(width, height) * .2f
+                swipe(center - Offset(distance, distance), center + Offset(distance, distance))
+            }
+            rule.onNodeWithText("Apply layer mask").assertIsEnabled()
+            assertEquals(1, resolver.delete(uri, null, null))
+
+            // Changing the adjustment schedules a new preview while the unapplied mask still exists.
+            tool("Layer effects")
+            rule.onNodeWithText(ProPixelEffect.INVERT.label).performScrollTo().performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Source for image layer 2 is unavailable.")
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+            tool("Select & mask")
+            rule.onNodeWithText("Mask owner · Adjustment").assertIsDisplayed()
+            rule.onNodeWithText("Apply layer mask").assertIsNotEnabled()
+            rule.runOnIdle { assertTrue(current.layers.all { it.mask == null }) }
+        } finally {
+            resolver.delete(uri, null, null)
+        }
+    }
+
     @Test fun clearingEffectLeavesGradeAndMaskOnThatAdjustmentLayer() {
         val grade = Grade(exposure = -.2f, contrast = .25f)
         val mask = ProSelection(ProSelectionKind.RECTANGLE, width = .4f, height = .4f)

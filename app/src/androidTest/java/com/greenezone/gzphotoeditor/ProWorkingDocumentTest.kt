@@ -114,6 +114,119 @@ class ProWorkingDocumentTest {
         }
     }
 
+    private fun adjustment(name: String) =
+        ProDocument(layers = listOf(ProLayer("", name = name, kind = ProLayerKind.ADJUSTMENT)))
+
+    private fun openSavedList() {
+        rule.onNodeWithText("File ▾").performClick()
+        rule.onNodeWithText("Open project").performClick()
+        rule.onNodeWithText("Saved Pro projects").assertIsDisplayed()
+    }
+
+    private fun openSaved(name: String) {
+        openSavedList()
+        rule.onNodeWithText(name).performScrollTo().performClick()
+    }
+
+    @Test fun undoOpenRestoresThePriorPhotosResetBaseline() {
+        val photo = adjustment("Prior original")
+        val editedPhoto = photo.copy(layers = listOf(photo.layers.single().copy(opacity = .7f)))
+        val saved = adjustment("Different saved composition")
+        val name = "Undo open " + System.nanoTime().toString().takeLast(12)
+        try {
+            assertTrue(ProStore.save(context, name, saved))
+            open(editedPhoto, reset = photo)
+            openSaved(name)
+            rule.runOnIdle { assertEquals(saved, current) }
+            rule.onNodeWithText("Undo").performClick()
+            rule.runOnIdle { assertEquals(editedPhoto, current) }
+            openReset()
+            rule.onNodeWithText("Delete work").performClick()
+            rule.runOnIdle { assertEquals(photo, current) }
+            assertEquals(saved, ProStore.load(context, name))
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+
+    @Test fun saveOpenUndoRedoPreservesTheNamedResetBaseline() {
+        val baseline = adjustment("Original baseline")
+        val edited = baseline.copy(layers = listOf(baseline.layers.single().copy(opacity = .6f)))
+        val hidden = edited.copy(layers = listOf(edited.layers.single().copy(visible = false)))
+        val name = "Reopen baseline " + System.nanoTime().toString().takeLast(12)
+        try {
+            open(edited, reset = baseline)
+            rule.onNodeWithText("File ▾").performClick()
+            rule.onNodeWithText("Save project").performClick()
+            rule.onNode(hasSetTextAction()).performTextInput(name)
+            rule.onNodeWithText("Save").performClick()
+            rule.waitUntil(5_000) { ProStore.load(context, name) == edited }
+
+            rule.onNodeWithText("Hide").performScrollTo().performClick()
+            rule.runOnIdle { assertEquals(hidden, current) }
+            openSaved(name)
+            rule.runOnIdle { assertEquals(edited, current) }
+            rule.onNodeWithText("Undo").performClick()
+            rule.runOnIdle { assertEquals(hidden, current) }
+            rule.onNodeWithText("Redo").performClick()
+            rule.runOnIdle { assertEquals(edited, current) }
+            openReset()
+            rule.onNodeWithText("Delete work").performClick()
+            rule.runOnIdle { assertEquals(baseline, current) }
+            assertEquals(edited, ProStore.load(context, name))
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+
+    @Test fun legacySavedProjectResetsToItsSavedVersion() {
+        val saved = adjustment("Legacy adjustment")
+        val name = "Legacy reset " + System.nanoTime().toString().takeLast(12)
+        try {
+            assertTrue(ProStore.save(context, name, saved))
+            open(ProDocument())
+            openSaved(name)
+            rule.onNodeWithText("Hide").performScrollTo().performClick()
+            rule.runOnIdle { assertFalse(current.layers.single().visible) }
+            openReset()
+            rule.onNodeWithText("Delete work").performClick()
+            rule.runOnIdle { assertEquals(saved, current) }
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+
+    @Test fun deletingNamedProjectNeedsConfirmationAndKeepsTheOpenWork() {
+        val suffix = System.nanoTime().toString().takeLast(12)
+        val targetName = "Delete target " + suffix
+        val keepName = "Keep project " + suffix
+        val target = adjustment("Target saved work")
+        val keep = adjustment("Other saved work")
+        val openWork = adjustment("Unsaved open work")
+        try {
+            assertTrue(ProStore.save(context, targetName, target))
+            assertTrue(ProStore.save(context, keepName, keep))
+            open(openWork)
+            openSavedList()
+            val delete = rule.onNodeWithContentDescription("Delete saved project $targetName")
+            delete.performScrollTo().performClick()
+            rule.onNodeWithText("Delete saved Pro project?").assertIsDisplayed()
+            assertEquals(target, ProStore.load(context, targetName))
+            rule.onNodeWithText("Cancel").performClick()
+            assertEquals(target, ProStore.load(context, targetName))
+
+            delete.performScrollTo().performClick()
+            rule.onNodeWithText("Delete saved project").performClick()
+            rule.onNodeWithText(targetName).assertDoesNotExist()
+            assertNull(ProStore.load(context, targetName))
+            assertEquals(keep, ProStore.load(context, keepName))
+            rule.runOnIdle { assertEquals(openWork, current) }
+        } finally {
+            ProStore.delete(context, targetName)
+            ProStore.delete(context, keepName)
+        }
+    }
+
     @Test fun androidBackShowsControlsThenClearsToolDraftBeforeLeaving() {
         open(ProDocument(layers = listOf(ProLayer(uri = "", name = "Grade",
             kind = ProLayerKind.ADJUSTMENT))))
@@ -140,7 +253,7 @@ class ProWorkingDocumentTest {
     }
 
     @Test fun oldProTextCanReopenWithoutTextAuthoringActions() {
-        val suffix = System.nanoTime()
+        val suffix = System.nanoTime().toString().takeLast(12)
         val name = "Legacy text " + suffix
         val resavedName = "Resaved text " + suffix
         val contents = "Keep these words"
