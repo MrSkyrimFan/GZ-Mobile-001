@@ -2,6 +2,7 @@ package com.greenezone.gzphotoeditor
 
 import android.app.Activity
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -35,6 +36,10 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.greenezone.gzphotoeditor.editor.CollagePhoto
+import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.LocalMask
+import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 import org.junit.Assert.assertArrayEquals
@@ -43,13 +48,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
 class AndroidRegularToolsTest {
     @get:Rule val rule = createComposeRule()
 
-    private fun withRegularPhoto(destination: Uri? = null, removeSourceAfterOpen: Boolean = false,
-        test: () -> Unit) {
+    private fun withRegularPhoto(
+        destination: Uri? = null,
+        removeSourceAfterOpen: Boolean = false,
+        tileEdits: EditDocument? = null,
+        onTileDone: ((CollagePhoto) -> Unit)? = null,
+        test: (Uri) -> Unit
+    ) {
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
         val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             ContentValues().apply {
@@ -81,18 +92,120 @@ class AndroidRegularToolsTest {
             }
             rule.setContent {
                 CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
-                    MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() }
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        PhotoEditorScreen(
+                            initialCollagePhoto = tileEdits?.let { CollagePhoto(uri.toString(), it) },
+                            onDoneCollagePhoto = onTileDone
+                        )
+                    }
                 }
             }
-            rule.onNodeWithText("Open media").performClick()
+            if (tileEdits == null) rule.onNodeWithText("Open media").performClick()
             rule.waitUntil(15_000) { rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty() }
             if (removeSourceAfterOpen) {
                 assertEquals(1, resolver.delete(uri, null, null))
                 removed = true
             }
-            test()
+            test(uri)
         } finally {
             if (!removed) resolver.delete(uri, null, null)
+        }
+    }
+
+    private fun assertNoMasksInPhotoTools() {
+        val tools = rule.onNodeWithTag("photo-tools")
+        tools.performScrollToNode(hasText("Blur & cover"))
+        rule.onNodeWithText("Blur & cover").assertIsDisplayed()
+        tools.performScrollToNode(hasText("Text"))
+        rule.onNodeWithText("Text").assertIsDisplayed()
+        // Search the entire lazy row. A semantics query alone misses offscreen tools.
+        val masks = runCatching { tools.performScrollToNode(hasText("Masks")) }
+        assertTrue("Regular still exposes Masks", masks.exceptionOrNull() is AssertionError)
+    }
+
+    private fun historicalMaskedPhoto() = EditDocument(masks = listOf(
+        LocalMask(kind = MaskKind.RADIAL, centerX = .68f, centerY = .5f,
+            radius = .2f, feather = .3f, exposure = -1f)
+    ))
+
+    private fun seedLegacyRegularProject(context: Context, name: String, uri: Uri) {
+        val recipe = """
+            mask.0.exposure=-1.0
+            mask.0.feather=0.3
+            mask.0.kind=RADIAL
+            mask.0.radius=0.2
+            mask.0.x=0.68
+            mask.0.y=0.5
+            mask.count=1
+            version=1
+        """.trimIndent()
+        val encoder = Base64.getUrlEncoder().withoutPadding()
+        val key = encoder.encodeToString(name.toByteArray())
+        val source = encoder.encodeToString(uri.toString().toByteArray())
+        val store = context.getSharedPreferences("gzphotoeditor.projects.v1", Context.MODE_PRIVATE)
+        assertTrue(store.edit().putString(key, source + "\n" + recipe).commit())
+    }
+
+    @Test fun regularOmitsMaskAuthoringAndPreservesOldProjectAppearanceAndRecipe() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val oldName = "Old mask " + System.nanoTime()
+        val copyName = "Mask copy " + System.nanoTime()
+        val historical = historicalMaskedPhoto()
+        try {
+            withRegularPhoto { uri ->
+                val tools = rule.onNodeWithTag("photo-tools")
+                val canvas = rule.onNodeWithContentDescription(
+                    "Photo editing canvas. Tap to hide or show tools."
+                )
+                fun sampleRightOfCenter(): Int {
+                    val capture = canvas.captureToImage().asAndroidBitmap()
+                    return try {
+                        val side = minOf(capture.width, capture.height)
+                        val x = (capture.width - side) / 2 + side * 68 / 100
+                        Color.red(capture.getPixel(x, capture.height / 2))
+                    } finally {
+                        capture.recycle()
+                    }
+                }
+
+                assertTrue(sampleRightOfCenter() > 240)
+                seedLegacyRegularProject(context, oldName, uri)
+                val legacy = ProjectStore.load(context).single { it.name == oldName }
+                assertEquals(historical.masks, legacy.document.masks)
+                tools.performScrollToNode(hasText("More"))
+                rule.onNodeWithText("More").performClick()
+                val actions = rule.onNodeWithTag("photo-actions")
+                actions.performScrollToNode(hasText("Open projects"))
+                rule.onNodeWithText("Open projects").performClick()
+                rule.onNodeWithText(oldName).performClick()
+                rule.onNodeWithText("Open project").performClick()
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty()
+                }
+                rule.waitUntil(15_000) { sampleRightOfCenter() in 100..160 }
+                assertNoMasksInPhotoTools()
+                tools.performScrollToNode(hasText("More"))
+                rule.onNodeWithText("More").performClick()
+                actions.performScrollToNode(hasText("Save project"))
+                rule.onNodeWithText("Save project").performClick()
+                rule.onNode(hasSetTextAction()).performTextInput(copyName)
+                rule.onNodeWithText("Save").performClick()
+                rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
+                assertEquals(legacy.document, ProjectStore.load(context).single { it.name == copyName }.document)
+            }
+        } finally {
+            ProjectStore.delete(context, oldName)
+            ProjectStore.delete(context, copyName)
+        }
+    }
+
+    @Test fun selectedCollageTileOmitsMaskAuthoringAndKeepsHistoricalRecipe() {
+        val historical = historicalMaskedPhoto()
+        var applied: CollagePhoto? = null
+        withRegularPhoto(tileEdits = historical, onTileDone = { applied = it }) { uri ->
+            assertNoMasksInPhotoTools()
+            rule.onNodeWithText("Done").performClick()
+            rule.runOnIdle { assertEquals(CollagePhoto(uri.toString(), historical), applied) }
         }
     }
 

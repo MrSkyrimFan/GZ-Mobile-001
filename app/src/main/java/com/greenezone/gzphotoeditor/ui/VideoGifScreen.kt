@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,7 +36,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
-private enum class VideoGifTab(val title: String) {
+internal enum class VideoGifTab(val title: String) {
     TIMELINE("Timeline"), PLAYBACK("Playback"), ADJUST("Adjust"), LOOKS("Looks"),
     CAPTION("Caption"), CANVAS("Canvas")
 }
@@ -53,21 +52,62 @@ fun VideoGifScreen(
     onSwitch: (WorkspaceMode) -> Unit,
     onOpenLegacyPhotoProject: (GifDocument) -> Unit
 ) {
+    var session by remember { mutableStateOf(GifWorkspaceSession()) }
+    VideoGifScreenContent(
+        document = document,
+        onDocument = onDocument,
+        onBack = onBack,
+        onSwitch = onSwitch,
+        onOpenLegacyPhotoProject = onOpenLegacyPhotoProject,
+        session = session,
+        onSession = { session = it }
+    )
+}
+
+@Composable
+internal fun VideoGifScreenContent(
+    document: GifDocument,
+    onDocument: (GifDocument) -> Unit,
+    onBack: () -> Unit,
+    onSwitch: (WorkspaceMode) -> Unit,
+    onOpenLegacyPhotoProject: (GifDocument) -> Unit,
+    session: GifWorkspaceSession,
+    onSession: (GifWorkspaceSession) -> Unit
+) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
     val clip = document.video
-    var tab by rememberSaveable { mutableStateOf(VideoGifTab.TIMELINE) }
+    val initialDiagnosticOperation = remember {
+        GifPreviewDiagnostics.nextOperationId()
+    }
+    var diagnosticOperation by remember {
+        mutableLongStateOf(initialDiagnosticOperation)
+    }
+    LaunchedEffect(initialDiagnosticOperation) {
+        GifPreviewDiagnostics.record(initialDiagnosticOperation,
+            stage = GifDiagnosticStage.G0_SOURCE_PICKED,
+            kind = GifDiagnosticKind.OPERATION_STARTED)
+    }
+    val latestDiagnosticOperation by rememberUpdatedState(diagnosticOperation)
+    DisposableEffect(Unit) {
+        onDispose {
+            GifPreviewDiagnostics.record(latestDiagnosticOperation,
+                stage = GifDiagnosticStage.G7_LIFECYCLE,
+                kind = GifDiagnosticKind.SCREEN_CLOSED)
+        }
+    }
+    var tab by remember { mutableStateOf(session.videoTab) }
     var playing by remember { mutableStateOf(false) }
-    var seek by remember { mutableIntStateOf(0) }
-    var position by remember { mutableIntStateOf(0) }
+    var seek by remember { mutableIntStateOf(session.videoSeek) }
+    var position by remember { mutableIntStateOf(session.videoPosition) }
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var committingExport by remember { mutableStateOf(false) }
     val enabled = !busy && !exporting
     var notice by remember { mutableStateOf("") }
     var progress by remember { mutableStateOf("") }
-    var history by remember { mutableStateOf(GifHistory()) }
+    var history by remember { mutableStateOf(session.videoHistory) }
     var dragStart by remember { mutableStateOf<GifDocument?>(null) }
     var dragLatest by remember { mutableStateOf<GifDocument?>(null) }
     var exportJob by remember { mutableStateOf<Job?>(null) }
@@ -79,7 +119,7 @@ fun VideoGifScreen(
     var showSaved by remember { mutableStateOf(false) }
     var savedNames by remember { mutableStateOf(emptyList<String>()) }
     var saveName by remember { mutableStateOf("") }
-    var collapsed by rememberSaveable { mutableStateOf(false) }
+    var collapsed by remember { mutableStateOf(session.videoCollapsed) }
 
     fun pauseAt(frame: Int) {
         playing = false
@@ -91,18 +131,33 @@ fun VideoGifScreen(
         pauseAt(frame)
         dragStart = null
         dragLatest = null
+        GifPreviewDiagnostics.record(diagnosticOperation,
+            stage = GifDiagnosticStage.G5_EDIT,
+            kind = GifDiagnosticKind.DOCUMENT_COMMITTED,
+            frameIndex = frame.coerceAtLeast(0),
+            frameCount = next.video?.let { GifVideoMath.frameCount(it) })
         onDocument(next)
     }
     fun slide(next: GifDocument, frame: Int = position) {
         if (dragStart == null) dragStart = document
         dragLatest = next
         pauseAt(frame)
+        GifPreviewDiagnostics.record(diagnosticOperation,
+            stage = GifDiagnosticStage.G5_EDIT,
+            kind = GifDiagnosticKind.DOCUMENT_SLID,
+            frameIndex = frame.coerceAtLeast(0),
+            frameCount = next.video?.let { GifVideoMath.frameCount(it) })
         onDocument(next)
     }
     fun finishSlide() {
         val start = dragStart
         val end = dragLatest
-        if (start != null && end != null) history = history.checkpoint(start, end)
+        if (start != null && end != null) {
+            history = history.checkpoint(start, end)
+            GifPreviewDiagnostics.record(diagnosticOperation,
+                stage = GifDiagnosticStage.G5_EDIT,
+                kind = GifDiagnosticKind.SLIDE_FINISHED)
+        }
         dragStart = null
         dragLatest = null
     }
@@ -114,6 +169,14 @@ fun VideoGifScreen(
     }
     fun openSource(uri: Uri) {
         if (!enabled) return
+        val openingOperation = GifPreviewDiagnostics.nextOperationId()
+        diagnosticOperation = openingOperation
+        GifPreviewDiagnostics.record(openingOperation,
+            stage = GifDiagnosticStage.G0_SOURCE_PICKED,
+            kind = GifDiagnosticKind.OPERATION_STARTED)
+        GifPreviewDiagnostics.record(openingOperation,
+            stage = GifDiagnosticStage.G0_SOURCE_PICKED,
+            kind = GifDiagnosticKind.SOURCE_OPEN_STARTED)
         busy = true
         pauseAt(position)
         notice = ""
@@ -125,6 +188,14 @@ fun VideoGifScreen(
                     // Some providers grant access only for this session.
                 }
                 val fresh = withContext(Dispatchers.IO) { VideoGifSource.document(context, uri) }
+                val openedClip = requireNotNull(fresh.video)
+                GifPreviewDiagnostics.record(openingOperation,
+                    stage = GifDiagnosticStage.G1_SOURCE_OPEN,
+                    kind = GifDiagnosticKind.SOURCE_OPEN_SUCCEEDED,
+                    frameCount = GifVideoMath.frameCount(openedClip),
+                    width = openedClip.width,
+                    height = openedClip.height,
+                    durationMs = openedClip.durationMs)
                 commit(fresh, 0)
                 lastExport = null
                 collapsed = false
@@ -132,8 +203,16 @@ fun VideoGifScreen(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                GifPreviewDiagnostics.record(openingOperation,
+                    stage = GifDiagnosticStage.G1_SOURCE_OPEN,
+                    kind = GifDiagnosticKind.SOURCE_OPEN_FAILED,
+                    failure = error)
                 notice = error.message ?: "Cannot open this source."
-            } catch (_: OutOfMemoryError) {
+            } catch (error: OutOfMemoryError) {
+                GifPreviewDiagnostics.record(openingOperation,
+                    stage = GifDiagnosticStage.G1_SOURCE_OPEN,
+                    kind = GifDiagnosticKind.SOURCE_OPEN_FAILED,
+                    failure = error)
                 notice = "There is not enough memory to open this source."
             } finally { busy = false }
         }
@@ -157,6 +236,11 @@ fun VideoGifScreen(
     fun startExport() {
         if (!enabled || !GifMath.valid(document)) return
         val saved = document
+        val exportOperation = diagnosticOperation
+        GifPreviewDiagnostics.record(exportOperation,
+            stage = GifDiagnosticStage.G6_EXPORT,
+            kind = GifDiagnosticKind.EXPORT_STARTED,
+            frameCount = saved.video?.let { GifVideoMath.frameCount(it) })
         pauseAt(position)
         exporting = true
         notice = ""
@@ -181,12 +265,19 @@ fun VideoGifScreen(
                             })
                     }
                 }
+                GifPreviewDiagnostics.record(exportOperation,
+                    stage = GifDiagnosticStage.G6_EXPORT,
+                    kind = GifDiagnosticKind.EXPORT_STAGED,
+                    frameCount = saved.video?.let { GifVideoMath.frameCount(it) })
                 val request = CompletableDeferred<Uri?>()
                 destinationRequest = request
                 progress = "Choose where to save your GIF"
                 exporter.launch("GZEditorPro.gif")
                 val dest = request.await()
                 if (dest == null) {
+                    GifPreviewDiagnostics.record(exportOperation,
+                        stage = GifDiagnosticStage.G6_EXPORT,
+                        kind = GifDiagnosticKind.EXPORT_DESTINATION_CANCELLED)
                     notice = "GIF export cancelled"
                     return@launch
                 }
@@ -202,12 +293,28 @@ fun VideoGifScreen(
                 }
                 lastExport = dest
                 notice = "GIF saved"
+                GifPreviewDiagnostics.record(exportOperation,
+                    stage = GifDiagnosticStage.G6_EXPORT,
+                    kind = GifDiagnosticKind.EXPORT_COMPLETED,
+                    frameCount = saved.video?.let { GifVideoMath.frameCount(it) })
             } catch (cancelled: CancellationException) {
+                GifPreviewDiagnostics.record(exportOperation,
+                    stage = GifDiagnosticStage.G6_EXPORT,
+                    kind = GifDiagnosticKind.EXPORT_CANCELLED,
+                    failure = cancelled)
                 notice = "GIF export cancelled"
                 throw cancelled
-            } catch (_: OutOfMemoryError) {
+            } catch (error: OutOfMemoryError) {
+                GifPreviewDiagnostics.record(exportOperation,
+                    stage = GifDiagnosticStage.G6_EXPORT,
+                    kind = GifDiagnosticKind.EXPORT_FAILED,
+                    failure = error)
                 notice = "Not enough memory to export. Choose a smaller canvas size and try again."
             } catch (error: Exception) {
+                GifPreviewDiagnostics.record(exportOperation,
+                    stage = GifDiagnosticStage.G6_EXPORT,
+                    kind = GifDiagnosticKind.EXPORT_FAILED,
+                    failure = error)
                 notice = "GIF export failed. ${error.message.orEmpty()}"
             } finally {
                 temp?.delete()
@@ -219,7 +326,55 @@ fun VideoGifScreen(
             }
         }
     }
-    BackHandler { if (enabled) onBack() }
+    fun persistVideoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.VIDEO) {
+        onSession(session.copy(
+            route = route,
+            videoTab = tab,
+            videoSeek = seek,
+            videoPosition = position,
+            videoHistory = history,
+            videoCollapsed = collapsed
+        ))
+    }
+
+    fun finishVideoRouteExit() {
+        finishSlide()
+        val frameCount = document.video?.let { GifVideoMath.frameCount(it) } ?: 0
+        pauseAt(position.coerceIn(0, (frameCount - 1).coerceAtLeast(0)))
+        GifPreviewDiagnostics.record(diagnosticOperation,
+            stage = GifDiagnosticStage.G7_LIFECYCLE,
+            kind = GifDiagnosticKind.ROUTE_CLOSED,
+            frameIndex = position.coerceAtLeast(0),
+            frameCount = frameCount)
+    }
+
+    fun requestBack() {
+        when {
+            committingExport -> notice = "Finish saving the GIF before leaving."
+            exporting -> notice = "Finish or cancel the GIF export before leaving."
+            busy -> notice = "Wait for the GIF source to finish opening."
+            else -> {
+                finishVideoRouteExit()
+                persistVideoSession()
+                onBack()
+            }
+        }
+    }
+
+    fun requestSwitch(mode: WorkspaceMode) {
+        when {
+            committingExport -> notice = "Finish saving the GIF before switching workspaces."
+            exporting -> notice = "Finish or cancel the GIF export before switching workspaces."
+            busy -> notice = "Wait for the GIF source to finish opening."
+            else -> {
+                finishVideoRouteExit()
+                persistVideoSession()
+                onSwitch(mode)
+            }
+        }
+    }
+
+    BackHandler { requestBack() }
 
     val count = remember(clip) { clip?.let { GifVideoMath.frameCount(it) } ?: 0 }
     val time = remember(clip) { clip?.let { GifVideoMath.frameTimesMs(it) }.orEmpty() }
@@ -234,7 +389,7 @@ fun VideoGifScreen(
             Row(Modifier.fillMaxWidth().background(EditorSurface),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onBack, enabled = enabled) { Text("‹ Back", color = EditorWhite) }
+                TextButton(onClick = ::requestBack) { Text("‹ Back", color = EditorWhite) }
                 TextButton(onClick = { pauseAt(position); showHelp = true }, enabled = enabled) {
                     Text("Help", color = EditorMint)
                 }
@@ -249,7 +404,7 @@ fun VideoGifScreen(
                         DropdownMenuItem(text = { Text("Open saved GIF project") }, onClick = { showMenu = false; openProjects() })
                     }
                 }
-                WorkspaceModeMenu(WorkspaceMode.GIF, enabled, onSwitch)
+                WorkspaceModeMenu(WorkspaceMode.GIF, enabled, ::requestSwitch)
             }
             if (notice.isNotBlank()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -280,7 +435,8 @@ fun VideoGifScreen(
                     // low-memory Android 10 devices.
                     Box(Modifier.weight(1f).fillMaxWidth())
                 } else {
-                    GifFramePreview(document, playing, seek, onFrame = { position = it },
+                    GifFramePreview(document, diagnosticOperation, playing, seek,
+                        onFrame = { position = it },
                         onEnd = { pauseAt(it) },
                         onError = { playing = false; notice = "Preview unavailable. $it" },
                         modifier = Modifier.weight(1f).fillMaxWidth())
@@ -438,7 +594,11 @@ fun VideoGifScreen(
                                 else if (saved.video != null) {
                                     commit(saved, 0)
                                     lastExport = null
-                                } else onOpenLegacyPhotoProject(saved)
+                                } else {
+                                    finishVideoRouteExit()
+                                    persistVideoSession(GifWorkspaceRoute.PHOTOS)
+                                    onOpenLegacyPhotoProject(saved)
+                                }
                             } finally { busy = false }
                         }
                     }) { Text(name) }

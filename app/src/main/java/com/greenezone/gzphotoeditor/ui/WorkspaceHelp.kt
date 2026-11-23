@@ -31,9 +31,9 @@ private val proTopics = listOf(
     HelpTopic("Build and arrange a layer stack",
         "Add a photo as the first layer, or start with a blank canvas for drawing. Add a separate layer for each object you want to change independently.",
         "Select the layer you want to work on. In Layers, hold an object on the canvas to select it. If objects overlap, select the one you need in the stack.",
-        "Move a layer above another to cover it, or behind to reveal the upper layer. Use Hide and Show to compare. Duplicate a layer before trying a different treatment."),
+        "Move a layer above another to cover it, or behind to reveal the upper layer. Use Hide and Show to compare. Duplicate an image or shape layer before trying a different treatment."),
     HelpTopic("Position and align an object",
-        "Select an image, text or shape layer and open Transform. Drag to move it. Use the X and Y controls for a small positioning change.",
+        "Select an image or shape layer and open Transform. Drag to move it. Use the X and Y controls for a small positioning change.",
         "Adjust Size or Rotate to place the object. Center on canvas returns its center to the middle. Pinching the canvas changes the view you work in."),
     HelpTopic("Cut out part of a photo",
         "Select the image layer, then choose Select & mask. Drag from one corner to the opposite corner for a rectangle or ellipse. For Freehand, trace the area with one continuous drag.",
@@ -49,14 +49,17 @@ private val proTopics = listOf(
         "Use Soft repair and a lower strength for a gentler result. Undo last repair removes the most recent mark. Reset source lets you pick a different sample."),
     HelpTopic("Paint, erase and add lettering",
         "Add a brush layer. Choose size, opacity and color. Hold on the canvas to sample a color, or enter a hex color. Drag to paint. Eraser removes strokes from that drawing layer. The photo underneath stays intact.",
-        "Add a text layer to write a caption. Edit its words, font, color and size, then position it with Transform. Add a shape layer to make an arrow, outline or filled shape."),
+        "Add a shape layer to make an arrow, outline or filled shape. Use Regular Photo to author text. Text layers in older Pro projects remain visible when you reopen or export those projects."),
     HelpTopic("Blend a texture or apply an effect",
-        "Place a texture photo above your image and open Blend. Multiply darkens the composite, Screen lightens it, and Soft light gives a gentler contrast effect.",
-        "Use Opacity to control the strength. Use a separate Layer effects adjustment for black and white, invert, threshold or posterize. Its position in the stack determines which layers it affects."),
+        "Place a texture photo above your image and open Blend. The panel names the layer or canvas below. Modes affect the pixels where the layers overlap. Screen and Overlay can turn a layer white over an opaque white canvas.",
+        "Use Restore Normal to return to the selected layer's regular colors. Opacity controls how much of the layer shows. A separate Layer effects adjustment affects the layers below it."),
     HelpTopic("Save a project and export a copy",
         "Save the Pro project to keep layers, masks and adjustments editable. Keep the original photos accessible on the device. Use Open to resume.",
         "Export writes a flattened image. Choose PNG for a transparent canvas. For an exact platform size choose its preset, then choose Fit for the whole composition or Fill to crop its edges.",
-        "If an image source becomes unavailable, select the affected layer and use Replace image to reconnect it.")
+        "If an image source becomes unavailable, select the affected layer and use Replace image to reconnect it."),
+    HelpTopic("Leave Pro or delete current work",
+        "Use Back to return to the previous workspace. Your Pro edits stay available when you return. Back first restores hidden controls or clears an unapplied selection or clone source.",
+        "Use File, then Delete current work, to start over. Confirm to return to the original first photo or to the empty workspace you started from. Your source photos and separately saved projects are kept.")
 )
 
 private val gifTopics = listOf(
@@ -98,9 +101,8 @@ private val photoTopics = listOf(
     HelpTopic("Balance light and color",
         "Start in Light. Adjust Exposure for the whole photo, Highlights for bright regions, and Shadows for dark regions.",
         "In Color, use Temperature and Tint to correct a color cast. Mix changes one color family. Curves lets you change shadows, midtones and highlights in RGB or a single color channel."),
-    HelpTopic("Retouch a local area",
-        "Open Masks to select a radial, linear or brush region. Set its position or draw over your subject, then adjust exposure, contrast or saturation inside it.",
-        "Use Blur & cover to obscure a face or detail. Position the region or paint it on. Inspect the entire area before exporting."),
+    HelpTopic("Blur or cover a private detail",
+        "Open Blur & cover to obscure a face or detail. Position a region or paint with a brush. Inspect the entire area before exporting."),
     HelpTopic("Save a look, project or finished image",
         "More → Save my look stores the grade for another photo. Save project keeps this photo’s editable settings. Keep the original photo on your device.",
         "Export creates a new image. For an exact platform size choose its preset. Fit preserves the whole photo and Fill crops the edges to cover the frame.")

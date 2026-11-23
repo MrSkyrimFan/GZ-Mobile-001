@@ -2,16 +2,15 @@
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-**Current phone-test candidate: v0.12.2. Commercial qualification remains open.**
-
-The [v0.12.2 phone QA notes](docs/PHONE_QA_014.md) cover the Regular text and blur regressions, GIF playback and export, Pro saving and selection, and independent collage export checks.
+[Revision 4 product requirements](docs/PRODUCT_SPEC.md) govern the current field-correction work. The owner reported stalled edited GIF playback, unreliable crop grips, and difficult Pro navigation and controls. The field acceptance checklist is in [Release gates](docs/RELEASE_GATE.md). The [v0.12.2 QA notes](docs/PHONE_QA_014.md) and version sections below record historical builds and tests.
 
 ## Core contract
 - Fully offline. No runtime AI, subscriptions, ads, account, telemetry, in-app purchases, watermarks or network permission.
 - Imported photos never intentionally overwritten. Android system photo picker and save-as document provider.
 - All edits are parameters in saved local project snapshots; previous projects remain decodable.
 - Compact image-first interface: GZ Editor Pro top-left, Open media, Undo/Redo, Before, Export, swipeable bottom tool dock, tap to hide editing chrome, company copyright bottom-left on empty main page.
-- Preserve all prior 56 global adjustments, 50 Looks, HSL color mixer, grading, 4 curve channels, 3 adjustment-mask types, Blur & cover, crop/rotate/flip/straighten, project/preset storage, JPEG/PNG export and transparent output where supported.
+- Preserve the existing Regular photo adjustments, Looks, color, curves, Text, Blur & cover, crop and export. Regular and Collage tile editing have no Masks authoring. Older saved masks must continue to render and round-trip. Pro owns selection and masking, and preserves legacy Text layers without Text authoring.
+- From a loaded Regular photo, choosing Pro offers to bring the current edited image into Pro. Choosing No opens an empty Pro editor. Regular keeps its own source, edits and history when the user returns.
 
 ## v0.12.1 independent quality review and safeguards
 - Source and merged-main APK were audited. The prior v0.12.0 release **does not pass full AAA/commercial qualification**. The exact gaps, independent checks, and required signoff criteria are recorded in `docs/AAA_RELEASE_AUDIT_013.md`.

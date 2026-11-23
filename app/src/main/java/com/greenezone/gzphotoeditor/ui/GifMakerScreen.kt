@@ -46,6 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,9 +69,23 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class GifTool(val label: String) {
+internal enum class GifTool(val label: String) {
     FRAMES("Photos"), TIMING("Timing"), SIZE("Canvas"), PROJECT("Projects")
 }
+
+internal enum class GifWorkspaceRoute { VIDEO, PHOTOS }
+
+internal data class GifWorkspaceSession(
+    val route: GifWorkspaceRoute? = null,
+    val photoTool: GifTool = GifTool.FRAMES,
+    val photoIndex: Int = 0,
+    val photoHistory: GifHistory = GifHistory(),
+    val videoTab: VideoGifTab = VideoGifTab.TIMELINE,
+    val videoSeek: Int = 0,
+    val videoPosition: Int = 0,
+    val videoHistory: GifHistory = GifHistory(),
+    val videoCollapsed: Boolean = false
+)
 
 @Composable
 fun GifMakerScreen(
@@ -78,9 +94,35 @@ fun GifMakerScreen(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit
 ) {
-    var photoSequenceOnly by remember { mutableStateOf(document.frames.isNotEmpty() && document.video == null) }
+    var session by remember { mutableStateOf(GifWorkspaceSession()) }
+    GifMakerScreenContent(
+        document = document,
+        onDocument = onDocument,
+        onBack = onBack,
+        onSwitch = onSwitch,
+        session = session,
+        onSession = { session = it }
+    )
+}
+
+@Composable
+internal fun GifMakerScreenContent(
+    document: GifDocument,
+    onDocument: (GifDocument) -> Unit,
+    onBack: () -> Unit,
+    onSwitch: (WorkspaceMode) -> Unit,
+    session: GifWorkspaceSession,
+    onSession: (GifWorkspaceSession) -> Unit
+) {
+    var photoSequenceOnly by remember {
+        mutableStateOf(when (session.route) {
+            GifWorkspaceRoute.PHOTOS -> true
+            GifWorkspaceRoute.VIDEO -> false
+            null -> document.frames.isNotEmpty() && document.video == null
+        })
+    }
     if (!photoSequenceOnly) {
-        VideoGifScreen(
+        VideoGifScreenContent(
             document = document,
             onDocument = onDocument,
             onBack = onBack,
@@ -88,7 +130,9 @@ fun GifMakerScreen(
             onOpenLegacyPhotoProject = { saved ->
                 onDocument(saved)
                 photoSequenceOnly = true
-            }
+            },
+            session = session,
+            onSession = onSession
         )
         return
     }
@@ -96,14 +140,19 @@ fun GifMakerScreen(
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
-    var tool by remember { mutableStateOf(GifTool.FRAMES) }
-    var index by remember { mutableIntStateOf(0) }
+    var tool by remember { mutableStateOf(session.photoTool) }
+    var index by remember {
+        mutableIntStateOf(session.photoIndex.coerceIn(
+            0, document.frames.lastIndex.coerceAtLeast(0)
+        ))
+    }
     var playing by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var exporting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
-    var history by remember { mutableStateOf(GifHistory()) }
+    var history by remember { mutableStateOf(session.photoHistory) }
     var timingStart by remember { mutableStateOf<GifDocument?>(null) }
+    var timingLatest by remember { mutableStateOf<GifDocument?>(null) }
     var pending by remember { mutableStateOf<GifDocument?>(null) }
     var saveOpen by remember { mutableStateOf(false) }
     var helpOpen by remember { mutableStateOf(false) }
@@ -116,6 +165,7 @@ fun GifMakerScreen(
     fun commit(next: GifDocument) {
         history = history.checkpoint(document, next)
         timingStart = null
+        timingLatest = null
         onDocument(next)
         index = index.coerceAtMost(next.frames.lastIndex).coerceAtLeast(0)
     }
@@ -137,7 +187,35 @@ fun GifMakerScreen(
         }
     }
 
-    BackHandler { if (!exporting) onBack() }
+    fun persistPhotoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.PHOTOS) {
+        onSession(session.copy(
+            route = route,
+            photoTool = tool,
+            photoIndex = index.coerceIn(0, document.frames.lastIndex.coerceAtLeast(0)),
+            photoHistory = history
+        ))
+    }
+
+    fun finishPhotoTiming() {
+        timingStart?.let { start ->
+            history = history.checkpoint(start, timingLatest ?: document)
+        }
+        timingStart = null
+        timingLatest = null
+    }
+
+    fun requestPhotoBack() {
+        if (exporting) {
+            notice = "Finish the photo GIF export before leaving."
+            return
+        }
+        playing = false
+        finishPhotoTiming()
+        persistPhotoSession()
+        onBack()
+    }
+
+    BackHandler { requestPhotoBack() }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(GifMath.MAX_FRAMES)
     ) { add(it) }
@@ -264,13 +342,18 @@ fun GifMakerScreen(
             .background(Color(0xEA121820)).statusBarsPadding().padding(horizontal = 8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
-                TextButton(enabled = !exporting, onClick = onBack) {
+                TextButton(onClick = ::requestPhotoBack) {
                     Text("‹ Back", color = EditorWhite, fontSize = 13.sp)
                 }
                 TextButton(enabled = !exporting, onClick = { playing = false; helpOpen = true }) {
                     Text("Help", color = EditorMint)
                 }
-                TextButton(enabled = !exporting, onClick = { photoSequenceOnly = false }) {
+                TextButton(enabled = !exporting, onClick = {
+                    playing = false
+                    finishPhotoTiming()
+                    persistPhotoSession(GifWorkspaceRoute.VIDEO)
+                    photoSequenceOnly = false
+                }) {
                     Text("Video → GIF", color = EditorMint, fontSize = 12.sp)
                 }
             }
@@ -350,13 +433,18 @@ fun GifMakerScreen(
                             enabled = !exporting,
                             onValueChange = { next ->
                                 if (timingStart == null) timingStart = document
-                                onDocument(document.copy(delayMs = (next.toInt() / 10) * 10))
+                                val changed = document.copy(
+                                    delayMs = (next.toInt() / 10) * 10
+                                )
+                                timingLatest = changed
+                                onDocument(changed)
                             },
-                            onValueChangeFinished = {
-                                timingStart?.let { history = history.checkpoint(it, document) }
-                                timingStart = null
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp))
+                            onValueChangeFinished = ::finishPhotoTiming,
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(horizontal = 14.dp)
+                                .semantics {
+                                    contentDescription = "Photo GIF frame duration"
+                                })
                         Row(Modifier.padding(start = 10.dp)) {
                             DockChip("Loop forever", document.forever, enabled = !exporting) {
                                 commit(document.copy(forever = true))
@@ -446,7 +534,10 @@ fun GifMakerScreen(
                                 else {
                                     playing = false; commit(restored); index = 0
                                     notice = "GIF project opened"
-                                    if (restored.video != null) photoSequenceOnly = false
+                                    if (restored.video != null) {
+                                        persistPhotoSession(GifWorkspaceRoute.VIDEO)
+                                        photoSequenceOnly = false
+                                    }
                                 }
                             } finally { openingProject = false }
                         }

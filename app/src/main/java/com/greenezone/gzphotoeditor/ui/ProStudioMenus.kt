@@ -20,7 +20,7 @@ internal enum class ProSection(val title: String, val group: String) {
     LAYERS("Layers", "Composition"), MOVE("Transform", "Composition"),
     BLEND("Blend", "Composition"), CANVAS("Canvas", "Composition"),
     SELECT("Select & mask", "Selection and retouch"), RETOUCH("Clone & repair", "Selection and retouch"),
-    PAINT("Brush", "Create"), STYLE("Text & shapes", "Create"),
+    PAINT("Brush", "Create"), STYLE("Shapes", "Create"),
     GRADE("Tone & color", "Adjust"), PIXEL("Layer effects", "Adjust")
 }
 

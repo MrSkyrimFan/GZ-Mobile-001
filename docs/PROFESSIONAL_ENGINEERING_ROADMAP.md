@@ -4,7 +4,9 @@
 
 This is an engineering and compliance roadmap, **not** a claim that trademark/patent clearance has been completed or that no one could sue. Features can generally be built independently, but source code, presets, artworks, branding, patents and libraries require different checks.
 
-## Professional photography features we intend to build ourselves
+[Current product boundaries](PRODUCT_SPEC.md) govern feature placement. Finish the field corrections for GIF, Crop, mode handoff and Pro before the later feature work below.
+
+## Regular photography features
 
 ### Photo library and batch workflow
 - Local image catalog with folders/collections, ratings, favorites, keyword tags, EXIF metadata inspection, import duplicates detection, sidecar edit copies and original-file custody.
@@ -18,15 +20,16 @@ This is an engineering and compliance roadmap, **not** a claim that trademark/pa
 - Upgrade beyond current 8-bit sRGB pipeline: internal 16-bit/float processing, ICC profiles, wide gamut, profile-to-sRGB export, lossless TIFF/PNG high-bit-depth options where supported, numerical reference images and color-chart test suite.
 - Avoid claims of lossless RAW editing until the actual pipeline, export bit depth, decode correctness and tests support them.
 
-### Manual local editing, retouching and optical correction
-- Layered luma/color-range masks, feathered gradients and editable brushes.
+### Optical correction and protected Regular tools
+- Preserve Regular photographic grading and Blur & cover. Restrict selection and new adjustment-mask authoring to Pro, preserving historical Regular masks in saved projects.
 - Original CPU/GPU denoise (non-ML), thresholded sharpening, chromatic aberration, distortion, perspective grids, manual straightening, highlight recovery within available source data, selective saturation and tone curves.
 - Clone/heal/source-stamp tools and blemish/object removal by original pixel processing rather than generative AI.
 - Skin retouch tools, local highlights, eye/teeth adjustments, privacy blackout and blur with clear distinction between cosmetic blur and genuine redaction.
 - Lens profiles can only ship where created independently or sourced under suitable licenses.
 
-### Compositing / creativity
-- Independently editable text, shapes, drawing, brand-neutral user-chosen templates, collages of up to 20 photos, reusable layout recipes, background colors, border/radius/spacing settings.
+### Composition and creativity
+- Regular owns Text authoring, Shapes, drawing and the offline sticker library. Sticker work needs at least 500 usable assets with documented rights, transparent custom imports, transforms and editable project storage. Collage supports those Regular edits independently on each of 20 tiles.
+- Pro owns layer-based compositing, non-destructive masks, selections, clone/repair, and Subject & Background. Deliver guided subject isolation, edge refinement, removal, replacement and reshape through editable local project state and full-resolution output. Preserve legacy Pro Text data without authoring entry points.
 - Every source retains its own `EditDocument` and can be edited in the existing full photo editor. Flatten only at export.
 - Future local stickers/texture packs require rights to each asset/font (no copying paid packs).
 - Better touch handles and editing overlays must not be coupled to toolbar visibility.
@@ -35,7 +38,9 @@ This is an engineering and compliance roadmap, **not** a claim that trademark/pa
 - Decode by tile, GPU shader acceleration where it materially improves responsiveness, separate fast preview vs final export, bounded memory, cancellation, safe failure and atomic local project custody.
 - Real 12MP/24MP/oversize photo and 2–20-source collage benchmarks; crash/ANR checks on low-memory Android devices and photo provider expiry.
 
-## Separate upcoming video editor inside the same GZ Editor Pro app
+## Separate Video editor after owner workspace locks
+
+Begin Video only after the owner formally locks Regular, Collage, Pro and GIF. Finish the full app and owner qualification before English/Spanish onboarding or legal acceptance flows.
 
 **Do not claim video functions exist yet.** Android's official Media3 Transformer supports clip trimming, track removal, video rotation and effects, transcoding and image-to-video. The `androidx/media` project has Apache License 2.0 notices; verify exact versions and dependency manifests before use.
 

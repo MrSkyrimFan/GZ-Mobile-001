@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,7 +53,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onClick
@@ -67,6 +70,7 @@ import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.CropFrame
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
+import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProDocument
 import com.greenezone.gzphotoeditor.editor.ProLayer
 import com.greenezone.gzphotoeditor.editor.GifDocument
@@ -116,18 +120,23 @@ private data class ExportRequest(val settings: ExportSettings, val edits: EditDo
 @Composable
 fun PhotoEditorScreen(
     initialCollagePhoto: CollagePhoto? = null,
-    onDoneCollagePhoto: ((CollagePhoto) -> Unit)? = null
+    onDoneCollagePhoto: ((CollagePhoto) -> Unit)? = null,
+    onCancelCollagePhoto: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
+    // The parent Collage record changes only through Apply or Done. Keep this
+    // entry snapshot immutable while the nested editor loads/saves other media.
+    val tileEntryBaseline = remember(initialCollagePhoto) { initialCollagePhoto }
 
-    var collageOpen by remember { mutableStateOf(false) }
+    var workspaceNavigation by remember { mutableStateOf(WorkspaceNavigation()) }
     var collageDocument by remember { mutableStateOf(CollageDocument()) }
-    var proOpen by remember { mutableStateOf(false) }
+    var collageSession by remember { mutableStateOf(CollageWorkspaceSession()) }
     var proDocument by remember { mutableStateOf(ProDocument()) }
-    var gifOpen by remember { mutableStateOf(false) }
+    var proSession by remember { mutableStateOf(ProWorkspaceSession()) }
     var gifDocument by remember { mutableStateOf(GifDocument()) }
+    var gifSession by remember { mutableStateOf(GifWorkspaceSession()) }
 
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
@@ -142,9 +151,10 @@ fun PhotoEditorScreen(
     var gestureStart by remember { mutableStateOf<EditDocument?>(null) }
 
     var chromeVisible by remember { mutableStateOf(true) }
+    var topChromeHeight by remember { mutableIntStateOf(0) }
+    var bottomChromeHeight by remember { mutableIntStateOf(0) }
     var selectedTab by remember { mutableStateOf(EditTab.LOOKS) }
     var activeLook by remember { mutableStateOf("none") }
-    var selectedMask by remember { mutableIntStateOf(0) }
     var selectedPrivacy by remember { mutableIntStateOf(0) }
     var compare by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -161,6 +171,12 @@ fun PhotoEditorScreen(
     var showTextDialog by remember { mutableStateOf(false) }
     var textDraft by remember { mutableStateOf("") }
     var editingTextIndex by remember { mutableIntStateOf(-1) }
+    var baselineUri by remember { mutableStateOf<String?>(null) }
+    var baselineDocument by remember { mutableStateOf(EditDocument()) }
+    var showRegularExit by remember { mutableStateOf(false) }
+    var showProHandoff by remember { mutableStateOf(false) }
+    var showTileExit by remember { mutableStateOf(false) }
+    var closeAfterProjectSave by remember { mutableStateOf(false) }
 
     var showExport by remember { mutableStateOf(false) }
     var showSaveLook by remember { mutableStateOf(false) }
@@ -195,7 +211,11 @@ fun PhotoEditorScreen(
         activeLook = key
     }
 
-    fun loadPhoto(uri: Uri, restored: EditDocument? = null) {
+    fun loadPhoto(
+        uri: Uri,
+        restored: EditDocument? = null,
+        establishBaseline: Boolean = tileEntryBaseline == null
+    ) {
         val request = ++loadingToken
         scope.launch {
             busy = true
@@ -221,10 +241,14 @@ fun PhotoEditorScreen(
                 quickSource = null
                 painting = false
                 liveGesture = false
-                document = restored ?: EditDocument()
+                val loadedDocument = restored ?: EditDocument()
+                document = loadedDocument
+                if (establishBaseline) {
+                    baselineUri = uri.toString()
+                    baselineDocument = loadedDocument
+                }
                 history = EditHistory()
                 gestureStart = null
-                selectedMask = 0
                 selectedPrivacy = 0
                 selectedTab = EditTab.LOOKS
                 creativeTools = CreativeToolState()
@@ -302,47 +326,141 @@ fun PhotoEditorScreen(
 
     fun chooseWorkspace(mode: WorkspaceMode) {
         if (onDoneCollagePhoto != null || busy || exporting) return
-        when (mode) {
-            WorkspaceMode.PHOTO -> {
-                collageOpen = false
-                proOpen = false
-                gifOpen = false
-            }
-            WorkspaceMode.PRO -> {
-                if (proDocument.layers.isEmpty()) {
-                    sourceUri?.let { current ->
-                        proDocument = ProDocument(layers = listOf(ProLayer(
-                            uri = current.toString(), edits = document, name = "Original photo",
-                            aspect = (processed ?: original)?.let { frame ->
-                                frame.width.toFloat() / frame.height.coerceAtLeast(1)
-                            }?.coerceIn(.1f, 10f) ?: 1f
-                        )))
+        if (mode == WorkspaceMode.VIDEO) {
+            notice = "Video editing is coming later, after the photo and GIF tools."
+            return
+        }
+        if (mode == WorkspaceMode.PHOTO && workspaceNavigation.current == WorkspaceMode.PRO &&
+            workspaceNavigation.previewBack() == WorkspaceMode.PHOTO) {
+            workspaceNavigation.commitBack()?.let { workspaceNavigation = it }
+            return
+        }
+        if (mode == WorkspaceMode.PRO && workspaceNavigation.current == WorkspaceMode.PHOTO &&
+            sourceUri != null && original != null) {
+            showProHandoff = true
+            return
+        }
+        workspaceNavigation = workspaceNavigation.open(mode)
+    }
+
+    fun openProWithRegularEdits() {
+        val uri = sourceUri ?: return
+        val input = original ?: return
+        if (busy || exporting) return
+        showProHandoff = false
+        finishSlide()
+        val edits = document
+        busy = true
+        scope.launch {
+            try {
+                val editedRatio = withContext(Dispatchers.Default) {
+                    // The current preview may still show the previous frame or the
+                    // uncropped Crop view. Use the committed edit geometry instead.
+                    val frame = ImagePipeline.geometry(input, edits)
+                    try {
+                        frame.width.toFloat() / frame.height
+                    } finally {
+                        if (frame !== input) frame.recycle()
                     }
                 }
-                collageOpen = false
-                gifOpen = false
-                proOpen = true
-            }
-            WorkspaceMode.COLLAGE -> {
-                proOpen = false
-                gifOpen = false
-                collageOpen = true
-            }
-            WorkspaceMode.GIF -> {
-                collageOpen = false
-                proOpen = false
-                gifOpen = true
-            }
-            WorkspaceMode.VIDEO -> {
-                notice = "Video editing is coming later, after the photo and GIF tools."
+                val originalRatio = input.width.toFloat() / input.height
+                val source = ProLayer(uri = uri.toString(), name = "Original photo", aspect = originalRatio)
+                val resetDocument = ProDocument(
+                    layers = listOf(source),
+                    background = ProBackground.TRANSPARENT,
+                    sourceAspectRatio = originalRatio
+                )
+                proDocument = resetDocument.copy(
+                    layers = listOf(source.copy(edits = edits, aspect = editedRatio)),
+                    sourceAspectRatio = editedRatio
+                )
+                proSession = ProWorkspaceSession(documentEstablished = true, resetDocument = resetDocument)
+                workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: OutOfMemoryError) {
+                notice = "There is not enough memory to open this photo in Pro."
+            } catch (_: Exception) {
+                notice = "Could not open the edited photo in Pro."
+            } finally {
+                busy = false
             }
         }
+    }
+
+    fun leaveWorkspace() {
+        workspaceNavigation.commitBack()?.let { workspaceNavigation = it }
     }
 
     fun finishCollageTile() {
         val originalTile = initialCollagePhoto ?: return
         val image = sourceUri?.toString() ?: originalTile.uri
+        showTileExit = false
         onDoneCollagePhoto?.invoke(CollagePhoto(image, document))
+    }
+
+    fun isPhotoDirty(): Boolean {
+        val tileEntry = tileEntryBaseline
+        if (tileEntry != null) {
+            val currentUri = sourceUri ?: return false
+            return currentUri.toString() != tileEntry.uri || document != tileEntry.edits
+        }
+        return sourceUri?.toString() != baselineUri || document != baselineDocument
+    }
+
+    fun closeCurrentPhoto() {
+        loadingToken += 1
+        sourceUri = null
+        original = null
+        processed = null
+        beforeImage = null
+        filterThumbs = emptyList()
+        quickSource = null
+        document = EditDocument()
+        baselineUri = null
+        baselineDocument = EditDocument()
+        history = EditHistory()
+        gestureStart = null
+        liveGesture = false
+        painting = false
+        currentInk = null
+        chromeVisible = true
+        selectedTab = EditTab.LOOKS
+        activeLook = "none"
+        selectedPrivacy = 0
+        compare = false
+        zoom = 1f
+        panX = 0f
+        panY = 0f
+        notice = ""
+        showExport = false
+        pendingExport = null
+        showTextDialog = false
+        showRegularExit = false
+        showTileExit = false
+        closeAfterProjectSave = false
+        selectedProject = null
+        creativeTools = CreativeToolState()
+    }
+
+    fun requestTileBack() {
+        if (busy || exporting) {
+            notice = if (exporting) "Finish or cancel the export before leaving this tile."
+                else "Wait for the current photo operation to finish."
+        } else if (isPhotoDirty()) {
+            showTileExit = true
+        } else {
+            onCancelCollagePhoto?.invoke()
+        }
+    }
+
+    fun requestRegularBack() {
+        val previous = workspaceNavigation.commitBack()
+        if (previous != null) {
+            workspaceNavigation = previous
+        } else if (original != null) {
+            if (isPhotoDirty()) showRegularExit = true else closeCurrentPhoto()
+        }
     }
 
     fun autoTone() {
@@ -387,37 +505,6 @@ fun PhotoEditorScreen(
         }
     }
 
-    fun addMask(kind: MaskKind) {
-        if (document.masks.size >= 4) {
-            notice = "Maximum of four masks per photo."
-            return
-        }
-        val mask = if (kind == MaskKind.BRUSH) {
-            LocalMask(kind = kind, radius = .045f, feather = .45f, exposure = .55f)
-        } else LocalMask(kind = kind)
-        selectedMask = document.masks.size
-        commit(document.copy(masks = document.masks + mask))
-        if (kind == MaskKind.BRUSH) {
-            zoom = 1f
-            panX = 0f
-            panY = 0f
-            notice = "Brush selected. Drag on your photo to paint."
-        }
-    }
-    fun removeMask() {
-        if (selectedMask !in document.masks.indices) return
-        val updated = document.masks.filterIndexed { i, _ -> i != selectedMask }
-        commit(document.copy(masks = updated))
-        selectedMask = selectedMask.coerceAtMost(updated.lastIndex).coerceAtLeast(0)
-    }
-    fun brushEdit(clearAll: Boolean) {
-        val mask = document.masks.getOrNull(selectedMask) ?: return
-        if (mask.kind != MaskKind.BRUSH) return
-        val updated = mask.copy(strokes = if (clearAll) emptyList() else mask.strokes.dropLast(1))
-        val values = document.masks.toMutableList()
-        values[selectedMask] = updated
-        commit(document.copy(masks = values))
-    }
     fun addPrivacy(kind: PrivacyKind) {
         if (document.privacy.size >= PrivacyRaster.MAX_EDITS) {
             notice = "Maximum of twelve privacy layers per photo."
@@ -460,62 +547,35 @@ fun PhotoEditorScreen(
     }
 
     fun startPaint(point: BrushPoint) {
-        if (selectedTab == EditTab.PRIVACY) {
-            val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
-            if (!mark.kind.usesBrush) return
-            if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 640) {
-                notice = "Brush limit reached. Undo a stroke or add another brush."
-                return
-            }
-            gestureStart = document
-            painting = true
-            val updated = document.privacy.toMutableList()
-            updated[selectedPrivacy] = mark.copy(strokes =
-                mark.strokes + BrushStroke(listOf(point)))
-            document = document.copy(privacy = updated)
-        } else {
-            val mask = document.masks.getOrNull(selectedMask) ?: return
-            if (mask.kind != MaskKind.BRUSH) return
-            if (mask.strokes.size >= 40 || mask.strokes.sumOf { it.points.size } >= 640) {
-                notice = "Brush limit reached. Undo a stroke or add another mask."
-                return
-            }
-            gestureStart = document
-            painting = true
-            val updated = document.masks.toMutableList()
-            updated[selectedMask] = mask.copy(strokes =
-                mask.strokes + BrushStroke(listOf(point)))
-            document = document.copy(masks = updated)
+        if (selectedTab != EditTab.PRIVACY) return
+        val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
+        if (!mark.kind.usesBrush) return
+        if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 640) {
+            notice = "Brush limit reached. Undo a stroke or add another brush."
+            return
         }
+        gestureStart = document
+        painting = true
+        val updated = document.privacy.toMutableList()
+        updated[selectedPrivacy] = mark.copy(strokes =
+            mark.strokes + BrushStroke(listOf(point)))
+        document = document.copy(privacy = updated)
     }
 
     fun continuePaint(point: BrushPoint) {
         if (!painting || gestureStart == null) return
-        if (selectedTab == EditTab.PRIVACY) {
-            val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
-            val last = mark.strokes.lastOrNull() ?: return
-            if (mark.strokes.sumOf { it.points.size } >= 640) return
-            val previous = last.points.last()
-            val dx = point.x - previous.x
-            val dy = point.y - previous.y
-            if (dx * dx + dy * dy < .000012f) return
-            val updated = document.privacy.toMutableList()
-            updated[selectedPrivacy] = mark.copy(strokes =
-                mark.strokes.dropLast(1) + last.copy(points = last.points + point))
-            document = document.copy(privacy = updated)
-        } else {
-            val mask = document.masks.getOrNull(selectedMask) ?: return
-            val last = mask.strokes.lastOrNull() ?: return
-            if (mask.strokes.sumOf { it.points.size } >= 640) return
-            val previous = last.points.last()
-            val dx = point.x - previous.x
-            val dy = point.y - previous.y
-            if (dx * dx + dy * dy < .000012f) return
-            val updated = document.masks.toMutableList()
-            updated[selectedMask] = mask.copy(strokes =
-                mask.strokes.dropLast(1) + last.copy(points = last.points + point))
-            document = document.copy(masks = updated)
-        }
+        if (selectedTab != EditTab.PRIVACY) return
+        val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
+        val last = mark.strokes.lastOrNull() ?: return
+        if (mark.strokes.sumOf { it.points.size } >= 640) return
+        val previous = last.points.last()
+        val dx = point.x - previous.x
+        val dy = point.y - previous.y
+        if (dx * dx + dy * dy < .000012f) return
+        val updated = document.privacy.toMutableList()
+        updated[selectedPrivacy] = mark.copy(strokes =
+            mark.strokes.dropLast(1) + last.copy(points = last.points + point))
+        document = document.copy(privacy = updated)
     }
 
     fun finishPaint() {
@@ -560,6 +620,12 @@ fun PhotoEditorScreen(
         showSaveLook = true
     }
     fun saveProject() {
+        closeAfterProjectSave = false
+        draftName = ""
+        showSaveProject = true
+    }
+    fun saveProjectAndClose() {
+        closeAfterProjectSave = true
         draftName = ""
         showSaveProject = true
     }
@@ -664,10 +730,17 @@ fun PhotoEditorScreen(
     }
 
     fun moveCrop(frame: CropFrame) {
-        slide(document.copy(
+        if (gestureStart == null) gestureStart = document
+        document = document.copy(
             crop = if (document.crop == CropRatio.ORIGINAL) CropRatio.FREE else document.crop,
             cropFrame = frame
-        ))
+        )
+    }
+
+    fun cancelCrop() {
+        gestureStart?.let { document = it }
+        gestureStart = null
+        liveGesture = false
     }
 
     LaunchedEffect(initialCollagePhoto?.uri) {
@@ -675,8 +748,20 @@ fun PhotoEditorScreen(
         if (photo != null) loadPhoto(Uri.parse(photo.uri), photo.edits)
     }
 
-    BackHandler(enabled = onDoneCollagePhoto != null && !busy && !exporting) {
-        finishCollageTile()
+    BackHandler(enabled = onDoneCollagePhoto != null) {
+        requestTileBack()
+    }
+    BackHandler(
+        enabled = onDoneCollagePhoto == null &&
+            workspaceNavigation.current == WorkspaceMode.PHOTO &&
+            (workspaceNavigation.previewBack() != null || original != null || busy || exporting)
+    ) {
+        if (busy || exporting) {
+            notice = if (exporting) "Finish the export before leaving this photo."
+                else "Wait for the current photo operation to finish."
+        } else {
+            requestRegularBack()
+        }
     }
 
     LaunchedEffect(original) {
@@ -711,18 +796,19 @@ fun PhotoEditorScreen(
         }
     }
 
-    LaunchedEffect(original, if (painting) null else document, liveGesture, quickSource, painting, selectedTab) {
+    val previewEdits = if (selectedTab == EditTab.CROP) {
+        document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f, cropCenterY = .5f)
+    } else document
+    LaunchedEffect(original, if (painting) null else previewEdits, liveGesture, quickSource, painting) {
         val input = original ?: run { processed = null; return@LaunchedEffect }
         if (painting) return@LaunchedEffect
-        val imageDocument = if (selectedTab == EditTab.CROP)
-            document.copy(crop = CropRatio.ORIGINAL, cropFrame = null) else document
         delay(if (liveGesture) 20L else 45L)
         try {
             val fast = quickSource
             if (fast != null && fast !== input) {
                 val preview = withContext(Dispatchers.Default) {
                     val running = currentCoroutineContext()
-                    ImagePipeline.render(fast, imageDocument) { running.ensureActive() }
+                    ImagePipeline.render(fast, previewEdits) { running.ensureActive() }
                 }
                 processed = preview
             }
@@ -730,7 +816,7 @@ fun PhotoEditorScreen(
                 if (fast != null && fast !== input) delay(140L)
                 val quality = withContext(Dispatchers.Default) {
                     val running = currentCoroutineContext()
-                    ImagePipeline.render(input, imageDocument) { running.ensureActive() }
+                    ImagePipeline.render(input, previewEdits) { running.ensureActive() }
                 }
                 processed = quality
             }
@@ -742,14 +828,13 @@ fun PhotoEditorScreen(
     }
 
     // Keep before/after geometry identical; compute outside the UI thread.
-    LaunchedEffect(original, document.quarterTurns, document.mirrored,
-        document.flipVertical, document.crop, document.cropFrame, document.cropCenterX,
-        document.cropCenterY, document.straightenDegrees, selectedTab) {
+    LaunchedEffect(original, previewEdits.quarterTurns, previewEdits.mirrored,
+        previewEdits.flipVertical, previewEdits.crop, previewEdits.cropFrame, previewEdits.cropCenterX,
+        previewEdits.cropCenterY, previewEdits.straightenDegrees) {
         val input = original ?: run { beforeImage = null; return@LaunchedEffect }
         try {
             val result = withContext(Dispatchers.Default) {
-                ImagePipeline.geometry(input, if (selectedTab == EditTab.CROP)
-                    document.copy(crop = CropRatio.ORIGINAL, cropFrame = null) else document)
+                ImagePipeline.geometry(input, previewEdits)
             }
             beforeImage = result
         } catch (cancelled: CancellationException) {
@@ -791,30 +876,36 @@ fun PhotoEditorScreen(
         }
     }
 
-    if (proOpen) {
-        ProWorkspaceScreen(
+    if (workspaceNavigation.current == WorkspaceMode.PRO) {
+        ProWorkspaceScreenContent(
             document = proDocument,
             onDocument = { proDocument = it },
-            onBack = { proOpen = false },
-            onSwitch = ::chooseWorkspace
+            onBack = ::leaveWorkspace,
+            onSwitch = ::chooseWorkspace,
+            session = proSession,
+            onSession = { proSession = it }
         )
         return
     }
-    if (gifOpen) {
-        GifMakerScreen(
+    if (workspaceNavigation.current == WorkspaceMode.GIF) {
+        GifMakerScreenContent(
             document = gifDocument,
             onDocument = { gifDocument = it },
-            onBack = { gifOpen = false },
-            onSwitch = ::chooseWorkspace
+            onBack = ::leaveWorkspace,
+            onSwitch = ::chooseWorkspace,
+            session = gifSession,
+            onSession = { gifSession = it }
         )
         return
     }
-    if (collageOpen) {
-        CollageWorkspaceScreen(
+    if (workspaceNavigation.current == WorkspaceMode.COLLAGE) {
+        CollageWorkspaceScreenContent(
             document = collageDocument,
             onDocument = { collageDocument = it },
-            onBack = { collageOpen = false },
-            onSwitch = ::chooseWorkspace
+            onBack = ::leaveWorkspace,
+            onSwitch = ::chooseWorkspace,
+            session = collageSession,
+            onSession = { collageSession = it }
         )
         return
     }
@@ -829,12 +920,8 @@ fun PhotoEditorScreen(
     val drawingActive = selectedTab == EditTab.DRAW && !compare && !busy && !exporting &&
         zoom <= 1.001f
     val activePrivacy = document.privacy.getOrNull(selectedPrivacy)
-    val maskBrushActive = selectedTab == EditTab.MASKS &&
-        document.masks.getOrNull(selectedMask)?.kind == MaskKind.BRUSH
-    val privacyBrushActive = selectedTab == EditTab.PRIVACY &&
-        activePrivacy?.kind?.usesBrush == true
     val brushSelected = !compare && !busy && !exporting && zoom <= 1.001f &&
-        (maskBrushActive || privacyBrushActive)
+        selectedTab == EditTab.PRIVACY && activePrivacy?.kind?.usesBrush == true
     val privacyRegionSelected = !compare && !busy && !exporting &&
         selectedTab == EditTab.PRIVACY && activePrivacy != null &&
         !activePrivacy.kind.usesBrush && zoom <= 1.001f
@@ -844,54 +931,60 @@ fun PhotoEditorScreen(
         contentAlignment = Alignment.Center
     ) {
         if (selectedImage != null) {
-            val stableCoordinates = beforeImage ?: selectedImage
-            Image(
-                bitmap = selectedImage.asImageBitmap(),
-                contentDescription = "Photo editing canvas. Tap to hide or show tools.",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize()
-                    .semantics {
-                        onClick(label = "Hide or show editing controls") {
-                            chromeVisible = !chromeVisible
-                            true
-                        }
-                    }
-                    .pointerInput(selectedImage) {
-                        detectTapGestures(onTap = { chromeVisible = !chromeVisible })
-                    }
-                    .pointerInput(selectedImage, brushSelected) {
-                        detectTransformGestures { _, pan, pinch, _ ->
-                            if (!brushSelected && !cropEditing && !textEditing &&
-                                !shapeEditing && !drawingActive) {
-                                zoom = (zoom * pinch).coerceIn(1f, 6f)
-                                val maxX = size.width * (zoom - 1f) / 2f
-                                val maxY = size.height * (zoom - 1f) / 2f
-                                panX = (panX + pan.x).coerceIn(-maxX, maxX)
-                                panY = (panY + pan.y).coerceIn(-maxY, maxY)
+            val viewportInsets = when {
+                selectedTab != EditTab.CROP -> Modifier
+                chromeVisible -> with(LocalDensity.current) {
+                    Modifier.padding(top = topChromeHeight.toDp(), bottom = bottomChromeHeight.toDp())
+                }
+                else -> Modifier.statusBarsPadding().navigationBarsPadding()
+            }
+            // Fit the crop image, Before image, and gesture coordinates inside the
+            // same viewport so visible handles stay clear of the header and dock.
+            Box(Modifier.fillMaxSize().then(viewportInsets)) {
+                val stableCoordinates = beforeImage ?: selectedImage
+                Image(
+                    bitmap = selectedImage.asImageBitmap(),
+                    contentDescription = "Photo editing canvas. Tap to hide or show tools.",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                        .semantics {
+                            onClick(label = "Hide or show editing controls") {
+                                chromeVisible = !chromeVisible
+                                true
                             }
                         }
-                    }
-                    .graphicsLayer {
-                        scaleX = zoom
-                        scaleY = zoom
-                        translationX = panX
-                        translationY = panY
-                    }
-            )
-            if (brushSelected) {
-                val active = if (privacyBrushActive) activePrivacy?.let {
-                    LocalMask(
-                        kind = MaskKind.BRUSH,
-                        strokes = it.strokes,
-                        radius = it.brushSize,
-                        feather = it.feather
-                    )
-                } else document.masks.getOrNull(selectedMask)
-                if (active != null) {
+                        .pointerInput(selectedImage) {
+                            detectTapGestures(onTap = { chromeVisible = !chromeVisible })
+                        }
+                        .pointerInput(selectedImage, brushSelected) {
+                            detectTransformGestures { _, pan, pinch, _ ->
+                                if (!brushSelected && !cropEditing && !textEditing &&
+                                    !shapeEditing && !drawingActive) {
+                                    zoom = (zoom * pinch).coerceIn(1f, 6f)
+                                    val maxX = size.width * (zoom - 1f) / 2f
+                                    val maxY = size.height * (zoom - 1f) / 2f
+                                    panX = (panX + pan.x).coerceIn(-maxX, maxX)
+                                    panY = (panY + pan.y).coerceIn(-maxY, maxY)
+                                }
+                            }
+                        }
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = panX
+                            translationY = panY
+                        }
+                )
+                if (brushSelected && activePrivacy != null) {
                     BrushOverlay(
                         bitmapWidth = stableCoordinates.width,
                         bitmapHeight = stableCoordinates.height,
-                        mask = active,
+                        mask = LocalMask(
+                            kind = MaskKind.BRUSH,
+                            strokes = activePrivacy.strokes,
+                            radius = activePrivacy.brushSize,
+                            feather = activePrivacy.feather
+                        ),
                         enabled = !busy,
                         onStart = ::startPaint,
                         onContinue = ::continuePaint,
@@ -900,69 +993,70 @@ fun PhotoEditorScreen(
                         showGuides = !editingBlurBrush
                     )
                 }
-            }
-            if (privacyRegionSelected && activePrivacy != null) {
-                PrivacyRegionOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    mark = activePrivacy,
-                    canMove = true,
-                    showGuides = true,
-                    onMove = ::movePrivacy,
-                    onFinished = ::finishSlide,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            if (cropEditing) {
-                CropFrameOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    frame = document.cropFrame ?: CropMath.initial(
-                        stableCoordinates.width, stableCoordinates.height, document.crop
-                    ),
-                    aspectRatio = document.crop.ratio,
-                    showGuides = true,
-                    onChange = ::moveCrop,
-                    onFinished = ::finishSlide,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            if (textEditing) {
-                val layer = document.creative.text.getOrNull(creativeTools.textIndex)
-                if (layer != null) EditableObjectOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    centerX = layer.x, centerY = layer.y,
-                    width = layer.width, height = layer.height,
-                    showGuides = true,
-                    onChanged = ::moveCreative,
-                    onFinished = ::finishSlide,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            if (shapeEditing) {
-                val layer = document.creative.shapes.getOrNull(creativeTools.shapeIndex)
-                if (layer != null) EditableObjectOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    centerX = layer.x, centerY = layer.y,
-                    width = layer.width, height = layer.height,
-                    showGuides = true,
-                    onChanged = ::moveCreative,
-                    onFinished = ::finishSlide,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
-            }
-            if (drawingActive) {
-                DrawTouchOverlay(
-                    imageWidth = stableCoordinates.width,
-                    imageHeight = stableCoordinates.height,
-                    ink = currentInk,
-                    onStart = ::startInk,
-                    onMove = ::continueInk,
-                    onFinish = ::finishInk,
-                    onTap = { chromeVisible = !chromeVisible }
-                )
+                if (privacyRegionSelected && activePrivacy != null) {
+                    PrivacyRegionOverlay(
+                        imageWidth = stableCoordinates.width,
+                        imageHeight = stableCoordinates.height,
+                        mark = activePrivacy,
+                        canMove = true,
+                        showGuides = true,
+                        onMove = ::movePrivacy,
+                        onFinished = ::finishSlide,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
+                if (cropEditing) {
+                    CropFrameOverlay(
+                        imageWidth = selectedImage.width,
+                        imageHeight = selectedImage.height,
+                        frame = document.cropFrame ?: CropMath.initial(
+                            selectedImage.width, selectedImage.height, document.crop
+                        ),
+                        aspectRatio = document.crop.ratio,
+                        showGuides = true,
+                        onChange = ::moveCrop,
+                        onFinished = ::finishSlide,
+                        onCanceled = ::cancelCrop,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
+                if (textEditing) {
+                    val layer = document.creative.text.getOrNull(creativeTools.textIndex)
+                    if (layer != null) EditableObjectOverlay(
+                        imageWidth = stableCoordinates.width,
+                        imageHeight = stableCoordinates.height,
+                        centerX = layer.x, centerY = layer.y,
+                        width = layer.width, height = layer.height,
+                        showGuides = true,
+                        onChanged = ::moveCreative,
+                        onFinished = ::finishSlide,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
+                if (shapeEditing) {
+                    val layer = document.creative.shapes.getOrNull(creativeTools.shapeIndex)
+                    if (layer != null) EditableObjectOverlay(
+                        imageWidth = stableCoordinates.width,
+                        imageHeight = stableCoordinates.height,
+                        centerX = layer.x, centerY = layer.y,
+                        width = layer.width, height = layer.height,
+                        showGuides = true,
+                        onChanged = ::moveCreative,
+                        onFinished = ::finishSlide,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
+                if (drawingActive) {
+                    DrawTouchOverlay(
+                        imageWidth = stableCoordinates.width,
+                        imageHeight = stableCoordinates.height,
+                        ink = currentInk,
+                        onStart = ::startInk,
+                        onMove = ::continueInk,
+                        onFinish = ::finishInk,
+                        onTap = { chromeVisible = !chromeVisible }
+                    )
+                }
             }
         } else {
             Column(
@@ -978,7 +1072,7 @@ fun PhotoEditorScreen(
                 ) { Text("Open media", fontWeight = FontWeight.Bold) }
                 if (onDoneCollagePhoto == null) {
                     Button(
-                        onClick = { collageOpen = true },
+                        onClick = { chooseWorkspace(WorkspaceMode.COLLAGE) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF26333C),
                             contentColor = EditorWhite
@@ -1015,6 +1109,9 @@ fun PhotoEditorScreen(
             Column(
                 Modifier.align(Alignment.TopCenter)
                     .fillMaxWidth()
+                    .then(if (selectedTab == EditTab.CROP) {
+                        Modifier.onSizeChanged { topChromeHeight = it.height }
+                    } else Modifier)
                     .background(Brush.verticalGradient(
                         listOf(Color(0xE5090C13), Color(0xC5090C13), Color.Transparent)
                     ))
@@ -1112,14 +1209,16 @@ fun PhotoEditorScreen(
                 Box(
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .then(if (selectedTab == EditTab.CROP) {
+                            Modifier.onSizeChanged { bottomChromeHeight = it.height }
+                        } else Modifier)
                         .navigationBarsPadding()
                 ) {
                     EditorDock(
                         tab = selectedTab,
                         onTab = {
                             selectedTab = it
-                            if (it == EditTab.MASKS || it == EditTab.PRIVACY ||
-                                it == EditTab.TEXT || it == EditTab.DRAW ||
+                            if (it == EditTab.PRIVACY || it == EditTab.TEXT || it == EditTab.DRAW ||
                                 it == EditTab.SHAPES || it == EditTab.CROP) {
                                 zoom = 1f; panX = 0f; panY = 0f
                             }
@@ -1130,8 +1229,6 @@ fun PhotoEditorScreen(
                         savedLooks = savedLooks,
                         activeLook = activeLook,
                         busy = busy || exporting,
-                        selectedMaskIndex = selectedMask,
-                        onSelectMask = { selectedMask = it },
                         selectedPrivacyIndex = selectedPrivacy,
                         onSelectPrivacy = { selectedPrivacy = it },
                         onAddPrivacy = ::addPrivacy,
@@ -1145,17 +1242,13 @@ fun PhotoEditorScreen(
                         onSlide = ::slide,
                         onSlideFinished = ::finishSlide,
                         onSelectLook = ::applyLook,
-                        onAddMask = ::addMask,
-                        onDeleteMask = ::removeMask,
-                        onUndoBrush = { brushEdit(false) },
-                        onClearBrush = { brushEdit(true) },
                         onAutoTone = ::autoTone,
                         onAutoWB = ::autoWB,
                         onSaveLook = ::saveLook,
                         onSaveProject = ::saveProject,
                         onProjects = ::openProjects,
                         onOpen = ::openPicker,
-                        onCollage = { collageOpen = true },
+                        onCollage = { chooseWorkspace(WorkspaceMode.COLLAGE) },
                         showCollage = onDoneCollagePhoto == null,
                         creativeTool = creativeTools,
                         onCreativeTool = { creativeTools = it },
@@ -1232,11 +1325,21 @@ fun PhotoEditorScreen(
                 val uri = sourceUri
                 if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
                     savedProjects = ProjectStore.load(context)
+                    if (tileEntryBaseline == null) {
+                        baselineUri = uri.toString()
+                        baselineDocument = document
+                    }
+                    val shouldClose = closeAfterProjectSave
+                    closeAfterProjectSave = false
                     showSaveProject = false
-                    notice = "Project saved on your phone"
+                    if (shouldClose) closeCurrentPhoto()
+                    else notice = "Project saved on your phone"
                 } else notice = "Could not save project (twelve maximum)."
             },
-            onDismiss = { showSaveProject = false }
+            onDismiss = {
+                closeAfterProjectSave = false
+                showSaveProject = false
+            }
         )
     }
     if (showProjects) {
@@ -1257,6 +1360,92 @@ fun PhotoEditorScreen(
                 notice = "Project reference removed. Original photo is untouched."
             },
             onDismiss = { showProjects = false }
+        )
+    }
+    if (showRegularExit) {
+        AlertDialog(
+            onDismissRequest = { showRegularExit = false },
+            title = { Text("Keep your photo edits?") },
+            text = { Text("Save an editable project, discard these changes, or keep editing.") },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { showRegularExit = false }) {
+                        Text("Keep editing")
+                    }
+                    TextButton(onClick = {
+                        showRegularExit = false
+                        saveProjectAndClose()
+                    }) {
+                        Text("Save project")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { closeCurrentPhoto() }) {
+                    Text("Discard")
+                }
+            }
+        )
+    }
+    if (showProHandoff) {
+        val hasProWork = proDocument.layers.isNotEmpty() ||
+            proSession.history.undo.isNotEmpty() || proSession.history.redo.isNotEmpty()
+        AlertDialog(
+            onDismissRequest = { showProHandoff = false },
+            title = { Text("Continue editing in Photo Pro?") },
+            text = {
+                Column {
+                    Text("Bring this photo and its current edits into Pro. Your Regular photo stays open.")
+                    if (hasProWork) {
+                        Text("Starting a new session replaces the current Pro work. Saved projects stay available.")
+                        TextButton(onClick = {
+                            showProHandoff = false
+                            finishSlide()
+                            workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
+                        }) { Text("Resume Pro work") }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = ::openProWithRegularEdits) { Text("Yes, continue") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { showProHandoff = false }) { Text("Cancel") }
+                    TextButton(onClick = {
+                        showProHandoff = false
+                        finishSlide()
+                        proDocument = ProDocument()
+                        proSession = ProWorkspaceSession(documentEstablished = true)
+                        workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
+                    }) { Text("No, open blank") }
+                }
+            }
+        )
+    }
+    if (showTileExit) {
+        AlertDialog(
+            onDismissRequest = { showTileExit = false },
+            title = { Text("Apply tile changes?") },
+            text = { Text("Only Apply or Done changes this collage tile.") },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { showTileExit = false }) {
+                        Text("Keep editing")
+                    }
+                    TextButton(onClick = { finishCollageTile() }) {
+                        Text("Apply")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showTileExit = false
+                    onCancelCollagePhoto?.invoke()
+                }) {
+                    Text("Discard")
+                }
+            }
         )
     }
 }

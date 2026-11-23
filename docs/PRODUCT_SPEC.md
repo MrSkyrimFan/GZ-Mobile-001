@@ -1,7 +1,17 @@
-# GZ Editor Pro 0.8 — collage workspace and active-tool corrections
+# GZ Editor Pro product requirements
 
-## Owner decisions and field evidence
-- Preserve the user-approved photo-first dark UI and existing editing functions. Do not restructure Looks, Light, Color, Masks, Blur & cover or move buttons gratuitously.
+## Current scope (Revision 4 and latest owner instructions, 2026-11-22)
+
+- **Regular and Collage.** Preserve the familiar photo-first interface, Text, Draw, Shapes, Blur & cover, and independent edits across all 20 Collage tiles. Regular and the selected-tile editor have no visible Masks authoring. Keep saved mask data, rendering and round-trip compatibility. Give all four Crop corners and all four edges density-aware touch targets of at least 48 dp and select the drag target on pointer down. Preserve predictable Freeform and fixed-ratio geometry and exact exported crops.
+- **Regular → Pro.** From a loaded standalone Regular photo, selecting Photo editing Pro presents a choice to continue the current image with its edits. Yes opens the current edited result in Pro, preserving its orientation, crop and appearance. No opens an empty Pro editor with “Select an image to edit.” Dismissing the choice leaves Regular open. Regular keeps its own source, edits and history when the user switches back, and stays independent of any Pro changes. Saving, deleting or opening a new Regular image follows the normal Regular commands. A failed handoff keeps the Regular work safe and explains the failure.
+- **Pro.** Masks, selections, layers, canvas tools and retouching belong here. Pro has no Text creation or editing. Preserve and render legacy Pro Text layers and keep Shapes accessible. Provide File → Delete current work with an explicit discard warning and confirmation. Cancel keeps the current workspace intact. Confirmation clears the current working edits and history and returns to the original or blank starting state. Preserve source media and named saved projects. Keep the existing Undo/Redo controls. Back closes the active transient context first and then returns to the correct workspace with recoverable work. Make controls meaningful for the selected layer and explain blend behavior and targets without changing correct blend math.
+- **GIF.** Playback must visibly advance and stay responsive after trim, Reverse, Looks, speed, canvas and other edits. Verify preview, scrubbing, project reopen and actual animated export on representative media. Use the owner's portrait workflow as a reproduction target. A moving frame number alone cannot demonstrate playback.
+- **Later pre-Video scope.** Regular gets an offline sticker menu with at least 500 usable finished assets, transparent custom PNG/WebP imports, editing and persistence, and independent sticker editing on selected Collage tiles. Pro gets the offline Subject & Background tools for subject selection, background removal or replacement, object removal, edge refinement, and reshaping, with editable masks/layers and full-resolution export. See the [roadmap](PROFESSIONAL_ENGINEERING_ROADMAP.md).
+- **Release decisions.** Regular and Collage retain their protected provisional status. GIF and Pro remain open for engineering and handset qualification. The separate Video editor stays disabled until the owner formally locks all four pre-Video workspaces. Bilingual English/Spanish welcome and legal acceptance belong to the final phase. The app stays offline with a one-time purchase and no runtime AI.
+
+## Retained photo and Collage requirements from 0.8
+
+- Preserve the user-approved photo-first dark UI and the familiar position of working Regular tools.
 - Restore full **GZ Editor Pro** top-left title; keep company `© 2026 Greenezone Software LLC` bottom-left on empty main screen.
 - Add flexible typography with multiple fonts and editable width/height; drawing and shapes; manual crop handles/freeform; export file-format dropdown separate from destination-platform dropdown.
 - Existing screenshots demonstrated that the privacy tools, uncropped photo canvas and Reset were now useful. Do not regress those.

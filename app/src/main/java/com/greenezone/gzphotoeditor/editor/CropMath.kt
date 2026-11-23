@@ -3,7 +3,7 @@ package com.greenezone.gzphotoeditor.editor
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-enum class CropHandle { MOVE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+enum class CropHandle { MOVE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, LEFT, TOP, RIGHT, BOTTOM }
 
 /** Aspect-safe, clamped, normalized rectangle geometry. */
 object CropMath {
@@ -31,6 +31,41 @@ object CropMath {
         )
     }
 
+    /** x/y are relative to the fitted image in screen pixels and can be outside it. */
+    fun hitTest(
+        frame: CropFrame, x: Float, y: Float, width: Float, height: Float, radius: Float
+    ): CropHandle? {
+        if (width <= 0f || height <= 0f || radius <= 0f) return null
+        val f = sanitize(frame)
+        val left = f.left * width
+        val right = f.right * width
+        val top = f.top * height
+        val bottom = f.bottom * height
+        val corners = listOf(
+            Triple(CropHandle.TOP_LEFT, abs(x - left), abs(y - top)),
+            Triple(CropHandle.TOP_RIGHT, abs(x - right), abs(y - top)),
+            Triple(CropHandle.BOTTOM_LEFT, abs(x - left), abs(y - bottom)),
+            Triple(CropHandle.BOTTOM_RIGHT, abs(x - right), abs(y - bottom))
+        )
+        corners.filter { (_, dx, dy) -> dx <= radius && dy <= radius }
+            .minByOrNull { (_, dx, dy) -> dx * dx + dy * dy }
+            ?.let { return it.first }
+
+        val edges = buildList {
+            if (y in top..bottom) {
+                add(CropHandle.LEFT to abs(x - left))
+                add(CropHandle.RIGHT to abs(x - right))
+            }
+            if (x in left..right) {
+                add(CropHandle.TOP to abs(y - top))
+                add(CropHandle.BOTTOM to abs(y - bottom))
+            }
+        }
+        edges.filter { it.second <= radius }.minByOrNull { it.second }
+            ?.let { return it.first }
+        return CropHandle.MOVE.takeIf { x in left..right && y in top..bottom }
+    }
+
     fun drag(
         frame: CropFrame,
         handle: CropHandle,
@@ -40,14 +75,22 @@ object CropMath {
         imageHeight: Int,
         ratio: Float?
     ): CropFrame {
-        if (imageWidth <= 0 || imageHeight <= 0) return sanitize(frame)
         val current = sanitize(frame)
+        if (imageWidth <= 0 || imageHeight <= 0 || !dx.isFinite() || !dy.isFinite() ||
+            (dx == 0f && dy == 0f)) return current
         if (handle == CropHandle.MOVE) {
             val width = current.width
             val height = current.height
             val x = (current.left + dx).coerceIn(0f, 1f - width)
             val y = (current.top + dy).coerceIn(0f, 1f - height)
             return CropFrame(x, y, x + width, y + height)
+        }
+
+        val normalizedRatio = ratio?.takeIf { it.isFinite() && it > 0f }
+            ?.let { (it * imageHeight.toFloat() / imageWidth).coerceAtLeast(.0001f) }
+        if (handle == CropHandle.LEFT || handle == CropHandle.RIGHT ||
+            handle == CropHandle.TOP || handle == CropHandle.BOTTOM) {
+            return dragEdge(current, handle, dx, dy, normalizedRatio)
         }
 
         val isLeft = handle == CropHandle.TOP_LEFT || handle == CropHandle.BOTTOM_LEFT
@@ -65,9 +108,7 @@ object CropMath {
         val maximumWidth = if (isLeft) anchorX else 1f - anchorX
         val maximumHeight = if (isTop) anchorY else 1f - anchorY
 
-        if (ratio != null && ratio > 0f) {
-            val normalizedRatio = (ratio * imageHeight.toFloat() / imageWidth)
-                .coerceAtLeast(.0001f)
+        if (normalizedRatio != null) {
             val oldPixelDeltaX = abs(dx) * imageWidth
             val oldPixelDeltaY = abs(dy) * imageHeight
             if (oldPixelDeltaX >= oldPixelDeltaY) {
@@ -75,11 +116,10 @@ object CropMath {
             } else {
                 newWidth = newHeight * normalizedRatio
             }
-            newWidth = minOf(newWidth, maximumWidth, maximumHeight * normalizedRatio)
+            val limit = minOf(maximumWidth, maximumHeight * normalizedRatio)
+            val minWidth = maxOf(MIN_SIDE, MIN_SIDE * normalizedRatio).coerceAtMost(limit)
+            newWidth = newWidth.coerceIn(minWidth, limit)
             newHeight = newWidth / normalizedRatio
-            // A very narrow image can make the requested ratio smaller than MIN_SIDE.
-            newWidth = newWidth.coerceAtLeast(.003f)
-            newHeight = newHeight.coerceAtLeast(.003f)
         } else {
             newWidth = newWidth.coerceIn(MIN_SIDE.coerceAtMost(maximumWidth), maximumWidth)
             newHeight = newHeight.coerceIn(MIN_SIDE.coerceAtMost(maximumHeight), maximumHeight)
@@ -90,6 +130,40 @@ object CropMath {
             minOf(y, anchorY).coerceIn(0f, 1f),
             maxOf(x, anchorX).coerceIn(0f, 1f),
             maxOf(y, anchorY).coerceIn(0f, 1f))
+    }
+
+    private fun dragEdge(
+        frame: CropFrame, handle: CropHandle, dx: Float, dy: Float, ratio: Float?
+    ): CropFrame {
+        val horizontal = handle == CropHandle.LEFT || handle == CropHandle.RIGHT
+        val near = handle == CropHandle.LEFT || handle == CropHandle.TOP
+        val start = if (horizontal) frame.left else frame.top
+        val end = if (horizontal) frame.right else frame.bottom
+        val crossStart = if (horizontal) frame.top else frame.left
+        val crossEnd = if (horizontal) frame.bottom else frame.right
+        val anchor = if (near) end else start
+        val sign = if (near) -1f else 1f
+        val old = if (near) start else end
+        val delta = if (horizontal) dx else dy
+        var maximum = if (near) anchor else 1f - anchor
+        var minimum = MIN_SIDE
+        val crossCenter = (crossStart + crossEnd) / 2f
+        val crossPerAxis = ratio?.let { if (horizontal) 1f / it else it }
+        if (crossPerAxis != null) {
+            val crossMaximum = 2f * minOf(crossCenter, 1f - crossCenter)
+            maximum = minOf(maximum, crossMaximum / crossPerAxis)
+            minimum = maxOf(minimum, MIN_SIDE / crossPerAxis)
+        }
+        val axisLength = ((old + delta - anchor) * sign)
+            .coerceIn(minimum.coerceAtMost(maximum), maximum)
+        val next = (anchor + axisLength * sign).coerceIn(0f, 1f)
+        val low = minOf(anchor, next)
+        val high = maxOf(anchor, next)
+        val crossHalf = crossPerAxis?.let { axisLength * it / 2f }
+        val crossLow = crossHalf?.let { (crossCenter - it).coerceIn(0f, 1f) } ?: crossStart
+        val crossHigh = crossHalf?.let { (crossCenter + it).coerceIn(0f, 1f) } ?: crossEnd
+        return if (horizontal) CropFrame(low, crossLow, high, crossHigh)
+            else CropFrame(crossLow, low, crossHigh, high)
     }
 
     fun pixelBounds(

@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,17 +89,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.min
 
-private enum class CollageSection(val label: String) {
+internal enum class CollageSection(val label: String) {
     TEMPLATES("Layouts"), ASPECT("Aspect"), FRAME("Spacing"),
     BACKGROUND("Style"), TILES("Photos"), QUALITY("Quality")
 }
 
-private enum class FrameControl(val title: String, val low: Float, val high: Float) {
+internal enum class FrameControl(val title: String, val low: Float, val high: Float) {
     GAP("Spacing", 0f, .08f),
     MARGIN("Outside margin", 0f, .10f),
     ROUND("Corner roundness", 0f, .10f),
     BORDER("Border width", 0f, .025f)
 }
+
+internal data class CollageWorkspaceSession(
+    val selectedPhoto: Int = 0,
+    val history: CollageHistory = CollageHistory(),
+    val section: CollageSection = CollageSection.TEMPLATES,
+    val control: FrameControl = FrameControl.GAP,
+    val toolsVisible: Boolean = true
+)
 
 private data class CollageExport(
     val collage: CollageDocument,
@@ -112,18 +121,44 @@ fun CollageWorkspaceScreen(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit = {}
 ) {
+    var session by remember { mutableStateOf(CollageWorkspaceSession()) }
+    CollageWorkspaceScreenContent(
+        document = document,
+        onDocument = onDocument,
+        onBack = onBack,
+        onSwitch = onSwitch,
+        session = session,
+        onSession = { session = it }
+    )
+}
+
+@Composable
+internal fun CollageWorkspaceScreenContent(
+    document: CollageDocument,
+    onDocument: (CollageDocument) -> Unit,
+    onBack: () -> Unit,
+    onSwitch: (WorkspaceMode) -> Unit,
+    session: CollageWorkspaceSession,
+    onSession: (CollageWorkspaceSession) -> Unit
+) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
-    var selected by remember { mutableIntStateOf(0) }
-    var history by remember { mutableStateOf(CollageHistory()) }
+    var selected by remember {
+        mutableIntStateOf(session.selectedPhoto.coerceIn(
+            0, document.photos.lastIndex.coerceAtLeast(0)
+        ))
+    }
+    var history by remember { mutableStateOf(session.history) }
     var layoutGestureStart by remember { mutableStateOf<CollageDocument?>(null) }
-    var section by remember { mutableStateOf(CollageSection.TEMPLATES) }
-    var control by remember { mutableStateOf(FrameControl.GAP) }
-    var toolsVisible by remember { mutableStateOf(true) }
+    var layoutGestureLatest by remember { mutableStateOf<CollageDocument?>(null) }
+    var section by remember { mutableStateOf(session.section) }
+    var control by remember { mutableStateOf(session.control) }
+    var toolsVisible by remember { mutableStateOf(session.toolsVisible) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var notice by remember { mutableStateOf("") }
     var rendering by remember { mutableStateOf(false) }
+    var renderGeneration by remember { mutableIntStateOf(0) }
     var exporting by remember { mutableStateOf(false) }
     var editingTile by remember { mutableIntStateOf(-1) }
     var showExport by remember { mutableStateOf(false) }
@@ -140,6 +175,7 @@ fun CollageWorkspaceScreen(
         history = history.checkpoint(document, next)
         onDocument(next)
         layoutGestureStart = null
+        layoutGestureLatest = null
     }
 
     fun changeLayout(layout: CollageLayout) {
@@ -148,14 +184,17 @@ fun CollageWorkspaceScreen(
 
     fun slideLayout(layout: CollageLayout) {
         if (layoutGestureStart == null) layoutGestureStart = document
-        onDocument(document.copy(layout = layout))
+        val next = document.copy(layout = layout)
+        layoutGestureLatest = next
+        onDocument(next)
     }
 
     fun finishLayout() {
-        layoutGestureStart?.let {
-            history = history.checkpoint(it, document)
+        layoutGestureStart?.let { start ->
+            history = history.checkpoint(start, layoutGestureLatest ?: document)
         }
         layoutGestureStart = null
+        layoutGestureLatest = null
     }
 
     fun undoCollage() {
@@ -172,6 +211,38 @@ fun CollageWorkspaceScreen(
             onDocument(nextDoc)
             selected = selected.coerceAtMost(nextDoc.photos.lastIndex).coerceAtLeast(0)
         }
+    }
+
+    fun persistSession() {
+        onSession(CollageWorkspaceSession(
+            selectedPhoto = selected.coerceIn(0, document.photos.lastIndex.coerceAtLeast(0)),
+            history = history,
+            section = section,
+            control = control,
+            toolsVisible = toolsVisible
+        ))
+    }
+
+    fun requestBack() {
+        if (rendering || exporting) {
+            notice = if (exporting) "Finish the collage export before leaving."
+                else "Wait for the collage preview to finish."
+            return
+        }
+        finishLayout()
+        persistSession()
+        onBack()
+    }
+
+    fun requestSwitch(mode: WorkspaceMode) {
+        if (rendering || exporting) {
+            notice = if (exporting) "Finish the collage export before switching workspaces."
+                else "Wait for the collage preview to finish."
+            return
+        }
+        finishLayout()
+        persistSession()
+        onSwitch(mode)
     }
 
     fun retainReadPermission(uri: Uri) {
@@ -212,12 +283,13 @@ fun CollageWorkspaceScreen(
                     commit(document.copy(photos = copy))
                 }
                 editingTile = -1
-            }
+            },
+            onCancelCollagePhoto = { editingTile = -1 }
         )
         return
     }
 
-    BackHandler { onBack() }
+    BackHandler { requestBack() }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(CollageMath.MAX_PHOTOS)
@@ -313,14 +385,17 @@ fun CollageWorkspaceScreen(
     }
 
     LaunchedEffect(document) {
+        renderGeneration += 1
+        val generation = renderGeneration
         if (document.photos.isEmpty()) {
             preview = null
+            rendering = false
             savedNames = withContext(Dispatchers.IO) { CollageStore.names(context) }
             return@LaunchedEffect
         }
-        delay(125L)
         rendering = true
         try {
+            delay(125L)
             val (width, height) = CollageMath.outputSize(document.layout, 960, 1_300_000L)
             val value = withContext(Dispatchers.Default) {
                 val job = currentCoroutineContext()
@@ -339,7 +414,7 @@ fun CollageWorkspaceScreen(
         } catch (error: Exception) {
             notice = "Cannot render collage: " + (error.message ?: "missing source photo")
         } finally {
-            rendering = false
+            if (renderGeneration == generation) rendering = false
         }
     }
 
@@ -408,7 +483,11 @@ fun CollageWorkspaceScreen(
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold)
-                    WorkspaceModeMenu(WorkspaceMode.COLLAGE, !exporting, onSwitch)
+                    WorkspaceModeMenu(
+                        WorkspaceMode.COLLAGE,
+                        !rendering && !exporting,
+                        ::requestSwitch
+                    )
                     val openProjects = document.photos.isEmpty() && savedNames.isNotEmpty()
                     TextButton(onClick = {
                         if (openProjects) {
@@ -429,7 +508,7 @@ fun CollageWorkspaceScreen(
                 Row(Modifier.fillMaxWidth().height(42.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = onBack) {
+                    TextButton(onClick = ::requestBack) {
                         Text("Back", color = EditorWhite)
                     }
                     TextButton(onClick = ::undoCollage,
@@ -580,6 +659,7 @@ fun CollageWorkspaceScreen(
                     if (candidate != null) {
                         history = CollageHistory()
                         layoutGestureStart = null
+                        layoutGestureLatest = null
                         onDocument(candidate)
                         selected = 0
                         savedList = false
@@ -719,7 +799,7 @@ private fun CollageControls(
                     }
                 }
             }
-            LazyRow(Modifier.fillMaxWidth().height(46.dp),
+            LazyRow(Modifier.fillMaxWidth().height(46.dp).testTag("collage-tile-actions"),
                 contentPadding = PaddingValues(horizontal = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 item { DockChip("+ Add", false,
@@ -750,7 +830,7 @@ private fun CollageControls(
         }
     }
 
-    LazyRow(Modifier.fillMaxWidth().height(47.dp),
+    LazyRow(Modifier.fillMaxWidth().height(47.dp).testTag("collage-sections"),
         contentPadding = PaddingValues(horizontal = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         items(CollageSection.entries) { item ->

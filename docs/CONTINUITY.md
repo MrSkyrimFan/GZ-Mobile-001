@@ -1,14 +1,17 @@
 # GZ Editor Pro — continuity / engineering custody
 
-## Most recent owner directive (2026-11-21)
-Preserve the existing easy photo-first UI and all working features. Put **GZ Editor Pro** at top left during editing. Show company **© 2026 Greenezone Software LLC** bottom-left on initial empty screen. Add real editable words/text in many fonts with width/height adjustment, freehand drawings/shapes, a manual draggable crop frame with freeform mode, more export file formats via dropdown, and a **separate** platform sizing dropdown for Instagram/Facebook/TikTok and other popular destinations. One large coherent implementation and test round, not endless microbuilds. User provided four screenshot references after GZ Editor Pro 0.6, verifying Blur & cover tools and opaque bar output. Existing UI must not be spoiled.
+## Current owner direction (2026-11-22)
+
+[Product requirements](PRODUCT_SPEC.md) reflect the owner's latest instructions and Revision 4. Use these to resolve conflicts with earlier handoffs and version records. Check live GitHub refs before issuing builds or relying on historical branch IDs. Work directly in the authorized GitHub repository. Keep owner evidence and the active task package in the supplemental intake until the work it governs is complete. Keep original handoff archives intact.
+
+The pending phone candidate must address real post-edit GIF motion, finger-friendly Regular crop, workspace tool ownership, Pro File reset and Back, and the confirmation-based Regular-to-Pro handoff. Protect working Regular and independent Collage workflows. Pro tools may be reorganized where the existing interface obstructs the job. Follow [Release gates](RELEASE_GATE.md) for engineering verification and owner acceptance.
 
 ## Repos / identifiers
 - Single authorized repo: `MrSkyrimFan/GZ-Mobile-001`.
 - Baseline GZ Editor Pro 0.6 merge: `2a0f11b7eef2c5b42e5f569890b694a1dd7ba265`.
-- Engineering branch: `feature/gz-editor-pro-creation-export-07`.
+- Historical 0.7 engineering branch: `feature/gz-editor-pro-creation-export-07`.
 - Application ID unchanged: `com.greenezone.gzphotoeditor`; launcher name GZ Editor Pro. Target Android10+, compile/target SDK36.
-- Price target $1.99 one-time, no AI runtime, ads, watermarks, IAP, subscriptions, tracking, remote services. Open media currently supports **images only**.
+- Retail target $2.99 one-time. Offline editing without runtime AI, ads, watermarks, in-app purchases, subscriptions, tracking or remote services.
 
 ## Architecture
 - Save source image only by content URI, edit non-destructively.
@@ -16,10 +19,10 @@ Preserve the existing easy photo-first UI and all working features. Put **GZ Edi
 - Text/ink/shapes and normalized crop frame persisted in backwards-compatible project codec; regenerate from source at final resolution.
 - Export supports JPEG/PNG/WebP lossy/lossless/BMP/TIFF/PDF with matching MIME and real encoders.
 - Social presets use specified pixel dimensions with explicit Fit/Fill. Not automatic social upload or guaranteed platform acceptance.
-- The prior app UI, horizontal categories, 50 Looks, curves, colors, privacy masks, undo/redo all remain.
+- Preserve the photo-first Regular interface, Looks, curves, color, Blur & cover, and Undo/Redo. Legacy Regular masks remain readable and renderable. New masking and selections belong in Pro.
 
 ## Hard rules
-Review source, test JVM and real Android bitmap/Compose, verify PR commit SHA, merged-main workflow and APK artifact. Don't claim final Play-ready app without physical phone and policy release gates. Do not change the Greenezone corporate website, registrar, DNS, XForge, GZFX, Beside-Me or unrelated repo settings.
+Trace owner-visible failures through production entry points. Test JVM and Android bitmap/Compose behavior, inspect rendered output, and link verification to the exact candidate commit. Engineering may merge verified changes under the owner's authority. Handset qualification, formal workspace locks, and commercial release each require their own evidence or owner decision. Keep changes inside the GZ app repository and its supplemental intake.
 
 ## Collage wave v0.8.0 (2026-11-21 local)
 Current verified main baseline before this wave: `7508ff715d39dbb13ae543961b943cee5c78c22b` (GZ Editor Pro 0.7).

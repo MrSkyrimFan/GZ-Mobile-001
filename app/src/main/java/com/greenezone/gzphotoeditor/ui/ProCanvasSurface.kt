@@ -20,13 +20,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import com.greenezone.gzphotoeditor.editor.*
 import kotlin.math.min
 
 internal data class ProViewport(val zoom: Float = 1f, val x: Float = .5f, val y: Float = .5f)
+
+internal val ProViewportSemanticsKey =
+    SemanticsPropertyKey<ProViewport>("ProViewport")
+private var SemanticsPropertyReceiver.proViewportForTesting by ProViewportSemanticsKey
 
 private class CanvasFrame(
     width: Float, height: Float, imageWidth: Int, imageHeight: Int, view: ProViewport
@@ -71,8 +78,9 @@ internal fun ProCanvasSurface(
     val bitmapPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG) }
     val toggleLabel = if (controlsVisible) "Hide controls" else "Show controls"
     val (width, height) = artboardSize
-    Canvas(modifier.semantics {
+    Canvas(modifier.testTag("pro-canvas").semantics {
         contentDescription = if (enabled) "Pro editable composition" else "Pro composition preview"
+        proViewportForTesting = view
         if (enabled) onClick(label = toggleLabel) { events.toggleControls(); true }
     }.pointerInput(section, enabled) {
         if (!enabled) return@pointerInput
@@ -161,7 +169,7 @@ internal fun ProCanvasSurface(
             }
             if ((section == ProSection.LAYERS || section == ProSection.MOVE) && layer?.visible == true)
                 drawLayerBounds(canvas, layer, width, height, guide)
-            if (section == ProSection.SELECT) {
+            if (section == ProSection.SELECT && layer?.visible == true && layer.opacity > 0f) {
                 layer?.mask?.let { canvas.drawPath(ProToolMath.projectedPath(it, layer, width, height), guide) }
                 if (draft != null && ProToolMath.valid(draft)) {
                     guide.color = android.graphics.Color.YELLOW
@@ -198,7 +206,7 @@ private fun drawLayerBounds(canvas: Canvas, layer: ProLayer, w: Int, h: Int, pai
     val cx = layer.x * w
     val cy = layer.y * h
     val rect = when (layer.kind) {
-        ProLayerKind.IMAGE -> ProMath.bounds(layer, w, h, (1000 * layer.aspect).toInt(), 1000)
+        ProLayerKind.IMAGE -> ProMath.bounds(layer, w, h)
             .let { RectF(it.left, it.top, it.right, it.bottom) }
         ProLayerKind.TEXT, ProLayerKind.SHAPE -> {
             val text = layer.edits.creative.text.firstOrNull()

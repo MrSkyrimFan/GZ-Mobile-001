@@ -61,6 +61,17 @@ class AndroidGifWorkspacePlaybackTest {
         }
     }
 
+    private fun taggedFrame(tag: String): Int {
+        val node = rule.onAllNodesWithTag(tag).fetchSemanticsNodes().singleOrNull() ?: return 0
+        val label = if (SemanticsProperties.ContentDescription in node.config)
+            node.config[SemanticsProperties.ContentDescription].singleOrNull() else null
+        return label?.substringAfterLast(' ')?.toIntOrNull() ?: 0
+    }
+
+    private fun waitTaggedFrameAtLeast(tag: String, frame: Int) {
+        rule.waitUntil(15_000) { taggedFrame(tag) >= frame }
+    }
+
     private fun centerColor(): Int {
         val frame = rule.onNodeWithTag("gif-frame").captureToImage().asAndroidBitmap()
         return frame.getPixel(frame.width / 2, frame.height / 2)
@@ -157,11 +168,12 @@ class AndroidGifWorkspacePlaybackTest {
         }
     }
 
-    @Test fun sixtyFpsBFramesUseContinuousSampledPlaybackAndExportTwoSeconds() {
+    @Test fun sixtyFpsBFramesAdvanceThroughScheduledOrMeasuredFallbackAndExportTwoSeconds() {
         val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-phone-60fps.mp4", "video/mp4") { out ->
             instrument.context.assets.open("gif_phone_60fps_bframes.mp4").use { it.copyTo(out) }
         }
         try {
+            val startingSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
             val doc = VideoGifSource.document(context, uri)
             val clip = requireNotNull(doc.video)
             assertEquals(720 to 1280, clip.width to clip.height)
@@ -170,27 +182,79 @@ class AndroidGifWorkspacePlaybackTest {
             assertEquals(80, times.size)
             show(doc)
             waitFrame(1)
-            rule.onNodeWithText("Play").performClick()
-            val tag = "gif-scheduled-video"
-            rule.waitUntil(15_000) {
-                val node = rule.onAllNodesWithTag(tag).fetchSemanticsNodes().singleOrNull()
-                val label = if (node != null && SemanticsProperties.ContentDescription in node.config)
-                    node.config[SemanticsProperties.ContentDescription].singleOrNull() else null
-                (label?.substringAfterLast(' ')?.toIntOrNull() ?: 0) >= 5
+            var operationId = 0L
+            rule.runOnIdle {
+                operationId = requireNotNull(GifPreviewDiagnostics.snapshot().lastOrNull {
+                    it.sequence > startingSequence &&
+                        it.kind == GifDiagnosticKind.OPERATION_STARTED
+                }).operationId
             }
+
+            val scheduledTag = "gif-scheduled-video"
+            val bitmapTag = "gif-frame"
+            rule.onNodeWithText("Play").performClick()
+            rule.waitUntil(15_000) {
+                taggedFrame(scheduledTag) >= 5 || taggedFrame(bitmapTag) >= 5
+            }
+
+            // Playback can reach the end between a Pause query and a click.
+            // These color patches are invariant, so capture the stable final still.
+            rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
+            waitFrame(times.size)
+
             // These patches remain cyan and blue through the moving test pattern.
             // Their positions come from independently decoding the rotated MP4 fixture.
-            val visible = rule.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
+            val visible = rule.onNodeWithTag(bitmapTag).captureToImage().asAndroidBitmap()
             fun verifyPortraitPatches(image: Bitmap) {
                 assertTrue(image.height > image.width)
-                val cyan = image.getPixel(image.width / 5, image.height / 10)
-                val blue = image.getPixel(image.width / 5, image.height * 45 / 100)
+                // captureToImage() includes the whole ContentScale.Fit node, including
+                // any letterbox gutters. Map fixture coordinates into the centered 9:16
+                // content rectangle so different API insets cannot turn this into a UI
+                // background-color assertion.
+                val contentWidth = minOf(image.width, image.height * 9 / 16)
+                val contentHeight = minOf(image.height, image.width * 16 / 9)
+                val left = (image.width - contentWidth) / 2
+                val top = (image.height - contentHeight) / 2
+                val cyan = image.getPixel(left + contentWidth / 5, top + contentHeight / 10)
+                val blue = image.getPixel(left + contentWidth / 5, top + contentHeight * 45 / 100)
                 assertTrue("rotated cyan patch = $cyan", Color.red(cyan) < 80 && Color.green(cyan) > 170 && Color.blue(cyan) > 170)
                 assertTrue("rotated blue patch = $blue", Color.red(blue) < 80 && Color.green(blue) < 80 && Color.blue(blue) > 170)
             }
             verifyPortraitPatches(visible)
-            rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
-            waitFrame(times.size)
+
+            rule.runOnIdle {
+                val events = GifPreviewDiagnostics.snapshot().filter {
+                    it.sequence > startingSequence && it.operationId == operationId
+                }
+                assertTrue(events.any {
+                    it.kind == GifDiagnosticKind.PREVIEW_ROUTE_SELECTED &&
+                        it.route == GifPreviewRoute.SCHEDULED_CODEC
+                })
+                assertFalse(events.any { it.kind == GifDiagnosticKind.PREVIEW_FAILED })
+                val scheduledAdvanced = events.any {
+                    it.kind == GifDiagnosticKind.FRAME_SETTLED &&
+                        it.route == GifPreviewRoute.SCHEDULED_CODEC &&
+                        (it.frameIndex ?: -1) >= 4
+                }
+                val fallbackStarted = events.any {
+                    it.kind == GifDiagnosticKind.FALLBACK_STARTED &&
+                        it.route == GifPreviewRoute.SCHEDULED_CODEC
+                }
+                val bitmapAdvanced = events.any {
+                    it.kind == GifDiagnosticKind.FRAME_SETTLED &&
+                        it.route == GifPreviewRoute.BITMAP_RETRIEVER &&
+                        (it.frameIndex ?: -1) >= 4
+                }
+                assertTrue("Preview neither advanced on the scheduled route nor completed its measured fallback",
+                    scheduledAdvanced || fallbackStarted && bitmapAdvanced)
+                if (fallbackStarted) {
+                    assertTrue(events.any {
+                        it.kind == GifDiagnosticKind.PREVIEW_ROUTE_SELECTED &&
+                            it.route == GifPreviewRoute.BITMAP_RETRIEVER
+                    })
+                    assertTrue(bitmapAdvanced)
+                }
+            }
 
             val small = doc.copy(size = GifSize.SMALL)
             val baseline = java.io.ByteArrayOutputStream()
@@ -336,4 +400,160 @@ class AndroidGifWorkspacePlaybackTest {
             waitFrame(GifVideoMath.frameCount(doc.video!!))
         } finally { resolver.delete(uri, null, null) }
     }
+    @Test fun portraitVideoPlaysAgainAfterTrimAndRapidScrub() {
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            "gz-portrait-motion.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_portrait_motion_fixture.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val source = VideoGifSource.document(context, uri)
+            val clip = requireNotNull(source.video)
+            assertEquals(1080 to 1920, clip.width to clip.height)
+            assertEquals(150, clip.sourceTimesMs.size)
+            var latest = source
+            show(source) { latest = it }
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            rule.waitUntil(15_000) {
+                taggedFrame("gif-native-video") >= 12 || taggedFrame("gif-scheduled-video") >= 12
+            }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty()
+            }
+            waitFrame(GifVideoMath.frameCount(clip))
+            rule.onNodeWithContentDescription("Trim start and end").performScrollTo().performTouchInput {
+                swipe(androidx.compose.ui.geometry.Offset(width * .04f, center.y),
+                    androidx.compose.ui.geometry.Offset(width * .44f, center.y), 450)
+            }
+            rule.runOnIdle {
+                val trimmed = requireNotNull(latest.video)
+                assertTrue("Trim thumb did not move to the intended range: ${trimmed.startMs}",
+                    trimmed.startMs in 1_700L..2_600L)
+                assertEquals(clip.endMs, trimmed.endMs)
+            }
+            rule.onNodeWithText("Reverse").performClick()
+            rule.onNodeWithText("Looks").performScrollTo().performClick()
+            rule.onNodeWithText("B&W").performScrollTo().performClick()
+            rule.onNodeWithText("Timeline").performScrollTo().performClick()
+            val scrub = rule.onNodeWithContentDescription("Scrub GIF frames").performScrollTo()
+            scrub.performTouchInput {
+                swipe(androidx.compose.ui.geometry.Offset(width * .06f, center.y),
+                    androidx.compose.ui.geometry.Offset(width * .77f, center.y), 260)
+                swipe(androidx.compose.ui.geometry.Offset(width * .77f, center.y),
+                    androidx.compose.ui.geometry.Offset(width * .06f, center.y), 260)
+            }
+            scrub.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(0f) }
+            waitFrame(1)
+            rule.runOnIdle {
+                assertTrue(requireNotNull(latest.video).reverse)
+                assertEquals(-1f, latest.edits.grade.saturation, .001f)
+            }
+            fun sampleMotion(): List<Int> {
+                val image = rule.onNodeWithTag("gif-frame").captureToImage().asAndroidBitmap()
+                return (1..13).flatMap { row ->
+                    (1..7).map { column ->
+                        val x = image.width / 4 + image.width * column / 16
+                        val y = image.height / 12 + image.height * row / 17
+                        Color.red(image.getPixel(x, y)) / 24
+                    }
+                }
+            }
+            val samples = mutableSetOf(sampleMotion())
+            val playAt = SystemClock.elapsedRealtime()
+            rule.onNodeWithText("Play").performClick()
+            try {
+                rule.waitUntil(6_000) {
+                    if (taggedFrame("gif-frame") > 0) samples.add(sampleMotion())
+                    samples.size >= 5
+                }
+            } finally {
+                Log.i("GzGifTiming", "Trim + reverse + B&W, 1080x1920: ${samples.size} distinct visible samples in ${SystemClock.elapsedRealtime() - playAt}ms")
+            }
+        } finally {
+            resolver.delete(uri, null, null)
+        }
+    }
+
+    @Test fun editedVideoKeepsAdvancingAcrossReverseLookAndSpeedChanges() {
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            "gz-edited-preview.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_sample_2sec_h264.mp4").use { it.copyTo(out) }
+        }
+        try {
+            val startingSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
+            val doc = VideoGifSource.document(context, uri)
+            show(doc)
+            waitFrame(1)
+            var operationId = 0L
+            rule.runOnIdle {
+                operationId = requireNotNull(GifPreviewDiagnostics.snapshot().lastOrNull {
+                    it.sequence > startingSequence &&
+                        it.kind == GifDiagnosticKind.OPERATION_STARTED
+                }).operationId
+            }
+
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-native-video", 4)
+            rule.onNodeWithText("Pause").performClick()
+            rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
+                androidx.compose.ui.semantics.SemanticsActions.SetProgress
+            ) { it(0f) }
+
+            rule.onNodeWithText("Reverse").performClick()
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-frame", 4)
+            rule.onNodeWithText("Pause").performClick()
+
+            rule.onNodeWithText("Looks").performScrollTo().performClick()
+            rule.onNodeWithText("B&W").performScrollTo().performClick()
+            rule.onNodeWithText("Timeline").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
+                androidx.compose.ui.semantics.SemanticsActions.SetProgress
+            ) { it(0f) }
+            rule.waitUntil(15_000) {
+                val gray = centerColor()
+                kotlin.math.abs(Color.red(gray) - Color.green(gray)) < 12 &&
+                    kotlin.math.abs(Color.green(gray) - Color.blue(gray)) < 12
+            }
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-frame", 4)
+            rule.onNodeWithText("Pause").performClick()
+
+            rule.onNodeWithText("Playback").performScrollTo().performClick()
+            rule.onNodeWithText("200%").performScrollTo().performClick()
+            rule.onNodeWithText("Timeline").performScrollTo().performClick()
+            rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
+                androidx.compose.ui.semantics.SemanticsActions.SetProgress
+            ) { it(0f) }
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-frame", 4)
+            rule.onNodeWithText("Pause").performClick()
+
+            rule.runOnIdle {
+                val events = GifPreviewDiagnostics.snapshot().filter {
+                    it.sequence > startingSequence && it.operationId == operationId
+                }
+                assertTrue(events.any {
+                    it.kind == GifDiagnosticKind.PREVIEW_ROUTE_SELECTED &&
+                        it.route == GifPreviewRoute.NATIVE_SOURCE
+                })
+                assertTrue(events.any {
+                    it.kind == GifDiagnosticKind.PREVIEW_ROUTE_SELECTED &&
+                        (it.route == GifPreviewRoute.BITMAP_CODEC || it.route == GifPreviewRoute.BITMAP_RETRIEVER)
+                })
+                val editedFrames = events.filter {
+                    it.kind == GifDiagnosticKind.FRAME_SETTLED &&
+                        (it.route == GifPreviewRoute.BITMAP_CODEC || it.route == GifPreviewRoute.BITMAP_RETRIEVER)
+                }.mapNotNull { it.frameIndex }.distinct()
+                assertTrue("Edited preview did not settle three distinct frames: $editedFrames",
+                    editedFrames.size >= 3)
+                assertFalse(events.any { it.kind == GifDiagnosticKind.PREVIEW_FAILED })
+            }
+        } finally {
+            resolver.delete(uri, null, null)
+        }
+    }
+
 }

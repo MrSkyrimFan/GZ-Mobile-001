@@ -65,10 +65,8 @@ import com.greenezone.gzphotoeditor.editor.CurveMath
 import com.greenezone.gzphotoeditor.editor.CurvePoints
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.Grade
-import com.greenezone.gzphotoeditor.editor.LocalMask
 import com.greenezone.gzphotoeditor.editor.Look
 import com.greenezone.gzphotoeditor.editor.Looks
-import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.Panel
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
 import java.util.Locale
@@ -89,7 +87,6 @@ enum class EditTab(val title: String) {
     DETAIL("Detail"),
     EFFECTS("Effects"),
     CURVES("Curves"),
-    MASKS("Masks"),
     PRIVACY("Blur & cover"),
     TEXT("Text"),
     DRAW("Draw"),
@@ -112,8 +109,6 @@ fun EditorDock(
     savedLooks: List<Look>,
     activeLook: String,
     busy: Boolean,
-    selectedMaskIndex: Int,
-    onSelectMask: (Int) -> Unit,
     selectedPrivacyIndex: Int,
     onSelectPrivacy: (Int) -> Unit,
     onAddPrivacy: (PrivacyKind) -> Unit,
@@ -124,10 +119,6 @@ fun EditorDock(
     onSlide: (EditDocument) -> Unit,
     onSlideFinished: () -> Unit,
     onSelectLook: (String, Grade) -> Unit,
-    onAddMask: (MaskKind) -> Unit,
-    onDeleteMask: () -> Unit,
-    onUndoBrush: () -> Unit,
-    onClearBrush: () -> Unit,
     onAutoTone: () -> Unit,
     onAutoWB: () -> Unit,
     onSaveLook: () -> Unit,
@@ -162,10 +153,6 @@ fun EditorDock(
             )
             EditTab.CURVES -> CurveDeck(
                 document, !busy, onCommit, onSlide, onSlideFinished
-            )
-            EditTab.MASKS -> MaskDeck(
-                document, !busy, selectedMaskIndex, onSelectMask, onCommit,
-                onSlide, onSlideFinished, onAddMask, onDeleteMask, onUndoBrush, onClearBrush
             )
             EditTab.PRIVACY -> PrivacyDeck(
                 document, selectedPrivacyIndex, !busy, onSelectPrivacy, onAddPrivacy,
@@ -516,123 +503,6 @@ private fun CurveThumb(points: CurvePoints, modifier: Modifier = Modifier) {
         drawLine(Color(0xFF515D68), Offset(0f, size.height), Offset(size.width, 0f), 1f)
         drawPath(path, EditorMint, style = Stroke(width = 2.5f))
     }
-}
-
-private data class MaskSetting(
-    val label: String,
-    val min: Float,
-    val max: Float,
-    val read: (LocalMask) -> Float,
-    val write: (LocalMask, Float) -> LocalMask,
-    val neutral: Float = 0f
-)
-
-private fun settingsFor(mask: LocalMask): List<MaskSetting> {
-    val common = listOf(
-        MaskSetting("Exposure", -1.5f, 1.5f, { it.exposure }, { m, v -> m.copy(exposure = v) }),
-        MaskSetting("Contrast", -1f, 1f, { it.contrast }, { m, v -> m.copy(contrast = v) }),
-        MaskSetting("Saturation", -1f, 1f, { it.saturation }, { m, v -> m.copy(saturation = v) })
-    )
-    val feather = MaskSetting("Soft edge", .01f, 1f, { it.feather },
-        { m, v -> m.copy(feather = v) }, .35f)
-    val size = MaskSetting("Brush size", .005f, .20f, { it.radius },
-        { m, v -> m.copy(radius = v) }, .045f)
-    val radius = MaskSetting("Size", .02f, .8f, { it.radius },
-        { m, v -> m.copy(radius = v) }, .35f)
-    val x = MaskSetting("Center X", 0f, 1f, { it.centerX },
-        { m, v -> m.copy(centerX = v) }, .5f)
-    val y = MaskSetting("Center Y", 0f, 1f, { it.centerY },
-        { m, v -> m.copy(centerY = v) }, .5f)
-    return common + when (mask.kind) {
-        MaskKind.BRUSH -> listOf(size, feather)
-        MaskKind.RADIAL -> listOf(radius, feather, x, y)
-        MaskKind.LINEAR -> listOf(
-            radius.copy(label = "Spread"),
-            x.copy(label = "Tilt"),
-            y
-        )
-    }
-}
-
-@Composable
-private fun MaskDeck(
-    document: EditDocument,
-    enabled: Boolean,
-    selectedMaskIndex: Int,
-    onSelectMask: (Int) -> Unit,
-    onCommit: (EditDocument) -> Unit,
-    onSlide: (EditDocument) -> Unit,
-    onFinished: () -> Unit,
-    onAdd: (MaskKind) -> Unit,
-    onDelete: () -> Unit,
-    onUndoBrush: () -> Unit,
-    onClearBrush: () -> Unit
-) {
-    val current = document.masks.getOrNull(selectedMaskIndex)
-    var settingIndex by remember(selectedMaskIndex, current?.kind) { mutableIntStateOf(0) }
-    LazyRow(
-        modifier = Modifier.fillMaxWidth().height(44.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        itemsIndexed(document.masks, key = { index, _ -> "mask-$index" }) { index, item ->
-            DockChip(item.kind.title + " " + (index + 1), selectedMaskIndex == index, enabled) {
-                onSelectMask(index)
-            }
-        }
-        if (document.masks.size < 4) {
-            item { DockChip("+ Brush", false, enabled) { onAdd(MaskKind.BRUSH) } }
-            item { DockChip("+ Radial", false, enabled) { onAdd(MaskKind.RADIAL) } }
-            item { DockChip("+ Linear", false, enabled) { onAdd(MaskKind.LINEAR) } }
-        }
-        if (current != null) {
-            item { DockChip("Remove mask", false, enabled, onDelete) }
-            if (current.kind == MaskKind.BRUSH) {
-                item { DockChip("Undo stroke", false, enabled && current.strokes.isNotEmpty(), onUndoBrush) }
-                item { DockChip("Clear paint", false, enabled && current.strokes.isNotEmpty(), onClearBrush) }
-            }
-        }
-    }
-    if (current == null) {
-        Text(
-            "Add a mask to adjust just part of the image.",
-            color = EditorWhite, fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp)
-        )
-        return
-    }
-    if (current.kind == MaskKind.BRUSH) {
-        Text("BRUSH  •  Paint directly on the photo at 1×",
-            color = EditorMint, fontSize = 11.sp,
-            modifier = Modifier.padding(horizontal = 15.dp))
-    }
-    val settings = settingsFor(current)
-    val setting = settings[settingIndex.coerceIn(0, settings.lastIndex)]
-    LazyRow(
-        modifier = Modifier.fillMaxWidth().height(44.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        itemsIndexed(settings) { index, item ->
-            DockChip(item.label, settingIndex == index, enabled) { settingIndex = index }
-        }
-    }
-    fun update(v: Float) {
-        val edited = document.masks.toMutableList()
-        edited[selectedMaskIndex] = setting.write(current, v)
-        onSlide(document.copy(masks = edited))
-    }
-    SingleAdjustment(
-        title = setting.label, value = setting.read(current),
-        low = setting.min, high = setting.max, enabled = enabled,
-        onReset = {
-            val edited = document.masks.toMutableList()
-            edited[selectedMaskIndex] = setting.write(current, setting.neutral)
-            onCommit(document.copy(masks = edited))
-        },
-        onChange = ::update,
-        onFinished = onFinished
-    )
 }
 
 @Composable

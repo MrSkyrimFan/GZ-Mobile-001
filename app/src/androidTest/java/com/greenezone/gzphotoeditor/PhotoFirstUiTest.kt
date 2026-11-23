@@ -22,7 +22,6 @@ import com.greenezone.gzphotoeditor.editor.ExportSettings
 import com.greenezone.gzphotoeditor.editor.ImageExportFormat
 import com.greenezone.gzphotoeditor.editor.Grade
 import com.greenezone.gzphotoeditor.editor.Look
-import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.ui.EditTab
 import com.greenezone.gzphotoeditor.ui.EditorDock
 import com.greenezone.gzphotoeditor.ui.ExportDialog
@@ -48,7 +47,7 @@ class PhotoFirstUiTest {
         rule.onNodeWithText("Add first photo").assertExists()
     }
 
-    @Test fun proLayerCreationIsReachableFromCleanCanvas() {
+    @Test fun proCreatesShapesWithoutOfferingTextFromCleanCanvas() {
         var lastDocument = com.greenezone.gzphotoeditor.editor.ProDocument()
         rule.setContent {
             var editable by remember {
@@ -66,13 +65,14 @@ class PhotoFirstUiTest {
         }
         rule.onNodeWithText("Or start with a blank canvas").performClick()
         rule.onNodeWithText("+ Add layer").performClick()
-        rule.onNodeWithText("Words / Text").performClick()
-        rule.onNodeWithText("Apply").performClick()
+        rule.onNodeWithText("Words / Text").assertDoesNotExist()
+        rule.onNodeWithText("Shape").performClick()
+        rule.onNodeWithText("Shapes ▴").assertIsDisplayed()
         rule.runOnIdle {
             assertEquals(2, lastDocument.layers.size)
             assertEquals(com.greenezone.gzphotoeditor.editor.ProLayerKind.DRAWING,
                 lastDocument.layers[0].kind)
-            assertEquals(com.greenezone.gzphotoeditor.editor.ProLayerKind.TEXT,
+            assertEquals(com.greenezone.gzphotoeditor.editor.ProLayerKind.SHAPE,
                 lastDocument.layers[1].kind)
         }
     }
@@ -158,8 +158,6 @@ class PhotoFirstUiTest {
                     savedLooks = emptyList(),
                     activeLook = "none",
                     busy = false,
-                    selectedMaskIndex = 0,
-                    onSelectMask = {},
                     selectedPrivacyIndex = 0,
                     onSelectPrivacy = {},
                     onAddPrivacy = {},
@@ -170,10 +168,6 @@ class PhotoFirstUiTest {
                     onSlide = {},
                     onSlideFinished = {},
                     onSelectLook = { key, grade -> selected = key; result = grade },
-                    onAddMask = {},
-                    onDeleteMask = {},
-                    onUndoBrush = {},
-                    onClearBrush = {},
                     onAutoTone = {},
                     onAutoWB = {},
                     onSaveLook = {},
@@ -203,8 +197,6 @@ class PhotoFirstUiTest {
                     savedLooks = emptyList(),
                     activeLook = "none",
                     busy = false,
-                    selectedMaskIndex = 0,
-                    onSelectMask = {},
                     selectedPrivacyIndex = 0,
                     onSelectPrivacy = {},
                     onAddPrivacy = {},
@@ -215,10 +207,6 @@ class PhotoFirstUiTest {
                     onSlide = {},
                     onSlideFinished = {},
                     onSelectLook = { _, _ -> },
-                    onAddMask = {},
-                    onDeleteMask = {},
-                    onUndoBrush = {},
-                    onClearBrush = {},
                     onAutoTone = {},
                     onAutoWB = {},
                     onSaveLook = {},
@@ -247,8 +235,6 @@ class PhotoFirstUiTest {
             savedLooks = emptyList(),
             activeLook = "none",
             busy = false,
-            selectedMaskIndex = 0,
-            onSelectMask = {},
             selectedPrivacyIndex = 0,
             onSelectPrivacy = {},
             onAddPrivacy = {},
@@ -259,10 +245,6 @@ class PhotoFirstUiTest {
             onSlide = {},
             onSlideFinished = {},
             onSelectLook = { _, _ -> },
-            onAddMask = {},
-            onDeleteMask = {},
-            onUndoBrush = {},
-            onClearBrush = {},
             onAutoTone = {},
             onAutoWB = {},
             onSaveLook = {},
@@ -363,8 +345,6 @@ class PhotoFirstUiTest {
                     savedLooks = emptyList(),
                     activeLook = "none",
                     busy = false,
-                    selectedMaskIndex = 0,
-                    onSelectMask = {},
                     selectedPrivacyIndex = 0,
                     onSelectPrivacy = {},
                     onAddPrivacy = {},
@@ -375,10 +355,6 @@ class PhotoFirstUiTest {
                     onSlide = { edits = it },
                     onSlideFinished = {},
                     onSelectLook = { _, grade -> edits = edits.copy(grade = grade) },
-                    onAddMask = {},
-                    onDeleteMask = {},
-                    onUndoBrush = {},
-                    onClearBrush = {},
                     onAutoTone = {},
                     onAutoWB = {},
                     onSaveLook = {},
