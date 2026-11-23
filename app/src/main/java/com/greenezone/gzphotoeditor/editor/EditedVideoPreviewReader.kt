@@ -26,9 +26,9 @@ private fun requiresAndroidColorConversion(standard: Int?, transfer: Int?): Bool
         transfer == MediaFormat.COLOR_TRANSFER_ST2084
 
 /**
- * Bitmap preview for edited SDR video. Forward play decodes packets in order. Reverse
- * decodes bounded windows forward and consumes the selected pictures backwards.
- * The caller owns returned bitmaps. Neither this reader nor its scaling is used by export.
+ * Bitmap decoder for edited SDR video. Forward reads decode packets in order; reverse
+ * reads decode bounded windows forward and consume the selected pictures backwards.
+ * The caller owns returned bitmaps. Export applies filtered downscaling.
  */
 internal class EditedVideoPreviewReader private constructor(
     private val clip: GifVideoClip,
@@ -37,6 +37,7 @@ internal class EditedVideoPreviewReader private constructor(
     private val trackFormat: MediaFormat,
     private val rotation: Int,
     private val prefetchReverseFrames: Boolean,
+    private val filterDownscaling: Boolean,
     private val checkActive: () -> Unit
 ) : GifFrameReader {
     private val times = clip.sourceTimesMs
@@ -65,7 +66,12 @@ internal class EditedVideoPreviewReader private constructor(
         val width = (clip.width * scale).roundToInt().coerceAtLeast(1)
         val height = (clip.height * scale).roundToInt().coerceAtLeast(1)
         val first = if (clip.reverse && prefetchReverseFrames) {
-            (target - MAX_REVERSE_PICTURES + 1).coerceIn(firstTrimmedIndex.coerceAtMost(target), target)
+            // Export can produce much larger pictures. Bound the scan by the number of
+            // packed planes that fit even when noisy footage does not compress.
+            val window = if (filterDownscaling)
+                (REVERSE_CACHE_BYTES / (3L * width * height) + 1).coerceAtMost(MAX_REVERSE_PICTURES.toLong()).toInt()
+                else MAX_REVERSE_PICTURES
+            (target - window + 1).coerceIn(firstTrimmedIndex.coerceAtMost(target), target)
         } else target
         if (first < target && (reverseStorage?.width != width || reverseStorage?.height != height)) {
             reverseStorage?.close()
@@ -168,7 +174,7 @@ internal class EditedVideoPreviewReader private constructor(
         val hd = standard == MediaFormat.COLOR_STANDARD_BT709 ||
             (standard == null && maxOf(clip.width, clip.height) >= 1280)
         val axes = sampleAxes?.takeIf { it.width == width && it.height == height && it.crop == crop }
-            ?: SampleAxes(width, height, crop, rotation).also { sampleAxes = it }
+            ?: SampleAxes(width, height, crop, rotation, filterDownscaling).also { sampleAxes = it }
         return SamplePicture(Plane(planes[0]), Plane(planes[1]), Plane(planes[2]),
             axes, PreviewColor(hd, fullRange))
     }
@@ -177,7 +183,8 @@ internal class EditedVideoPreviewReader private constructor(
         val width: Int,
         val height: Int,
         val crop: Rect,
-        rotation: Int
+        rotation: Int,
+        filterDownscaling: Boolean
     ) {
         private val transposed = rotation == 90 || rotation == 270
         private val sourceXs = sampleCoordinates(
@@ -191,8 +198,38 @@ internal class EditedVideoPreviewReader private constructor(
                 start + ((if (reverse) 1 - fraction else fraction) * span).toInt()
             }
 
-        fun x(row: Int, column: Int) = sourceXs[if (transposed) row else column]
-        fun y(row: Int, column: Int) = sourceYs[if (transposed) column else row]
+        private val sourceColumns = if (transposed) height else width
+        private val sourceRows = if (transposed) width else height
+        private val filtered = filterDownscaling && (sourceColumns < crop.width() || sourceRows < crop.height())
+        private val xWeights = if (filtered) filterCoordinates(sourceColumns, crop.left, crop.width(),
+            rotation == 180 || rotation == 270) else emptyArray()
+        private val yWeights = if (filtered) filterCoordinates(sourceRows, crop.top, crop.height(),
+            rotation == 90 || rotation == 180) else emptyArray()
+
+        private fun filterCoordinates(count: Int, start: Int, span: Int, reverse: Boolean): Array<FilterTaps> =
+            Array(count) { position ->
+                val fraction = (position + .5) / count
+                val coordinate = (start + (if (reverse) 1 - fraction else fraction) * span - .5)
+                    .coerceIn(start.toDouble(), (start + span - 1).toDouble())
+                val low = coordinate.toInt()
+                FilterTaps(low, (low + 1).coerceAtMost(start + span - 1),
+                    ((coordinate - low) * 256).roundToInt())
+            }
+
+        fun sample(y: Plane, u: Plane, v: Plane, row: Int, column: Int): Int {
+            val xIndex = if (transposed) row else column
+            val yIndex = if (transposed) column else row
+            if (filtered) {
+                val x = xWeights[xIndex]
+                val yy = yWeights[yIndex]
+                return y.bilinear(x, yy, 0) or (u.bilinear(x, yy, 1) shl 8) or
+                    (v.bilinear(x, yy, 1) shl 16)
+            }
+            val x = sourceXs[xIndex]
+            val yy = sourceYs[yIndex]
+            return y.read(x, yy) or (u.read(x / 2, yy / 2) shl 8) or
+                (v.read(x / 2, yy / 2) shl 16)
+        }
     }
 
     private class SamplePicture(
@@ -204,10 +241,8 @@ internal class EditedVideoPreviewReader private constructor(
     ) {
         fun toBitmap(checkActive: () -> Unit): Bitmap =
             previewBitmap(axes.width, axes.height, checkActive) { row, column, _ ->
-                val xPosition = axes.x(row, column)
-                val yPosition = axes.y(row, column)
-                color.pixel(y.read(xPosition, yPosition),
-                    u.read(xPosition / 2, yPosition / 2), v.read(xPosition / 2, yPosition / 2))
+                val samples = axes.sample(y, u, v, row, column)
+                color.pixel(samples and 255, (samples shr 8) and 255, samples shr 16)
             }
 
         fun copySamplesTo(samples: ByteArray, checkActive: () -> Unit) {
@@ -215,12 +250,11 @@ internal class EditedVideoPreviewReader private constructor(
             for (row in 0 until axes.height) {
                 if (row % 32 == 0) checkActive()
                 for (column in 0 until axes.width) {
-                    val xPosition = axes.x(row, column)
-                    val yPosition = axes.y(row, column)
+                    val sample = axes.sample(y, u, v, row, column)
                     val index = row * axes.width + column
-                    samples[index] = y.read(xPosition, yPosition).toByte()
-                    samples[pitch + index] = u.read(xPosition / 2, yPosition / 2).toByte()
-                    samples[2 * pitch + index] = v.read(xPosition / 2, yPosition / 2).toByte()
+                    samples[index] = sample.toByte()
+                    samples[pitch + index] = (sample shr 8).toByte()
+                    samples[2 * pitch + index] = (sample shr 16).toByte()
                 }
             }
         }
@@ -297,6 +331,8 @@ internal class EditedVideoPreviewReader private constructor(
         }
     }
 
+    private data class FilterTaps(val low: Int, val high: Int, val highWeight: Int)
+
     private class Plane(plane: Image.Plane) {
         private val buffer = plane.buffer
         private val origin = buffer.position()
@@ -304,6 +340,23 @@ internal class EditedVideoPreviewReader private constructor(
         private val pixelStride = plane.pixelStride
 
         fun read(x: Int, y: Int) = buffer.get(origin + y * rowStride + x * pixelStride).toInt() and 255
+
+        fun bilinear(x: FilterTaps, y: FilterTaps, subsampleShift: Int): Int {
+            val left = x.low shr subsampleShift
+            val right = x.high shr subsampleShift
+            val top = y.low shr subsampleShift
+            val bottom = y.high shr subsampleShift
+            val horizontal = if (left == right) 0 else x.highWeight
+            val vertical = if (top == bottom) 0 else y.highWeight
+            val first = read(left, top)
+            if (horizontal == 0 && vertical == 0) return first
+            val upper = if (horizontal == 0) first * 256
+                else first * (256 - horizontal) + read(right, top) * horizontal
+            if (vertical == 0) return (upper + 128) shr 8
+            val lower = read(left, bottom) * (256 - horizontal) +
+                (if (horizontal == 0) 0 else read(right, bottom) * horizontal)
+            return (upper * (256 - vertical) + lower * vertical + 32768) shr 16
+        }
     }
 
     private fun clearWindow() {
@@ -346,6 +399,7 @@ internal class EditedVideoPreviewReader private constructor(
             context: Context,
             clip: GifVideoClip,
             prefetchReverseFrames: Boolean = false,
+            filterDownscaling: Boolean = false,
             checkActive: () -> Unit
         ): EditedVideoPreviewReader {
             if (clip.isGif || clip.sourceTimesMs.isEmpty()) throw IOException("Video timestamps unavailable")
@@ -372,7 +426,7 @@ internal class EditedVideoPreviewReader private constructor(
                     decoder.configure(format, null, null, 0)
                     decoder.start()
                     return EditedVideoPreviewReader(clip, extractor, decoder, format, rotation,
-                        prefetchReverseFrames, checkActive)
+                        prefetchReverseFrames, filterDownscaling, checkActive)
                 } catch (error: Throwable) {
                     decoder.release()
                     throw error

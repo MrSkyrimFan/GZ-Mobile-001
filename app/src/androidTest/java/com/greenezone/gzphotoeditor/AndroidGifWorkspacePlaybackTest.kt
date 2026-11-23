@@ -265,7 +265,7 @@ class AndroidGifWorkspacePlaybackTest {
             val optimizedStart = SystemClock.elapsedRealtime()
             VideoGifSource.write(context, small, output)
             val optimizedMs = SystemClock.elapsedRealtime() - optimizedStart
-            Log.i("GzGifExportPerf", "720p60 long GOP to 180x320, 80 frames: timestamp=${baselineMs}ms batched=${optimizedMs}ms")
+            Log.i("GzGifExportPerf", "720p60 long GOP to 180x320, 80 frames: timestamp=${baselineMs}ms production=${optimizedMs}ms")
             val encoded = GifSourceMetadata.read(output.toByteArray().inputStream(), "content://test/output")
             val reference = GifSourceMetadata.read(baseline.toByteArray().inputStream(), encoded.uri)
             assertEquals(reference, encoded)
@@ -284,6 +284,8 @@ class AndroidGifWorkspacePlaybackTest {
                 val expected = requireNotNull(Movie.decodeByteArray(original, 0, original.size))
                 compareDecodedMotion(expected, movie, encoded.sourceTimesMs, GifVideoMath.frameDelaysMs(clip))
             } finally { final.recycle() }
+            assertTrue("Production export took ${optimizedMs}ms versus ${baselineMs}ms with per-frame seeks",
+                optimizedMs * 2 <= baselineMs)
         } finally { resolver.delete(uri, null, null) }
     }
 
@@ -534,17 +536,26 @@ class AndroidGifWorkspacePlaybackTest {
 
             rule.onNodeWithText("Canvas").performScrollTo().performClick()
             rule.onNodeWithText(GifSize.SMALL.label).performScrollTo().performClick()
+            val exportSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
             val exportAt = SystemClock.elapsedRealtime()
             rule.onNodeWithText("Save GIF").performClick()
             rule.waitUntil(120_000) {
                 rule.onAllNodesWithText("Edit saved GIF").fetchSemanticsNodes().isNotEmpty()
             }
+            val exportMs = SystemClock.elapsedRealtime() - exportAt
+            val exportEvents = GifPreviewDiagnostics.snapshot().filter { it.sequence > exportSequence }
+            val started = requireNotNull(exportEvents.firstOrNull { it.kind == GifDiagnosticKind.EXPORT_STARTED })
+            val staged = requireNotNull(exportEvents.firstOrNull { it.kind == GifDiagnosticKind.EXPORT_STAGED })
+            assertTrue(exportEvents.any { it.kind == GifDiagnosticKind.EXPORT_COMPLETED })
+            val stagedMs = (staged.timestampNanos - started.timestampNanos) / 1_000_000
             val bytes = requireNotNull(resolver.openInputStream(destination)).use { it.readBytes() }
             val exported = GifSourceMetadata.read(bytes.inputStream(), destination.toString())
             assertEquals(180 to 320, exported.width to exported.height)
             assertEquals(count, exported.sourceTimesMs.size)
-            assertEquals(GifVideoMath.frameDelaysMs(reversed).sum().toLong(), exported.durationMs)
-            Log.i("GzGifTiming", "Edited export: ${exported.width}x${exported.height}, $count frames, ${exported.durationMs}ms duration, saved in ${SystemClock.elapsedRealtime() - exportAt}ms")
+            val expectedDelays = GifVideoMath.frameDelaysMs(reversed)
+            assertEquals(expectedDelays.sum().toLong(), exported.durationMs)
+            assertEquals(expectedDelays, GifVideoMath.frameDelaysMs(exported))
+            Log.i("GzGifTiming", "Edited export: ${exported.width}x${exported.height}, $count frames, ${exported.durationMs}ms duration, saved in ${exportMs}ms, staged in ${stagedMs}ms")
             val movie = requireNotNull(Movie.decodeByteArray(bytes, 0, bytes.size))
             val pixels = Bitmap.createBitmap(exported.width, exported.height, Bitmap.Config.ARGB_8888)
             try {
@@ -564,6 +575,16 @@ class AndroidGifWorkspacePlaybackTest {
                 assertTrue(requireNotNull(latest.video).isGif)
                 assertEquals(count, GifVideoMath.frameCount(requireNotNull(latest.video)))
             }
+            waitFrame(1)
+            rule.waitUntil(15_000) { previewShowsMarker(late, early) }
+            rule.onNodeWithText("Play").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() &&
+                    taggedFrame("gif-frame") == count
+            }
+            rule.waitUntil(15_000) { previewShowsMarker(early, late) }
+            assertTrue("Saving the edited portrait GIF took ${exportMs}ms",
+                exportMs <= 15_000L)
         } finally {
             resolver.delete(destination, null, null)
             resolver.delete(uri, null, null)
