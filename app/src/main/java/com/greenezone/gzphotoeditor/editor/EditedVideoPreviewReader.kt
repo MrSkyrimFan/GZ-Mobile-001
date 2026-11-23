@@ -3,6 +3,7 @@ package com.greenezone.gzphotoeditor.editor
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
+import android.graphics.Rect
 import android.media.Image
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -11,7 +12,18 @@ import android.media.MediaFormat
 import android.net.Uri
 import android.os.SystemClock
 import java.io.IOException
+import java.util.zip.Deflater
+import java.util.zip.Inflater
 import kotlin.math.roundToInt
+
+/** Android uses zero for unspecified output color metadata. */
+internal fun gifColorMetadata(output: Int?, source: Int?): Int? =
+    output?.takeIf { it > 0 } ?: source?.takeIf { it > 0 }
+
+private fun requiresAndroidColorConversion(standard: Int?, transfer: Int?): Boolean =
+    standard == MediaFormat.COLOR_STANDARD_BT2020 ||
+        transfer == MediaFormat.COLOR_TRANSFER_HLG ||
+        transfer == MediaFormat.COLOR_TRANSFER_ST2084
 
 /**
  * Bitmap preview for edited SDR video. Forward play decodes packets in order. Reverse
@@ -24,11 +36,16 @@ internal class EditedVideoPreviewReader private constructor(
     private val decoder: MediaCodec,
     private val trackFormat: MediaFormat,
     private val rotation: Int,
+    private val prefetchReverseFrames: Boolean,
     private val checkActive: () -> Unit
 ) : GifFrameReader {
     private val times = clip.sourceTimesMs
     private val info = MediaCodec.BufferInfo()
-    private val pending = mutableMapOf<Int, Bitmap>()
+    private val firstTrimmedIndex = indexAtOrBefore(clip.startMs)
+    private val pending = linkedMapOf<Int, ReversePicture>()
+    private var pendingBytes = 0
+    private var sampleAxes: SampleAxes? = null
+    private var reverseStorage: ReverseStorage? = null
     private var inputEnded = false
     private var lastIndex = -1
     private var started = false
@@ -36,19 +53,24 @@ internal class EditedVideoPreviewReader private constructor(
 
     override fun frame(atMs: Long, edge: Int): Bitmap {
         checkActive()
-        val found = times.binarySearch(atMs)
-        val target = if (found >= 0) found else (-found - 2).coerceAtLeast(0)
-        if (edge == windowEdge) pending.remove(target)?.let { return it }
+        val target = indexAtOrBefore(atMs)
+        if (edge == windowEdge) pending.remove(target)?.let { picture ->
+            pendingBytes -= picture.samples.size
+            return requireNotNull(reverseStorage).render(picture, checkActive)
+        }
         clearWindow()
         windowEdge = edge
 
         val scale = minOf(1.0, edge.toDouble() / maxOf(clip.width, clip.height))
         val width = (clip.width * scale).roundToInt().coerceAtLeast(1)
         val height = (clip.height * scale).roundToInt().coerceAtLeast(1)
-        // Larger reverse windows avoid repeatedly decoding the same long GOP while
-        // the presentation clock is running. Bound by both memory and frame count.
-        val window = (16L * 1024 * 1024 / (4L * width * height)).coerceIn(1, 32).toInt()
-        val first = if (clip.reverse) (target - window + 1).coerceAtLeast(0) else target
+        val first = if (clip.reverse && prefetchReverseFrames) {
+            (target - MAX_REVERSE_PICTURES + 1).coerceIn(firstTrimmedIndex.coerceAtMost(target), target)
+        } else target
+        if (first < target && (reverseStorage?.width != width || reverseStorage?.height != height)) {
+            reverseStorage?.close()
+            reverseStorage = ReverseStorage(width, height)
+        }
         if (!started || lastIndex < 0 || first <= lastIndex || clip.reverse ||
             times[first] - times[lastIndex] > 1_000L) {
             if (started) decoder.flush()
@@ -70,6 +92,8 @@ internal class EditedVideoPreviewReader private constructor(
             }
             lastOutput = SystemClock.uptimeMillis()
             val end = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+            var retainedIndex = -1
+            var retainedColor: PreviewColor? = null
             try {
                 if (info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
                     val pts = (info.presentationTimeUs + 500L) / 1_000L
@@ -77,17 +101,39 @@ internal class EditedVideoPreviewReader private constructor(
                     if (index >= 0) lastIndex = index
                     if (pts > times[target]) throw IOException("Video decoder missed the requested frame")
                     if (index in first..target) {
-                        val bitmap = decoder.getOutputImage(output)?.use {
-                            toBitmap(it, decoder.getOutputFormat(output), width, height)
-                        } ?: throw IOException("Video decoder cannot supply editable pictures")
-                        if (index == target) return bitmap
-                        pending.put(index, bitmap)?.recycle()
+                        val image = decoder.getOutputImage(output)
+                            ?: throw IOException("Video decoder cannot supply editable pictures")
+                        image.use {
+                            val picture = samplePicture(it, decoder.getOutputFormat(output), width, height)
+                            if (index == target) return picture.toBitmap(checkActive)
+                            requireNotNull(reverseStorage).sample(picture, checkActive)
+                            retainedIndex = index
+                            retainedColor = picture.color
+                        }
                     }
                 }
             } finally {
                 decoder.releaseOutputBuffer(output, false)
             }
+            retainedColor?.let { color ->
+                retain(retainedIndex, requireNotNull(reverseStorage).compress(color, checkActive))
+            }
             if (end) throw IOException("Video ended before the requested frame")
+        }
+    }
+
+    private fun indexAtOrBefore(timeMs: Long): Int {
+        val found = times.binarySearch(timeMs)
+        return if (found >= 0) found else (-found - 2).coerceAtLeast(0)
+    }
+
+    private fun retain(index: Int, picture: ReversePicture) {
+        pending.put(index, picture)?.let { pendingBytes -= it.samples.size }
+        pendingBytes += picture.samples.size
+        val oldest = pending.values.iterator()
+        while (pendingBytes > REVERSE_CACHE_BYTES && oldest.hasNext()) {
+            pendingBytes -= oldest.next().samples.size
+            oldest.remove()
         }
     }
 
@@ -106,48 +152,149 @@ internal class EditedVideoPreviewReader private constructor(
         }
     }
 
-    private fun toBitmap(image: Image, format: MediaFormat, width: Int, height: Int): Bitmap {
-        if (image.format != ImageFormat.YUV_420_888 || image.planes.size != 3) {
+    private fun samplePicture(image: Image, format: MediaFormat, width: Int, height: Int): SamplePicture {
+        val planes = image.planes
+        if (image.format != ImageFormat.YUV_420_888 || planes.size != 3) {
             throw IOException("Video decoder returned an unsupported pixel format")
         }
         val crop = image.cropRect
         if (crop.width() <= 0 || crop.height() <= 0) throw IOException("Invalid video picture bounds")
-        val y = Plane(image.planes[0])
-        val u = Plane(image.planes[1])
-        val v = Plane(image.planes[2])
-        val standard = format.number(MediaFormat.KEY_COLOR_STANDARD)
-            ?: trackFormat.number(MediaFormat.KEY_COLOR_STANDARD)
-        val fullRange = (format.number(MediaFormat.KEY_COLOR_RANGE)
-            ?: trackFormat.number(MediaFormat.KEY_COLOR_RANGE)) == MediaFormat.COLOR_RANGE_FULL
+        fun colorMetadata(key: String) = gifColorMetadata(format.number(key), trackFormat.number(key))
+        val standard = colorMetadata(MediaFormat.KEY_COLOR_STANDARD)
+        if (requiresAndroidColorConversion(standard, colorMetadata(MediaFormat.KEY_COLOR_TRANSFER))) {
+            throw IOException("Use Android's image conversion for wide-gamut or HDR video")
+        }
+        val fullRange = colorMetadata(MediaFormat.KEY_COLOR_RANGE) == MediaFormat.COLOR_RANGE_FULL
         val hd = standard == MediaFormat.COLOR_STANDARD_BT709 ||
             (standard == null && maxOf(clip.width, clip.height) >= 1280)
-        val uToBlue = if (hd) 1.8556 else 1.772
-        val vToRed = if (hd) 1.5748 else 1.402
-        val uToGreen = if (hd) -.1873 else -.344136
-        val vToGreen = if (hd) -.4681 else -.714136
-        val chromaScale = if (fullRange) 1.0 else 255.0 / 224
-        val lumaScale = if (fullRange) 1.0 else 255.0 / 219
-        val lumaOffset = if (fullRange) 0 else 16
-        val pixels = IntArray(width * height)
-        for (row in 0 until height) {
-            if (row % 32 == 0) checkActive()
-            for (column in 0 until width) {
-                val x = (column + .5) / width
-                val yy = (row + .5) / height
-                val sx = when (rotation) { 90 -> yy; 180 -> 1 - x; 270 -> 1 - yy; else -> x }
-                val sy = when (rotation) { 90 -> 1 - x; 180 -> 1 - yy; 270 -> x; else -> yy }
-                val sourceX = crop.left + (sx * crop.width()).toInt()
-                val sourceY = crop.top + (sy * crop.height()).toInt()
-                val luma = (y.read(sourceX, sourceY) - lumaOffset) * lumaScale
-                val blueDelta = (u.read(sourceX / 2, sourceY / 2) - 128) * chromaScale
-                val redDelta = (v.read(sourceX / 2, sourceY / 2) - 128) * chromaScale
-                val red = channel(luma + vToRed * redDelta)
-                val green = channel(luma + uToGreen * blueDelta + vToGreen * redDelta)
-                val blue = channel(luma + uToBlue * blueDelta)
-                pixels[row * width + column] = -0x1000000 or (red shl 16) or (green shl 8) or blue
+        val axes = sampleAxes?.takeIf { it.width == width && it.height == height && it.crop == crop }
+            ?: SampleAxes(width, height, crop, rotation).also { sampleAxes = it }
+        return SamplePicture(Plane(planes[0]), Plane(planes[1]), Plane(planes[2]),
+            axes, PreviewColor(hd, fullRange))
+    }
+
+    private class SampleAxes(
+        val width: Int,
+        val height: Int,
+        val crop: Rect,
+        rotation: Int
+    ) {
+        private val transposed = rotation == 90 || rotation == 270
+        private val sourceXs = sampleCoordinates(
+            if (transposed) height else width, crop.left, crop.width(), rotation == 180 || rotation == 270)
+        private val sourceYs = sampleCoordinates(
+            if (transposed) width else height, crop.top, crop.height(), rotation == 90 || rotation == 180)
+
+        private fun sampleCoordinates(count: Int, start: Int, span: Int, reverse: Boolean): IntArray =
+            IntArray(count) { position ->
+                val fraction = (position + .5) / count
+                start + ((if (reverse) 1 - fraction else fraction) * span).toInt()
+            }
+
+        fun x(row: Int, column: Int) = sourceXs[if (transposed) row else column]
+        fun y(row: Int, column: Int) = sourceYs[if (transposed) column else row]
+    }
+
+    private class SamplePicture(
+        private val y: Plane,
+        private val u: Plane,
+        private val v: Plane,
+        val axes: SampleAxes,
+        val color: PreviewColor
+    ) {
+        fun toBitmap(checkActive: () -> Unit): Bitmap =
+            previewBitmap(axes.width, axes.height, checkActive) { row, column, _ ->
+                val xPosition = axes.x(row, column)
+                val yPosition = axes.y(row, column)
+                color.pixel(y.read(xPosition, yPosition),
+                    u.read(xPosition / 2, yPosition / 2), v.read(xPosition / 2, yPosition / 2))
+            }
+
+        fun copySamplesTo(samples: ByteArray, checkActive: () -> Unit) {
+            val pitch = axes.width * axes.height
+            for (row in 0 until axes.height) {
+                if (row % 32 == 0) checkActive()
+                for (column in 0 until axes.width) {
+                    val xPosition = axes.x(row, column)
+                    val yPosition = axes.y(row, column)
+                    val index = row * axes.width + column
+                    samples[index] = y.read(xPosition, yPosition).toByte()
+                    samples[pitch + index] = u.read(xPosition / 2, yPosition / 2).toByte()
+                    samples[2 * pitch + index] = v.read(xPosition / 2, yPosition / 2).toByte()
+                }
             }
         }
-        return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+    }
+
+    private class PreviewColor(hd: Boolean, fullRange: Boolean) {
+        private val uToBlue = if (hd) 1.8556 else 1.772
+        private val vToRed = if (hd) 1.5748 else 1.402
+        private val uToGreen = if (hd) -.1873 else -.344136
+        private val vToGreen = if (hd) -.4681 else -.714136
+        private val chromaScale = if (fullRange) 1.0 else 255.0 / 224
+        private val lumaScale = if (fullRange) 1.0 else 255.0 / 219
+        private val lumaOffset = if (fullRange) 0 else 16
+
+        fun pixel(y: Int, u: Int, v: Int): Int {
+            val luma = (y - lumaOffset) * lumaScale
+            val blueDelta = (u - 128) * chromaScale
+            val redDelta = (v - 128) * chromaScale
+            val red = channel(luma + vToRed * redDelta)
+            val green = channel(luma + uToGreen * blueDelta + vToGreen * redDelta)
+            val blue = channel(luma + uToBlue * blueDelta)
+            return -0x1000000 or (red shl 16) or (green shl 8) or blue
+        }
+
+        private fun channel(value: Double) = value.roundToInt().coerceIn(0, 255)
+    }
+
+    private data class ReversePicture(val samples: ByteArray, val color: PreviewColor)
+
+    /**
+     * Retain exact source samples at the preview dimensions and render color only when needed.
+     * Lossless compression retains longer GOPs without another seek or a larger bitmap budget.
+     * Noisy frames that do not compress are stored as raw planes under the same byte limit.
+     */
+    private class ReverseStorage(val width: Int, val height: Int) : AutoCloseable {
+        private val pitch = width * height
+        private val raw = ByteArray(3 * pitch)
+        private val compressed = ByteArray(raw.size)
+        private val deflater = Deflater(Deflater.BEST_SPEED)
+        private val inflater = Inflater()
+
+        fun sample(picture: SamplePicture, checkActive: () -> Unit) {
+            picture.copySamplesTo(raw, checkActive)
+        }
+
+        fun compress(color: PreviewColor, checkActive: () -> Unit): ReversePicture {
+            deflater.reset()
+            deflater.setInput(raw)
+            deflater.finish()
+            val length = deflater.deflate(compressed)
+            checkActive()
+            val samples = if (deflater.finished() && length < raw.size) compressed.copyOf(length)
+                else raw.copyOf()
+            return ReversePicture(samples, color)
+        }
+
+        fun render(picture: ReversePicture, checkActive: () -> Unit): Bitmap {
+            val samples = if (picture.samples.size == raw.size) picture.samples else {
+                inflater.reset()
+                inflater.setInput(picture.samples)
+                if (inflater.inflate(raw) != raw.size || !inflater.finished()) {
+                    throw IOException("Cannot restore the cached reverse preview picture")
+                }
+                raw
+            }
+            return previewBitmap(width, height, checkActive) { _, _, index ->
+                picture.color.pixel(samples[index].toInt() and 255,
+                    samples[pitch + index].toInt() and 255, samples[2 * pitch + index].toInt() and 255)
+            }
+        }
+
+        override fun close() {
+            try { deflater.end() } finally { inflater.end() }
+        }
     }
 
     private class Plane(plane: Image.Plane) {
@@ -159,23 +306,48 @@ internal class EditedVideoPreviewReader private constructor(
         fun read(x: Int, y: Int) = buffer.get(origin + y * rowStride + x * pixelStride).toInt() and 255
     }
 
-    private fun channel(value: Double) = value.roundToInt().coerceIn(0, 255)
-
     private fun clearWindow() {
-        pending.values.forEach { it.recycle() }
         pending.clear()
+        pendingBytes = 0
     }
 
     override fun close() {
         clearWindow()
-        try { decoder.release() } finally { extractor.release() }
+        try { reverseStorage?.close() } finally {
+            try { decoder.release() } finally { extractor.release() }
+        }
     }
 
     companion object {
+        private const val MAX_REVERSE_PICTURES = 96
+        private const val REVERSE_CACHE_BYTES = 16 * 1024 * 1024
+
+        private inline fun previewBitmap(
+            width: Int,
+            height: Int,
+            checkActive: () -> Unit,
+            sourcePixel: (row: Int, column: Int, index: Int) -> Int
+        ): Bitmap {
+            val pixels = IntArray(width * height)
+            for (row in 0 until height) {
+                if (row % 32 == 0) checkActive()
+                for (column in 0 until width) {
+                    val index = row * width + column
+                    pixels[index] = sourcePixel(row, column, index)
+                }
+            }
+            return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        }
+
         private fun MediaFormat.number(key: String): Int? =
             if (containsKey(key)) getInteger(key) else null
 
-        fun open(context: Context, clip: GifVideoClip, checkActive: () -> Unit): EditedVideoPreviewReader {
+        fun open(
+            context: Context,
+            clip: GifVideoClip,
+            prefetchReverseFrames: Boolean = false,
+            checkActive: () -> Unit
+        ): EditedVideoPreviewReader {
             if (clip.isGif || clip.sourceTimesMs.isEmpty()) throw IOException("Video timestamps unavailable")
             val extractor = MediaExtractor()
             try {
@@ -187,9 +359,7 @@ internal class EditedVideoPreviewReader private constructor(
                 val format = extractor.getTrackFormat(track)
                 val transfer = format.number(MediaFormat.KEY_COLOR_TRANSFER)
                 val standard = format.number(MediaFormat.KEY_COLOR_STANDARD)
-                if (transfer == MediaFormat.COLOR_TRANSFER_HLG ||
-                    transfer == MediaFormat.COLOR_TRANSFER_ST2084 ||
-                    standard == MediaFormat.COLOR_STANDARD_BT2020) {
+                if (requiresAndroidColorConversion(standard, transfer)) {
                     throw IOException("Use Android's image conversion for wide-gamut or HDR video")
                 }
                 val rotation = (format.number(MediaFormat.KEY_ROTATION) ?: 0).mod(360)
@@ -201,7 +371,8 @@ internal class EditedVideoPreviewReader private constructor(
                 try {
                     decoder.configure(format, null, null, 0)
                     decoder.start()
-                    return EditedVideoPreviewReader(clip, extractor, decoder, format, rotation, checkActive)
+                    return EditedVideoPreviewReader(clip, extractor, decoder, format, rotation,
+                        prefetchReverseFrames, checkActive)
                 } catch (error: Throwable) {
                     decoder.release()
                     throw error

@@ -542,7 +542,8 @@ private fun CropDeck(
         } }
         item { DockChip("Reset crop", false, enabled) {
             onCommit(document.copy(crop = CropRatio.ORIGINAL, cropFrame = null,
-                cropCenterX = .5f, cropCenterY = .5f, straightenDegrees = 0f))
+                cropCenterX = .5f, cropCenterY = .5f, straightenDegrees = 0f,
+                cropFrameRatioLocked = false))
         } }
     }
     LazyRow(
@@ -559,12 +560,12 @@ private fun CropDeck(
                         imageHeight.coerceAtLeast(1), ratio)
                 }
                 onCommit(document.copy(crop = ratio, cropFrame = frame,
-                    cropCenterX = .5f, cropCenterY = .5f))
+                    cropCenterX = .5f, cropCenterY = .5f, cropFrameRatioLocked = ratio.ratio != null))
             }
         }
     }
     Text(
-        "Drag inside to move. Drag the corner dots to resize.",
+        "Drag inside to move. Drag an edge or corner dot to resize.",
         color = EditorMuted, fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 13.dp)
     )

@@ -64,3 +64,7 @@ internal fun GifDocument.previewRoute(
     }
     return GifPreviewRoute.BITMAP_RETRIEVER
 }
+
+/** Keep an already-failed edited-frame codec out of subsequent Play sessions for this import. */
+internal fun GifPreviewRoute.afterBitmapCodecFailure(failed: Boolean): GifPreviewRoute =
+    if (failed && this == GifPreviewRoute.BITMAP_CODEC) GifPreviewRoute.BITMAP_RETRIEVER else this

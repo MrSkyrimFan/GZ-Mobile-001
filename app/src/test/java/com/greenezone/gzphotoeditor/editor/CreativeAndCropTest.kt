@@ -20,6 +20,54 @@ class CreativeAndCropTest {
             CropMath.initial(1920, 1080, CropRatio.ORIGINAL))
     }
 
+    @Test fun aFortyDpCropKeepsCornersEdgesAndItsInteriorDistinct() {
+        val crop = CropFrame(0f, 0f, 1f, 1f)
+        fun hit(x: Float, y: Float) = CropMath.hitTest(crop, x, y, 40f, 40f, 32f)
+        assertEquals(CropHandle.TOP_LEFT, hit(0f, 0f))
+        assertEquals(CropHandle.TOP, hit(20f, 0f))
+        assertEquals(CropHandle.TOP, hit(20f, -24f))
+        assertEquals(CropHandle.BOTTOM, hit(20f, 40f))
+        assertEquals(CropHandle.LEFT, hit(0f, 20f))
+        assertEquals(CropHandle.RIGHT, hit(40f, 20f))
+        assertEquals(CropHandle.MOVE, hit(20f, 20f))
+    }
+
+    @Test fun lockedPanoramaRemainsSquareWhenSavedAndCanStillShrink() {
+        val initial = CropMath.initial(4000, 100, CropRatio.SQUARE)
+        val document = EditDocument(crop = CropRatio.SQUARE, cropFrame = initial,
+            cropFrameRatioLocked = true)
+        val reopened = EditDocumentCodec.decode(EditDocumentCodec.encode(document))!!
+        assertEquals(document, reopened)
+        assertTrue(CropMath.pixelBounds(4000, 100, reopened.cropFrame!!, reopened.crop)
+            .contentEquals(intArrayOf(1950, 0, 100, 100)))
+
+        val shrunk = CropMath.drag(initial, CropHandle.RIGHT, -.01f, .06f, 4000, 100, 1f)
+        val bounds = CropMath.pixelBounds(4000, 100, shrunk, CropRatio.SQUARE)
+        assertTrue(bounds[2] in 55..65)
+        assertEquals(bounds[2], bounds[3])
+        assertEquals(initial.left, shrunk.left, .00001f)
+    }
+
+    @Test fun lockedCropSnapsRoundingInwardWithoutForcingAnOlderArbitraryFrame() {
+        val frame = CropFrame(.2f, .1f, .8f, .9f)
+        val old = EditDocument(crop = CropRatio.PORTRAIT, cropFrame = frame)
+        val reopened = EditDocumentCodec.decode(EditDocumentCodec.encode(old))!!
+        assertEquals(old, reopened)
+        assertTrue(CropMath.pixelBounds(1000, 500, reopened.cropFrame!!)
+            .contentEquals(intArrayOf(200, 50, 600, 400)))
+        assertTrue(CropMath.pixelBounds(1000, 501, frame, CropRatio.PORTRAIT)
+            .contentEquals(intArrayOf(340, 50, 320, 400)))
+    }
+
+    @Test fun legacyCropGuideUsesTheSameOffCenterPositionAsTheRenderer() {
+        val legacy = EditDocument(crop = CropRatio.SQUARE, cropCenterX = 1f)
+        val guide = CropMath.displayFrame(200, 100, legacy)
+        assertEquals(CropFrame(.5f, 0f, 1f, 1f), guide)
+        assertTrue(CropMath.pixelBounds(200, 100, guide).contentEquals(
+            CropMath.presetBounds(200, 100, legacy.crop, legacy.cropCenterX, legacy.cropCenterY)
+        ))
+    }
+
     @Test fun cropHandlesMaintainAspectAndStayWithinFrame() {
         val start = CropMath.initial(1200, 900, CropRatio.SQUARE)
         val next = CropMath.drag(start, CropHandle.BOTTOM_RIGHT, -.10f, -.06f,

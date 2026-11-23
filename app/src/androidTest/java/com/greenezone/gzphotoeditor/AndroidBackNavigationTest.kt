@@ -28,13 +28,17 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
+import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.GifDocument
+import com.greenezone.gzphotoeditor.editor.ImagePipeline
+import com.greenezone.gzphotoeditor.editor.Looks
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProDocument
@@ -66,7 +70,12 @@ class AndroidBackNavigationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val resolver get() = instrumentation.targetContext.contentResolver
 
-    private fun createPhoto(label: String, width: Int = 96, height: Int = 64): Uri {
+    private fun createPhoto(
+        label: String,
+        width: Int = 96,
+        height: Int = 64,
+        colorAt: ((Int, Int) -> Int)? = null
+    ): Uri {
         val uri = requireNotNull(resolver.insert(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             ContentValues().apply {
@@ -76,7 +85,9 @@ class AndroidBackNavigationTest {
             }
         ))
         val pixels = IntArray(width * height) { index ->
-            if (index % width < width / 2) Color.rgb(24, 72, 120)
+            val x = index % width
+            val y = index / width
+            colorAt?.invoke(x, y) ?: if (x < width / 2) Color.rgb(24, 72, 120)
             else Color.rgb(232, 184, 72)
         }
         val bitmap = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
@@ -166,9 +177,10 @@ class AndroidBackNavigationTest {
     private fun withLoadedRegular(
         width: Int = 96,
         height: Int = 64,
+        colorAt: ((Int, Int) -> Int)? = null,
         test: (Uri, ByteArray) -> Unit
     ) {
-        val uri = createPhoto("gz-back-regular-" + System.nanoTime(), width, height)
+        val uri = createPhoto("gz-back-regular-" + System.nanoTime(), width, height, colorAt)
         val mounted = mutableStateOf(true)
         var contentSet = false
         try {
@@ -708,12 +720,109 @@ class AndroidBackNavigationTest {
         assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
     }
 
+    @Test fun offCenterCropAndLookSurviveRegularProHandoffAndProjectSave() =
+        withLoadedRegular(width = 120, height = 80, colorAt = { x, y ->
+            val column = x / 20
+            val row = y / 20
+            Color.rgb(32 + 34 * column, 32 + 52 * row, 28 + 33 * ((column + row * 2) % 6))
+        }) { uri, sourceBytes ->
+            val context = instrumentation.targetContext
+            val name = "crop-handoff-" + System.nanoTime().toString().takeLast(10)
+            val original = ImagePipeline.decode(resolver, uri, 120, 9_600)
+            // An 80x80 centered square starts at x=20. The drag below moves it 12px right.
+            // Build the expected crop directly from source pixels, independently of CropMath.
+            val cropped = Bitmap.createBitmap(original, 32, 0, 80, 80)
+            val look = Looks.all.single { it.name == "Golden" }.grade
+            val expected = ImagePipeline.render(cropped, EditDocument(grade = look))
+            val probes = listOf(.15f, .4f, .65f, .9f)
+            fun matchesEditedCrop(node: SemanticsNodeInteraction): Boolean {
+                val shown = node.captureToImage().asAndroidBitmap()
+                val edge = minOf(shown.width, shown.height)
+                val left = (shown.width - edge) / 2
+                val top = (shown.height - edge) / 2
+                return try {
+                    probes.all { y ->
+                        probes.all { x ->
+                            val actual = shown.getPixel(left + (x * edge).toInt(), top + (y * edge).toInt())
+                            val reference = expected.getPixel((x * 80).toInt(), (y * 80).toInt())
+                            pixelDistance(actual, reference) <= 12
+                        }
+                    }
+                } finally {
+                    shown.recycle()
+                }
+            }
+
+            try {
+                val tools = rule.onNodeWithTag("photo-tools")
+                tools.performScrollToNode(hasText("Crop"))
+                rule.onNodeWithText("Crop").performClick()
+                rule.onNodeWithText("1:1").performScrollTo().performClick()
+                rule.waitUntil(15_000) { rule.onAllNodesWithTag("crop-frame").fetchSemanticsNodes().isNotEmpty() }
+                val gutter = with(rule.density) { 16.dp.roundToPx() }
+                rule.onNodeWithTag("crop-frame").performTouchInput {
+                    val fittedWidth = minOf(
+                        (width - 2 * gutter).toFloat(), (height - 2 * gutter) * (120f / 80f)
+                    )
+                    down(center)
+                    moveTo(center + Offset(fittedWidth / 10f, 0f))
+                    up()
+                }
+                tools.performScrollToNode(hasText("Looks"))
+                rule.onNodeWithText("Looks").performClick()
+                rule.onNodeWithText("Golden").performClick()
+                val regular = rule.onNodeWithContentDescription("Photo editing canvas", substring = true)
+                // Exclude chrome from the full-photo pixel grid. Reopen it to choose Pro.
+                regular.performSemanticsAction(SemanticsActions.OnClick)
+                rule.waitUntil(15_000) { matchesEditedCrop(regular) }
+                regular.performSemanticsAction(SemanticsActions.OnClick)
+
+                requestProHandoff()
+                acceptProHandoff()
+                rule.waitUntil(15_000) {
+                    val previews = rule.onAllNodesWithContentDescription("Pro editable composition")
+                    previews.fetchSemanticsNodes().isNotEmpty() && matchesEditedCrop(previews[0])
+                }
+                rule.onNodeWithText("File ▾").performClick()
+                rule.onNodeWithText("Save project").performClick()
+                rule.onNode(hasSetTextAction()).performTextInput(name)
+                rule.onNodeWithText("Save", ignoreCase = true).performClick()
+                rule.waitUntil(15_000) { ProStore.names(context).contains(name) }
+                val saved = requireNotNull(ProStore.load(context, name))
+                val layer = saved.layers.single()
+                assertEquals(uri.toString(), layer.uri)
+                assertEquals(1f, saved.canvasAspectRatio, .001f)
+                assertEquals(1f, layer.aspect, .001f)
+                assertEquals(CropRatio.SQUARE, layer.edits.crop)
+                assertTrue(layer.edits.cropFrameRatioLocked)
+                assertEquals(look, layer.edits.grade)
+                val frame = requireNotNull(layer.edits.cropFrame)
+                assertEquals(32f / 120f, frame.left, .01f)
+                assertEquals(112f / 120f, frame.right, .01f)
+                assertEquals(0f, frame.top, .001f)
+                assertEquals(1f, frame.bottom, .001f)
+
+                pressBackThroughDispatcher()
+                rule.onNodeWithTag("photo-tools").assertIsDisplayed()
+                regular.performSemanticsAction(SemanticsActions.OnClick)
+                rule.waitUntil(15_000) { matchesEditedCrop(regular) }
+                assertArrayEquals(sourceBytes, resolver.openInputStream(uri)!!.use { it.readBytes() })
+            } finally {
+                ProStore.delete(context, name)
+                if (expected !== cropped) expected.recycle()
+                cropped.recycle()
+                original.recycle()
+            }
+        }
+
     @Test fun portraitCropTopAndBottomEdgesStayReachableWithEditorControlsVisible() =
         withLoadedRegular(width = 64, height = 120) { uri, original ->
             rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Crop"))
             rule.onNodeWithText("Crop").performClick()
+            rule.waitUntil(15_000) { rule.onAllNodesWithTag("crop-frame").fetchSemanticsNodes().isNotEmpty() }
             val overlay = rule.onNodeWithTag("crop-frame")
             val frame = overlay.fetchSemanticsNode().boundsInRoot
+            val gutter = with(rule.density) { 16.dp.roundToPx() }
             val topControl = rule.onNodeWithText("Open media").fetchSemanticsNode().boundsInRoot
             val bottomControls = rule.onNodeWithTag("photo-tools").fetchSemanticsNode().boundsInRoot
             assertTrue(frame.top >= topControl.bottom - 1f)
@@ -721,11 +830,13 @@ class AndroidBackNavigationTest {
 
             fun dragEdge(top: Boolean) {
                 overlay.performTouchInput {
-                    val fittedHeight = minOf(height.toFloat(), width * (120f / 64f))
+                    val fittedHeight = minOf(
+                        (height - 2 * gutter).toFloat(), (width - 2 * gutter) * (120f / 64f)
+                    )
                     val inset = (height - fittedHeight) / 2f
                     val direction = if (top) 1f else -1f
                     val border = if (top) inset else height - inset
-                    val start = Offset(center.x, border + direction * fittedHeight / 80f)
+                    val start = Offset(center.x, border - direction * gutter * .75f)
                     down(start)
                     moveTo(start + Offset(0f, direction * fittedHeight / 10f))
                     up()

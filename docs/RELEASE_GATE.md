@@ -8,6 +8,13 @@
 - [ ] Exercise Pro layer selection, transform, masks, opacity/blend, painting and repair through pixel change, Undo/Redo, save/reopen and export. Check Back through active tools, menus, dialogs, keyboard and workspaces. Verify physical gestures from both edges, half-cancel and rapid double Back on a handset, including picker/IME ownership.
 - [ ] Run JVM and complete API 29/API 35 instrumentation on the repair commit, including independent Collage tile rendering and save/reopen. For a combined phone build, provide the commit, run, APK artifact, APK hash, signing/package/version details, and one compact phone script. Engineering merge authority and owner acceptance are separate. Mark physical-device and formal workspace acceptance only from the corresponding results.
 
+### Regression cases found after Revision 4
+
+- Check a small crop's edge midpoint and interior independently of its corners. Exercise locked ratios on wide and tall photos, the first gesture after reopening Crop, and off-center positioning in older saved projects.
+- Open a different named Pro project, Undo and Redo across that boundary, and verify Delete current work returns to the correct baseline. Confirm the separate named-delete prompts before deleting a save. Reorder a layer, Undo and Redo, and verify subsequent tools still target it. Exercise a pending tool draft when another layer's media becomes unavailable.
+- Widen both ends of a long trim at a fixed frame rate. Keep the selected FPS and stop at its exact frame-budget limit. Cover unspecified decoder color tags, edited playback of metadata-rotated clips, failed-codec fallback and actual edited export.
+- Move a square crop off-center, apply a Look, hand it into Pro, and verify the rendered crop, saved edit recipe, and intact Regular draft.
+
 ## Retained automated Collage and photo verification (0.8)
 - [ ] Main original photo edit screen unchanged aside from GZ brand on landing and Create collage entry.
 - [ ] Crop/blur/text/shapes/brush active guides persist while main toolbar is hidden, and editing remains possible.

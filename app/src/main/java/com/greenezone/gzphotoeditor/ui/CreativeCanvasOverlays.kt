@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.CropFrame
@@ -38,8 +39,12 @@ private data class ImageSpace(val left: Float, val top: Float, val w: Float, val
             ((p.y - top) / h).coerceIn(0f, 1f))
 }
 
-private fun imageSpace(outerWidth: Float, outerHeight: Float, imageW: Int, imageH: Int): ImageSpace {
-    val scale = min(outerWidth / imageW, outerHeight / imageH)
+private fun imageSpace(
+    outerWidth: Float, outerHeight: Float, imageW: Int, imageH: Int, inset: Float = 0f
+): ImageSpace {
+    val width = (outerWidth - inset * 2).coerceAtLeast(0f)
+    val height = (outerHeight - inset * 2).coerceAtLeast(0f)
+    val scale = min(width / imageW, height / imageH)
     val w = imageW * scale
     val h = imageH * scale
     return ImageSpace((outerWidth - w) / 2f, (outerHeight - h) / 2f, w, h)
@@ -55,10 +60,10 @@ fun CropFrameOverlay(
     onChange: (CropFrame) -> Unit,
     onFinished: () -> Unit,
     onCanceled: () -> Unit,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    imageInset: Dp = 0.dp
 ) {
     val latestFrame by rememberUpdatedState(frame)
-    val imageDimensions by rememberUpdatedState(imageWidth to imageHeight)
     val change by rememberUpdatedState(onChange)
     val finished by rememberUpdatedState(onFinished)
     val canceled by rememberUpdatedState(onCanceled)
@@ -66,12 +71,14 @@ fun CropFrameOverlay(
     Canvas(
         Modifier.fillMaxSize()
             .testTag("crop-frame")
-            .pointerInput(aspectRatio) {
+            .pointerInput(aspectRatio, imageWidth, imageHeight, imageInset) {
                 val radius = 32.dp.toPx()
+                val insetPixels = imageInset.roundToPx().toFloat()
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    val (imageW, imageH) = imageDimensions
-                    val img = imageSpace(size.width.toFloat(), size.height.toFloat(), imageW, imageH)
+                    val startSize = size
+                    val img = imageSpace(startSize.width.toFloat(), startSize.height.toFloat(),
+                        imageWidth, imageHeight, insetPixels)
                     val start = CropMath.sanitize(latestFrame)
                     val handle = CropMath.hitTest(start, down.position.x - img.left,
                         down.position.y - img.top, img.w, img.h, radius)
@@ -83,12 +90,13 @@ fun CropFrameOverlay(
                         do {
                             val event = awaitPointerEvent()
                             val pointer = event.changes.singleOrNull() ?: return@awaitEachGesture
-                            if (pointer.id != down.id || pointer.isConsumed) return@awaitEachGesture
+                            if (size != startSize || pointer.id != down.id || pointer.isConsumed)
+                                return@awaitEachGesture
                             val delta = pointer.position - down.position
                             moved = moved || delta.getDistance() > viewConfiguration.touchSlop
                             if (moved && handle != null) {
                                 val next = CropMath.drag(start, handle, delta.x / img.w, delta.y / img.h,
-                                    imageW, imageH, aspectRatio)
+                                    imageWidth, imageHeight, aspectRatio)
                                 if (changed || next != start) {
                                     changed = true
                                     change(next)
@@ -106,7 +114,8 @@ fun CropFrameOverlay(
             }
     ) {
         if (!showGuides) return@Canvas
-        val space = imageSpace(size.width, size.height, imageWidth, imageHeight)
+        val space = imageSpace(size.width, size.height, imageWidth, imageHeight,
+            imageInset.roundToPx().toFloat())
         val f = CropMath.sanitize(frame)
         val l = space.left + f.left * space.w
         val t = space.top + f.top * space.h

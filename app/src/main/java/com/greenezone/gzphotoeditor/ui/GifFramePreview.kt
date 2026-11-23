@@ -26,6 +26,7 @@ import com.greenezone.gzphotoeditor.editor.GifDiagnosticStage
 import com.greenezone.gzphotoeditor.editor.GifPreviewRoute
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
+import com.greenezone.gzphotoeditor.editor.afterBitmapCodecFailure
 import com.greenezone.gzphotoeditor.editor.previewRoute
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 private data class PreviewFrame(val index: Int, val bitmap: Bitmap)
@@ -47,6 +49,8 @@ internal fun GifFramePreview(
     operationId: Long,
     playing: Boolean,
     startFrame: Int,
+    editedCodecFailed: AtomicBoolean,
+    readerOwner: Mutex,
     onFrame: (Int) -> Unit,
     onEnd: (Int) -> Unit,
     onError: (String) -> Unit,
@@ -64,9 +68,6 @@ internal fun GifFramePreview(
             override fun sizeOf(key: Int, value: Bitmap) = value.allocationByteCount
         }
     }
-    // A cancelled native read can still be inside a codec call. Keep one bitmap reader
-    // alive at a time even when slider events invalidate several generations rapidly.
-    val readerOwner = remember { Mutex() }
     val sourceCache = remember(operationId, clip.uri) {
         object : LruCache<Long, Bitmap>(4 * 1024 * 1024) {
             override fun sizeOf(key: Long, value: Bitmap) = value.allocationByteCount
@@ -76,11 +77,14 @@ internal fun GifFramePreview(
     var resumeFrom by remember(document, playing) { mutableStateOf<Int?>(null) }
     val generationCounter = remember(operationId) { AtomicLong() }
     val activeGeneration = remember(operationId) { AtomicLong() }
-    val generation = remember(operationId, document, playing, nativeFailed) {
+    val generation = remember(operationId, clip.uri, document, playing, nativeFailed) {
         generationCounter.incrementAndGet()
     }
-    val route = remember(document, playing, nativeFailed) {
+    val preferredRoute = remember(document, playing, nativeFailed) {
         document.previewRoute(playing, nativeFailed)
+    }
+    val route = remember(operationId, generation) {
+        preferredRoute.afterBitmapCodecFailure(editedCodecFailed.get())
     }
     DisposableEffect(operationId, generation) {
         activeGeneration.set(generation)
@@ -147,7 +151,9 @@ internal fun GifFramePreview(
                     val (width, height) = GifMath.dimensions(document, maxEdge = 480)
                     val neutral = document.edits == EditDocument()
                     var reader: GifFrameReader? = null
-                    var bitmapRoute = route
+                    // Reread after taking ownership in case the previous reader failed
+                    // while this effect was queued behind it.
+                    var bitmapRoute = route.afterBitmapCodecFailure(editedCodecFailed.get())
                     val playbackJob = currentCoroutineContext()
                     fun checkCurrent() {
                         playbackJob.ensureActive()
@@ -156,10 +162,11 @@ internal fun GifFramePreview(
                     }
                     fun openReader(): GifFrameReader {
                         val opened = if (bitmapRoute == GifPreviewRoute.BITMAP_CODEC) {
-                            EditedVideoPreviewReader.open(context, clip, ::checkCurrent)
+                            EditedVideoPreviewReader.open(context, clip, prefetchReverseFrames = playing,
+                                checkActive = ::checkCurrent)
                         } else {
                             VideoGifSource.open(context, clip, batchFrames = playing,
-                                allowScaledBatches = playing && route == GifPreviewRoute.BITMAP_CODEC)
+                                allowScaledBatches = playing && preferredRoute == GifPreviewRoute.BITMAP_CODEC)
                         }
                         reader = opened
                         GifPreviewDiagnostics.record(operationId, generation,
@@ -186,6 +193,7 @@ internal fun GifFramePreview(
                             GifPreviewDiagnostics.record(operationId, generation,
                                 GifDiagnosticStage.G2_PLAY, GifDiagnosticKind.FALLBACK_STARTED, bitmapRoute,
                                 failure = error)
+                            editedCodecFailed.set(true)
                             closeReader()
                             bitmapRoute = GifPreviewRoute.BITMAP_RETRIEVER
                             GifPreviewDiagnostics.record(operationId, generation,

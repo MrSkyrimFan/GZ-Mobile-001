@@ -110,17 +110,19 @@ data class Grade(
     val blueCurve: CurvePoints = CurvePoints()
 )
 
-enum class CropRatio(val label: String, val ratio: Float?) {
-    ORIGINAL("Original", null),
-    SQUARE("1:1", 1f),
-    PORTRAIT("4:5", 4f / 5f),
-    TALL("2:3", 2f / 3f),
-    STORY("9:16", 9f / 16f),
-    CLASSIC("3:2", 3f / 2f),
-    PHOTO("4:3", 4f / 3f),
-    WIDE("16:9", 16f / 9f),
-    CINEMA("21:9", 21f / 9f),
-    FREE("Freeform", null)
+enum class CropRatio(val label: String, val unitsWide: Int = 0, val unitsHigh: Int = 0) {
+    ORIGINAL("Original"),
+    SQUARE("1:1", 1, 1),
+    PORTRAIT("4:5", 4, 5),
+    TALL("2:3", 2, 3),
+    STORY("9:16", 9, 16),
+    CLASSIC("3:2", 3, 2),
+    PHOTO("4:3", 4, 3),
+    WIDE("16:9", 16, 9),
+    CINEMA("21:9", 7, 3),
+    FREE("Freeform");
+
+    val ratio: Float? = if (unitsWide > 0) unitsWide.toFloat() / unitsHigh else null
 }
 
 data class EditDocument(
@@ -135,7 +137,9 @@ data class EditDocument(
     val masks: List<LocalMask> = emptyList(),
     val privacy: List<PrivacyEdit> = emptyList(),
     val cropFrame: CropFrame? = null,
-    val creative: CreativeDocument = CreativeDocument()
+    val creative: CreativeDocument = CreativeDocument(),
+    // Explicit old crop frames are authoritative even when accompanied by a preset name.
+    val cropFrameRatioLocked: Boolean = false
 )
 
 data class Look(val name: String, val grade: Grade)

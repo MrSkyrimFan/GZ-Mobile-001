@@ -55,6 +55,51 @@ class GifPreviewClockTest {
             GifDocument().previewRoute(playing = true, nativeFailed = false))
     }
 
+    @Test fun editedCodecFailureKeepsNextPreviewOnRetrieverWithoutChangingSurfaceRoutes() {
+        assertEquals(GifPreviewRoute.BITMAP_CODEC,
+            GifPreviewRoute.BITMAP_CODEC.afterBitmapCodecFailure(false))
+        assertEquals(GifPreviewRoute.BITMAP_RETRIEVER,
+            GifPreviewRoute.BITMAP_CODEC.afterBitmapCodecFailure(true))
+        assertEquals(GifPreviewRoute.NATIVE_SOURCE,
+            GifPreviewRoute.NATIVE_SOURCE.afterBitmapCodecFailure(true))
+        assertEquals(GifPreviewRoute.SCHEDULED_CODEC,
+            GifPreviewRoute.SCHEDULED_CODEC.afterBitmapCodecFailure(true))
+    }
+
+    @Test fun unspecifiedDecoderColorMetadataFallsBackToTheSource() {
+        assertEquals(1, gifColorMetadata(0, 1))
+        assertEquals(2, gifColorMetadata(null, 2))
+        assertEquals(4, gifColorMetadata(4, 1))
+        assertNull(gifColorMetadata(0, 0))
+        assertNull(gifColorMetadata(null, null))
+    }
+
+    @Test fun longFixedFpsTrimsKeepTheOppositeThumbAndBuildAValidSchedule() {
+        val source = GifVideoClip("content://video/long", 6_000_000L,
+            sourceTimesMs = List(144_000) { it * 1_000L / 24 })
+        assertTrue(GifVideoMath.valid(source))
+        assertFalse(GifVideoMath.fitsFrameBudget(source, 30))
+
+        val right = GifVideoMath.trimWithinFrameBudget(
+            source.copy(startMs = 500_000L, endMs = 1_000_000L, fps = 30),
+            source.durationMs, movingEnd = true)
+        assertEquals(500_000L, right.startMs)
+        assertEquals(5_500_000L, right.endMs)
+        assertEquals(30, right.fps)
+        assertTrue(GifVideoMath.valid(right))
+        assertEquals(GifVideoMath.MAX_OUTPUT_FRAMES, GifVideoMath.frameCount(right))
+
+        val left = GifVideoMath.trimWithinFrameBudget(
+            source.copy(startMs = 5_000_000L, fps = 30, reverse = true),
+            0L, movingEnd = false)
+        assertEquals(1_000_000L, left.startMs)
+        assertEquals(source.durationMs, left.endMs)
+        assertEquals(30, left.fps)
+        assertTrue(left.reverse)
+        assertTrue(GifVideoMath.valid(left))
+        assertEquals(GifVideoMath.MAX_OUTPUT_FRAMES, GifVideoMath.frameCount(left))
+    }
+
     @Test fun nativePlaybackRequiresUnmodifiedFrameOrderTimingAndAppearance() {
         val clip = GifVideoClip("content://video/1", 120, sourceTimesMs = listOf(0L, 40L, 80L))
         val doc = GifDocument(video = clip)
