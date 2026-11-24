@@ -2,7 +2,7 @@
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-The supplied independent PR #26 review requires four corrections before the next combined handset candidate. Engineering is authorized; the former successor hold is lifted. The complete intended app scope and ordered delivery are now tracked in one [roadmap](docs/GZ_ENGINEERING_ROADMAP.md), [77-family capability inventory](docs/CAPABILITY_MATRIX.md) and [active work ledger](docs/WORK_LEDGER.md). [Continuity](docs/CONTINUITY.md) · [Prior Audit 2 evidence](docs/AUDIT_2_REPAIR_VERIFICATION.md). The prior v0.12.8 APK remains historical evidence.
+The four independent-review defects are corrected in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`. The candidate and merged app each passed Verify and 186/186 tests on Android 10 and Android 15. **GZ Editor Pro 0.12.9 Test** is the qualified handset wave; owner phone acceptance and commercial release remain open. The full intended app is tracked in one [roadmap](docs/GZ_ENGINEERING_ROADMAP.md), [77-family inventory](docs/CAPABILITY_MATRIX.md) and [work ledger](docs/WORK_LEDGER.md). **R1 durability is next.** [Exact phone APK](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845/artifacts/14903086243).
 
 The product requirements and release gates describe the ongoing scope. The earlier QA notes and version sections below record historical checkpoints. [Product requirements](docs/PRODUCT_SPEC.md) · [Release gates](docs/RELEASE_GATE.md) · [Historical v0.12.2 QA notes](docs/PHONE_QA_014.md).
 
