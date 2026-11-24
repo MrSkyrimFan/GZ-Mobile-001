@@ -4,7 +4,7 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.greenezone.gzphotoeditor.ui.ProViewport
 import com.greenezone.gzphotoeditor.ui.ProViewportSemanticsKey

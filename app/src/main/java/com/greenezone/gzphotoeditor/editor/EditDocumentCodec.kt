@@ -49,6 +49,9 @@ object EditDocumentCodec {
     fun encode(document: EditDocument): String = encodeBounded(document, Int.MAX_VALUE)
 
     internal fun encodeBounded(document: EditDocument, maxChars: Int = MAX_ENCODED_CHARS): String {
+        // Never report a successful save of only a prefix of the active drawing.
+        // UI transactions enforce this too; persistence is the final boundary.
+        if (document.creative.strokes.size > CreativeRaster.MAX_INK) throw RecipeTooLarge()
         val fields = RecipeFields(maxChars)
         val privacy = document.privacy.take(PrivacyRaster.MAX_EDITS)
         fields["version"] = if (privacy.any { it.authoringGeometry != null })
