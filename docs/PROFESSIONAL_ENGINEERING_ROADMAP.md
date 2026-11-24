@@ -4,7 +4,7 @@
 
 This is an engineering and compliance roadmap, **not** a claim that trademark/patent clearance has been completed or that no one could sue. Features can generally be built independently, but source code, presets, artworks, branding, patents and libraries require different checks.
 
-[Current product boundaries](PRODUCT_SPEC.md) govern feature placement. Finish the field corrections for GIF, Crop, mode handoff and Pro before the later feature work below.
+The product requirements govern tool placement. Audit 2 records the verified application baseline for the field corrections. The continuity page and release gates govern the owner-review hold, handset work, and later features. [Product requirements](PRODUCT_SPEC.md) · [Audit 2 evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Current continuity](CONTINUITY.md) · [Release gates](RELEASE_GATE.md).
 
 ## Regular photography features
 
@@ -23,18 +23,21 @@ This is an engineering and compliance roadmap, **not** a claim that trademark/pa
 ### Optical correction and protected Regular tools
 - Preserve Regular photographic grading and Blur & cover. Restrict selection and new adjustment-mask authoring to Pro, preserving historical Regular masks in saved projects.
 - Original CPU/GPU denoise (non-ML), thresholded sharpening, chromatic aberration, distortion, perspective grids, manual straightening, highlight recovery within available source data, selective saturation and tone curves.
-- Clone/heal/source-stamp tools and blemish/object removal by original pixel processing rather than generative AI.
-- Skin retouch tools, local highlights, eye/teeth adjustments, privacy blackout and blur with clear distinction between cosmetic blur and genuine redaction.
+- Keep Regular privacy blackout and blur available. Give these tools clear names and verify protected pixels in exports.
 - Lens profiles can only ship where created independently or sourced under suitable licenses.
 
 ### Composition and creativity
 - Regular owns Text authoring, Shapes, drawing and the offline sticker library. Sticker work needs at least 500 usable assets with documented rights, transparent custom imports, transforms and editable project storage. Collage supports those Regular edits independently on each of 20 tiles.
-- Pro owns layer-based compositing, non-destructive masks, selections, clone/repair, and Subject & Background. Deliver guided subject isolation, edge refinement, removal, replacement and reshape through editable local project state and full-resolution output. Preserve legacy Pro Text data without authoring entry points.
 - Every source retains its own `EditDocument` and can be edited in the existing full photo editor. Flatten only at export.
 - Future local stickers/texture packs require rights to each asset/font (no copying paid packs).
 - Better touch handles and editing overlays must not be coupled to toolbar visibility.
 
-### Performance and reliability
+## Pro retouching and compositing
+
+- Pro owns layer-based compositing, editable masks, selections, clone, healing, source stamp, and local retouching for blemishes, skin, eyes, and teeth. Preserve legacy Pro Text data and render it in saved projects.
+- Pro's Subject & Background tools include guided subject isolation, edge refinement, background removal or replacement, object removal, and reshaping. Use offline image processing and preserve editable state, Undo/Redo, saved-project reopen, and full-resolution export.
+
+## Performance and reliability
 - Decode by tile, GPU shader acceleration where it materially improves responsiveness, separate fast preview vs final export, bounded memory, cancellation, safe failure and atomic local project custody.
 - Real 12MP/24MP/oversize photo and 2–20-source collage benchmarks; crash/ANR checks on low-memory Android devices and photo provider expiry.
 
@@ -72,8 +75,8 @@ Sources:
 
 **Scope boundary:** Never change Greenezone's corporate website, DNS, accounts, XForge, GZFX or Beside-Me as part of this app wave.
 
-## Owner scope and UX correction: 0.9
+## Historical owner scope and UX record for v0.9
 - Updated final product price: **$2.99 one-time**, not $1.99.
 - Hard UI requirement: top-right separated workflows for Regular Photo, Pro Photo, Collage, GIF and disabled Video Coming soon. Keep regular easy, expert tools in named Pro sections.
 - Complete feature-by-feature non-AI photography, Photoshop-style editing, frame animations, user-audio, slide shows, export and video-last development scope in `UNIFIED_PRODUCT_SCOPE_09.md`. Do not silently skip any requested capability, but do not call it implemented unless tested.
-- Dedicated combined field test after this wave `PHONE_TEST_WAVE8.md`. Owner has not performed the prior 0.8 phone check yet.
+- The Wave 8 document records the original v0.9 phone test plan. Use the release gates for the current owner test. [Historical Wave 8 plan](PHONE_TEST_WAVE8.md) · [Current release gates](RELEASE_GATE.md).
