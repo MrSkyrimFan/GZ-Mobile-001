@@ -2,9 +2,9 @@
 
 ## Current owner direction (2026-11-24)
 
-Lance supplied GPT-6 Pro's independent PR #26 review (CHANGES REQUIRED), authorized fixing the defects and requested the complete intended professional-app roadmap. **The successor read-only hold is lifted.** Engineering/PRs/verified merges are authorized. The combined phone candidate stays held until the four corrections pass. Formal workspace locks and publication remain owner decisions.
+Lance supplied GPT-6 Pro's independent PR #26 review (CHANGES REQUIRED), authorized fixing the defects and requested the complete intended professional-app roadmap. **The successor read-only hold is lifted.** Engineering/PRs/verified merges are authorized. R0 has now passed candidate and merged-main qualification. The qualified v0.12.9 Test phone wave is ready for owner acceptance; formal workspace locks and release remain open. Formal workspace locks and publication remain owner decisions.
 
-Start with the [single work ledger](WORK_LEDGER.md), [complete roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family capability inventory](CAPABILITY_MATRIX.md), [product requirements](PRODUCT_SPEC.md) and [release gates](RELEASE_GATE.md). R0 covers fresh-cover manual Crop, Regular serialization limits, complete long Draw/cancel and complete Pro lasso. Its linked PR is the exact current execution receipt. After its gate passes, proceed to R1 without replaying intake.
+Start with the [single work ledger](WORK_LEDGER.md), [complete roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family capability inventory](CAPABILITY_MATRIX.md), [product requirements](PRODUCT_SPEC.md) and [release gates](RELEASE_GATE.md). R0 covers fresh-cover manual Crop, Regular serialization limits, complete long Draw/cancel and complete Pro lasso. Its linked PR is the exact current execution receipt. The gate has passed; proceed to R1 without replaying intake. [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Both complete Android suites passed 186/186 on candidate and merge; source trees are identical. The exact APK identity is in the PR.
 
 Play Console is not set up. Setup occurs last, after a fully functioning app AND completion of the Greenezone website. No website work is authorized here. Video waits for four formal pre-Video locks; final English/Spanish customer onboarding follows all five editing workspaces.
 
@@ -26,7 +26,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 - Single authorized repo: `MrSkyrimFan/GZ-Mobile-001`.
 - Baseline GZ Editor Pro 0.6 merge: `2a0f11b7eef2c5b42e5f569890b694a1dd7ba265`.
 - Historical 0.7 engineering branch: `feature/gz-editor-pro-creation-export-07`.
-- Application ID unchanged: `com.greenezone.gzphotoeditor`; launcher name GZ Editor Pro. Target Android10+, compile/target SDK36.
+- Application ID unchanged: `com.greenezone.gzphotoeditor`; launcher name GZ Editor Pro. Target Android 10+, compile/target SDK36.
 - Retail target $2.99 one-time. Offline editing without runtime AI, ads, watermarks, in-app purchases, subscriptions, tracking or remote services.
 
 ## Architecture

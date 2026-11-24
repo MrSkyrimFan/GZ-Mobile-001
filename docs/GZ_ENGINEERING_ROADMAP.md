@@ -10,6 +10,14 @@ Lance supplied the independent PR #26 review (CHANGES REQUIRED), authorized fixi
 
 Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WORK_LEDGER.md), [capability inventory](CAPABILITY_MATRIX.md), and [release gates](RELEASE_GATE.md). The inventory gives scope and current evidence; the ledger gives the next executable work. Earlier blueprints and transcripts retain their historical evidence and yield to later direct owner decisions.
 
+## Current engineering state
+
+R0 is engineering-verified in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Candidate and merged application share tree `47e95c51254ce8e8f97b3883c44dc157ea8452b4`; each passed Verify and 186/186 Android cases on both API29 and API35, with no failures/errors/skips. Version 0.12.9 Test / code 21 is the qualified phone wave. Handset acceptance, all formal workspace locks and commercial release remain open.
+
+**Next engineering package: R1.** Preserve the completed R0 evidence and start the bounded durability work from the ledger. Do not replay the independent-review intake or reopen repairs without a new reason.
+
+The legacy Pro streaming optimization passes in the recorded CI environments; the earlier 16 MiB hard-cap condition has not been independently requalified. R1/R8 retain explicit low-memory/device-tier measurements. Legacy v4 GIF aspect migration remains R7.
+
 ## Product contract
 
 A paid-once, fully offline Android creative application with five separate, understandable workspaces. Target price remains US $2.99 once. No runtime AI/ML inference, cloud/account requirement, ads, telemetry SDK, subscription, credits, watermark or in-app purchase. Imported originals are read-only. No copying proprietary source, presets, artwork or branding.
@@ -26,7 +34,7 @@ Preserve the established dark image-first style, workspace selector and working 
 
 The terms Lightroom-class, Photoshop-style and studio-quality are behavioral references. The finite capabilities below govern delivery; they are not permission to copy those products or to claim universal parity. The no-AI and mode-ownership rules override incompatible features. Required families cannot disappear merely because they are difficult.
 
-## Evidence baseline, not a finished product claim
+## Historical intake evidence baseline
 
 - App baseline: PR #26 merge `372e0e947caacb2ceaf603bc4ff5a60e44cc33ec`; candidate `6a8cceba719dc990d663768f626ab87d9436aad4`.
 - Roadmap intake main: `d2a8f4de41839e25ad54060be803746d7307bee8`, tree `5f62620f9fbad28bd8c404c723d995decf03ecf3`. Its difference from the app baseline is six documentation paths, including PRs #27/#28. No open PR was found at intake.
