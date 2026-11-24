@@ -1,10 +1,10 @@
-# GZ Editor Pro — Professional capability roadmap and IP safeguards
+# GZ Editor Pro — historical capability reference and IP safeguards
 
 **Company:** Greenezone Software LLC | **Product:** GZ Editor Pro (Android) | **Policy:** Offline, no runtime AI, no watermarks, one-time payment.
 
 This is an engineering and compliance roadmap, **not** a claim that trademark/patent clearance has been completed or that no one could sue. Features can generally be built independently, but source code, presets, artworks, branding, patents and libraries require different checks.
 
-The product requirements govern tool placement. Audit 2 records the verified application baseline for the field corrections. The continuity page and release gates govern the owner-review hold, handset work, and later features. [Product requirements](PRODUCT_SPEC.md) · [Audit 2 evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Current continuity](CONTINUITY.md) · [Release gates](RELEASE_GATE.md).
+**Execution roadmap superseded on 2026-11-24.** Use the [complete roadmap](GZ_ENGINEERING_ROADMAP.md), [capability inventory](CAPABILITY_MATRIX.md) and [single work ledger](WORK_LEDGER.md) for current scope/order/status. This file preserves earlier capability rationale and license research; it is not a second backlog. Current product requirements, owner decisions and release gates control.
 
 ## Regular photography features
 

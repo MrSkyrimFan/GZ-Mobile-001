@@ -39,9 +39,17 @@ object ProjectStore {
         val key = Base64.getUrlEncoder().withoutPadding().encodeToString(
             name.toByteArray(StandardCharsets.UTF_8)
         )
-        val value = Base64.getUrlEncoder().withoutPadding().encodeToString(
-            image.toString().toByteArray(StandardCharsets.UTF_8)
-        ) + "\n" + EditDocumentCodec.encode(document)
+        // Build a reader-bounded value before touching the existing named save.
+        val value = try {
+            val recipe = EditDocumentCodec.encodeBounded(document)
+            Base64.getUrlEncoder().withoutPadding().encodeToString(
+                image.toString().toByteArray(StandardCharsets.UTF_8)
+            ) + "\n" + recipe
+        } catch (_: EditDocumentCodec.RecipeTooLarge) {
+            return false
+        } catch (_: OutOfMemoryError) {
+            return false
+        }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!prefs.contains(key) && prefs.all.size >= LIMIT) return false
         return prefs.edit().putString(key, value).commit()

@@ -222,32 +222,50 @@ fun DrawTouchOverlay(
     onStart: (BrushPoint) -> Unit,
     onMove: (BrushPoint) -> Unit,
     onFinish: () -> Unit,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    onCancel: () -> Unit = {}
 ) {
     val start by rememberUpdatedState(onStart)
     val move by rememberUpdatedState(onMove)
     val finish by rememberUpdatedState(onFinish)
     val tap by rememberUpdatedState(onTap)
+    val cancel by rememberUpdatedState(onCancel)
     Canvas(
         Modifier.fillMaxSize()
-            .pointerInput(Unit) { detectTapGestures(onTap = { tap() }) }
             .pointerInput(imageWidth, imageHeight) {
-                val img = imageSpace(size.width.toFloat(), size.height.toFloat(), imageWidth, imageHeight)
-                var drawing = false
-                detectDragGestures(
-                    onDragStart = { p ->
-                        drawing = false
-                        img.point(p)?.let { drawing = true; start(it) }
-                    },
-                    onDragEnd = { if (drawing) finish(); drawing = false },
-                    onDragCancel = { if (drawing) finish(); drawing = false },
-                    onDrag = { event, _ ->
-                        if (drawing) {
-                            move(img.clamp(event.position))
-                            event.consume()
-                        }
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val startSize = size
+                    val img = imageSpace(startSize.width.toFloat(), startSize.height.toFloat(),
+                        imageWidth, imageHeight)
+                    val first = img.point(down.position) ?: return@awaitEachGesture
+                    down.consume()
+                    var drawing = false
+                    var completed = false
+                    try {
+                        do {
+                            val event = awaitPointerEvent()
+                            val pointer = event.changes.singleOrNull() ?: return@awaitEachGesture
+                            if (size != startSize || pointer.id != down.id || pointer.isConsumed)
+                                return@awaitEachGesture
+                            if (!drawing && (pointer.position - down.position).getDistance() >
+                                viewConfiguration.touchSlop) {
+                                drawing = true
+                                start(first)
+                            }
+                            // Include release coordinates, even after the point budget
+                            // is reached. The bounded sampler preserves the endpoint.
+                            if (drawing) move(img.clamp(pointer.position))
+                            pointer.consume()
+                        } while (pointer.pressed)
+                        completed = true
+                        if (drawing) finish() else tap()
+                    } finally {
+                        // Pointer cancellation, another finger, a resize, or disposal
+                        // rolls back the whole gesture, including a live vector erase.
+                        if (!completed && drawing) cancel()
                     }
-                )
+                }
             }
     ) {
         val stroke = ink

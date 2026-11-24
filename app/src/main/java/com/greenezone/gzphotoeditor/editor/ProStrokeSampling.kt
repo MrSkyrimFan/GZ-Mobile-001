@@ -4,9 +4,12 @@ package com.greenezone.gzphotoeditor.editor
 internal object ProStrokeSampling {
     const val MAX_POINTS = 500
 
-    fun append(points: List<BrushPoint>, point: BrushPoint, aspect: Float): List<BrushPoint> {
+    fun append(
+        points: List<BrushPoint>, point: BrushPoint, aspect: Float, maxPoints: Int = MAX_POINTS
+    ): List<BrushPoint> {
+        require(maxPoints in 3..MAX_POINTS)
         if (points.lastOrNull() == point) return points
-        if (points.size < MAX_POINTS) return points + point
+        if (points.size < maxPoints) return points + point
 
         // Drop the interior point closest to its neighbours' segment. Include the
         // previous endpoint as a candidate now that there is a newer one.
