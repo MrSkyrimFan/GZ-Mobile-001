@@ -33,7 +33,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 Trace owner-visible failures through production entry points. Test JVM and Android bitmap/Compose behavior, inspect rendered output, and link verification to the exact candidate commit. After the owner lifts the current hold, engineering and merge authority follow the owner's instructions for the approved scope. Handset qualification, formal workspace locks, and commercial release each require their own evidence or owner decision. Keep changes inside the GZ app repository and its supplemental intake.
 
 ## Collage wave v0.8.0 (2026-11-21 local)
-Current verified main baseline before this wave: `7508ff715d39dbb13ae543961b943cee5c78c22b` (GZ Editor Pro 0.7).
+Verified main baseline at the start of the historical v0.8 wave: `7508ff715d39dbb13ae543961b943cee5c78c22b` (GZ Editor Pro 0.7).
 Branch: `feature/collage-workspace-photo-08`.
 The owner added an explicit 2–20-photo collage requirement, independent photo editing inside tiles and high-quality layout templates. They supplied Lightroom's *functional* feature comparison as roadmap input and prohibit runtime AI, infringement and improperly licensed dependencies. No claims of zero legal risk.
 
