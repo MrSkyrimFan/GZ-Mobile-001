@@ -554,28 +554,40 @@ object VideoGifSource {
         val delays = GifVideoMath.frameDelaysMs(clip)
         val (w, h) = GifMath.dimensions(doc)
         val start = System.nanoTime()
-        var sourceReadNanos = 0L
+        val totalTiming = GifStageTiming()
+        val openTiming = GifStageTiming()
+        val readTiming = GifStageTiming()
+        val progressTiming = GifStageTiming()
+        val closeTiming = GifStageTiming()
         var firstFrameNanos = 0L
-        openReader().use { reader ->
-            GifEncoder.writeFrames(out, doc, times.size, delays.first(), cancel,
-                delayAt = { delays[it] }) { index ->
-                val readStart = System.nanoTime()
-                val frame = reader.frame(times[index], maxOf(w, h))
-                val readEnd = System.nanoTime()
-                sourceReadNanos += readEnd - readStart
-                if (index == 0) firstFrameNanos = readEnd - start
-                try {
-                    onProgress?.invoke(index + 1, times.size)
-                    frame
-                } catch (failed: Throwable) {
-                    frame.recycle()
-                    throw failed
+        totalTiming.measure {
+            val opened = openTiming.measure(openReader)
+            // Keep use()'s close and suppressed-exception behavior, while measuring
+            // release separately from frame retrieval and color/encoding work.
+            val measured = object : GifFrameReader by opened {
+                override fun close() = closeTiming.measure { opened.close() }
+            }
+            measured.use { reader ->
+                GifEncoder.writeFrames(out, doc, times.size, delays.first(), cancel,
+                    delayAt = { delays[it] }) { index ->
+                    val frame = readTiming.measure { reader.frame(times[index], maxOf(w, h)) }
+                    val readEnd = System.nanoTime()
+                    if (index == 0) firstFrameNanos = readEnd - start
+                    try {
+                        progressTiming.measure { onProgress?.invoke(index + 1, times.size) }
+                        frame
+                    } catch (failed: Throwable) {
+                        frame.recycle()
+                        throw failed
+                    }
                 }
             }
         }
-        val total = System.nanoTime() - start
         Log.d("GzGifExportStage",
-            "frames=${times.size} canvas=${w}x$h sourceReadMs=${sourceReadNanos / 1_000_000} " +
-                "firstFrameMs=${firstFrameNanos / 1_000_000} totalMs=${total / 1_000_000}")
+            "frames=${times.size} canvas=${w}x$h sourceReadMs=${readTiming.wallMs} " +
+                "firstFrameMs=${firstFrameNanos / 1_000_000} totalMs=${totalTiming.wallMs} " +
+                "sourceReadCpuMs=${readTiming.cpuMs} openMs=${openTiming.wallMs} openCpuMs=${openTiming.cpuMs} " +
+                "progressMs=${progressTiming.wallMs} progressCpuMs=${progressTiming.cpuMs} " +
+                "closeMs=${closeTiming.wallMs} closeCpuMs=${closeTiming.cpuMs} totalCpuMs=${totalTiming.cpuMs}")
     }
 }

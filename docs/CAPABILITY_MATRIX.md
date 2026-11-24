@@ -47,7 +47,7 @@ Updated 2026-11-24 after qualified app merge `c9efc5aa0673f21b98f150733582a24996
 | R11 | Regular | Virtual copies, sidecars, sync and catalog recovery | OPEN | R6 | Selective compatible edits, source-safe relink, migrated backup and independent copies | Master §4 |
 | R12 | Regular | Durable batch processing and export | OPEN | R6 | Frozen items/multiple outputs/name/profile/privacy, cancel/resume/idempotent receipts | Master §4 |
 | R13 | Regular / tile | Text and typography | PARTIAL | R6 | Unicode shaping/fonts/styles/editability/crop/reopen/export; asset rights | Revision 4; CreativeModel/CreativeRaster |
-| R14 | Regular / tile | Draw, Shapes and decoration | PARTIAL | R6 | Complete bounded gestures; independent transforms/layers; borders/frames | Revision 4; CreativeDecks; current 32-text/160-stroke/64-shape limits |
+| R14 | Regular / tile | Draw, Shapes and decoration | DEFECT | R6 | Correct R29-01/02 Eraser geometry/capacity before phone delivery; then independent transforms/layers and borders/frames | Current Eraser review; Revision 4; CreativeDecks; current 32-text/160-stroke/64-shape limits |
 | R15 | Regular / tile | Privacy cover/blur/pixelation | PARTIAL | R0/R6 | Same source detail protected through geometry/export; blur strength not called secure redaction | Audit 2; fresh-crop D01 |
 | R16 | Regular / tile | Finished offline sticker library | OPEN | R6 | ≥500 usable rights-cleared assets; 648 concepts/27 categories alone earn no credit | Revision 3.1 sticker requirements |
 | R17 | Regular / tile | Sticker browser, transform, custom PNG/WebP | OPEN | R6 | Search/favorite/recent; alpha/order/duplicate/delete; Undo/reopen/export per tile | Revision 3.1 sticker requirements |

@@ -126,7 +126,21 @@ class AndroidGifFidelityTest {
             }
             assertNull(ImagePipeline.GifColors.forGrade(edits.grade.copy(grain = .4f)))
             assertNull(ImagePipeline.GifColors.forGrade(edits.grade.copy(vignette = .4f)))
-            assertNull(ImagePipeline.GifColors.forGrade(edits.grade.copy(texture = .4f)))
+            // Detail-aware entries now support texture; retain full raster equivalence.
+            val textured = edits.copy(grade = edits.grade.copy(texture = .4f))
+            val texturedCache = requireNotNull(ImagePipeline.GifColors.forGrade(textured.grade))
+            val expectedTexture = ImagePipeline.render(source, textured)
+            val actualTexture = ImagePipeline.render(source, textured, texturedCache, null)
+            try {
+                val expected = IntArray(sourcePixels.size)
+                val actual = IntArray(sourcePixels.size)
+                expectedTexture.getPixels(expected, 0, size, 0, 0, size, size)
+                actualTexture.getPixels(actual, 0, size, 0, 0, size, size)
+                assertArrayEquals("Texture cache must preserve every raster pixel", expected, actual)
+            } finally {
+                expectedTexture.recycle()
+                actualTexture.recycle()
+            }
         } finally {
             source.recycle()
         }

@@ -202,6 +202,7 @@ fun PhotoEditorScreen(
     var loadingToken by remember { mutableIntStateOf(0) }
     var creativeTools by remember { mutableStateOf(CreativeToolState()) }
     var currentInk by remember { mutableStateOf<InkStroke?>(null) }
+    var previousInkErasePoint by remember { mutableStateOf<BrushPoint?>(null) }
     var showTextDialog by remember { mutableStateOf(false) }
     var textDraft by remember { mutableStateOf("") }
     var editingTextIndex by remember { mutableIntStateOf(-1) }
@@ -314,6 +315,7 @@ fun PhotoEditorScreen(
                 selectedTab = EditTab.LOOKS
                 creativeTools = CreativeToolState()
                 currentInk = null
+                previousInkErasePoint = null
                 showTextDialog = false
                 activeLook = if (restored == null) "none" else "custom"
                 chromeVisible = true
@@ -451,6 +453,7 @@ fun PhotoEditorScreen(
         liveGesture = false
         painting = false
         currentInk = null
+        previousInkErasePoint = null
         chromeVisible = true
         selectedTab = EditTab.LOOKS
         activeLook = "none"
@@ -687,6 +690,30 @@ fun PhotoEditorScreen(
         showProjects = true
     }
 
+    fun applyInkErase(point: BrushPoint) {
+        val image = previewState.beforeImage ?: original
+        val aspect = image?.let { it.width.toFloat() / it.height } ?: 1f
+        val result = InkMath.eraseBounded(document.creative.strokes, point.x, point.y,
+            creativeTools.inkThickness, aspect, previousInkErasePoint)
+        if (result.capacityExceeded) {
+            // A later sample can overflow after earlier valid cuts. Reject the
+            // whole gesture before history or persistence can accept a prefix.
+            gestureStart?.let { document = it }
+            currentInk = null
+            previousInkErasePoint = null
+            painting = false
+            gestureStart = null
+            liveGesture = false
+            chromeVisible = true
+            notice = "Erasing would exceed the drawing limit. Your drawing is unchanged."
+        } else {
+            if (result.strokes != document.creative.strokes) {
+                document = document.copy(creative = document.creative.copy(strokes = result.strokes))
+            }
+            previousInkErasePoint = point
+        }
+    }
+
     fun startInk(point: BrushPoint) {
         if (selectedTab != EditTab.DRAW) return
         if (!creativeTools.erase &&
@@ -696,10 +723,9 @@ fun PhotoEditorScreen(
         }
         gestureStart = document
         painting = true
+        previousInkErasePoint = null
         if (creativeTools.erase) {
-            val erased = InkMath.erase(document.creative.strokes, point.x, point.y,
-                creativeTools.inkThickness)
-            document = document.copy(creative = document.creative.copy(strokes = erased))
+            applyInkErase(point)
         } else {
             currentInk = InkStroke(listOf(point), creativeTools.inkColor,
                 creativeTools.inkThickness, creativeTools.inkOpacity)
@@ -709,11 +735,7 @@ fun PhotoEditorScreen(
     fun continueInk(point: BrushPoint) {
         if (!painting || selectedTab != EditTab.DRAW) return
         if (creativeTools.erase) {
-            val erased = InkMath.erase(document.creative.strokes, point.x, point.y,
-                creativeTools.inkThickness)
-            if (erased.size <= CreativeRaster.MAX_INK) {
-                document = document.copy(creative = document.creative.copy(strokes = erased))
-            }
+            applyInkErase(point)
         } else {
             val ink = currentInk ?: return
             val image = previewState.beforeImage ?: original
@@ -733,6 +755,7 @@ fun PhotoEditorScreen(
             }
         }
         currentInk = null
+        previousInkErasePoint = null
         painting = false
         finishSlide()
     }
@@ -741,6 +764,7 @@ fun PhotoEditorScreen(
         if (!painting) return
         gestureStart?.let { document = it }
         currentInk = null
+        previousInkErasePoint = null
         painting = false
         gestureStart = null
         liveGesture = false

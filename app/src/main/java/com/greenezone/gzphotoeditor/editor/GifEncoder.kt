@@ -5,10 +5,34 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.Debug
+import android.util.Log
 import java.io.BufferedOutputStream
 import java.io.OutputStream
 import kotlin.math.max
 import kotlin.math.min
+
+/** Aggregate wall/thread CPU time only; no source identifiers or per-frame records. */
+internal class GifStageTiming {
+    private var wallNanos = 0L
+    private var cpuNanos = 0L
+    private var cpuAvailable = true
+    val wallMs get() = wallNanos / 1_000_000
+    val cpuMs get() = if (cpuAvailable) cpuNanos / 1_000_000 else -1L
+
+    fun <T> measure(block: () -> T): T {
+        val wallStart = System.nanoTime()
+        val cpuStart = Debug.threadCpuTimeNanos()
+        try {
+            return block()
+        } finally {
+            val cpuEnd = Debug.threadCpuTimeNanos()
+            wallNanos += System.nanoTime() - wallStart
+            if (cpuStart >= 0 && cpuEnd >= cpuStart) cpuNanos += cpuEnd - cpuStart
+            else cpuAvailable = false
+        }
+    }
+}
 
 /** Streaming GIF89a writer with per-frame source-adaptive palettes. */
 object GifEncoder {
@@ -146,58 +170,83 @@ object GifEncoder {
         require(frameCount in 1..GifVideoMath.MAX_OUTPUT_FRAMES)
         val (w, h) = GifMath.dimensions(doc)
         require(w.toLong() * h <= 16_777_216L) { "Choose a smaller export size for this canvas" }
-        val stream = BufferedOutputStream(output, 64 * 1024)
-        val writer = LzwWriter(stream, cancel)
-        val palette = GifPalette(w, cancel, reserveTransparency = doc.video?.isGif == true)
-        val colors = ImagePipeline.GifColors.forGrade(doc.edits.grade)
-        val pixels = ByteArray(w * h)
-        val table = ByteArray(256 * 3)
-        stream.ascii("GIF89a")
-        stream.short(w); stream.short(h)
-        // A two-entry global table supplies the logical background for transparent frames.
-        stream.byte(0xf0); stream.byte(0); stream.byte(0)
-        stream.write(ByteArray(6))
-        if (doc.loopCount >= 0) {
-            stream.byte(0x21); stream.byte(0xff); stream.byte(11)
-            stream.ascii("NETSCAPE2.0")
-            stream.byte(3); stream.byte(1); stream.short(doc.loopCount); stream.byte(0)
-        }
-        for (i in 0 until frameCount) {
-            cancel?.invoke()
-            val source = loader(i)
-            var target: Bitmap? = null
-            try {
-                // Photo sequences composite transparent input onto the same black canvas as preview.
-                val needsPhotoBackground = doc.video == null && source.hasAlpha()
-                val image = if (source.width == w && source.height == h && doc.edits == neutral && !needsPhotoBackground)
-                    source else renderFrame(source, doc, maxEdge = null, cancel = cancel, colors = colors)
-                target = image
-                palette.index(image, pixels)
-                palette.colors.forEachIndexed { idx, color ->
-                    table[idx * 3] = (color ushr 16).toByte()
-                    table[idx * 3 + 1] = (color ushr 8).toByte()
-                    table[idx * 3 + 2] = color.toByte()
+        val totalTiming = GifStageTiming()
+        val loaderTiming = GifStageTiming()
+        val renderTiming = GifStageTiming()
+        val paletteTiming = GifStageTiming()
+        val encodeTiming = GifStageTiming()
+        val colors = totalTiming.measure {
+            val colors = ImagePipeline.GifColors.forGrade(doc.edits.grade)
+            val stream = BufferedOutputStream(output, 64 * 1024)
+            val writer = LzwWriter(stream, cancel)
+            val palette = GifPalette(w, cancel, reserveTransparency = doc.video?.isGif == true)
+            val pixels = ByteArray(w * h)
+            val table = ByteArray(256 * 3)
+            encodeTiming.measure {
+                stream.ascii("GIF89a")
+                stream.short(w); stream.short(h)
+                // A two-entry global table supplies the logical background for transparent frames.
+                stream.byte(0xf0); stream.byte(0); stream.byte(0)
+                stream.write(ByteArray(6))
+                if (doc.loopCount >= 0) {
+                    stream.byte(0x21); stream.byte(0xff); stream.byte(11)
+                    stream.ascii("NETSCAPE2.0")
+                    stream.byte(3); stream.byte(1); stream.short(doc.loopCount); stream.byte(0)
                 }
-                var ticks = ((delayAt(i) + 5) / 10).coerceAtLeast(1)
-                while (ticks > 0) {
-                    // Readers treat a one-tick hold as a fallback. Borrow a tick for the final block.
-                    val hold = if (ticks == MAX_DELAY_TICKS + 1) MAX_DELAY_TICKS - 1
-                        else min(MAX_DELAY_TICKS, ticks)
-                    stream.byte(0x21); stream.byte(0xf9); stream.byte(4)
-                    stream.byte(if (palette.transparent) 0x09 else 0x04)
-                    stream.short(hold); stream.byte(0); stream.byte(0)
-                    stream.byte(0x2c); stream.short(0); stream.short(0)
-                    stream.short(w); stream.short(h); stream.byte(0x87)
-                    stream.write(table); stream.byte(8)
-                    writer.write(pixels)
-                    ticks -= hold
-                }
-            } finally {
-                if (target != null && target !== source) target.recycle()
-                source.recycle()
             }
+            for (i in 0 until frameCount) {
+                cancel?.invoke()
+                val source = loaderTiming.measure { loader(i) }
+                var target: Bitmap? = null
+                try {
+                    // Photo sequences composite transparent input onto the same black canvas as preview.
+                    val needsPhotoBackground = doc.video == null && source.hasAlpha()
+                    val image = renderTiming.measure {
+                        if (source.width == w && source.height == h && doc.edits == neutral && !needsPhotoBackground)
+                            source else renderFrame(source, doc, maxEdge = null, cancel = cancel, colors = colors)
+                    }
+                    target = image
+                    paletteTiming.measure {
+                        palette.index(image, pixels)
+                        palette.colors.forEachIndexed { idx, color ->
+                            table[idx * 3] = (color ushr 16).toByte()
+                            table[idx * 3 + 1] = (color ushr 8).toByte()
+                            table[idx * 3 + 2] = color.toByte()
+                        }
+                    }
+                    encodeTiming.measure {
+                        var ticks = ((delayAt(i) + 5) / 10).coerceAtLeast(1)
+                        while (ticks > 0) {
+                            // Readers treat a one-tick hold as a fallback. Borrow a tick for the final block.
+                            val hold = if (ticks == MAX_DELAY_TICKS + 1) MAX_DELAY_TICKS - 1
+                                else min(MAX_DELAY_TICKS, ticks)
+                            stream.byte(0x21); stream.byte(0xf9); stream.byte(4)
+                            stream.byte(if (palette.transparent) 0x09 else 0x04)
+                            stream.short(hold); stream.byte(0); stream.byte(0)
+                            stream.byte(0x2c); stream.short(0); stream.short(0)
+                            stream.short(w); stream.short(h); stream.byte(0x87)
+                            stream.write(table); stream.byte(8)
+                            writer.write(pixels)
+                            ticks -= hold
+                        }
+                    }
+                } finally {
+                    if (target != null && target !== source) target.recycle()
+                    source.recycle()
+                }
+            }
+            encodeTiming.measure {
+                stream.byte(0x3b)
+                stream.flush()
+            }
+            colors
         }
-        stream.byte(0x3b)
-        stream.flush()
+        Log.d("GzGifEncodeStage",
+            "frames=$frameCount canvas=${w}x$h loaderMs=${loaderTiming.wallMs} loaderCpuMs=${loaderTiming.cpuMs} " +
+                "renderMs=${renderTiming.wallMs} renderCpuMs=${renderTiming.cpuMs} " +
+                "paletteMs=${paletteTiming.wallMs} paletteCpuMs=${paletteTiming.cpuMs} " +
+                "lzwOutputMs=${encodeTiming.wallMs} lzwOutputCpuMs=${encodeTiming.cpuMs} " +
+                "colorCacheHits=${colors?.hits ?: 0} colorCacheMisses=${colors?.misses ?: 0} " +
+                "totalMs=${totalTiming.wallMs} totalCpuMs=${totalTiming.cpuMs}")
     }
 }

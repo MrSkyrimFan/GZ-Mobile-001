@@ -2,6 +2,10 @@
 
 ## Current scope
 
+**Latest engineering direction:** Lance explicitly authorized correcting the two independent PR #29 Eraser findings. Preserve the existing layout/style and mode boundaries. Eraser must cut rendered line geometry and reject any unrepresentable result without dropping unrelated artwork or committing a partial gesture. The prior phone candidate remains held until this correction is qualified; R1.1 follows. [Current work](WORK_LEDGER.md) · [Evidence](ERASER_REPAIR_VERIFICATION.md).
+
+### Retained PR #29 baseline
+
 The November 23 audit and PR #26 evidence record the prior application baseline. Lance supplied the independent follow-up review on November 24 and authorized corrections and the complete professional-app roadmap. The former owner-review hold is lifted; the four corrections are now engineering-verified in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), with 186/186 Android cases per platform on candidate and merge. Qualified v0.12.9 Test handset acceptance remains open, and R1 durability is next. [Active roadmap](GZ_ENGINEERING_ROADMAP.md) · [Capability inventory](CAPABILITY_MATRIX.md) · [Work ledger](WORK_LEDGER.md) · [Continuity](CONTINUITY.md) · [Release gates](RELEASE_GATE.md).
 
 - **Regular and Collage.** Preserve the familiar photo-first interface, Text, Draw, Shapes, Blur & cover, and independent edits across all 20 Collage tiles. Regular and the selected-tile editor have no visible Masks authoring. Keep saved mask data, rendering and round-trip compatibility. Give all four Crop corners and all four edges density-aware touch targets of at least 48 dp and select the drag target on pointer down. Preserve predictable Freeform and fixed-ratio geometry and exact exported crops.

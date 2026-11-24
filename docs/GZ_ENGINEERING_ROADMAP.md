@@ -12,9 +12,13 @@ Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WO
 
 ## Current engineering state
 
+**Current override:** the owner authorized correcting two new Eraser findings from the independent PR #29 review. The 0.12.9 phone candidate is held until visible-segment erasing and capacity-safe gesture/persistence behavior pass the [focused execution gate](ERASER_REPAIR_VERIFICATION.md). Existing layout, original R0 evidence, all 186 cases and GIF budgets remain protected. The active ledger records the exact baseline, owners, files and exits. R1.1 follows this bounded correction.
+
+### Prior verified PR #29 checkpoint
+
 R0 is engineering-verified in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Candidate and merged application share tree `47e95c51254ce8e8f97b3883c44dc157ea8452b4`; each passed Verify and 186/186 Android cases on both API29 and API35, with no failures/errors/skips. Version 0.12.9 Test / code 21 is the qualified phone wave. Handset acceptance, all formal workspace locks and commercial release remain open.
 
-**Next engineering package: R1.** Preserve the completed R0 evidence and start the bounded durability work from the ledger. Do not replay the independent-review intake or reopen repairs without a new reason.
+**Next roadmap package after the active Eraser correction: R1.** Preserve the completed R0 evidence and follow the active ledger. Do not replay the independent-review intake or reopen repairs without a new reason.
 
 The legacy Pro streaming optimization passes in the recorded CI environments; the earlier 16 MiB hard-cap condition has not been independently requalified. R1/R8 retain explicit low-memory/device-tier measurements. Legacy v4 GIF aspect migration remains R7.
 
