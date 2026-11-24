@@ -2,6 +2,7 @@ package com.greenezone.gzphotoeditor.editor
 
 import android.content.Context
 import android.util.AtomicFile
+import java.io.DataInputStream
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -80,11 +81,14 @@ object ProStore {
                         })
                     }
                 })
-                val edits = EditDocumentCodec.encode(layer.edits)
-                recipeChars += edits.length
-                if (edits.length > EditDocumentCodec.MAX_ENCODED_CHARS || recipeChars > MAX_BYTES) {
+                val edits = try {
+                    EditDocumentCodec.encodeBounded(
+                        layer.edits, minOf(EditDocumentCodec.MAX_ENCODED_CHARS, MAX_BYTES - recipeChars)
+                    )
+                } catch (_: EditDocumentCodec.RecipeTooLarge) {
                     throw ProjectTooLarge()
                 }
+                recipeChars += edits.length
                 put("edits", edits)
             })
         }
@@ -119,7 +123,12 @@ object ProStore {
     private fun decode(data: String, recoverLegacyRecipe: Boolean): ProDocument? {
         if (data.length > MAX_BYTES) return null
         return try {
-            val obj = JSONObject(data)
+            decode(JSONObject(data), recoverLegacyRecipe)
+        } catch (_: Exception) { null }
+    }
+
+    private fun decode(obj: JSONObject, recoverLegacyRecipe: Boolean): ProDocument? {
+        return try {
             val version = obj.optInt("version", -1)
             if (version !in 1..VERSION) return null
             val array = obj.optJSONArray("layers") ?: return null
@@ -235,8 +244,12 @@ object ProStore {
         if (data.length > MAX_PROJECT_BYTES) return null
         val json = JSONObject(data)
         val reset = json.remove(RESET_DOCUMENT) as? JSONObject
-        val document = decode(if (reset == null) data else json.toString(), recoverLegacyRecipe = true)
-            ?: return null
+        if (data.length > MAX_BYTES) {
+            if (reset == null || json.toString().length > MAX_BYTES ||
+                reset.toString().length > MAX_BYTES
+            ) return null
+        }
+        val document = decode(json, recoverLegacyRecipe = true) ?: return null
         val baseline = reset?.let {
             if (it.optBoolean("empty")) {
                 ProDocument(
@@ -246,7 +259,7 @@ object ProStore {
                         .takeIf(ProMath::validSourceAspect),
                     canvasSize = runCatching { it.pixelSize("canvasSize") }.getOrNull()
                 )
-            } else decode(it.toString(), recoverLegacyRecipe = true)
+            } else decode(it, recoverLegacyRecipe = true)
         }
         // A legacy or unreadable optional baseline must never clear the user's saved work.
         return SavedProject(document, baseline ?: document)
@@ -359,16 +372,13 @@ object ProStore {
         if (!recoverable.isFile || recoverable.length() > projectReadLimit()) return null
         val atomic = AtomicFile(base)
         return try {
-            val data = atomic.openRead().bufferedReader(Charsets.UTF_8).use { reader ->
-                val text = StringBuilder()
-                val buf = CharArray(4096)
-                while (true) {
-                    val n = reader.read(buf)
-                    if (n < 0) break
-                    if (text.length + n > MAX_PROJECT_BYTES) return null
-                    text.append(buf, 0, n)
-                }
-                text.toString()
+            val data = atomic.openRead().use { input ->
+                val length = input.channel.size()
+                if (length !in 1L..projectReadLimit()) return null
+                val bytes = ByteArray(length.toInt())
+                DataInputStream(input).readFully(bytes)
+                if (input.read() != -1) return null
+                String(bytes, Charsets.UTF_8)
             }
             decodeProject(data)
         } catch (_: OutOfMemoryError) {

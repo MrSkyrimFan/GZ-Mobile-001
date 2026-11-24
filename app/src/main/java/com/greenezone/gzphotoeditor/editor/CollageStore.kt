@@ -36,8 +36,7 @@ object CollageStore {
             require(photo.uri.startsWith("content://") && photo.uri.length <= 4096) {
                 "Only local photos may be stored"
             }
-            val edits = EditDocumentCodec.encode(photo.edits)
-            require(edits.length <= EditDocumentCodec.MAX_ENCODED_CHARS) { "Tile recipe is too large" }
+            val edits = EditDocumentCodec.encodeBounded(photo.edits)
             photos.put(JSONObject().apply {
                 put("uri", photo.uri)
                 put("id", photo.id)

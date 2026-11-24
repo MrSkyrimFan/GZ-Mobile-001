@@ -15,8 +15,41 @@ object EditDocumentCodec {
     private const val MAX_INK_POINTS = 500
     internal const val MAX_ENCODED_CHARS = 2_000_000
 
-    fun encode(document: EditDocument): String {
-        val fields = sortedMapOf<String, String>()
+    internal class RecipeTooLarge : IllegalArgumentException("Edit recipe is too large")
+
+    private class RecipeFields(private val limit: Int) {
+        private val values = sortedMapOf<String, String>()
+        private var lengthWithTrailingNewline = 0L
+
+        operator fun set(key: String, value: String) {
+            val previous = values.put(key, value)
+            lengthWithTrailingNewline += if (previous == null) {
+                key.length.toLong() + value.length + 2
+            } else {
+                (value.length - previous.length).toLong()
+            }
+            if (lengthWithTrailingNewline - 1 > limit) throw RecipeTooLarge()
+        }
+
+        fun encode(): String {
+            // Keys, enums, numbers and flags are ASCII. Free text is encoded in Base64.
+            // Allocate the exact byte count instead of growing a large UTF-16 buffer.
+            val bytes = ByteArray((lengthWithTrailingNewline - 1).toInt())
+            var offset = 0
+            for ((key, value) in values) {
+                if (offset != 0) bytes[offset++] = '\n'.code.toByte()
+                for (char in key) bytes[offset++] = char.code.toByte()
+                bytes[offset++] = '='.code.toByte()
+                for (char in value) bytes[offset++] = char.code.toByte()
+            }
+            return String(bytes, StandardCharsets.US_ASCII)
+        }
+    }
+
+    fun encode(document: EditDocument): String = encodeBounded(document, Int.MAX_VALUE)
+
+    internal fun encodeBounded(document: EditDocument, maxChars: Int = MAX_ENCODED_CHARS): String {
+        val fields = RecipeFields(maxChars)
         val privacy = document.privacy.take(PrivacyRaster.MAX_EDITS)
         fields["version"] = if (privacy.any { it.authoringGeometry != null })
             ANCHORED_PRIVACY_VERSION else LEGACY_VERSION
@@ -134,7 +167,7 @@ object EditDocumentCodec {
                 it.x.toString() + "," + it.y.toString()
             }
         }
-        return fields.entries.joinToString("\n") { "${it.key}=${it.value}" }
+        return fields.encode()
     }
 
     fun decode(content: String): EditDocument? = decode(content, MAX_ENCODED_CHARS)
