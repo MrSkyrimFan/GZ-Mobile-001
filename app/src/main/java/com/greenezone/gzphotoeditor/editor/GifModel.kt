@@ -23,15 +23,22 @@ data class GifDocument(
 ) {
     val loopCount: Int get() = if (forever) 0 else repeatCount ?: -1
 }
-data class GifHistory(val undo: List<GifDocument> = emptyList(),
-                      val redo: List<GifDocument> = emptyList()) {
-    fun checkpoint(before: GifDocument, after: GifDocument): GifHistory =
+data class GifUndoStack<T>(
+    val undo: List<T> = emptyList(),
+    val redo: List<T> = emptyList()
+) {
+    fun checkpoint(before: T, after: T): GifUndoStack<T> =
         if (before == after) this else copy(undo = (undo + before).takeLast(30), redo = emptyList())
-    fun undo(now: GifDocument): Pair<GifDocument, GifHistory>? =
+
+    fun undo(now: T): Pair<T, GifUndoStack<T>>? =
         undo.lastOrNull()?.let { it to copy(undo = undo.dropLast(1), redo = (redo + now).takeLast(30)) }
-    fun redo(now: GifDocument): Pair<GifDocument, GifHistory>? =
+
+    fun redo(now: T): Pair<T, GifUndoStack<T>>? =
         redo.lastOrNull()?.let { it to copy(redo = redo.dropLast(1), undo = (undo + now).takeLast(30)) }
 }
+
+typealias GifHistory = GifUndoStack<GifDocument>
+
 object GifMath {
     const val MAX_FRAMES = 20
     fun valid(doc: GifDocument): Boolean =

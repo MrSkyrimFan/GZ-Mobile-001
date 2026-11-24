@@ -13,11 +13,14 @@ object GifStore {
     private const val MAX_FILES = 12
     private const val MAX_BYTES = 2_400_000
     private fun folder(context: Context) = File(context.filesDir, "gz_gif_projects").also { it.mkdirs() }
-    private fun id(name: String): String? {
-        val clean = name.trim().replace(Regex("\\s+"), " ").take(32)
-        if (clean.isBlank()) return null
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(clean.toByteArray(Charsets.UTF_8))
+    internal fun projectName(name: String): String? =
+        name.trim().replace(Regex("\\s+"), " ").take(32).takeUnless(String::isBlank)
+
+    private fun id(name: String): String? = projectName(name)?.let {
+        Base64.getUrlEncoder().withoutPadding().encodeToString(it.toByteArray(Charsets.UTF_8))
     }
+
+    internal enum class SaveResult { SAVED, NAME_IN_USE, FULL, FAILED }
     fun encode(doc: GifDocument): String {
         require(GifMath.valid(doc))
         return JSONObject().apply {
@@ -124,11 +127,20 @@ object GifStore {
             Charsets.UTF_8) } catch (_: Exception) { null }
     }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
 
-    @Synchronized fun save(context: Context, name: String, doc: GifDocument): Boolean {
-        val id = id(name) ?: return false
-        val dir = folder(context)
-        val file = File(dir, "$id.gzgif")
-        if (!file.exists() && !File(file.path + ".bak").isFile && names(context).size >= MAX_FILES) return false
+    fun save(context: Context, name: String, doc: GifDocument): Boolean =
+        saveProject(context, name, doc, replaceExisting = true) == SaveResult.SAVED
+
+    @Synchronized internal fun saveProject(
+        context: Context,
+        name: String,
+        doc: GifDocument,
+        replaceExisting: Boolean
+    ): SaveResult {
+        val id = id(name) ?: return SaveResult.FAILED
+        val file = File(folder(context), "$id.gzgif")
+        val exists = file.exists() || File(file.path + ".bak").isFile
+        if (exists && !replaceExisting) return SaveResult.NAME_IN_USE
+        if (!exists && names(context).size >= MAX_FILES) return SaveResult.FULL
         return try {
             val data = encode(doc).toByteArray(Charsets.UTF_8)
             require(data.size <= MAX_BYTES)
@@ -141,9 +153,10 @@ object GifStore {
                 atomic.failWrite(stream)
                 throw e
             }
-            true
-        } catch (_: Exception) { false }
+            SaveResult.SAVED
+        } catch (_: Exception) { SaveResult.FAILED }
     }
+
     @Synchronized fun load(context: Context, name: String): GifDocument? {
         val id = id(name) ?: return null
         val file = File(folder(context), "$id.gzgif")

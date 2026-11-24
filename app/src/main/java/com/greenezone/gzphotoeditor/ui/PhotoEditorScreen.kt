@@ -110,6 +110,12 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.roundToInt
 
+private data class PhotoReplacement(
+    val uri: Uri,
+    val edits: EditDocument? = null,
+    val projectName: String? = null
+)
+
 private data class ExportRequest(val settings: ExportSettings, val edits: EditDocument)
 private data class CropPreview(val source: Bitmap, val edits: EditDocument, val bitmap: Bitmap)
 
@@ -176,6 +182,9 @@ fun PhotoEditorScreen(
     var baselineUri by remember { mutableStateOf<String?>(null) }
     var baselineDocument by remember { mutableStateOf(EditDocument()) }
     var showRegularExit by remember { mutableStateOf(false) }
+    var replacement by remember { mutableStateOf<PhotoReplacement?>(null) }
+    var replacementAfterSave by remember { mutableStateOf(false) }
+    var projectToDelete by remember { mutableStateOf<String?>(null) }
     var showProHandoff by remember { mutableStateOf(false) }
     var showTileExit by remember { mutableStateOf(false) }
     var closeAfterProjectSave by remember { mutableStateOf(false) }
@@ -184,6 +193,7 @@ fun PhotoEditorScreen(
     var showHistogram by remember { mutableStateOf(false) }
     var showSaveLook by remember { mutableStateOf(false) }
     var showSaveProject by remember { mutableStateOf(false) }
+    var projectSaveError by remember { mutableStateOf<String?>(null) }
     var showProjects by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf("") }
     var selectedProject by remember { mutableStateOf<String?>(null) }
@@ -191,14 +201,15 @@ fun PhotoEditorScreen(
     var savedProjects by remember { mutableStateOf(ProjectStore.load(context)) }
 
     fun commit(next: EditDocument) {
-        history = history.checkpoint(document, next)
-        document = next
+        val updated = PrivacyMath.retainAuthoringGeometry(document, next)
+        history = history.checkpoint(document, updated)
+        document = updated
         gestureStart = null
         liveGesture = false
     }
     fun slide(next: EditDocument) {
         if (gestureStart == null) gestureStart = document
-        document = next
+        document = PrivacyMath.retainAuthoringGeometry(document, next)
         liveGesture = true
         activeLook = "custom"
     }
@@ -411,6 +422,24 @@ fun PhotoEditorScreen(
         return sourceUri?.toString() != baselineUri || document != baselineDocument
     }
 
+    fun requestPhotoReplacement(candidate: PhotoReplacement) {
+        if (busy || exporting) return
+        finishSlide()
+        if (isPhotoDirty()) {
+            replacement = candidate
+            showRegularExit = true
+        } else {
+            loadPhoto(candidate.uri, candidate.edits)
+        }
+    }
+
+    fun completeReplacement() {
+        val candidate = replacement ?: return
+        replacement = null
+        showRegularExit = false
+        loadPhoto(candidate.uri, candidate.edits)
+    }
+
     fun closeCurrentPhoto() {
         loadingToken += 1
         sourceUri = null
@@ -442,6 +471,8 @@ fun PhotoEditorScreen(
         showRegularExit = false
         showTileExit = false
         closeAfterProjectSave = false
+        replacement = null
+        replacementAfterSave = false
         selectedProject = null
         creativeTools = CreativeToolState()
     }
@@ -541,18 +572,27 @@ fun PhotoEditorScreen(
         commit(document.copy(privacy = updated))
     }
 
+    fun authoringPoint(mark: PrivacyEdit, point: BrushPoint): BrushPoint {
+        val input = original ?: return point
+        return PrivacyMath.projection(input.width, input.height, document, mark)
+            ?.toAuthoring(point) ?: point
+    }
+
     fun movePrivacy(x: Float, y: Float) {
         val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
         if (mark.kind.usesBrush) return
         val updated = document.privacy.toMutableList()
-        updated[selectedPrivacy] = PrivacyMath.withCenter(mark, x, y)
+        val point = authoringPoint(mark, BrushPoint(x, y))
+        updated[selectedPrivacy] = PrivacyMath.withCenter(mark, point.x, point.y)
         slide(document.copy(privacy = updated))
     }
 
-    fun startPaint(point: BrushPoint) {
+    fun startPaint(viewPoint: BrushPoint) {
         if (selectedTab != EditTab.PRIVACY) return
         val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
         if (!mark.kind.usesBrush) return
+        val point = authoringPoint(mark, viewPoint)
+        if (point.x !in 0f..1f || point.y !in 0f..1f) return
         if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 640) {
             notice = "Brush limit reached. Undo a stroke or add another brush."
             return
@@ -565,12 +605,14 @@ fun PhotoEditorScreen(
         document = document.copy(privacy = updated)
     }
 
-    fun continuePaint(point: BrushPoint) {
+    fun continuePaint(viewPoint: BrushPoint) {
         if (!painting || gestureStart == null) return
         if (selectedTab != EditTab.PRIVACY) return
         val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
         val last = mark.strokes.lastOrNull() ?: return
         if (mark.strokes.sumOf { it.points.size } >= 640) return
+        val point = authoringPoint(mark, viewPoint)
+        if (point.x !in 0f..1f || point.y !in 0f..1f) return
         val previous = last.points.last()
         val dx = point.x - previous.x
         val dy = point.y - previous.y
@@ -587,7 +629,7 @@ fun PhotoEditorScreen(
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
-        if (it != null) loadPhoto(it)
+        if (it != null) requestPhotoReplacement(PhotoReplacement(it))
     }
     val exporter = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -623,12 +665,16 @@ fun PhotoEditorScreen(
         showSaveLook = true
     }
     fun saveProject() {
+        projectSaveError = null
         closeAfterProjectSave = false
+        replacementAfterSave = false
         draftName = ""
         showSaveProject = true
     }
     fun saveProjectAndClose() {
-        closeAfterProjectSave = true
+        projectSaveError = null
+        replacementAfterSave = replacement != null
+        closeAfterProjectSave = !replacementAfterSave
         draftName = ""
         showSaveProject = true
     }
@@ -803,8 +849,9 @@ fun PhotoEditorScreen(
 
     val cropTab = selectedTab == EditTab.CROP
     val previewEdits = if (cropTab) {
-        document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f,
-            cropCenterY = .5f, cropFrameRatioLocked = false)
+        PrivacyMath.retainAuthoringGeometry(document,
+            document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f,
+                cropCenterY = .5f, cropFrameRatioLocked = false))
     } else document
     LaunchedEffect(original, if (painting) null else previewEdits, liveGesture, quickSource, painting, cropTab) {
         if (!cropTab) cropPreview = null
@@ -993,14 +1040,24 @@ fun PhotoEditorScreen(
                             translationY = panY
                         }
                 )
+                val privacyProjection = if (brushSelected || privacyRegionSelected) {
+                    val input = original
+                    if (input != null && activePrivacy != null)
+                        PrivacyMath.projection(input.width, input.height, document, activePrivacy)
+                    else null
+                } else null
                 if (brushSelected && activePrivacy != null) {
+                    val guideStrokes = if (privacyProjection == null) activePrivacy.strokes
+                        else activePrivacy.strokes.map { stroke ->
+                            stroke.copy(points = stroke.points.map(privacyProjection::toView))
+                        }
                     BrushOverlay(
                         bitmapWidth = stableCoordinates.width,
                         bitmapHeight = stableCoordinates.height,
                         mask = LocalMask(
                             kind = MaskKind.BRUSH,
-                            strokes = activePrivacy.strokes,
-                            radius = activePrivacy.brushSize,
+                            strokes = guideStrokes,
+                            radius = activePrivacy.brushSize * (privacyProjection?.radiusScale ?: 1f),
                             feather = activePrivacy.feather
                         ),
                         enabled = !busy,
@@ -1016,6 +1073,7 @@ fun PhotoEditorScreen(
                         imageWidth = stableCoordinates.width,
                         imageHeight = stableCoordinates.height,
                         mark = activePrivacy,
+                        projection = privacyProjection,
                         canMove = true,
                         showGuides = true,
                         onMove = ::movePrivacy,
@@ -1343,24 +1401,34 @@ fun PhotoEditorScreen(
             description = "Stores your edits and a local reference to this photo. " +
                 "Keep the original photo available.",
             name = draftName,
-            onName = { draftName = it },
+            onName = { draftName = it; projectSaveError = null },
+            error = projectSaveError,
             onSave = {
                 val uri = sourceUri
-                if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
+                if (replacementAfterSave && ProjectStore.normalizedName(draftName) == replacement?.projectName) {
+                    projectSaveError = "Choose a different name from the project you are opening."
+                } else if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
                     savedProjects = ProjectStore.load(context)
                     if (tileEntryBaseline == null) {
                         baselineUri = uri.toString()
                         baselineDocument = document
                     }
                     val shouldClose = closeAfterProjectSave
+                    val shouldReplace = replacementAfterSave
                     closeAfterProjectSave = false
+                    replacementAfterSave = false
                     showSaveProject = false
-                    if (shouldClose) closeCurrentPhoto()
-                    else notice = "Project saved on your phone"
-                } else notice = "Could not save project (twelve maximum)."
+                    when {
+                        shouldReplace -> completeReplacement()
+                        shouldClose -> closeCurrentPhoto()
+                        else -> notice = "Project saved on your phone"
+                    }
+                } else projectSaveError = "Could not save project (twelve maximum)."
             },
             onDismiss = {
                 closeAfterProjectSave = false
+                if (replacementAfterSave) replacement = null
+                replacementAfterSave = false
                 showSaveProject = false
             }
         )
@@ -1372,27 +1440,62 @@ fun PhotoEditorScreen(
             onSelect = { selectedProject = it },
             onOpen = {
                 savedProjects.firstOrNull { it.name == selectedProject }?.let {
-                    loadPhoto(it.image, it.document)
+                    requestPhotoReplacement(PhotoReplacement(it.image, it.document, it.name))
                 }
                 showProjects = false
             },
             onDelete = {
-                selectedProject?.let { ProjectStore.delete(context, it) }
-                savedProjects = ProjectStore.load(context)
-                selectedProject = null
-                notice = "Project reference removed. Original photo is untouched."
+                selectedProject?.let {
+                    projectToDelete = it
+                    showProjects = false
+                }
             },
             onDismiss = { showProjects = false }
         )
     }
-    if (showRegularExit) {
+    projectToDelete?.let { name ->
         AlertDialog(
-            onDismissRequest = { showRegularExit = false },
+            onDismissRequest = { projectToDelete = null; showProjects = true },
+            title = { Text("Delete saved project?") },
+            text = { Text("Delete \"$name\" from saved projects. Your original photo stays on your phone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (ProjectStore.delete(context, name)) {
+                        savedProjects = ProjectStore.load(context)
+                        selectedProject = null
+                        notice = "Project reference removed."
+                    } else {
+                        notice = "Could not delete project."
+                    }
+                    projectToDelete = null
+                    showProjects = true
+                }) { Text("Delete project") }
+            },
+            dismissButton = {
+                TextButton(onClick = { projectToDelete = null; showProjects = true }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (showRegularExit) {
+        val keepEditing = {
+            showRegularExit = false
+            replacement = null
+        }
+        AlertDialog(
+            onDismissRequest = keepEditing,
             title = { Text("Keep your photo edits?") },
-            text = { Text("Save an editable project, discard these changes, or keep editing.") },
+            text = {
+                Text(if (replacement == null) {
+                    "Save an editable project, discard these changes, or keep editing."
+                } else {
+                    "Save or discard your current edits before opening the other photo."
+                })
+            },
             confirmButton = {
                 Row {
-                    TextButton(onClick = { showRegularExit = false }) {
+                    TextButton(onClick = keepEditing) {
                         Text("Keep editing")
                     }
                     TextButton(onClick = {
@@ -1404,7 +1507,9 @@ fun PhotoEditorScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { closeCurrentPhoto() }) {
+                TextButton(onClick = {
+                    if (replacement == null) closeCurrentPhoto() else completeReplacement()
+                }) {
                     Text("Discard")
                 }
             }

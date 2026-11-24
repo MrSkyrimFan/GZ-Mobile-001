@@ -29,6 +29,48 @@ import org.junit.runner.RunWith
 class CollageReopenUiTest {
     @get:Rule val rule = createComposeRule()
 
+    @Test fun duplicateUriSelectionSurvivesMovementAndUndo() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val resolver = target.contentResolver
+        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "gz-tile-selection.png")
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }))
+        val source = Bitmap.createBitmap(12, 12, Bitmap.Config.ARGB_8888)
+        try {
+            source.eraseColor(Color.RED)
+            requireNotNull(resolver.openOutputStream(uri, "wt")).use {
+                assertTrue(source.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            val first = CollagePhoto(uri.toString(), EditDocument(grade = Grade(exposure = -.2f)))
+            val second = CollagePhoto(uri.toString(), EditDocument(grade = Grade(exposure = .2f)))
+            var observed = CollageDocument(listOf(first, second))
+            rule.setContent {
+                var current by remember { mutableStateOf(observed) }
+                CollageWorkspaceScreen(current, { current = it; observed = it }, {})
+            }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("Photos", substring = false).performClick()
+            val actions = rule.onNodeWithTag("collage-tile-actions")
+            actions.performScrollToNode(hasText("Move right"))
+            rule.onNodeWithText("Move right").performClick()
+            rule.runOnIdle { assertEquals(listOf(second, first), observed.photos) }
+            rule.onNodeWithText("↶", substring = false).performClick()
+            rule.runOnIdle { assertEquals(listOf(first, second), observed.photos) }
+
+            actions.performScrollToNode(hasText("Remove"))
+            rule.onNodeWithText("Remove").performClick()
+            rule.runOnIdle { assertEquals(listOf(second), observed.photos) }
+        } finally {
+            source.recycle()
+            resolver.delete(uri, null, null)
+        }
+    }
+
     @Test fun emptyWorkspaceReopensSavedTilesInTheExistingExportSlot() {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val folder = Files.createTempDirectory(target.cacheDir.toPath(), "collage-reopen-").toFile()

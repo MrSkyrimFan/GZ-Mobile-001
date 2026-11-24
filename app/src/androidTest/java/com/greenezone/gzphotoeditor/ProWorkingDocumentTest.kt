@@ -126,6 +126,9 @@ class ProWorkingDocumentTest {
     private fun openSaved(name: String) {
         openSavedList()
         rule.onNodeWithText(name).performScrollTo().performClick()
+        rule.waitUntil(10_000) {
+            rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty()
+        }
     }
 
     @Test fun undoOpenRestoresThePriorPhotosResetBaseline() {
@@ -160,7 +163,10 @@ class ProWorkingDocumentTest {
             rule.onNodeWithText("Save project").performClick()
             rule.onNode(hasSetTextAction()).performTextInput(name)
             rule.onNodeWithText("Save").performClick()
-            rule.waitUntil(5_000) { ProStore.load(context, name) == edited }
+            rule.waitUntil(10_000) {
+                rule.onAllNodesWithText("Save Pro project").fetchSemanticsNodes().isEmpty() &&
+                    ProStore.load(context, name) == edited
+            }
 
             rule.onNodeWithText("Hide").performScrollTo().performClick()
             rule.runOnIdle { assertEquals(hidden, current) }

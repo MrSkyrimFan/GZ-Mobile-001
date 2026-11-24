@@ -64,7 +64,8 @@ fun ExportDialog(
     settings: ExportSettings,
     onSettings: (ExportSettings) -> Unit,
     onSave: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    error: String? = null
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -196,7 +197,9 @@ fun SaveNameDialog(
                     value = name,
                     onValueChange = { onName(it.take(28)) },
                     singleLine = true,
-                    label = { Text("Name") }
+                    label = { Text("Name") },
+                    isError = error != null,
+                    supportingText = error?.let { message -> { Text(message) } }
                 )
             }
         },

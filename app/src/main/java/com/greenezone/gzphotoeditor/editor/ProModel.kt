@@ -49,11 +49,14 @@ data class ProDocument(
 internal fun ProLayer.withBrushStroke(stroke: InkStroke): ProLayer =
     copy(edits = edits.copy(creative = edits.creative.copy(strokes = edits.creative.strokes + stroke)))
 
+data class ProSaveTarget(val workId: Long = 0, val name: String? = null)
+
 /** Captures the working document and the workspace state needed to restore it safely. */
 data class ProHistoryEntry(
     val document: ProDocument,
     val resetDocument: ProDocument? = null,
-    val selectedLayer: Int = 0
+    val selectedLayer: Int = 0,
+    val saveTarget: ProSaveTarget = ProSaveTarget()
 ) {
     fun selectionAfter(current: ProHistoryEntry): Int {
         val active = current.document.layers.getOrNull(current.selectedLayer)
@@ -72,8 +75,22 @@ data class ProHistory(
     val redo: List<ProHistoryEntry> = emptyList()
 ) {
     fun checkpoint(before: ProHistoryEntry, after: ProHistoryEntry): ProHistory =
-        if (before.document == after.document && before.resetDocument == after.resetDocument) this
+        if (before.document == after.document && before.resetDocument == after.resetDocument &&
+            before.saveTarget == after.saveTarget) this
         else copy(undo = (undo + before).takeLast(35), redo = emptyList())
+
+    fun bindSavedName(target: ProSaveTarget): ProHistory = mapTargets { entry ->
+        if (entry.workId == target.workId) target else entry
+    }
+
+    fun forgetSavedName(name: String): ProHistory = mapTargets { entry ->
+        if (entry.name == name) entry.copy(name = null) else entry
+    }
+
+    private fun mapTargets(change: (ProSaveTarget) -> ProSaveTarget): ProHistory = copy(
+        undo = undo.map { it.copy(saveTarget = change(it.saveTarget)) },
+        redo = redo.map { it.copy(saveTarget = change(it.saveTarget)) }
+    )
 
     fun undo(now: ProHistoryEntry): Pair<ProHistoryEntry, ProHistory>? =
         undo.lastOrNull()?.let { it to copy(undo = undo.dropLast(1), redo = (redo + now).takeLast(35)) }

@@ -77,6 +77,12 @@ internal enum class ProTransform(val title: String) {
 
 private data class ProBrushDraft(val id: Long, val layer: Int, val stroke: InkStroke)
 private data class ProBrushFrame(val draftId: Long, val bitmap: Bitmap)
+private data class ProSaveRequest(
+    val name: String,
+    val document: ProDocument,
+    val reset: ProDocument?,
+    val target: ProSaveTarget
+)
 
 internal data class ProWorkspaceSession(
     val documentEstablished: Boolean = false,
@@ -96,7 +102,9 @@ internal data class ProWorkspaceSession(
     val selectionKind: ProSelectionKind = ProSelectionKind.RECTANGLE,
     val retouchKind: ProRetouchKind = ProRetouchKind.CLONE,
     val retouchRadius: Float = .04f,
-    val retouchStrength: Float = 1f
+    val retouchStrength: Float = 1f,
+    val saveTarget: ProSaveTarget = ProSaveTarget(),
+    val nextWorkId: Long = 1
 )
 
 /** True independently editable bitmap/vector/adjustment layer workspace. */
@@ -155,6 +163,8 @@ internal fun ProWorkspaceScreenContent(
     var resetDocument by remember {
         mutableStateOf(session.resetDocument ?: document.takeIf { it.layers.isNotEmpty() })
     }
+    var saveTarget by remember { mutableStateOf(session.saveTarget) }
+    var nextWorkId by remember { mutableLongStateOf(session.nextWorkId) }
     var sliderStart by remember { mutableStateOf<ProHistoryEntry?>(null) }
     var lastSliderValue by remember { mutableStateOf<ProDocument?>(null) }
     var lastDragValue by remember { mutableStateOf<ProDocument?>(null) }
@@ -191,6 +201,9 @@ internal fun ProWorkspaceScreenContent(
     var pendingSavedDelete by remember { mutableStateOf<String?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf("") }
+    var pendingReplace by remember { mutableStateOf<ProSaveRequest?>(null) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var openError by remember { mutableStateOf<String?>(null) }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val active = document.layers.getOrNull(selected)
@@ -220,11 +233,16 @@ internal fun ProWorkspaceScreenContent(
         showTools = false
     }
     fun historyEntry(current: ProDocument = document) =
-        ProHistoryEntry(current, resetDocument, selected)
+        ProHistoryEntry(current, resetDocument, selected, saveTarget)
 
-    fun commit(next: ProDocument, nextReset: ProDocument? = resetDocument) {
-        history = history.checkpoint(historyEntry(), historyEntry(next).copy(resetDocument = nextReset))
+    fun commit(
+        next: ProDocument,
+        nextReset: ProDocument? = resetDocument,
+        nextTarget: ProSaveTarget = saveTarget
+    ) {
+        history = history.checkpoint(historyEntry(), ProHistoryEntry(next, nextReset, selected, nextTarget))
         resetDocument = nextReset
+        saveTarget = nextTarget
         sliderStart = null
         lastSliderValue = null
         onDocument(next)
@@ -297,7 +315,9 @@ internal fun ProWorkspaceScreenContent(
             selectionKind = selectionKind,
             retouchKind = retouchKind,
             retouchRadius = retouchRadius,
-            retouchStrength = retouchStrength
+            retouchStrength = retouchStrength,
+            saveTarget = saveTarget,
+            nextWorkId = nextWorkId
         ))
     }
 
@@ -318,6 +338,7 @@ internal fun ProWorkspaceScreenContent(
         clearToolDrafts()
         history = nextHistory
         resetDocument = restored.resetDocument
+        saveTarget = restored.saveTarget
         selected = restored.selectionAfter(current)
         onDocument(restored.document)
     }
@@ -380,6 +401,7 @@ internal fun ProWorkspaceScreenContent(
         lastDragValue = null
         replacement = null
         history = ProHistory()
+        saveTarget = ProSaveTarget(nextWorkId++)
         selected = 0
         section = ProSection.LAYERS
         transform = ProTransform.SIZE
@@ -399,6 +421,58 @@ internal fun ProWorkspaceScreenContent(
         confirmReset = false
         onDocument(clean)
         notice = "Current Pro work discarded."
+    }
+
+    fun saveProject(request: ProSaveRequest, replaceName: String?) {
+        if (busy) return
+        busy = true
+        saveError = null
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    ProStore.saveProject(context, request.name, request.document, request.reset, replaceName)
+                }
+                pendingReplace = null
+                when (result) {
+                    is ProStore.SaveResult.Saved -> {
+                        saveTarget = request.target.copy(name = result.name)
+                        history = history.bindSavedName(saveTarget)
+                        showSave = false
+                        notice = "Editable Pro project saved"
+                    }
+                    is ProStore.SaveResult.Exists -> pendingReplace = request.copy(name = result.name)
+                    ProStore.SaveResult.TooLarge -> saveError =
+                        "This project exceeds the saved edit limit. Remove some complex brush strokes or layers and try again."
+                    ProStore.SaveResult.Failed -> saveError =
+                        "Could not save. Check the name, project limit, and available storage."
+                }
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    fun openProject(name: String) {
+        if (busy) return
+        busy = true
+        openError = null
+        scope.launch {
+            try {
+                val restored = withContext(Dispatchers.IO) { ProStore.loadProject(context, name) }
+                if (restored == null) {
+                    openError = "Project unreadable or invalid."
+                } else {
+                    finishPendingHistory()
+                    clearToolDrafts()
+                    commit(restored.document, restored.resetDocument, ProSaveTarget(nextWorkId++, name))
+                    selected = 0
+                    showProjects = false
+                    notice = "Pro project opened"
+                }
+            } finally {
+                busy = false
+            }
+        }
     }
 
     BackHandler { requestBack() }
@@ -710,10 +784,19 @@ internal fun ProWorkspaceScreenContent(
                             TextButton(onClick = { showFile = true }, enabled = available) { Text("File ▾") }
                             DropdownMenu(expanded = showFile, onDismissRequest = { showFile = false }) {
                                 DropdownMenuItem(text = { Text("Open project") }, onClick = {
-                                    showFile = false; savedNames = ProStore.names(context); showProjects = true
+                                    showFile = false
+                                    openError = null
+                                    savedNames = ProStore.names(context)
+                                    showProjects = true
                                 })
                                 DropdownMenuItem(text = { Text("Save project") }, enabled = ProMath.valid(document),
-                                    onClick = { showFile = false; showSave = true })
+                                    onClick = {
+                                        showFile = false
+                                        finishPendingHistory()
+                                        draftName = saveTarget.name.orEmpty()
+                                        saveError = null
+                                        showSave = true
+                                    })
                                 DropdownMenuItem(text = { Text("Export image") }, enabled = ProMath.valid(document),
                                     onClick = { showFile = false; showExport = true })
                                 DropdownMenuItem(text = { Text("Fit canvas") }, enabled = document.layers.isNotEmpty(),
@@ -1318,47 +1401,64 @@ internal fun ProWorkspaceScreenContent(
         settings = exportSettings, onSettings = { exportSettings = it },
         onSave = ::startExport, onDismiss = { showExport = false }
     )
-    if (showSave) SaveNameDialog(
+    if (showSave && pendingReplace == null) SaveNameDialog(
         title = "Save Pro project",
-        description = "Preserves individual layers, order, adjustments and local image references.",
-        name = draftName, onName = { draftName = it },
-        onSave = {
-            if (ProStore.save(context, draftName, document, resetDocument)) {
-                showSave = false; notice = "Editable Pro project saved"
-            } else notice = "Could not save. Check the name, project limit, and available storage."
+        description = when {
+            busy -> "Saving project…"
+            saveError != null -> saveError.orEmpty()
+            else -> "Preserves individual layers, order, adjustments and local image references."
         },
-        onDismiss = { showSave = false }
+        name = draftName,
+        onName = {
+            if (!busy) {
+                draftName = it
+                saveError = null
+            }
+        },
+        onSave = {
+            saveProject(ProSaveRequest(draftName, document, resetDocument, saveTarget), saveTarget.name)
+        },
+        onDismiss = { if (!busy) showSave = false }
     )
+    pendingReplace?.let { request ->
+        AlertDialog(
+            onDismissRequest = { if (!busy) pendingReplace = null },
+            title = { Text("Replace saved Pro project?") },
+            text = { Text("Replace “${request.name}” with the current Pro work?") },
+            confirmButton = {
+                TextButton(onClick = { saveProject(request, request.name) }, enabled = !busy) {
+                    Text("Replace project", color = EditorMint)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingReplace = null }, enabled = !busy) { Text("Cancel") }
+            }
+        )
+    }
     if (showProjects && pendingSavedDelete == null) AlertDialog(
-        onDismissRequest = { showProjects = false },
+        onDismissRequest = { if (!busy) showProjects = false },
         title = { Text("Saved Pro projects") },
         text = {
             Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                openError?.let { Text(it, color = EditorMuted) }
+                if (busy) Text("Opening project…", color = EditorMuted)
                 if (savedNames.isEmpty()) Text("No saved Pro projects yet.", color = EditorMuted)
                 savedNames.forEach { name ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = {
-                            val restored = ProStore.loadProject(context, name)
-                            if (restored == null) notice = "Project unreadable or invalid."
-                            else {
-                                finishPendingHistory()
-                                clearToolDrafts()
-                                commit(restored.document, restored.resetDocument)
-                                selected = 0
-                                showProjects = false
-                                notice = "Pro project opened"
-                            }
-                        }) { Text(name, color = EditorMint) }
+                        TextButton(onClick = { openProject(name) }, enabled = !busy) {
+                            Text(name, color = EditorMint)
+                        }
                         Spacer(Modifier.weight(1f))
                         TextButton(
                             onClick = { pendingSavedDelete = name },
+                            enabled = !busy,
                             modifier = Modifier.semantics { contentDescription = "Delete saved project $name" }
                         ) { Text("Delete", color = Color(0xFFFF9D9D)) }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { showProjects = false }) {
+        confirmButton = { TextButton(onClick = { showProjects = false }, enabled = !busy) {
             Text("Close")
         } }
     )
@@ -1370,6 +1470,11 @@ internal fun ProWorkspaceScreenContent(
             confirmButton = {
                 TextButton(onClick = {
                     val deleted = ProStore.delete(context, name)
+                    if (deleted) {
+                        finishPendingHistory()
+                        if (saveTarget.name == name) saveTarget = saveTarget.copy(name = null)
+                        history = history.forgetSavedName(name)
+                    }
                     savedNames = ProStore.names(context)
                     pendingSavedDelete = null
                     notice = if (deleted) "Saved Pro project deleted." else "Could not delete saved Pro project."

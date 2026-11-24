@@ -14,6 +14,13 @@ object PrivacyRaster {
         source: Bitmap,
         edits: List<PrivacyEdit>,
         cancelCheck: (() -> Unit)? = null
+    ): Bitmap = applyProjected(source, edits, cancelCheck) { null }
+
+    internal fun applyProjected(
+        source: Bitmap,
+        edits: List<PrivacyEdit>,
+        cancelCheck: (() -> Unit)?,
+        projectionFor: (PrivacyEdit) -> PrivacyProjection?
     ): Bitmap {
         if (edits.isEmpty()) return source
         val output = source.copy(Bitmap.Config.ARGB_8888, true)
@@ -23,14 +30,14 @@ object PrivacyRaster {
             bounded.filter { it.kind == PrivacyKind.BLUR || it.kind == PrivacyKind.PIXELATE ||
                 it.kind == PrivacyKind.BLUR_BRUSH }.forEach {
                 if (it.kind == PrivacyKind.BLUR_BRUSH) {
-                    applyBlurBrush(output, it, cancelCheck)
+                    applyBlurBrush(output, it, projectionFor(it), cancelCheck)
                 } else {
-                    applyFiltered(output, it, cancelCheck)
+                    applyFiltered(output, it, projectionFor(it), cancelCheck)
                 }
             }
             bounded.filter { it.kind == PrivacyKind.BLACK_BAR ||
                 it.kind == PrivacyKind.COLOR_COVER || it.kind == PrivacyKind.BLACK_BRUSH }.forEach {
-                applyCover(output, it, cancelCheck)
+                applyCover(output, it, projectionFor(it), cancelCheck)
             }
             return output
         } catch (error: Throwable) {
@@ -39,32 +46,56 @@ object PrivacyRaster {
         }
     }
 
+    private class Placement(output: Bitmap, mark: PrivacyEdit, val projection: PrivacyProjection?) {
+        val width = projection?.authorWidth ?: output.width
+        val height = projection?.authorHeight ?: output.height
+        val authoredBounds = PrivacyMath.bounds(mark, width, height)
+        val bounds = projection?.boundsInView(authoredBounds) ?: authoredBounds
+
+        fun rectWeight(mark: PrivacyEdit, x: Int, y: Int): Float {
+            val px = x + .5f
+            val py = y + .5f
+            return PrivacyMath.rectCoverageAt(mark, projection?.authorX(px, py) ?: px,
+                projection?.authorY(px, py) ?: py, width, height)
+        }
+
+        fun brushWeight(grid: MaskMath.BrushGrid, x: Int, y: Int): Float {
+            val px = x + .5f
+            val py = y + .5f
+            return grid.coverageAt(projection?.authorX(px, py) ?: px,
+                projection?.authorY(px, py) ?: py, width, height)
+        }
+    }
+
     private fun applyCover(
         output: Bitmap,
         mark: PrivacyEdit,
+        projection: PrivacyProjection?,
         cancelCheck: (() -> Unit)?
     ) {
-        val bounds = PrivacyMath.bounds(mark, output.width, output.height)
+        val placement = Placement(output, mark, projection)
+        val bounds = placement.bounds
         if (bounds.empty) return
         val color = if (mark.kind == PrivacyKind.COLOR_COVER) {
             mark.color or -0x1000000
         } else Color.BLACK
         if (!mark.kind.usesBrush) {
-            Canvas(output).drawRect(
-                bounds.left.toFloat(), bounds.top.toFloat(),
-                bounds.right.toFloat(), bounds.bottom.toFloat(),
+            val canvas = Canvas(output)
+            projection?.let { canvas.concat(it.fromAuthoring) }
+            val rect = placement.authoredBounds
+            canvas.drawRect(
+                rect.left.toFloat(), rect.top.toFloat(), rect.right.toFloat(), rect.bottom.toFloat(),
                 Paint().apply { this.color = color; isAntiAlias = false }
             )
             return
         }
-        val mask = brushMask(mark)
-        val prepared = MaskMath.prepareCoverage(mask)
+        val brush = MaskMath.BrushGrid.from(brushMask(mark))
         val line = IntArray(bounds.width)
         for (y in bounds.top until bounds.bottom) {
             if (y % 12 == 0) cancelCheck?.invoke()
             output.getPixels(line, 0, bounds.width, bounds.left, y, bounds.width, 1)
             for (x in bounds.left until bounds.right) {
-                val w = MaskMath.coverageForPrepared(prepared, x, y, output.width, output.height)
+                val w = placement.brushWeight(brush, x, y)
                 if (w > 0f) line[x - bounds.left] = if (w >= .999f) color
                     else blend(line[x - bounds.left], color, w)
             }
@@ -75,9 +106,11 @@ object PrivacyRaster {
     private fun applyFiltered(
         output: Bitmap,
         mark: PrivacyEdit,
+        projection: PrivacyProjection?,
         cancelCheck: (() -> Unit)?
     ) {
-        val bounds = PrivacyMath.bounds(mark, output.width, output.height)
+        val placement = Placement(output, mark, projection)
+        val bounds = placement.bounds
         if (bounds.empty || bounds.width < 2 || bounds.height < 2) return
         val pixelate = mark.kind == PrivacyKind.PIXELATE
         val factor = if (pixelate) {
@@ -106,7 +139,7 @@ object PrivacyRaster {
                 if (y % 12 == 0) cancelCheck?.invoke()
                 output.getPixels(line, 0, bounds.width, bounds.left, y, bounds.width, 1)
                 for (x in bounds.left until bounds.right) {
-                    val coverage = PrivacyMath.rectCoverage(mark, x, y, output.width, output.height)
+                    val coverage = placement.rectWeight(mark, x, y)
                     if (coverage <= .0001f) continue
                     val nx = ((x - bounds.left + .5f) / bounds.width * sw - .5f)
                         .coerceIn(0f, (sw - 1).toFloat())
@@ -127,12 +160,18 @@ object PrivacyRaster {
         }
     }
 
-    private fun applyBlurBrush(output: Bitmap, mark: PrivacyEdit, cancelCheck: (() -> Unit)?) {
-        val bounds = PrivacyMath.bounds(mark, output.width, output.height)
+    private fun applyBlurBrush(
+        output: Bitmap,
+        mark: PrivacyEdit,
+        projection: PrivacyProjection?,
+        cancelCheck: (() -> Unit)?
+    ) {
+        val placement = Placement(output, mark, projection)
+        val bounds = placement.bounds
         val strength = mark.strength.coerceIn(0f, 1f)
         if (bounds.empty || strength <= 0f) return
-        val mask = MaskMath.prepareCoverage(brushMask(mark))
-        val spread = minOf(output.width, output.height) * .032f * strength
+        val brush = MaskMath.BrushGrid.from(brushMask(mark))
+        val spread = minOf(placement.width, placement.height) * .032f * strength
         val radius = spread.roundToInt().coerceAtLeast(1)
         val diameter = radius * 2 + 1
         val sampleLeft = (bounds.left - radius).coerceAtLeast(0)
@@ -170,8 +209,7 @@ object PrivacyRaster {
             cancelCheck?.invoke()
             output.getPixels(original, 0, bounds.width, bounds.left, y, bounds.width, 1)
             for (i in original.indices) {
-                val weight = MaskMath.coverageForPrepared(mask, bounds.left + i, y,
-                    output.width, output.height) * opacity
+                val weight = placement.brushWeight(brush, bounds.left + i, y) * opacity
                 if (weight > 0f) {
                     val blurred = columns[i].average(diameter)
                     original[i] = unpremultiply(blend(premultiply(original[i]), blurred, weight))

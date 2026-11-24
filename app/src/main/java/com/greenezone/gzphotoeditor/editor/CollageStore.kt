@@ -6,6 +6,7 @@ import org.json.JSONObject
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.Base64
+import java.util.UUID
 
 /** Private on-device custody. Saves references and editing parameters, not full photo bytes. */
 object CollageStore {
@@ -34,6 +35,7 @@ object CollageStore {
             require(photo.uri.startsWith("content://")) { "Only local photos may be stored" }
             photos.put(JSONObject().apply {
                 put("uri", photo.uri)
+                put("id", photo.id)
                 put("edits", EditDocumentCodec.encode(photo.edits))
             })
         }
@@ -53,13 +55,17 @@ object CollageStore {
             if (obj.optInt("version", -1) != VERSION) return null
             val images = obj.optJSONArray("photos") ?: return null
             if (!CollageMath.validCount(images.length())) return null
+            val tileIds = mutableSetOf<String>()
             val photos = (0 until images.length()).map { i ->
                 val image = images.optJSONObject(i) ?: return null
                 val uri = image.optString("uri", "")
                 if (!uri.startsWith("content://") || uri.length > 4096) return null
                 val edits = EditDocumentCodec.decode(image.optString("edits", ""))
                     ?: return null
-                CollagePhoto(uri, edits)
+                val savedId = image.optString("id", "")
+                val id = if (savedId.length in 1..64 && tileIds.add(savedId)) savedId
+                    else UUID.randomUUID().toString().also { tileIds.add(it) }
+                CollagePhoto(uri, edits, id)
             }
             fun number(name: String, fallback: Float, low: Float, high: Float): Float {
                 val n = obj.optDouble(name, fallback.toDouble()).toFloat()
@@ -87,8 +93,10 @@ object CollageStore {
     private fun directory(context: Context): File =
         File(context.filesDir, DIR).also { it.mkdirs() }
 
+    fun normalizedName(input: String): String = input.trim().replace(Regex("\\s+"), " ").take(36)
+
     private fun key(name: String): String? {
-        val clean = name.trim().replace(Regex("\\s+"), " ").take(36)
+        val clean = normalizedName(name)
         if (clean.isBlank()) return null
         return Base64.getUrlEncoder().withoutPadding().encodeToString(
             clean.toByteArray(StandardCharsets.UTF_8)

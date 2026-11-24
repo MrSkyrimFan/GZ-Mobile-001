@@ -1,5 +1,6 @@
 package com.greenezone.gzphotoeditor.editor
 
+import java.util.UUID
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -7,7 +8,8 @@ import kotlin.math.sqrt
 /** A collage is a set of distinct, independently editable photo documents. */
 data class CollagePhoto(
     val uri: String,
-    val edits: EditDocument = EditDocument()
+    val edits: EditDocument = EditDocument(),
+    val id: String = UUID.randomUUID().toString()
 )
 
 enum class CollageTemplate(val label: String) {

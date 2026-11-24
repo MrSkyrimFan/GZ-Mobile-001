@@ -113,8 +113,9 @@ internal fun VideoGifScreenContent(
     val enabled = !busy && !exporting
     var notice by remember { mutableStateOf("") }
     var progress by remember { mutableStateOf("") }
-    var history by remember { mutableStateOf(session.videoHistory) }
-    var dragStart by remember { mutableStateOf<GifDocument?>(null) }
+    var history by remember { mutableStateOf(session.history) }
+    var savedName by remember { mutableStateOf(session.savedName) }
+    var dragStart by remember { mutableStateOf<GifProjectSnapshot?>(null) }
     var dragLatest by remember { mutableStateOf<GifDocument?>(null) }
     var exportJob by remember { mutableStateOf<Job?>(null) }
     var destinationRequest by remember { mutableStateOf<CompletableDeferred<Uri?>?>(null) }
@@ -124,7 +125,6 @@ internal fun VideoGifScreenContent(
     var showSave by remember { mutableStateOf(false) }
     var showSaved by remember { mutableStateOf(false) }
     var savedNames by remember { mutableStateOf(emptyList<String>()) }
-    var saveName by remember { mutableStateOf("") }
     var collapsed by remember { mutableStateOf(session.videoCollapsed) }
 
     fun pauseAt(frame: Int) {
@@ -132,20 +132,49 @@ internal fun VideoGifScreenContent(
         seek = frame
         position = frame
     }
-    fun commit(next: GifDocument, frame: Int = position) {
-        history = history.checkpoint(document, next)
+    fun snapshot(
+        current: GifDocument = document,
+        name: String? = savedName,
+        route: GifWorkspaceRoute = if (current.frames.isNotEmpty() && current.video == null)
+            GifWorkspaceRoute.PHOTOS else GifWorkspaceRoute.VIDEO
+    ) = GifProjectSnapshot(current, name, route)
+
+    fun persistVideoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.VIDEO) {
+        onSession(session.copy(
+            route = route,
+            videoTab = tab,
+            videoSeek = seek,
+            videoPosition = position,
+            history = history,
+            savedName = savedName,
+            videoCollapsed = collapsed
+        ))
+    }
+
+    fun applySnapshot(next: GifProjectSnapshot, frame: Int) {
         pauseAt(frame)
         dragStart = null
         dragLatest = null
+        savedName = next.savedName
+        if (next.route == GifWorkspaceRoute.PHOTOS) {
+            persistVideoSession(next.route)
+            onOpenLegacyPhotoProject(next.document)
+        } else onDocument(next.document)
+    }
+
+    fun commit(next: GifDocument, frame: Int = position, nextName: String? = savedName) {
+        val updated = snapshot(next, nextName)
+        history = history.checkpoint(snapshot(), updated)
         GifPreviewDiagnostics.record(diagnosticOperation,
             stage = GifDiagnosticStage.G5_EDIT,
             kind = GifDiagnosticKind.DOCUMENT_COMMITTED,
             frameIndex = frame.coerceAtLeast(0),
             frameCount = next.video?.let { GifVideoMath.frameCount(it) })
-        onDocument(next)
+        applySnapshot(updated, frame)
     }
+
     fun slide(next: GifDocument, frame: Int = position) {
-        if (dragStart == null) dragStart = document
+        if (dragStart == null) dragStart = snapshot()
         dragLatest = next
         pauseAt(frame)
         GifPreviewDiagnostics.record(diagnosticOperation,
@@ -159,7 +188,7 @@ internal fun VideoGifScreenContent(
         val start = dragStart
         val end = dragLatest
         if (start != null && end != null) {
-            history = history.checkpoint(start, end)
+            history = history.checkpoint(start, snapshot(end))
             GifPreviewDiagnostics.record(diagnosticOperation,
                 stage = GifDiagnosticStage.G5_EDIT,
                 kind = GifDiagnosticKind.SLIDE_FINISHED)
@@ -167,11 +196,10 @@ internal fun VideoGifScreenContent(
         dragStart = null
         dragLatest = null
     }
-    fun restore(entry: Pair<GifDocument, GifHistory>?) {
+    fun restore(entry: Pair<GifProjectSnapshot, GifUndoStack<GifProjectSnapshot>>?) {
         if (entry == null) return
-        pauseAt(0)
         history = entry.second
-        onDocument(entry.first)
+        applySnapshot(entry.first, 0)
     }
     fun openSource(uri: Uri) {
         if (!enabled) return
@@ -202,7 +230,7 @@ internal fun VideoGifScreenContent(
                     width = openedClip.width,
                     height = openedClip.height,
                     durationMs = openedClip.durationMs)
-                commit(fresh, 0)
+                commit(fresh, 0, nextName = null)
                 lastExport = null
                 collapsed = false
                 tab = VideoGifTab.TIMELINE
@@ -334,17 +362,6 @@ internal fun VideoGifScreenContent(
             }
         }
     }
-    fun persistVideoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.VIDEO) {
-        onSession(session.copy(
-            route = route,
-            videoTab = tab,
-            videoSeek = seek,
-            videoPosition = position,
-            videoHistory = history,
-            videoCollapsed = collapsed
-        ))
-    }
-
     fun finishVideoRouteExit() {
         finishSlide()
         val frameCount = document.video?.let { GifVideoMath.frameCount(it) } ?: 0
@@ -435,6 +452,16 @@ internal fun VideoGifScreenContent(
                     Button(onClick = ::chooseVideo, enabled = enabled) { Text("Choose video") }
                     TextButton(onClick = ::chooseGif, enabled = enabled) { Text("Edit existing GIF", color = EditorMint) }
                     TextButton(onClick = ::openProjects, enabled = enabled) { Text("Open saved GIF project", color = EditorMuted) }
+                    if (history.undo.isNotEmpty() || history.redo.isNotEmpty()) {
+                        Row {
+                            if (history.undo.isNotEmpty()) TextButton(
+                                enabled = enabled, onClick = { restore(history.undo(snapshot())) }
+                            ) { Text("Undo", color = EditorWhite) }
+                            if (history.redo.isNotEmpty()) TextButton(
+                                enabled = enabled, onClick = { restore(history.redo(snapshot())) }
+                            ) { Text("Redo", color = EditorWhite) }
+                        }
+                    }
                 }
             } else {
                 if (busy || exporting) {
@@ -480,10 +507,10 @@ internal fun VideoGifScreenContent(
                             val (w, h) = GifMath.dimensions(document)
                             Text("${w} × ${h}  ·  ${timeLabel(time.getOrElse(activeFrame) { 0L })}",
                                 fontSize = 12.sp, color = EditorMuted, modifier = Modifier.weight(1f))
-                            TextButton(enabled = enabled && history.undo.isNotEmpty(), onClick = { restore(history.undo(document)) }) {
+                            TextButton(enabled = enabled && history.undo.isNotEmpty(), onClick = { restore(history.undo(snapshot())) }) {
                                 Text("Undo", color = EditorWhite)
                             }
-                            TextButton(enabled = enabled && history.redo.isNotEmpty(), onClick = { restore(history.redo(document)) }) {
+                            TextButton(enabled = enabled && history.redo.isNotEmpty(), onClick = { restore(history.redo(snapshot())) }) {
                                 Text("Redo", color = EditorWhite)
                             }
                         }
@@ -581,13 +608,12 @@ internal fun VideoGifScreenContent(
         }
     }
     if (showHelp) GifHelpDialog { showHelp = false }
-    if (showSave) SaveNameDialog("Save GIF project", "Reopen your source with these edits and timing settings.",
-        saveName, { saveName = it }, {
-            if (GifStore.save(context, saveName, document)) {
-                showSave = false
-                notice = "Project saved"
-            } else notice = "Could not save this project."
-        }, { showSave = false })
+    if (showSave) GifProjectSaveDialog("Save GIF project", "Reopen your source with these edits and timing settings.",
+        document, savedName, onSaved = { name ->
+            savedName = name
+            showSave = false
+            notice = "Project saved"
+        }, onDismiss = { showSave = false })
     if (showSaved) AlertDialog(onDismissRequest = { showSaved = false }, title = { Text("Saved GIF projects") },
         text = {
             Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
@@ -600,13 +626,11 @@ internal fun VideoGifScreenContent(
                             try {
                                 val saved = withContext(Dispatchers.IO) { GifStore.load(context, name) }
                                 if (saved == null) notice = "Could not read the saved project or its source file."
-                                else if (saved.video != null) {
-                                    commit(saved, 0)
+                                else {
+                                    finishSlide()
+                                    if (saved.video == null) finishVideoRouteExit()
+                                    commit(saved, 0, nextName = name)
                                     lastExport = null
-                                } else {
-                                    finishVideoRouteExit()
-                                    persistVideoSession(GifWorkspaceRoute.PHOTOS)
-                                    onOpenLegacyPhotoProject(saved)
                                 }
                             } finally { busy = false }
                         }

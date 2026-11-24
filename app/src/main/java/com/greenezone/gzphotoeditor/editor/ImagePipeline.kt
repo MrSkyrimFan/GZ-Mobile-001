@@ -4,7 +4,6 @@ import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
 import android.graphics.ImageDecoder
-import android.graphics.Matrix
 import android.net.Uri
 import kotlin.math.PI
 import kotlin.math.abs
@@ -86,57 +85,31 @@ object ImagePipeline {
      * Straightening produces a transparent-cornered intermediate, then a conservative
      * centered safe crop before the regular aspect/position crop.
      */
-    fun geometry(input: Bitmap, document: EditDocument): Bitmap {
+    fun geometry(input: Bitmap, document: EditDocument): Bitmap =
+        geometry(input, PhotoGeometryPlan(input.width, input.height, PhotoGeometry.from(document)))
+
+    private fun geometry(input: Bitmap, plan: PhotoGeometryPlan): Bitmap {
         var working = input
         try {
-            val quarter = ((document.quarterTurns % 4) + 4) % 4
-            if (quarter != 0 || document.mirrored || document.flipVertical) {
-                val transform = Matrix()
-                if (document.mirrored || document.flipVertical) {
-                    transform.postScale(
-                        if (document.mirrored) -1f else 1f,
-                        if (document.flipVertical) -1f else 1f,
-                        working.width / 2f, working.height / 2f
-                    )
-                }
-                if (quarter != 0) transform.postRotate(
-                    quarter * 90f, working.width / 2f, working.height / 2f
+            if (!plan.orientation.isIdentity) {
+                working = Bitmap.createBitmap(
+                    input, 0, 0, input.width, input.height, plan.orientation, true
                 )
-                val oriented = Bitmap.createBitmap(
-                    working, 0, 0, working.width, working.height, transform, true
-                )
-                if (working !== input && working !== oriented) working.recycle()
-                working = oriented
             }
-
-            val angle = document.straightenDegrees.coerceIn(-15f, 15f)
-            if (abs(angle) > .001f) {
-                val beforeWidth = working.width
-                val beforeHeight = working.height
-                val matrix = Matrix().apply { postRotate(angle) }
+            if (!plan.straighten.isIdentity) {
                 val spun = Bitmap.createBitmap(
-                    working, 0, 0, beforeWidth, beforeHeight, matrix, true
+                    working, 0, 0, working.width, working.height, plan.straighten, true
                 )
                 if (working !== input && working !== spun) working.recycle()
                 working = spun
-                val (safeW, safeH) = GeometryMath.safeStraightenCrop(beforeWidth, beforeHeight, angle)
-                val safeWidth = safeW.coerceAtMost(working.width)
-                val safeHeight = safeH.coerceAtMost(working.height)
-                if (safeWidth < working.width || safeHeight < working.height) {
-                    val centered = Bitmap.createBitmap(
-                        working, (working.width - safeWidth) / 2, (working.height - safeHeight) / 2,
-                        safeWidth, safeHeight
-                    )
+                if (plan.safeWidth < working.width || plan.safeHeight < working.height) {
+                    val centered = Bitmap.createBitmap(working, plan.safeLeft, plan.safeTop,
+                        plan.safeWidth, plan.safeHeight)
                     if (working !== input && working !== centered) working.recycle()
                     working = centered
                 }
             }
-
-            val (originX, originY, cropWidth, cropHeight) = document.cropFrame?.let {
-                CropMath.pixelBounds(working.width, working.height, it,
-                    document.crop.takeIf { document.cropFrameRatioLocked })
-            } ?: CropMath.presetBounds(working.width, working.height, document.crop,
-                document.cropCenterX, document.cropCenterY)
+            val (originX, originY, cropWidth, cropHeight) = plan.crop
             if (cropWidth < working.width || cropHeight < working.height) {
                 val crop = Bitmap.createBitmap(working, originX, originY, cropWidth, cropHeight)
                 if (working !== input && working !== crop) working.recycle()
@@ -154,7 +127,16 @@ object ImagePipeline {
      * pixel IntArrays. Detail, curves and masks share one final-resolution render.
      */
     fun render(input: Bitmap, document: EditDocument, cancelCheck: (() -> Unit)? = null): Bitmap {
-        val source = geometry(input, document)
+        val view = PhotoGeometry.from(document)
+        val plan = PhotoGeometryPlan(input.width, input.height, view)
+        val source = geometry(input, plan)
+        val projections = HashMap<PhotoGeometry, PrivacyProjection>()
+        fun project(mark: PrivacyEdit): PrivacyProjection? {
+            val anchor = mark.authoringGeometry?.takeUnless { it == view } ?: return null
+            return projections.getOrPut(anchor) {
+                plan.projectFrom(PhotoGeometryPlan(input.width, input.height, anchor))
+            }
+        }
         var output: Bitmap? = null
         var returnedGeometry = false
         try {
@@ -179,7 +161,7 @@ object ImagePipeline {
                     return source
                 }
                 val photo = if (document.privacy.isEmpty()) source
-                    else PrivacyRaster.apply(source, document.privacy, cancelCheck)
+                    else PrivacyRaster.applyProjected(source, document.privacy, cancelCheck, ::project)
                 try {
                     return composite(photo, photo !== source)
                 } catch (error: Throwable) {
@@ -256,7 +238,7 @@ object ImagePipeline {
                 }
             }
             if (document.privacy.isNotEmpty()) {
-                val privacyResult = PrivacyRaster.apply(result, document.privacy, cancelCheck)
+                val privacyResult = PrivacyRaster.applyProjected(result, document.privacy, cancelCheck, ::project)
                 output = privacyResult
                 result.recycle()
             }

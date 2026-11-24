@@ -75,15 +75,21 @@ internal enum class GifTool(val label: String) {
 
 internal enum class GifWorkspaceRoute { VIDEO, PHOTOS }
 
+internal data class GifProjectSnapshot(
+    val document: GifDocument,
+    val savedName: String?,
+    val route: GifWorkspaceRoute
+)
+
 internal data class GifWorkspaceSession(
     val route: GifWorkspaceRoute? = null,
     val photoTool: GifTool = GifTool.FRAMES,
     val photoIndex: Int = 0,
-    val photoHistory: GifHistory = GifHistory(),
+    val history: GifUndoStack<GifProjectSnapshot> = GifUndoStack(),
+    val savedName: String? = null,
     val videoTab: VideoGifTab = VideoGifTab.TIMELINE,
     val videoSeek: Int = 0,
     val videoPosition: Int = 0,
-    val videoHistory: GifHistory = GifHistory(),
     val videoCollapsed: Boolean = false
 )
 
@@ -150,8 +156,9 @@ internal fun GifMakerScreenContent(
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     var exporting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
-    var history by remember { mutableStateOf(session.photoHistory) }
-    var timingStart by remember { mutableStateOf<GifDocument?>(null) }
+    var history by remember { mutableStateOf(session.history) }
+    var savedName by remember { mutableStateOf(session.savedName) }
+    var timingStart by remember { mutableStateOf<GifProjectSnapshot?>(null) }
     var timingLatest by remember { mutableStateOf<GifDocument?>(null) }
     var pending by remember { mutableStateOf<GifDocument?>(null) }
     var saveOpen by remember { mutableStateOf(false) }
@@ -159,15 +166,48 @@ internal fun GifMakerScreenContent(
     var projectsOpen by remember { mutableStateOf(false) }
     var openingProject by remember { mutableStateOf(false) }
     var newOpen by remember { mutableStateOf(false) }
-    var fileName by remember { mutableStateOf("") }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    fun commit(next: GifDocument) {
-        history = history.checkpoint(document, next)
+    fun snapshot(
+        current: GifDocument = document,
+        name: String? = savedName
+    ) = GifProjectSnapshot(current, name,
+        if (current.video == null) GifWorkspaceRoute.PHOTOS else GifWorkspaceRoute.VIDEO)
+
+    fun persistPhotoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.PHOTOS) {
+        onSession(session.copy(
+            route = route,
+            photoTool = tool,
+            photoIndex = index.coerceIn(0, document.frames.lastIndex.coerceAtLeast(0)),
+            history = history,
+            savedName = savedName
+        ))
+    }
+
+    fun applySnapshot(next: GifProjectSnapshot) {
         timingStart = null
         timingLatest = null
-        onDocument(next)
-        index = index.coerceAtMost(next.frames.lastIndex).coerceAtLeast(0)
+        savedName = next.savedName
+        onDocument(next.document)
+        index = index.coerceAtMost(next.document.frames.lastIndex).coerceAtLeast(0)
+        if (next.route == GifWorkspaceRoute.VIDEO) {
+            playing = false
+            persistPhotoSession(GifWorkspaceRoute.VIDEO)
+            photoSequenceOnly = false
+        }
+    }
+
+    fun commit(next: GifDocument, nextName: String? = savedName) {
+        val updated = snapshot(next, nextName)
+        history = history.checkpoint(snapshot(), updated)
+        applySnapshot(updated)
+    }
+
+    fun restore(entry: Pair<GifProjectSnapshot, GifUndoStack<GifProjectSnapshot>>?) {
+        if (entry == null) return
+        playing = false
+        history = entry.second
+        applySnapshot(entry.first)
     }
     fun add(uris: List<Uri>) {
         val remaining = GifMath.MAX_FRAMES - document.frames.size
@@ -187,18 +227,9 @@ internal fun GifMakerScreenContent(
         }
     }
 
-    fun persistPhotoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.PHOTOS) {
-        onSession(session.copy(
-            route = route,
-            photoTool = tool,
-            photoIndex = index.coerceIn(0, document.frames.lastIndex.coerceAtLeast(0)),
-            photoHistory = history
-        ))
-    }
-
     fun finishPhotoTiming() {
         timingStart?.let { start ->
-            history = history.checkpoint(start, timingLatest ?: document)
+            history = history.checkpoint(start, snapshot(timingLatest ?: document))
         }
         timingStart = null
         timingLatest = null
@@ -365,15 +396,9 @@ internal fun GifMakerScreenContent(
                     Text(if (playing) "Pause" else "▶ Play", color = EditorMint)
                 }
                 TextButton(enabled = history.undo.isNotEmpty() && !exporting,
-                    onClick = { history.undo(document)?.let { (d,h) ->
-                        playing = false; history = h; onDocument(d)
-                        index = index.coerceAtMost(d.frames.lastIndex).coerceAtLeast(0)
-                    } }) { Text("Undo", color = EditorWhite) }
+                    onClick = { restore(history.undo(snapshot())) }) { Text("Undo", color = EditorWhite) }
                 TextButton(enabled = history.redo.isNotEmpty() && !exporting,
-                    onClick = { history.redo(document)?.let { (d,h) ->
-                        playing = false; history = h; onDocument(d)
-                        index = index.coerceAtMost(d.frames.lastIndex).coerceAtLeast(0)
-                    } }) { Text("Redo", color = EditorWhite) }
+                    onClick = { restore(history.redo(snapshot())) }) { Text("Redo", color = EditorWhite) }
                 TextButton(enabled = !exporting && document.frames.size < 20,
                     onClick = ::importPhotos) { Text("+ Photos", color = EditorMint) }
                 TextButton(enabled = !exporting,
@@ -432,7 +457,7 @@ internal fun GifMakerScreenContent(
                         Slider(value = document.delayMs.toFloat(), valueRange = 100f..1500f,
                             enabled = !exporting,
                             onValueChange = { next ->
-                                if (timingStart == null) timingStart = document
+                                if (timingStart == null) timingStart = snapshot()
                                 val changed = document.copy(
                                     delayMs = (next.toInt() / 10) * 10
                                 )
@@ -509,14 +534,13 @@ internal fun GifMakerScreenContent(
     }
 
     if (helpOpen) GifHelpDialog { helpOpen = false }
-    if (saveOpen) SaveNameDialog("Save editable GIF project",
+    if (saveOpen) GifProjectSaveDialog("Save editable GIF project",
         "Save photo order, frame speed and canvas options. Keep the original photos.",
-        fileName, { fileName = it }, {
-            if (GifStore.save(context, fileName, document)) {
-                saveOpen = false
-                notice = "GIF project saved"
-            } else notice = "Could not save. Choose a name (12 maximum)."
-        }, { saveOpen = false })
+        document, savedName, onSaved = { name ->
+            savedName = name
+            saveOpen = false
+            notice = "GIF project saved"
+        }, onDismiss = { saveOpen = false })
     if (projectsOpen) AlertDialog(
         onDismissRequest = { if (!openingProject) projectsOpen = false },
         title = { Text("Saved GIF projects") },
@@ -532,12 +556,10 @@ internal fun GifMakerScreenContent(
                                 projectsOpen = false
                                 if (restored == null) notice = "Could not read the saved project or its source file."
                                 else {
-                                    playing = false; commit(restored); index = 0
+                                    playing = false
+                                    index = 0
+                                    commit(restored, name)
                                     notice = "GIF project opened"
-                                    if (restored.video != null) {
-                                        persistPhotoSession(GifWorkspaceRoute.VIDEO)
-                                        photoSequenceOnly = false
-                                    }
                                 }
                             } finally { openingProject = false }
                         }
@@ -553,7 +575,10 @@ internal fun GifMakerScreenContent(
         text = { Text("Unsaved edits will be cleared. You can Undo after starting over.",
             color = EditorMuted) },
         confirmButton = { TextButton(onClick = {
-            playing = false; commit(GifDocument()); index = 0; newOpen = false
+            playing = false
+            commit(GifDocument(), nextName = null)
+            index = 0
+            newOpen = false
         }) { Text("New GIF", color = EditorMint) } },
         dismissButton = { TextButton(onClick = { newOpen = false }) { Text("Keep current") } }
     )

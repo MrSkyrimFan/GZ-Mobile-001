@@ -45,6 +45,7 @@ import com.greenezone.gzphotoeditor.editor.PhotoHistogram
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -340,6 +341,54 @@ class AndroidRegularToolsTest {
         } finally {
             ProjectStore.delete(context, name)
             resolver.delete(output, null, null)
+        }
+    }
+
+    @Test fun regularProtectsDirtyDraftAndConfirmsNamedDeletion() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "Regular B " + System.nanoTime()
+        val original = EditDocument(grade = Grade(exposure = -.3f))
+        try {
+            withRegularPhoto { source ->
+                assertTrue(ProjectStore.save(context, name, source, original))
+                rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Text"))
+                rule.onNodeWithText("Text").performClick()
+                rule.onNodeWithText("+ Add text").performClick()
+                rule.onNode(hasSetTextAction()).performTextInput("Retain this draft")
+                rule.onNodeWithText("Apply").performClick()
+
+                fun openLibrary() {
+                    rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("More"))
+                    rule.onNodeWithText("More").performClick()
+                    rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Open projects"))
+                    rule.onNodeWithText("Open projects").performClick()
+                    rule.onNodeWithText(name).performClick()
+                }
+                openLibrary()
+                rule.onNodeWithText("Open project").performClick()
+                rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
+                rule.onNodeWithText("Keep editing").performClick()
+                rule.onNodeWithText("Export").assertIsDisplayed()
+                rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Text"))
+                rule.onNodeWithText("Text").performClick()
+                rule.onNodeWithText("Text 1").assertIsDisplayed()
+
+                openLibrary()
+                rule.onNodeWithText("Delete", substring = false).performClick()
+                rule.onNodeWithText("Delete saved project?").assertIsDisplayed()
+                rule.onNodeWithText("Cancel").performClick()
+                assertEquals(original, ProjectStore.load(context).single { it.name == name }.document)
+                rule.onNodeWithText("Delete", substring = false).performClick()
+                rule.onNodeWithText("Delete project").performClick()
+                assertTrue(ProjectStore.load(context).none { it.name == name })
+                assertNotNull(context.contentResolver.openInputStream(source)?.use { it.read() })
+                rule.onNodeWithText("Close").performClick()
+                rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Text"))
+                rule.onNodeWithText("Text").performClick()
+                rule.onNodeWithText("Text 1").assertIsDisplayed()
+            }
+        } finally {
+            ProjectStore.delete(context, name)
         }
     }
 

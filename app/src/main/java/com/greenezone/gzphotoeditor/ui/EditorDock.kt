@@ -522,18 +522,10 @@ private fun CropDeck(
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         item { DockChip("Rotate left", false, enabled) {
-            val quarter = (document.quarterTurns + 3) % 4
-            onCommit(document.copy(quarterTurns = quarter,
-                cropFrame = if (document.cropFrame != null)
-                    CropMath.initial(imageHeight, imageWidth, document.crop)
-                    else null))
+            onCommit(CropMath.rotate(document, imageWidth, imageHeight, clockwise = false))
         } }
         item { DockChip("Rotate right", false, enabled) {
-            val quarter = (document.quarterTurns + 1) % 4
-            onCommit(document.copy(quarterTurns = quarter,
-                cropFrame = if (document.cropFrame != null)
-                    CropMath.initial(imageHeight, imageWidth, document.crop)
-                    else null))
+            onCommit(CropMath.rotate(document, imageWidth, imageHeight, clockwise = true))
         } }
         item { DockChip("Flip horizontal", document.mirrored, enabled) {
             onCommit(document.copy(mirrored = !document.mirrored))

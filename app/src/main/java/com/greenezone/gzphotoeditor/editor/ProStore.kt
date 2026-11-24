@@ -5,7 +5,6 @@ import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 /** Versioned private JSON holding photo URIs and editable layer settings, never source image bytes. */
@@ -19,6 +18,8 @@ object ProStore {
     private const val RESET_DOCUMENT = "resetDocument"
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
+    private val whitespace = Regex("\\s+")
+    private class ProjectTooLarge : IllegalArgumentException()
 
     private fun projectReadLimit(): Long =
         (Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(MAX_PROJECT_BYTES.toLong())
@@ -71,7 +72,9 @@ object ProStore {
                         })
                     }
                 })
-                put("edits", EditDocumentCodec.encode(layer.edits))
+                val edits = EditDocumentCodec.encode(layer.edits)
+                if (edits.length > EditDocumentCodec.MAX_ENCODED_CHARS) throw ProjectTooLarge()
+                put("edits", edits)
             })
         }
         val legacyAspectRange = LEGACY_ASPECT_MIN..LEGACY_ASPECT_MAX
@@ -87,12 +90,16 @@ object ProStore {
             document.sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
             put("background", document.background.name)
             put("layers", layers)
-        }.toString().also { require(it.toByteArray(StandardCharsets.UTF_8).size <= MAX_BYTES) }
+        }.toString().also {
+            if (it.toByteArray(Charsets.UTF_8).size > MAX_BYTES) throw ProjectTooLarge()
+        }
     }
     private inline fun <reified T: Enum<T>> value(name: String, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == name } ?: fallback
 
-    fun decode(data: String): ProDocument? {
+    fun decode(data: String): ProDocument? = decode(data, recoverLegacyRecipe = false)
+
+    private fun decode(data: String, recoverLegacyRecipe: Boolean): ProDocument? {
         if (data.length > MAX_BYTES) return null
         return try {
             val obj = JSONObject(data)
@@ -111,7 +118,11 @@ object ProStore {
                 val o = array.optJSONObject(idx) ?: return null
                 val uri = o.optString("uri", "")
                 if (uri.length > 4096) return null
-                val edits = EditDocumentCodec.decode(o.optString("edits", "")) ?: return null
+                val recipe = o.optString("edits", "")
+                val edits = if (recoverLegacyRecipe && recipe.length > EditDocumentCodec.MAX_ENCODED_CHARS) {
+                    EditDocumentCodec.recoverProRecipe(recipe, MAX_BYTES)
+                } else EditDocumentCodec.decode(recipe)
+                if (edits == null) return null
                 val mask = o.optJSONObject("mask")?.let { json ->
                     val raw = json.optJSONArray("points") ?: JSONArray()
                     if (raw.length() > ProToolMath.MAX_LASSO_POINTS) return null
@@ -197,13 +208,14 @@ object ProStore {
         } else JSONObject(encode(resetDocument))
         // The optional field leaves the existing root document and codec version intact.
         return JSONObject(encoded).put(RESET_DOCUMENT, baseline).toString().toByteArray(Charsets.UTF_8)
-            .also { require(it.size <= MAX_PROJECT_BYTES) }
+            .also { if (it.size > MAX_PROJECT_BYTES) throw ProjectTooLarge() }
     }
 
     private fun decodeProject(data: String): SavedProject? {
         val json = JSONObject(data)
         val reset = json.remove(RESET_DOCUMENT) as? JSONObject
-        val document = decode(if (reset == null) data else json.toString()) ?: return null
+        val document = decode(if (reset == null) data else json.toString(), recoverLegacyRecipe = true)
+            ?: return null
         val baseline = reset?.let {
             if (it.optBoolean("empty")) {
                 ProDocument(
@@ -212,18 +224,36 @@ object ProStore {
                     sourceAspectRatio = it.optDouble("sourceAspectRatio").toFloat()
                         .takeIf(ProMath::validSourceAspect)
                 )
-            } else decode(it.toString())
+            } else decode(it.toString(), recoverLegacyRecipe = true)
         }
         // A legacy or unreadable optional baseline must never clear the user's saved work.
         return SavedProject(document, baseline ?: document)
     }
 
     private fun dir(context: Context): File = File(context.filesDir, DIR).also { it.mkdirs() }
-    private fun key(name: String): String? {
-        val cleaned = name.trim().replace(Regex("\\s+"), " ").take(32)
-        if (cleaned.isBlank()) return null
-        return Base64.getUrlEncoder().withoutPadding()
-            .encodeToString(cleaned.toByteArray(StandardCharsets.UTF_8))
+    private data class ProjectPath(val name: String, val base: File) {
+        val backup: File get() = File(base.path + ".bak")
+        fun exists(): Boolean = base.exists() || backup.isFile
+    }
+
+    private fun projectPath(context: Context, name: String): ProjectPath? {
+        val legacy = name.trim().replace(whitespace, " ").take(32)
+            .toByteArray(Charsets.UTF_8).toString(Charsets.UTF_8)
+        val canonical = legacy.trimEnd()
+        if (canonical.isBlank()) return null
+        val directory = dir(context)
+        fun path(storedName: String): ProjectPath {
+            val id = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(storedName.toByteArray(Charsets.UTF_8))
+            return ProjectPath(storedName, File(directory, "$id.gzpro"))
+        }
+        // Old names truncated at a space may still exist in the project list.
+        if (name.length == 32 && name.endsWith(' ') && name.dropLast(1) == canonical) {
+            path(name).takeIf { it.exists() }?.let { return it }
+        }
+        val current = path(canonical)
+        return if (current.exists() || canonical == legacy) current
+            else path(legacy).takeIf { it.exists() } ?: current
     }
     @Synchronized fun names(context: Context): List<String> =
         dir(context).listFiles()?.mapNotNull {
@@ -239,20 +269,44 @@ object ProStore {
             } catch (_: Exception) { null }
         }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
 
-    @Synchronized fun save(
+    internal sealed interface SaveResult {
+        data class Saved(val name: String) : SaveResult
+        data class Exists(val name: String) : SaveResult
+        data object TooLarge : SaveResult
+        data object Failed : SaveResult
+    }
+
+    fun save(
         context: Context,
         name: String,
         document: ProDocument,
         resetDocument: ProDocument? = null
-    ): Boolean {
-        val id = key(name) ?: return false
-        val file = File(dir(context), "$id.gzpro")
-        val recoverableBackup = File(file.path + ".bak")
-        if (!file.exists() && !recoverableBackup.isFile && names(context).size >= MAX_SAVED) return false
+    ): Boolean = writeProject(context, name, document, resetDocument, null, replaceAny = true) is SaveResult.Saved
+
+    internal fun saveProject(
+        context: Context,
+        name: String,
+        document: ProDocument,
+        resetDocument: ProDocument?,
+        replaceName: String?
+    ): SaveResult = writeProject(context, name, document, resetDocument, replaceName, replaceAny = false)
+
+    @Synchronized private fun writeProject(
+        context: Context,
+        name: String,
+        document: ProDocument,
+        resetDocument: ProDocument?,
+        replaceName: String?,
+        replaceAny: Boolean
+    ): SaveResult {
+        val target = projectPath(context, name) ?: return SaveResult.Failed
+        if (target.exists()) {
+            if (!replaceAny && replaceName != target.name) return SaveResult.Exists(target.name)
+        } else if (names(context).size >= MAX_SAVED) return SaveResult.Failed
         return try {
             val payload = encodeProject(document, resetDocument)
-            if (payload.size.toLong() > projectReadLimit()) return false
-            val atomic = AtomicFile(file)
+            if (payload.size.toLong() > projectReadLimit()) return SaveResult.TooLarge
+            val atomic = AtomicFile(target.base)
             val stream = atomic.startWrite()
             try {
                 stream.write(payload)
@@ -261,16 +315,20 @@ object ProStore {
                 atomic.failWrite(stream)
                 throw failed
             }
-            true
-        } catch (_: Exception) { false }
+            SaveResult.Saved(target.name)
+        } catch (_: ProjectTooLarge) {
+            SaveResult.TooLarge
+        } catch (_: Exception) {
+            SaveResult.Failed
+        }
     }
 
     fun load(context: Context, name: String): ProDocument? = loadProject(context, name)?.document
 
     @Synchronized internal fun loadProject(context: Context, name: String): SavedProject? {
-        val id = key(name) ?: return null
-        val base = File(dir(context), "$id.gzpro")
-        val backup = File(base.path + ".bak")
+        val target = projectPath(context, name) ?: return null
+        val base = target.base
+        val backup = target.backup
         // Fail before allocating strings or reading hostile oversize projects.
         // On legacy backup-only recovery AtomicFile will rename the backup to base.
         val recoverable = if (backup.exists()) backup else base
@@ -293,9 +351,9 @@ object ProStore {
     }
 
     @Synchronized fun delete(context: Context, name: String): Boolean {
-        val id = key(name) ?: return false
-        val file = File(dir(context), "$id.gzpro")
-        val projectFiles = listOf(file, File(file.path + ".bak"), File(file.path + ".new"))
+        val target = projectPath(context, name) ?: return false
+        val file = target.base
+        val projectFiles = listOf(file, target.backup, File(file.path + ".new"))
         if (projectFiles.none { it.exists() }) return false
         AtomicFile(file).delete()
         return projectFiles.none { it.exists() }

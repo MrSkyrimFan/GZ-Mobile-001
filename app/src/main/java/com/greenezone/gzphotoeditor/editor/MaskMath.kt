@@ -22,10 +22,14 @@ object MaskMath {
         private val radius: Float,
         private val feather: Float
     ) {
-        fun coverage(x: Int, y: Int, width: Int, height: Int): Float {
-            if (width <= 0 || height <= 0 || segments.isEmpty()) return 0f
-            val nx = (x + .5f) / width.toFloat()
-            val ny = (y + .5f) / height.toFloat()
+        fun coverage(x: Int, y: Int, width: Int, height: Int): Float =
+            coverageAt(x + .5f, y + .5f, width, height)
+
+        fun coverageAt(x: Float, y: Float, width: Int, height: Int): Float {
+            if (width <= 0 || height <= 0 || segments.isEmpty() ||
+                x < 0f || y < 0f || x >= width || y >= height) return 0f
+            val nx = x / width
+            val ny = y / height
             val gx = (nx * GRID).toInt().coerceIn(0, GRID - 1)
             val gy = (ny * GRID).toInt().coerceIn(0, GRID - 1)
             val indices = cells[gy * GRID + gx]
