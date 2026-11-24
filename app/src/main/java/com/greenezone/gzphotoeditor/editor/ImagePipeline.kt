@@ -135,28 +135,41 @@ object ImagePipeline {
         }
     }
 
-    /** Bounded, exact cache for repeated input colors in a single GIF export. */
+    /** Bounded, exact cache for repeated colors and local detail in one GIF export. */
     internal class GifColors private constructor(internal val prepared: ToneMath.Prepared) {
         private val keys = IntArray(16_384)
+        private val detailKeys = IntArray(keys.size)
         private val results = IntArray(keys.size)
         private val occupied = BooleanArray(keys.size)
+        var hits = 0L
+            private set
+        var misses = 0L
+            private set
 
-        fun adjust(argb: Int): Int {
-            val slot = (argb * -1640531527) ushr 18
-            if (occupied[slot] && keys[slot] == argb) return results[slot]
-            val adjusted = ToneMath.adjustPrepared(argb, prepared, 0, 0, 1, 1)
+        fun adjust(argb: Int, detail: Float = 0f): Int {
+            // Detail has already been calculated from this frame's neighborhood.
+            // Preserve its exact bits; equal colors with different surroundings must
+            // never share a result merely because their source ARGB values match.
+            val detailKey = detail.toRawBits()
+            val slot = ((argb * -1640531527) xor (detailKey * -1640531527)) ushr 18
+            if (occupied[slot] && keys[slot] == argb && detailKeys[slot] == detailKey) {
+                hits++
+                return results[slot]
+            }
+            val adjusted = ToneMath.adjustPrepared(argb, prepared, 0, 0, 1, 1, detail)
             keys[slot] = argb
+            detailKeys[slot] = detailKey
             results[slot] = adjusted
             occupied[slot] = true
+            misses++
             return adjusted
         }
 
         companion object {
             fun forGrade(grade: Grade): GifColors? {
-                // These controls depend on the image coordinate or nearby source pixels.
-                if (grade.vignette > 0f || grade.grain > 0f || grade.sharpen != 0f ||
-                    grade.texture != 0f || grade.clarity != 0f || grade.denoise > 0f
-                ) return null
+                // Coordinate-dependent effects cannot share results. Denoise is
+                // already included in the input pixel; local detail is in the key.
+                if (grade.vignette > 0f || grade.grain > 0f) return null
                 val prepared = ToneMath.prepare(grade)
                 return if (prepared.isNeutral) null else GifColors(prepared)
             }
@@ -264,7 +277,7 @@ object ImagePipeline {
                             lightRows[2][x], horizontal3 / 9f, horizontal5 / 25f, document.grade
                         )
                     } else 0f
-                    val base = gifColors?.adjust(sourcePixel)
+                    val base = gifColors?.adjust(sourcePixel, detail)
                         ?: ToneMath.adjustPrepared(sourcePixel, prepared, x, y, width, height, detail)
                     rendered[x] = MaskMath.adjust(base, masks, x, y, width, height)
                     if (vertical3 != null && vertical5 != null) {
