@@ -51,4 +51,44 @@ class ProStrokeSamplingTest {
         // The former prefix truncation loses the final quadrant and roughly 9% of area.
         assertTrue(points.any { it.x > .7f && it.y < .3f })
     }
+
+    @Test fun denseEarlyZigzagsCannotDisplaceBroadLateBends() {
+        for (aspect in listOf(.5f, 1f, 2f)) {
+            val first = BrushPoint(.2f, .45f)
+            val entry = BrushPoint(.78f, .65f)
+            val corner = BrushPoint(.87f, .65f)
+            val tail = BrushPoint(.87f, .75f)
+            var points = listOf(first)
+            // Match the failing Regular and selected-Collage-tile UI gesture.
+            for (index in 1..610) {
+                points = ProStrokeSampling.append(points,
+                    BrushPoint(.2f + index * .0006f, if (index % 2 == 0) .45f else .55f),
+                    aspect)
+            }
+            for (point in listOf(entry, corner, tail)) {
+                points = ProStrokeSampling.append(points, point, aspect)
+            }
+            assertEquals(ProStrokeSampling.MAX_POINTS, points.size)
+            assertEquals(first, points.first())
+            assertEquals(tail, points.last())
+            assertTrue("Broad late entry lost at aspect $aspect", points.contains(entry))
+            assertTrue("Late right-angle corner lost at aspect $aspect", points.contains(corner))
+        }
+    }
+
+    @Test fun areaRankingStillRetainsCollinearOutAndBackExcursions() {
+        val first = BrushPoint(.2f, .49f)
+        val before = BrushPoint(.2f, .5f)
+        val excursion = BrushPoint(.8f, .5f)
+        // Exercise coincident neighbours and a projection beyond the segment.
+        for (tail in listOf(before, BrushPoint(.5f, .5f))) {
+            val points = ProStrokeSampling.append(listOf(first, before, excursion),
+                tail, aspect = 1f, maxPoints = 3)
+            assertEquals(3, points.size)
+            assertEquals(first, points.first())
+            assertEquals(tail, points.last())
+            assertTrue("A collinear reversal was flattened", points.contains(excursion))
+        }
+    }
+
 }

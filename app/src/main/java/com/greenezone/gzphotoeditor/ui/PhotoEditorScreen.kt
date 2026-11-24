@@ -1358,7 +1358,7 @@ fun PhotoEditorScreen(
                         shouldClose -> closeCurrentPhoto()
                         else -> notice = "Project saved on your phone"
                     }
-                } else projectSaveError = "Could not save project. Keep editing, reduce its size, or choose another name (twelve maximum)."
+                } else projectSaveError = "Could not save project. Your edits are still open. Reduce edit details or free a saved-project slot (maximum twelve)."
             },
             onDismiss = {
                 closeAfterProjectSave = false

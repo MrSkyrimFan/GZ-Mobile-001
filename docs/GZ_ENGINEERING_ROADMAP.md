@@ -144,14 +144,14 @@ Give Lance one coherent verified candidate and focused handset script. Repair hi
 
 1. Versioned video project, source/track metadata, stable clip IDs, timeline/timebase, playback/seek, proxies, transactional edits, trim and real H.264/AAC MP4 export.
 2. Assembly: split/join/reorder/duplicate, source/sequence In/Out, append/insert/overwrite, ripple/lift/extract/roll/slip/slide, snapping/markers/frame nudge, linked/unlinked sound, J/L cuts, track targeting/locks/sync.
-3. Audio: imported local audio/video streams and voiceover, waveforms, clip/track/master gain, mute/solo/range mute, fades/pan/EQ/dynamics/limiter, automation, ducking, buses/stems and channel/sample-rate policy. No bundled unlicensed music.
-4. Compositing: multitrack video, PiP, keyframed transforms/opacity, captions/titles, masks/chroma/luma key, speed ramps/reverse/freeze, transitions and conventional stabilization; later nested/compound/multicamera within the same finite studio scope.
+3. Audio: imported local audio/video streams and voiceover, waveforms, clip/track/master gain, mute/solo/range mute, fades/pan/EQ/dynamics/limiter, conventional non-AI noise reduction, automation, ducking, buses/stems and channel/sample-rate policy. No bundled unlicensed music.
+4. Compositing: multitrack video, PiP, keyframed transforms/opacity, captions/titles, masks/chroma/luma key, speed ramps/reverse/freeze, transitions and conventional stabilization; later nested/compound/multicamera within the same finite studio scope. Photo-plus-audio slideshow authoring includes per-photo duration, deterministic pan/zoom and optional beat-sync.
 5. Color/effects: shared original Looks and selected-range grades, scopes, bypass/copy settings, qualified LUT import, explicit log/SDR/HDR transforms and preview/final parity.
 6. Timed blur/pixelation/opaque redaction with editable keyframes and optional deterministic tracking; review uncertain intervals/cuts. Re-encode sensitive removals and inspect every affected frame/stream/thumbnail; edit-list-only hiding is insufficient.
 7. Mastering: local bins, metadata, full-resolution conform, sequence versions, full/range/audio-only exports, subtitles/burn-in/sidecars, declared interchange subset, portable archive/relink.
 8. Initial qualified SDR preset, then measured 1080p/4K/HEVC/HDR/device tiers. Pin and verify Media3 or other dependencies then; older references to framework limitations are not current implementation guarantees.
 
-Exit: multitrack project with precision edits, user audio, transitions, captions and moving redaction survives process loss and independently decoded MP4 agrees in frames/audio/timestamps/color. Photo-plus-music exports MP4, never a purported sound-bearing GIF.
+Exit: multitrack project with precision edits, user audio, transitions, captions and moving redaction survives process loss and independently decoded MP4 agrees in frames/audio/timestamps/color. A photo-plus-music slideshow preserves declared per-photo durations and pan/zoom in a real MP4; optional beat-sync aligns the declared events. Audio-cleanup fixtures measure noise attenuation and retained desired signal. GIF remains silent.
 
 ### R10 — Full editing qualification, then final customer onboarding
 
