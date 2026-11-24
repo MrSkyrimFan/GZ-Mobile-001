@@ -2,7 +2,9 @@
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-The four original independent-review defects have passing evidence in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), with 186/186 cases on both Android versions at candidate and merge. A follow-up review found two Regular/Collage Eraser defects, and Lance authorized their correction. **The 0.12.9 phone candidate is held pending this focused repair.** [Current correction and evidence](docs/ERASER_REPAIR_VERIFICATION.md). Preserve the existing layout and workspaces. The full intended app remains in one [roadmap](docs/GZ_ENGINEERING_ROADMAP.md), [77-family inventory](docs/CAPABILITY_MATRIX.md) and [work ledger](docs/WORK_LEDGER.md); R1 durability follows this correction. Owner acceptance and commercial release remain open.
+**GZ Editor Pro 0.12.10 Test is the current qualified phone-test build.** [PR #31](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/31) corrects the two follow-up Regular/Collage Eraser findings and the GIF Save performance failure found during qualification. The final candidate and application merge each pass **193/193 cases on Android 10 and Android 15**, with zero failures, errors or skips. [Current verification, exact APK and owner checklist](docs/ERASER_REPAIR_VERIFICATION.md).
+
+The earlier PR #29 repairs remain credited; **0.12.9 is historical and superseded for this combined phone pass**. Owner handset acceptance, all workspace locks and commercial release remain open. The full intended app remains in one [roadmap](docs/GZ_ENGINEERING_ROADMAP.md), [77-family inventory](docs/CAPABILITY_MATRIX.md) and [work ledger](docs/WORK_LEDGER.md). The next engineering task is **R1.1: bounded saved-project listing and loading**, followed by R1.2 recoverable Regular drafts. Preserve the established layout, style and separate workspaces.
 
 The product requirements and release gates describe the ongoing scope. The earlier QA notes and version sections below record historical checkpoints. [Product requirements](docs/PRODUCT_SPEC.md) · [Release gates](docs/RELEASE_GATE.md) · [Historical v0.12.2 QA notes](docs/PHONE_QA_014.md).
 
@@ -72,16 +74,19 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 - All creative layers are composited in preview/export after privacy redaction; no branding, timestamp or watermark added to the exported photo.
 
 ## Limits and safeguards
-- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36; package stays `com.greenezone.gzphotoeditor` to preserve installation/project continuity when signing keys agree.
+- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36. The production application ID is `com.greenezone.gzphotoeditor`; versioned phone-test builds use a separate suffix, currently `com.greenezone.gzphotoeditor.phonetest.v22`. Their local project storage is separate.
 - Renderer uses 8-bit sRGB, not a RAW/16-bit managed photo pipeline. New TIFF is uncompressed 8-bit RGB, not 16-bit.
 - Social dimensions are practical composition presets, **not guarantees of platform acceptance**, safe-area rules or uploaded file size. Platforms may change their policies.
 - Export presets may upscale lower-resolution source photos; this cannot recover missing detail. Fit can add margins; Fill can crop. The user selects explicitly.
-- Drawing eraser splits vector strokes at erased points, not a pixel-based clone/heal tool. Video editing is not yet implemented and stays disabled in the mode menu.
+- Drawing Eraser cuts visible vector segments along the swept brush path. If a result would exceed the existing 160-stroke limit, the whole gesture is restored with a visible notice; unrelated artwork is preserved. Video editing is not yet implemented and stays disabled in the mode menu.
 - Very large photo output is limited by device memory. Custom-font file imports, text-on-path, automatic subject isolation and PSD project import remain unimplemented.
 - Blur/pixelation are not secure redaction. Use a fully opaque black covering for sensitive material.
 
 ## Build and test
-GitHub Actions runs JVM tests and instrumented Android 10 and Android 15 suites. For Audit 2, each Android version passed 174 of 174 cases on the exact candidate and merged application commit. The verified phone ZIP comes from the API 35 emulator's `gz-editor-pro-phone-test` artifact. The physical handset and commercial release gates remain open. [Merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608) · [Phone-test artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102) · [Release gates](docs/RELEASE_GATE.md).
+
+The qualified application commit is [`3ad65c533f7667a136d4fa1838afcc06d3f484da`](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/3ad65c533f7667a136d4fa1838afcc06d3f484da). It has the same tree as the tested candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) and [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512) pass JVM/assembly/signing and the full 193-case suite on each Android version. Later documentation-only commits reconcile these results; they are not replacement application builds.
+
+[Download the merged API 35 phone APK artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512/artifacts/14963127303). Extract `app-debug.apk`: launcher **GZ Editor Pro 0.12.10 Test**, version `0.12.10`, code `22`, package `com.greenezone.gzphotoeditor.phonetest.v22`, Android 10+. It installs separately from the older v21 test package, whose projects remain in that app. This does not test same-ID upgrades or automatically migrate those projects. The [verification receipt](docs/ERASER_REPAIR_VERIFICATION.md) records the actual APK hash/signature, both raw Android receipts, retained failures and handset limits.
 
 See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`.
 

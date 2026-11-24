@@ -2,25 +2,29 @@
 
 Updated 2026-11-24. Read with [roadmap](GZ_ENGINEERING_ROADMAP.md), [capability inventory](CAPABILITY_MATRIX.md) and [release gates](RELEASE_GATE.md). This ledger controls execution order; the linked engineering records control run results. Historical green counts do not close newly reported defects.
 
-## Current state — focused Eraser correction active; R1 follows
+## Current state — PR #31 engineering complete; owner phone pass open
 
-[PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Both source trees match, and each full candidate/merge Android lane passed 186/186 with zero failures/errors/skips. Verify/JVM/assembly/signature checks passed. The exact exercised phone APK and its hash/package/certificate are in the PR execution receipt.
+[PR #31](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/31) is merged at application commit `3ad65c533f7667a136d4fa1838afcc06d3f484da`. It shares tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511` with candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run 45480001019](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) and [merged-main run 45483297512](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512) each pass JVM/assembly/signing and **193/193 on API29 and API35**, zero failures/errors/skips. The current combined phone candidate is **0.12.10 Test / code 22 / phonetest.v22**. [Raw receipts, exact APK, retained failures and phone checklist](ERASER_REPAIR_VERIFICATION.md).
 
-The four review defects are corrected. Additional qualification repairs cover broad late-corner sampling, bounded legacy Pro reading, and the observed Compose test scheduler issue. These results do not close handset acceptance, full feature families, smallest-heap qualification or commercial release.
+Later documentation-only commits reconcile this state without replacing that tested application commit or APK. Owner handset acceptance, the complete Draw/GIF families, all workspace locks and commercial release remain open. R14 is PARTIAL, not complete. The four original PR #29 corrections remain credited; its 0.12.9 artifact is historical and superseded for current delivery.
 
-**Active item: R0 Eraser follow-up — R29-01/R29-02.** Lance supplied the independent 0.12.9 review and explicitly asked this assistant to fix the repository. Reopening reason: a supported 160-stroke erase can omit unrelated artwork; the new sampler exposes visible segments the point-only eraser cannot hit. The four original regression repairs remain credited. Do not issue another combined phone candidate until this focused correction is qualified.
+### Completed scoped follow-up — R29-01/R29-02 and observed GIF Save failure
 
-**Observable result:** Regular and selected Collage-tile Eraser cuts the displayed line, including between sparse retained vertices, without losing unrelated strokes. First/later capacity overflow restores the entire gesture, dirty work and history, with visible feedback through existing controls. Named saves reject over-capacity ink rather than encoding an incomplete prefix.
+**Reopening reason and authority:** Lance supplied the independent 0.12.9 review and explicitly requested repository fixes. A supported 160-stroke erase could omit unrelated artwork, and the bounded Draw sampler exposed visible segments the point-only Eraser could not cut. These named failures justified the follow-up without reopening the full blueprint.
 
-**Baseline:** main `e04bc08a4800233b0f407b419a91c97ca2c068f6`, same application as `c9efc5aa0673f21b98f150733582a24996b34d10`. **Owners:** root UI/codec/integration; distinct geometry/JVM and Android-regression implementers; independent review. **Initial Eraser scope:** InkMath.kt, PhotoEditorScreen.kt, EditDocumentCodec.kt, test version. The observed GIF qualification failure below adds ImagePipeline.kt, GifEncoder.kt and VideoGifSource.kt. No layout, mode, Pro, preview-routing, dependency or workflow changes.
+**Delivered result:** Regular and the selected Collage-tile Eraser cut visible segments and the swept brush path. First/later capacity overflow restores the entire pre-gesture document, dirty work and history with feedback through the existing notice. Named saves reject invalid ink cardinality rather than encoding a prefix. Five actual UI regressions verify seeded boundaries, long Draw→Erase, cancellation, history, dirty-state Back, named reopen, decoded PNG and full-parent duplicate-source Collage isolation. All original 186 Android case identities remain.
 
-**Reproduction and decisive check:** preserve test-only red evidence on unchanged production; seed 160/159-stroke boundaries and run the actual Eraser UI, long Draw→Erase, history, dirty-state Back, named reopen, external PNG decode and full parent Collage isolation. Retain all 186 existing Android cases and GIF budgets. Final candidate and merge require JVM/API29/API35, exact source tree and exercised APK identity. [Execution evidence](ERASER_REPAIR_VERIFICATION.md).
+**Qualification extension, resolved:** candidate 1 passed the Eraser cases on both APIs but failed the unchanged API29 portrait GIF Save gate at 28,331 ms. That failure was preserved and diagnosed; the application was not retried unchanged. A bounded exact `(sourceARGB, computedDetail.rawBits)` export cache and stage measurements were added. Two actual Android bitmap-equivalence cases retain full pixels across changing neighborhoods/grades. The 6-second sampled-motion and 15-second Save gates, source fixture, 180×320 canvas, 88 frames and complete delays remain unchanged. Candidate and merged-main now pass those gates. The old timing counters cannot retrospectively assign the entire failed interval to one stage; physical performance remains a separate gate.
 
-**Qualification extension — GIF Save speed:** Candidate1 completes all five Eraser and rotation cases on both APIs, but API29 portrait GIF Save is 28,331 ms against the unchanged 15,000 ms gate. API35 is 191/191; API29 is 190/191. Preserve this failure. The same active wave now includes a bounded exact detail-aware GIF color cache, stage/worker-CPU measurements and two bitmap-equivalence cases. No UI/fixture/output/budget reduction; no unchanged retry. Details and precise scope are in the execution record. R1.1 does not start while this qualification failure is open.
+**Scoped production files:** `InkMath.kt`, `PhotoEditorScreen.kt`, `EditDocumentCodec.kt`, `ImagePipeline.kt`, `GifEncoder.kt`, `VideoGifSource.kt`, and test version. The one observed rotation-harness fault was corrected through its rule import only. No layout/style, mode ownership, Pro production, preview routing, schema, dependency or workflow change. Baseline main was `e04bc08a4800233b0f407b419a91c97ca2c068f6`, with the same application as PR #29 merge `c9efc5aa0673f21b98f150733582a24996b34d10`.
 
-**Next planned item after this correction: R1.1 — bounded saved-project listing and loading.** Inventory current state/source ownership once, then load lightweight project metadata and decode only the selected recipe. Qualify a full twelve-save set containing near-budget recipes, failed/corrupt entries, correct selected identity and unchanged saved bytes, with measured memory. Preserve the existing saved projects through any required storage migration. Pin the baseline, affected files and decisive fault experiment before editing; do not restart blueprint intake.
+### Next selected engineering item — R1.1 bounded saved-project listing and loading
 
-**Following item R1.2 — recoverable Regular working drafts.** Persist completed edits atomically, keep transient gestures out of checkpoints, retain source identity/grants and restore the selected work after genuine process loss. Carry the same contracts to Pro/Collage/GIF in subsequent R1 slices.
+**Observable result:** opening the saved-project list reads lightweight metadata and decodes only the selected recipe. A full twelve-save set containing near-budget recipes and failed/corrupt entries remains bounded in memory; selection opens the intended project and existing saved bytes remain intact.
+
+Inventory the current state/source ownership once, pin the current main and compare app/test/Gradle/CI inputs against the qualified application, identify affected files, and define the decisive fault experiment before editing. Preserve saved projects through any required storage migration. Keep the existing UI and list behavior; do not restart blueprint intake or reopen the completed repair wave without a new reason. R1.1 is selected but has not been implemented by PR #31.
+
+**Following item R1.2 — recoverable Regular working drafts.** Persist completed edits atomically, keep transient gestures out of checkpoints, retain source identity/grants and restore selected work after genuine process loss. Carry the same contracts to Pro/Collage/GIF in subsequent R1 slices. Handset testing of 0.12.10 remains a separate owner gate; it does not imply all workspaces are accepted.
 
 ## Completed wave R0 — independent PR #26 corrections
 
@@ -29,7 +33,7 @@ The four review defects are corrected. Additional qualification repairs cover br
 | Item | Required behavior | Production scope | Decisive evidence |
 | --- | --- | --- | --- |
 | D01 | A newly drawn privacy cover remains over the same source pixels during the first manual Crop; held gesture survives recomposition | PhotoEditorScreen preview identity and crop anchoring | Actual held/quick pointer flow, Undo/Redo, reopen, PNG and selected-tile isolation |
-| D02 | Oversized Regular save/export rejects before storage mutation or destination picker; healthy save and dirty work survive | ProjectStore; PhotoExportController; actionable save error | Allowed dense draw fixture, last healthy bytes unchanged, readable smaller recipe; actual Save-before-close/replace remains open |
+| D02 | Oversized Regular save/export rejects before storage mutation or destination picker; healthy save and dirty work survive | ProjectStore; PhotoExportController; actionable save error | Allowed dense draw fixture, last healthy bytes unchanged, readable smaller recipe; [failed Save-before-close/replace keeps the dirty editor open](../app/src/androidTest/java/com/greenezone/gzphotoeditor/AndroidRegularSaveBudgetTest.kt) |
 | D03 | Long Regular Draw retains late bends and endpoint within budget; cancellation makes no edit | CreativeCanvasOverlays; PhotoEditorScreen; bounded sampler | Actual >500-sample Regular/tile gestures, saved/exported pixels, cancellation and history |
 | D04 | Long Pro lasso represents the full contour rather than a truncated polygon | ProStrokeSampling; ProWorkspaceScreen | Actual >450-sample lasso, late-region applied mask pixels, Undo/Redo/save/reopen; cancellation restores prior selection |
 
@@ -45,15 +49,15 @@ The four review defects are corrected. Additional qualification repairs cover br
 - The baseline legacy Pro failure occurred in JSON unescaping: its 7,591,944-byte transient allocation exceeded the 16 MiB heap observed in that run. The merged read optimization reduces copies while preserving format, file/recipe limits, validation, backup behavior and full recovery equality. Later larger-heap success is not evidence that this memory failure disappeared.
 - Final changed-candidate and merged-application results, exact artifact identity and any further diagnostic disposition belong in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29). Preserve all earlier failures. These bounded qualification repairs do not close the broader R1 durability/memory package.
 
-**Prior state transition:** PR #29 closed its original R0 reproductions. The newly demonstrated Eraser failures above reopen only that behavior; R1 follows their correction. Reopen an R0 behavior only for a named new failure, changed dependency, weaker evidence or owner report. Handset acceptance remains separately open.
+**Retained state transition:** PR #29 closed its original R0 reproductions. The newly demonstrated Eraser failures reopened only that behavior and are now engineering-verified in PR #31, together with the observed GIF Save correction. R1.1 is next. Reopen a settled behavior only for a named new failure, changed dependency, weaker evidence or owner report; record that reason. Handset acceptance remains separately open.
 
-**Preserve:** all original 174 Android cases, established GIF performance/fidelity budgets, mode boundaries, named project identity, immutable picker recipes, all source files and independent Collage tiles. New version 0.12.9 / code 21 isolates the next phone test from prior builds; separate packages do not prove same-ID upgrade behavior.
+**Preserve:** all original 174 Android cases, established GIF performance/fidelity budgets, mode boundaries, named project identity, immutable picker recipes, all source files and independent Collage tiles. Historical version 0.12.9 / code 21 isolated that phone test from prior builds. Current 0.12.10 / code 22 is also a separate test package; neither proves same-ID upgrade behavior.
 
 ## Ordered remaining work
 
 | Order | Package / completion target | Prerequisite and current disposition |
 | --- | --- | --- |
-| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, saved repeated exchange and portable bundles | NEXT after the active Eraser correction — begin R1.1 above; required families S01–S08 remain open/partial |
+| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, saved repeated exchange and portable bundles | NEXT — begin R1.1 above; required families S01–S08 remain open/partial |
 | R2 | Pro layer tree/groups/clipping and memory-bounded reference compositor | R1 contracts; preserve legacy pixels |
 | R3 | Full Pro selection, paint, retouch, shapes, transforms, effects and declared interchange | R2 foundation |
 | R4 | Offline Subject & Background, refine/removal and reshaping | R2/R3 mask/geometry foundation; no runtime AI |
@@ -67,13 +71,13 @@ The four review defects are corrected. Additional qualification repairs cover br
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next action — complete the named Eraser correction
+## Next action — execute the selected R1.1
 
-Reproduce and repair R29-01/R29-02 using the scoped contract above. Preserve the prior regression evidence, qualify the final candidate/merge, and deliver the exact replacement APK. Then execute R1.1 already selected above, followed by R1.2. This owner-directed new failure is the recorded reason to reopen the affected behavior; it is not a new blueprint intake.
+Deliver bounded saved-project listing/loading using its observable result above, followed by R1.2. Preserve the qualified 0.12.10 artifact for the owner’s combined phone pass. Routine authorized engineering can continue while that separate pass is pending; Video and workspace acceptance still require the existing explicit owner gates. Do not restart the correction intake, rerun settled qualification to manufacture progress, or create another master backlog.
 
 ## Pending owner/device decisions
 
-- Prior v0.12.9 Test handset wave is held by the new Eraser findings. Replacement qualification will cover: fresh-cover Crop, long Draw, Pro lasso, dense Save rejection, prior portrait GIF workflow and physical Back/picker/provider checks. Use the exact APK and focused script in the PR execution receipt.
+- Current 0.12.10 Test handset acceptance remains open. Use the exact merged API35 APK and focused script in the PR #31 execution receipt: original portrait GIF, visible Eraser gaps and independent Collage tiles, retained fresh-cover Crop/Draw/Pro lasso, Regular→Pro custody, and physical Back/picker/provider behavior. The 160-stroke boundaries are already covered by seeded automation; do not ask Lance to draw 160 strokes by hand.
 - Four formal pre-Video workspace locks remain open; a limited successful phone session does not close the full product inventory.
 - Shipping device/performance, RAW-camera and interchange support tiers are explicit later decisions, informed by implementation evidence.
 - Greenezone website completion is an external dependency, not app-engineering scope. Play Console setup waits for that plus the functioning app; no account work now.

@@ -1,18 +1,23 @@
 # GZ Editor Pro engineering and release gates
 
-## Current independent-review correction gate (2026-11-24)
+## Current engineering qualification — PR #31 / 0.12.10 Test
 
-**Latest correction gate:** the independent PR #29 review found R29-01/02 in Regular/Collage Eraser. Lance explicitly authorized fixes. Do not recommend the previous 0.12.9 APK as the current combined candidate. [Focused correction evidence](ERASER_REPAIR_VERIFICATION.md).
+The named R29-01/R29-02 Eraser correction and observed GIF Save performance failure have passed candidate and merged-application qualification. This closes the focused engineering gate and makes **0.12.10 Test** the current combined phone candidate. [Execution evidence, raw receipts and exact APK](ERASER_REPAIR_VERIFICATION.md). The prior 0.12.9 download is historical and superseded for this pass.
 
-- [ ] Actual UI regression shows first/later capacity refusal preserves the full gesture baseline, unrelated strokes, dirty state/history and saved/output pixels.
-- [ ] Sparse/long visible segments erase correctly in Regular and the selected Collage tile; cancel, parent history, named reopen and decoded PNG retain sibling independence.
-- [ ] Final candidate and merge retain the original 186 cases, pass JVM/API29/API35, and qualify the exact replacement phone APK.
+- [x] Actual UI regressions show first/later capacity refusal preserves the full gesture baseline, unrelated strokes, dirty state/history, named reopen and decoded output pixels.
+- [x] Sparse/long visible segments erase correctly in Regular and the selected Collage tile; cancel, parent history, named reopen and PNG retain sibling independence.
+- [x] Exact detail-aware GIF caching preserves uncached Android raster pixels and the established fixture/output/budgets. The observed 28,331 ms failed candidate remains in the evidence chain.
+- [x] Final candidate and merge retain all original 186 case identities and add five Eraser plus two cache-fidelity cases. JVM/build/signing and **193/193 per API29/API35** pass with zero failures/errors/skips.
+- [x] The merged API35 emulator-exercised APK is independently identified as 0.12.10 / code 22 / phonetest.v22; Android v2 signature and SHA-256 are recorded in the execution receipt.
+- [ ] Owner completes the focused combined 0.12.10 phone pass. Automation does not replace original-media, physical Back, OEM/provider, sustained-performance or workspace acceptance evidence.
 
-### Retained PR #29 checkpoint
+Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. R1.1 remains the selected next engineering task.
+
+### Retained PR #29 checkpoint — historical, not the current download
 
 - [x] R0 fresh-cover/manual-Crop, bounded Regular save/export, complete long Draw/cancel and Pro lasso have regression evidence against actual flows.
 - [x] Exact corrected candidate and merged application pass JVM and full API29/API35; preserve prior 174 cases and established GIF budgets. Independently review failure receipts and output assertions.
-- [x] Qualified exercised v0.12.9/code 21 phone APK has source/run/artifact/hash/package/signature recorded in the repair PR. This engineering gate is complete; owner phone acceptance remains below.
+- [x] Historical exercised v0.12.9/code 21 phone APK has source/run/artifact/hash/package/signature recorded in PR #29. Its four original engineering corrections remain credited; PR #31 supplies the current phone artifact.
 - [ ] Owner completes one combined phone pass with the focused new cases plus retained field cases below. Physical acceptance remains separate from CI.
 - [ ] All required families in the [capability inventory](CAPABILITY_MATRIX.md) complete the [roadmap](GZ_ENGINEERING_ROADMAP.md); a repaired current build is not the entire professional app.
 - [ ] Lance formally locks all four pre-Video workspaces before Video implementation.
@@ -20,7 +25,7 @@
 - [ ] Fully functioning qualified app AND Greenezone website complete before Play Console setup. Account is not set up; website work is outside this repository task.
 - [ ] At that final stage: verify actual account-specific requirements/current policies, rights/notices, release signing/AAB/splits/same-ID upgrade, store testing/listing and explicit owner publication approval.
 
-[Single work ledger and current execution receipts](WORK_LEDGER.md). Qualified app merge `c9efc5aa0673f21b98f150733582a24996b34d10`: candidate and merged-main each pass Verify and 186/186 on both API29/API35; exact APK identity is in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29). The earlier successor review hold is lifted by the supplied review and owner's engineering request. Existing evidence below retains its original scope/date; it does not close new defects or full release.
+[Single work ledger and current execution receipts](WORK_LEDGER.md). Historical PR #29 app merge `c9efc5aa0673f21b98f150733582a24996b34d10`: candidate and merged-main each pass Verify and 186/186 on both API29/API35; exact APK identity is in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29). The earlier successor review hold is lifted by the supplied review and owner's engineering request. Existing evidence below retains its original scope/date; it does not close new defects or full release.
 
 ## Retained field-correction acceptance
 

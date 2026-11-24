@@ -1,0 +1,209 @@
+{
+  "schema": 1,
+  "date_utc": "2026-11-24",
+  "purpose": "Qualified owner handset-test build; not commercial or workspace acceptance",
+  "repository": "MrSkyrimFan/GZ-Mobile-001",
+  "pull_request": 31,
+  "application_merge": "3ad65c533f7667a136d4fa1838afcc06d3f484da",
+  "candidate": "aa86c37c64c5e395d5378df281a0c7583a39d0e0",
+  "identical_candidate_merge_tree": "1c7e3007204192ea240a7fd8d65cbd00cf7f9511",
+  "candidate_run": 45480001019,
+  "merged_run": 45483297512,
+  "candidate_android": {
+    "api29": {
+      "passed": 193,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "save_ms": 4159
+    },
+    "api35": {
+      "passed": 193,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "save_ms": 4580
+    }
+  },
+  "merged_jobs": [
+    {
+      "id": 138761888772,
+      "name": "android-emulator",
+      "conclusion": "success"
+    },
+    {
+      "id": 138761888996,
+      "name": "verify",
+      "conclusion": "success"
+    },
+    {
+      "id": 138761889265,
+      "name": "android-minimum-api29",
+      "conclusion": "success"
+    }
+  ],
+  "merged_android": {
+    "api29": {
+      "artifact_id": 14963562392,
+      "name": "gz-editor-pro-emulator-api29-receipts",
+      "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512/artifacts/14963562392",
+      "zip_sha256": "98fd5b062d376c45764e4b763917df849ff2bb7110d4aaef681ef9fa242b9467",
+      "zip_bytes": 772216,
+      "counts": {
+        "discovered": 193,
+        "passed": 193,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "case_set_sha256": "b190082b3b60bf0b19ef6f66eafb31ca0b258bc9264c4b6b8168ae50f9f29816",
+      "per_test_logcats": 193,
+      "exit_code": 0,
+      "prior_186_cases_retained": true,
+      "added_cases": [
+        "com.greenezone.gzphotoeditor.AndroidGifDetailColorCacheTest#detailGradesMatchUncachedPixelsAcrossGradientAlphaAndRepeatedColorFrames",
+        "com.greenezone.gzphotoeditor.AndroidGifDetailColorCacheTest#equalSourceColorsWithDifferentNeighborhoodsStayDistinctAcrossCacheReuse",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#firstEraseAtCapacityKeepsUntouchedLastStrokeHistoryReopenAndPng",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#laterCapacityRefusalRestoresEarlierEraseAndKeepsDirtyTextAndUndo",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#longRegularLineCanBeErasedUndoneReopenedAndExported",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#selectedTileCapacityRefusalPreservesParentHistoryReopenAndExport",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#selectedTileEraseAndCanceledGesturesKeepSiblingThroughParentReopenAndPng"
+      ],
+      "known_fault_marker_scan": [],
+      "portrait_fixture": {
+        "source_dimensions": [
+          1080,
+          1920
+        ],
+        "output_dimensions": [
+          180,
+          320
+        ],
+        "frames": 88,
+        "duration_ms": 2950,
+        "save_completion_ms": 3872,
+        "staging_ms": 3686,
+        "five_distinct_samples_including_initial_still_ms": 1393,
+        "limits_ms": {
+          "sampled_motion": 6000,
+          "save_completion": 15000
+        },
+        "receipt_log": "outputs/androidTest-results/connected/debug/test(AVD) - 10/logcat-com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "assertions": [
+          "all_frame_delays",
+          "reverse_first_and_last_marker_pixels",
+          "reopen_and_replay_to_last_frame"
+        ]
+      }
+    },
+    "api35": {
+      "artifact_id": 14963142239,
+      "name": "gz-editor-pro-emulator-receipts",
+      "url": "https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512/artifacts/14963142239",
+      "zip_sha256": "1b7db96a348567041b9f6cbc84fd60b3b2a084a637b9a498a200b1e5f78176e1",
+      "zip_bytes": 1622220,
+      "counts": {
+        "discovered": 193,
+        "passed": 193,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "case_set_sha256": "b190082b3b60bf0b19ef6f66eafb31ca0b258bc9264c4b6b8168ae50f9f29816",
+      "per_test_logcats": 193,
+      "exit_code": 0,
+      "prior_186_cases_retained": true,
+      "added_cases": [
+        "com.greenezone.gzphotoeditor.AndroidGifDetailColorCacheTest#detailGradesMatchUncachedPixelsAcrossGradientAlphaAndRepeatedColorFrames",
+        "com.greenezone.gzphotoeditor.AndroidGifDetailColorCacheTest#equalSourceColorsWithDifferentNeighborhoodsStayDistinctAcrossCacheReuse",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#firstEraseAtCapacityKeepsUntouchedLastStrokeHistoryReopenAndPng",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#laterCapacityRefusalRestoresEarlierEraseAndKeepsDirtyTextAndUndo",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#longRegularLineCanBeErasedUndoneReopenedAndExported",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#selectedTileCapacityRefusalPreservesParentHistoryReopenAndExport",
+        "com.greenezone.gzphotoeditor.AndroidRegularEraseInteractionTest#selectedTileEraseAndCanceledGesturesKeepSiblingThroughParentReopenAndPng"
+      ],
+      "known_fault_marker_scan": [],
+      "portrait_fixture": {
+        "source_dimensions": [
+          1080,
+          1920
+        ],
+        "output_dimensions": [
+          180,
+          320
+        ],
+        "frames": 88,
+        "duration_ms": 2950,
+        "save_completion_ms": 3334,
+        "staging_ms": 3160,
+        "five_distinct_samples_including_initial_still_ms": 1525,
+        "limits_ms": {
+          "sampled_motion": 6000,
+          "save_completion": 15000
+        },
+        "receipt_log": "outputs/androidTest-results/connected/debug/test(AVD) - 15/logcat-com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest-portraitVideoPlaysAgainAfterTrimAndRapidScrub.txt",
+        "assertions": [
+          "all_frame_delays",
+          "reverse_first_and_last_marker_pixels",
+          "reopen_and_replay_to_last_frame"
+        ]
+      }
+    }
+  },
+  "phone_apk": {
+    "identity": {
+      "package": "com.greenezone.gzphotoeditor.phonetest.v22",
+      "versionCode": 22,
+      "versionName": "0.12.10",
+      "minSdkVersion": 29,
+      "targetSdkVersion": 36,
+      "label": "GZ Editor Pro 0.12.10 Test"
+    },
+    "application_flags": {
+      "debuggable": true,
+      "enableOnBackInvokedCallback": true,
+      "allowBackup": false,
+      "usesCleartextTraffic": false
+    },
+    "permissions": [
+      "com.greenezone.gzphotoeditor.phonetest.v22.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    ],
+    "apk_bytes": 32899125,
+    "apk_sha256": "ed362e928db9db1f3f37c7a82c99141d64af42db1112ed8eacbdec6f466dfb80",
+    "archive_bytes": 11552723,
+    "archive_sha256": "ab5ad668a034decb54866c3059f0f7d45c48f2bb31220b25d1356be3cb7d8c94",
+    "archive_digest_matches_github": true,
+    "archive_crc_valid": true,
+    "apk_crc_valid": true,
+    "signature_verified_v2": true,
+    "signature_verifier_sha256": "c070ed1394629d74641aa0906f60b2ffa1ee77e6366a1f93437f59717b1aeb89",
+    "certificate_sha256": "40b29579b3c5b21461ac4d5d5e9a4fe9396b9723a59bdad1e24a3dc268a1d3f2"
+  },
+  "phone_provenance": {
+    "artifact_id": 14963127303,
+    "run_id": 45483297512,
+    "api35_job_id": 138761888772,
+    "application_commit": "3ad65c533f7667a136d4fa1838afcc06d3f484da",
+    "uploaded_path": "app/build/outputs/apk/debug/app-debug.apk",
+    "checkout_connected_test_upload_chain_independently_read": true
+  },
+  "retained_failures": [
+    {
+      "run": 45471163485,
+      "disposition": "Unchanged-production Eraser reproduction; API29 separately aborts in rotation harness before Eraser"
+    },
+    {
+      "run": 45473953140,
+      "disposition": "All Eraser cases pass; API29 GIF Save 28331ms exceeds unchanged 15000ms gate"
+    }
+  ],
+  "scope_closed": [
+    "R29-01 Eraser capacity and complete gesture rollback",
+    "R29-02 visible and swept segment erasure",
+    "Observed portrait GIF Save performance failure"
+  ],
+  "owner_acceptance": false,
+  "commercial_release": false,
+  "next_engineering": "R1.1 bounded saved-project listing/loading, then R1.2 recoverable Regular drafts",
+  "documentation_limit": "Later documentation-only commits may record these results. Their app/test/Gradle/CI inputs must match this application merge; they do not identify a new tested APK."
+}
