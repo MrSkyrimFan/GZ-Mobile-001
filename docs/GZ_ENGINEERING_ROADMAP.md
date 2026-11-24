@@ -4,7 +4,7 @@ Updated 2026-11-24. Owner: Lance / Greenezone Software LLC. Engineering workspac
 
 ## Current direction and authority
 
-Lance supplied the independent PR #26 review (CHANGES REQUIRED), authorized fixing the issues, and requested a complete roadmap for the original professional app vision. The successor onboarding hold is lifted. The combined handset candidate remains held until the known correction wave passes. Engineering, tests, branches, PRs and verified merges are authorized; physical acceptance, formal workspace locks and public release remain owner decisions.
+Lance supplied the independent PR #26 review (CHANGES REQUIRED), authorized fixing the issues, and requested a complete roadmap for the original professional app vision. The successor onboarding hold is lifted. The completed correction wave now supplies a qualified 0.12.10 Test handset build; owner acceptance remains open. Engineering, tests, branches, PRs and verified merges are authorized; physical acceptance, formal workspace locks and public release remain owner decisions.
 
 **Latest release sequencing:** Play Console is not set up. Lance wants its setup last, after a fully functioning app AND completion of the Greenezone website. Website work is an external dependency; this app task does not authorize modifying it.
 
@@ -12,13 +12,15 @@ Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WO
 
 ## Current engineering state
 
-**Current override:** the owner authorized correcting two new Eraser findings from the independent PR #29 review. The 0.12.9 phone candidate is held until visible-segment erasing and capacity-safe gesture/persistence behavior pass the [focused execution gate](ERASER_REPAIR_VERIFICATION.md). Existing layout, original R0 evidence, all 186 cases and GIF budgets remain protected. The active ledger records the exact baseline, owners, files and exits. R1.1 follows this bounded correction.
+**Current qualified correction:** [PR #31](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/31), application merge `3ad65c533f7667a136d4fa1838afcc06d3f484da`, closes only R29-01/R29-02 Eraser engineering and the GIF Save performance failure observed during qualification. Candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0` and the merge share tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`. [Candidate run 45480001019](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) and [merged run 45483297512](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512) pass JVM/build/signing and **193/193 per Android API**, with zero failures/errors/skips. [Execution receipt and exact 0.12.10 Test APK](ERASER_REPAIR_VERIFICATION.md).
+
+All original 186 Android case identities and established GIF budgets remain; five Eraser and two cache-equivalence cases extend them. The original red reproduction, separate rotation-harness abort, and candidate 1 GIF speed failure remain in the receipt. Existing layout/style and mode ownership are preserved. Later documentation-only commits do not supersede the qualified application identity. **R1.1 bounded saved-project listing/loading is the next engineering task; R1.2 recoverable Regular drafts follows.** Handset acceptance, whole-family completion and commercial release remain open.
 
 ### Prior verified PR #29 checkpoint
 
-R0 is engineering-verified in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Candidate and merged application share tree `47e95c51254ce8e8f97b3883c44dc157ea8452b4`; each passed Verify and 186/186 Android cases on both API29 and API35, with no failures/errors/skips. Version 0.12.9 Test / code 21 is the qualified phone wave. Handset acceptance, all formal workspace locks and commercial release remain open.
+R0 is engineering-verified in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Candidate and merged application share tree `47e95c51254ce8e8f97b3883c44dc157ea8452b4`; each passed Verify and 186/186 Android cases on both API29 and API35, with no failures/errors/skips. Version 0.12.9 Test / code 21 was that checkpoint’s qualified phone wave and is now superseded by 0.12.10 Test. Handset acceptance, all formal workspace locks and commercial release remain open.
 
-**Next roadmap package after the active Eraser correction: R1.** Preserve the completed R0 evidence and follow the active ledger. Do not replay the independent-review intake or reopen repairs without a new reason.
+**Next roadmap package: R1, starting with R1.1.** Preserve the completed R0 evidence and follow the active ledger. Do not replay the independent-review intake or reopen repairs without a new reason.
 
 The legacy Pro streaming optimization passes in the recorded CI environments; the earlier 16 MiB hard-cap condition has not been independently requalified. R1/R8 retain explicit low-memory/device-tier measurements. Legacy v4 GIF aspect migration remains R7.
 
@@ -34,7 +36,7 @@ A paid-once, fully offline Android creative application with five separate, unde
 | GIF | Silent animation from video/GIF/photo sequences; neutral import, real edited playback, timeline and frame edits, captions, palette controls, accurate timing/color, persistence and externally playable GIF output. Sound belongs in Video. |
 | Video | Separate professional timeline with clips, compositing, user-owned audio/music/voice, precision editing, effects, keyframes and real MP4 output. **Implementation starts only after Lance formally accepts/locks all four pre-Video workspaces.** |
 
-Preserve the established dark image-first style, workspace selector and working Regular/Collage layout. A necessary functional change must name its user benefit and affected surface. The current repair wave changes no layout. Broad reskins and new product scope need owner decisions.
+Preserve the established dark image-first style, workspace selector and working Regular/Collage layout. A necessary functional change must name its user benefit and affected surface. PR #31 changed no layout or style. Broad reskins and new product scope need owner decisions.
 
 The terms Lightroom-class, Photoshop-style and studio-quality are behavioral references. The finite capabilities below govern delivery; they are not permission to copy those products or to claim universal parity. The no-AI and mode-ownership rules override incompatible features. Required families cannot disappear merely because they are difficult.
 
@@ -62,7 +64,7 @@ These are dependency-ordered work packages, not dates or completion percentages.
 5. Preserve existing named-save, Pro bounded save, Collage, handoff, GIF performance/fidelity and picker tests. Capture specific red-before and green-after evidence, full candidate and app-merge JVM/API29/API35 results, exact phone APK identity/signature.
 6. Correct overstated evidence wording and retain the legacy v4 GIF aspect limitation as explicit follow-up. Do not silently reinterpret old project framing.
 
-Exit: all four defects have production repairs and actual regression evidence; no new high-impact failure; reviewed candidate/merge identity and qualified artifact. Owner handset acceptance stays separate.
+The original four defects passed that engineering exit in PR #29. The separately demonstrated R29-01/R29-02 Eraser follow-up and observed GIF Save failure passed their focused candidate/merge exit in PR #31. Both histories remain credited; neither closes the complete feature families or owner handset acceptance. Follow the selected R1.1 instead of reopening this wave without new evidence.
 
 ### R1 — Durable documents, source custody and complete interaction contracts
 
