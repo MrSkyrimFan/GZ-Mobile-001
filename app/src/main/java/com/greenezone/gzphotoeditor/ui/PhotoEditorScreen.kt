@@ -78,6 +78,7 @@ import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
 import com.greenezone.gzphotoeditor.editor.InkMath
 import com.greenezone.gzphotoeditor.editor.InkStroke
+import com.greenezone.gzphotoeditor.editor.ProStrokeSampling
 import com.greenezone.gzphotoeditor.editor.CreativeRaster
 import com.greenezone.gzphotoeditor.editor.TextOverlay
 import com.greenezone.gzphotoeditor.editor.EditHistory
@@ -715,17 +716,14 @@ fun PhotoEditorScreen(
             }
         } else {
             val ink = currentInk ?: return
-            if (ink.points.size >= 500) return
-            val last = ink.points.last()
-            val dx = last.x - point.x
-            val dy = last.y - point.y
-            if (dx * dx + dy * dy >= .000008f) {
-                currentInk = ink.copy(points = ink.points + point)
-            }
+            val image = previewState.beforeImage ?: original
+            val aspect = image?.let { it.width.toFloat() / it.height } ?: 1f
+            currentInk = ink.copy(points = ProStrokeSampling.append(ink.points, point, aspect))
         }
     }
 
     fun finishInk() {
+        if (!painting) return
         if (selectedTab == EditTab.DRAW && !creativeTools.erase) {
             val ink = currentInk
             if (ink != null && ink.points.isNotEmpty()) {
@@ -737,6 +735,15 @@ fun PhotoEditorScreen(
         currentInk = null
         painting = false
         finishSlide()
+    }
+
+    fun cancelInk() {
+        if (!painting) return
+        gestureStart?.let { document = it }
+        currentInk = null
+        painting = false
+        gestureStart = null
+        liveGesture = false
     }
 
     fun editWords(newLayer: Boolean) {
@@ -782,12 +789,12 @@ fun PhotoEditorScreen(
 
     fun moveCrop(frame: CropFrame) {
         if (gestureStart == null) gestureStart = document
-        document = document.copy(
+        document = PrivacyMath.retainAuthoringGeometry(document, document.copy(
             crop = if (document.crop == CropRatio.ORIGINAL) CropRatio.FREE else document.crop,
             cropFrame = frame,
             cropFrameRatioLocked = document.crop.ratio != null &&
                 (document.cropFrameRatioLocked || document.cropFrame == null)
-        )
+        ))
     }
 
     fun cancelCrop() {
@@ -821,9 +828,18 @@ fun PhotoEditorScreen(
         document.privacy.getOrNull(selectedPrivacy)?.kind == PrivacyKind.BLUR_BRUSH
     val cropTab = selectedTab == EditTab.CROP
     val previewEdits = if (cropTab) {
-        PrivacyMath.retainAuthoringGeometry(document,
-            document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f,
-                cropCenterY = .5f, cropFrameRatioLocked = false))
+        // Canonicalize even ORIGINAL -> ORIGINAL before the first pointer move.
+        // moveCrop will retain exactly these anchors, so dragging a fresh cover's
+        // crop never invalidates the uncropped preview or disposes its overlay.
+        // This temporary recipe does not dirty the document or add history.
+        val authoringGeometry = PhotoGeometry.from(document)
+        document.copy(
+            privacy = document.privacy.map { mark ->
+                if (mark.authoringGeometry == null) mark.copy(authoringGeometry = authoringGeometry) else mark
+            },
+            crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f,
+            cropCenterY = .5f, cropFrameRatioLocked = false
+        )
     } else document
     RenderRegularPhotoPreview(
         state = previewState,
@@ -1043,7 +1059,8 @@ fun PhotoEditorScreen(
                         onStart = ::startInk,
                         onMove = ::continueInk,
                         onFinish = ::finishInk,
-                        onTap = { chromeVisible = !chromeVisible }
+                        onTap = { chromeVisible = !chromeVisible },
+                        onCancel = ::cancelInk
                     )
                 }
             }
@@ -1341,7 +1358,7 @@ fun PhotoEditorScreen(
                         shouldClose -> closeCurrentPhoto()
                         else -> notice = "Project saved on your phone"
                     }
-                } else projectSaveError = "Could not save project (twelve maximum)."
+                } else projectSaveError = "Could not save project. Your edits are still open. Reduce edit details or free a saved-project slot (maximum twelve)."
             },
             onDismiss = {
                 closeAfterProjectSave = false

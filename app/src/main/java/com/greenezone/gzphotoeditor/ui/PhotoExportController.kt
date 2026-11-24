@@ -47,7 +47,7 @@ internal data class PhotoExportRequest(
     fun encode(): String {
         val photo = JSONObject().apply {
             put("source", source.toString())
-            put("edits", EditDocumentCodec.encode(edits))
+            put("edits", EditDocumentCodec.encodeBounded(edits))
         }
         return PendingImageRecipe(settings, photo.toString()).encode()
     }
@@ -150,6 +150,10 @@ internal class PhotoExportController(
                 PhotoExportRequest(source, selectedSettings, document).encode())
             pending = record
             launchId = record.id
+        } catch (_: EditDocumentCodec.RecipeTooLarge) {
+            report("Could not prepare export: too many edit details. Remove some drawing or brush details and try again.")
+        } catch (_: OutOfMemoryError) {
+            report("Not enough memory to prepare this export. Your current edits are still open.")
         } catch (error: Exception) {
             report("Could not prepare export: " + (error.message ?: "local storage failed"))
         }

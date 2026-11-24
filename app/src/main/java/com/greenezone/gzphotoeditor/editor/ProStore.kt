@@ -2,7 +2,12 @@ package com.greenezone.gzphotoeditor.editor
 
 import android.content.Context
 import android.util.AtomicFile
-import java.io.DataInputStream
+import android.util.JsonReader
+import android.util.JsonToken
+import java.io.FilterInputStream
+import java.io.FilterReader
+import java.io.IOException
+import java.io.InputStream
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -242,9 +247,13 @@ object ProStore {
 
     internal fun decodeProject(data: String): SavedProject? {
         if (data.length > MAX_PROJECT_BYTES) return null
-        val json = JSONObject(data)
+        return decodeProject(JSONObject(data), data.length)
+    }
+
+    private fun decodeProject(json: JSONObject, encodedChars: Int): SavedProject? {
+        if (encodedChars > MAX_PROJECT_BYTES) return null
         val reset = json.remove(RESET_DOCUMENT) as? JSONObject
-        if (data.length > MAX_BYTES) {
+        if (encodedChars > MAX_BYTES) {
             if (reset == null || json.toString().length > MAX_BYTES ||
                 reset.toString().length > MAX_BYTES
             ) return null
@@ -372,19 +381,77 @@ object ProStore {
         if (!recoverable.isFile || recoverable.length() > projectReadLimit()) return null
         val atomic = AtomicFile(base)
         return try {
-            val data = atomic.openRead().use { input ->
+            atomic.openRead().use { input ->
                 val length = input.channel.size()
                 if (length !in 1L..projectReadLimit()) return null
-                val bytes = ByteArray(length.toInt())
-                DataInputStream(input).readFully(bytes)
-                if (input.read() != -1) return null
-                String(bytes, Charsets.UTF_8)
+                readProject(input, length)
             }
-            decodeProject(data)
         } catch (_: OutOfMemoryError) {
             null
         } catch (_: Exception) {
             null
+        }
+    }
+
+    /**
+     * Parse saved JSON through a small reader buffer. JSONTokener grows a UTF-16
+     * builder around each escaped recipe and can transiently need several times
+     * the file budget even though the recipe itself is readable.
+     */
+    private fun readProject(input: InputStream, length: Long): SavedProject? {
+        val bounded = object : FilterInputStream(input) {
+            private var remaining = length
+            override fun read(): Int {
+                val value = input.read()
+                if (remaining == 0L) {
+                    if (value != -1) throw IOException("Project grew while reading")
+                    return -1
+                }
+                if (value == -1) throw IOException("Truncated project")
+                remaining--
+                return value
+            }
+            override fun read(bytes: ByteArray, offset: Int, count: Int): Int {
+                if (count == 0) return 0
+                if (remaining == 0L) return read()
+                val read = input.read(bytes, offset, minOf(count.toLong(), remaining).toInt())
+                if (read == -1) throw IOException("Truncated project")
+                remaining -= read
+                return read
+            }
+        }
+        var chars = 0
+        val counted = object : FilterReader(bounded.reader(Charsets.UTF_8)) {
+            override fun read(buffer: CharArray, offset: Int, count: Int): Int =
+                super.read(buffer, offset, count).also { if (it > 0) chars += it }
+        }
+        return JsonReader(counted).use { reader ->
+            val json = readProjectValue(reader, 0) as? JSONObject ?: return null
+            if (reader.peek() != JsonToken.END_DOCUMENT) return null
+            decodeProject(json, chars)
+        }
+    }
+
+    private fun readProjectValue(reader: JsonReader, depth: Int): Any {
+        // Our layer/mask/reset schema is shallow; malformed input must not recurse
+        // indefinitely before the existing document validator gets to inspect it.
+        require(depth <= 32) { "Project JSON nesting is too deep" }
+        return when (reader.peek()) {
+            JsonToken.BEGIN_OBJECT -> JSONObject().apply {
+                reader.beginObject()
+                while (reader.hasNext()) put(reader.nextName(), readProjectValue(reader, depth + 1))
+                reader.endObject()
+            }
+            JsonToken.BEGIN_ARRAY -> JSONArray().apply {
+                reader.beginArray()
+                while (reader.hasNext()) put(readProjectValue(reader, depth + 1))
+                reader.endArray()
+            }
+            JsonToken.STRING -> reader.nextString()
+            JsonToken.NUMBER -> reader.nextString().let { it.toLongOrNull() ?: it.toDouble() }
+            JsonToken.BOOLEAN -> reader.nextBoolean()
+            JsonToken.NULL -> { reader.nextNull(); JSONObject.NULL }
+            else -> throw IllegalArgumentException("Expected project JSON value")
         }
     }
 

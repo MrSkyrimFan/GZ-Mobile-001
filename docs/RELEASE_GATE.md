@@ -1,6 +1,20 @@
 # GZ Editor Pro engineering and release gates
 
-## Current field-correction acceptance
+## Current independent-review correction gate (2026-11-24)
+
+- [ ] R0 fresh-cover/manual-Crop, bounded Regular save/export, complete long Draw/cancel and Pro lasso have regression evidence against actual flows.
+- [ ] Exact corrected candidate and merged application pass JVM and full API29/API35; preserve prior 174 cases and established GIF budgets. Independently review failure receipts and output assertions.
+- [ ] Qualified exercised v0.12.9/code21 phone APK has source/run/artifact/hash/package/signature recorded in the repair PR. No new handset candidate before this gate.
+- [ ] Owner completes one combined phone pass with the focused new cases plus retained field cases below. Physical acceptance remains separate from CI.
+- [ ] All required families in the [capability inventory](CAPABILITY_MATRIX.md) complete the [roadmap](GZ_ENGINEERING_ROADMAP.md); a repaired current build is not the entire professional app.
+- [ ] Lance formally locks all four pre-Video workspaces before Video implementation.
+- [ ] All five editing workspaces complete/accepted before final English/Spanish welcome and customer legal acceptance.
+- [ ] Fully functioning qualified app AND Greenezone website complete before Play Console setup. Account is not set up; website work is outside this repository task.
+- [ ] At that final stage: verify actual account-specific requirements/current policies, rights/notices, release signing/AAB/splits/same-ID upgrade, store testing/listing and explicit owner publication approval.
+
+[Single work ledger and current execution receipts](WORK_LEDGER.md). The earlier successor review hold is lifted by the supplied review and owner's engineering request. Existing evidence below retains its original scope/date; it does not close new defects or full release.
+
+## Retained field-correction acceptance
 
 - [ ] Open a rights-cleared 1080×1920 portrait video of approximately five seconds from the GIF workspace. Compare untouched playback with trim around 2.19–4.99 seconds, Reverse, B&W or Punch, speed, crop, Undo/Redo and rapid edits. Confirm changing picture content, correct direction and responsive controls. Reopen a saved project and decode the exported animation independently to check orientation, motion, color, duration and frame schedule. Include 720p60 B-frames and representative phone media.
 - [ ] Enter Regular Crop through the normal UI. Drag four corners, four edges and the interior in Freeform and fixed ratio with touch input. Verify predictable anchoring, pointer-down acquisition, letterbox interactions, expected crop pixels and saved-project reopen. Confirm Regular and Collage tile editing omit Masks authoring and retain Text, Blur & cover and old mask-bearing projects.
@@ -53,7 +67,7 @@ Use the [audit repair evidence index](AUDIT_2_REPAIR_VERIFICATION.md) and [PR #2
 ## Commercial gate remains open
 Native app profiling, large-photo/20-tile memory pressure, long session/ANR, color accuracy, Android API/device coverage, media URI grant lifetime, trademark/patent/license/SBOM and privacy/Play/store legal checks, production signed AAB. No final 1.0 claim.
 
-Refer also to `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md` for lawful original-code Lightroom-class **non-AI** features, RAW/license decisions and later video editing.
+Refer to `docs/GZ_ENGINEERING_ROADMAP.md` for lawful original-code Lightroom-class **non-AI** features, RAW/license decisions and later video editing.
 
 ## Historical v0.9 verification criteria
 - [ ] Top-right mode dropdown on Regular, Pro, GIF and Collage. Video disabled / Coming soon. Regular toolbar compact, no destroyed existing tools.

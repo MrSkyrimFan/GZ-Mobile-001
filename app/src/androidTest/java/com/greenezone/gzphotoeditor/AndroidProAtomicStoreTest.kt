@@ -115,8 +115,70 @@ class AndroidProAtomicStoreTest {
             assertTrue(file.length() <= Runtime.getRuntime().maxMemory() / 8L)
             val before = fileSha256(file)
 
-            assertEquals(dense, ProStore.load(context, name))
+            val recovered = ProStore.load(context, name)
             assertArrayEquals(before, fileSha256(file))
+            val budget = "fileBytes=${file.length()}, heapMax=${Runtime.getRuntime().maxMemory()}"
+            assertNotNull("Readable legacy project failed to recover ($budget)", recovered)
+            // Comparing the complete model keeps every field/point in the oracle.
+            // Avoid JUnit formatting a multi-megabyte model if equality fails.
+            assertTrue("Recovered legacy project differs ($budget)", dense == recovered)
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+
+    @Test fun namedLoadPreservesEscapedMetadataNestedMasksAndResetDocument() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "JSON recovery " + System.nanoTime().toString().takeLast(10)
+        val layer = ProLayer(
+            uri = "content://qa/quoted\"source",
+            name = "Snow \u2744 \" \\ \n \uD83D\uDE80",
+            edits = EditDocument(grade = Grade(exposure = .00012345678f)),
+            mask = ProSelection(
+                ProSelectionKind.LASSO,
+                points = listOf(BrushPoint(.1f, .2f), BrushPoint(.8f, .2f), BrushPoint(.7f, .9f)),
+                inverted = true, feather = .03f,
+                anchor = ProMaskAnchor(.5f, .5f, 1f, 0f, 1f, 1f)
+            ),
+            retouches = listOf(ProRetouchMark(ProRetouchKind.CLONE, .2f, .3f, .6f, .7f)),
+            visible = false
+        )
+        val document = ProDocument(listOf(layer, ProLayer("", name = "Ink", kind = ProLayerKind.DRAWING)))
+        val reset = document.copy(layers = listOf(layer.copy(name = "Before \t edit", visible = true)))
+        val file = projectFile(context.filesDir, name)
+        try {
+            assertTrue(ProStore.save(context, name, document, reset))
+            val before = fileSha256(file)
+            val recovered = requireNotNull(ProStore.loadProject(context, name))
+            assertEquals(document, recovered.document)
+            assertEquals(reset, recovered.resetDocument)
+            assertArrayEquals(before, fileSha256(file))
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+
+    @Test fun malformedNamedJsonDoesNotMutateTheStoredFile() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "JSON rejection " + System.nanoTime().toString().takeLast(10)
+        val document = ProDocument(listOf(ProLayer("", name = "Keep me", kind = ProLayerKind.DRAWING)))
+        val file = projectFile(context.filesDir, name)
+        try {
+            assertTrue(ProStore.save(context, name, document))
+            val healthy = file.readText()
+            val malformed = listOf(
+                healthy.dropLast(1),
+                healthy + "{}",
+                "{\"ignored\":" + "[".repeat(40) + "0" + "]".repeat(40) + "," + healthy.drop(1)
+            )
+            malformed.forEachIndexed { index, text ->
+                file.writeText(text)
+                val before = fileSha256(file)
+                assertNull("Malformed project $index was accepted", ProStore.load(context, name))
+                assertArrayEquals(before, fileSha256(file))
+            }
+            file.writeText(healthy)
+            assertEquals(document, ProStore.load(context, name))
         } finally {
             ProStore.delete(context, name)
         }

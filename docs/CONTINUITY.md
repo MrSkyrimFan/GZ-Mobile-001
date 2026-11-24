@@ -1,10 +1,18 @@
 # GZ Editor Pro — continuity / engineering custody
 
-## Current owner direction (2026-11-23)
+## Current owner direction (2026-11-24)
 
-The Audit 2 application baseline is PR #26 merge `372e0e947caacb2ceaf603bc4ff5a60e44cc33ec`. Its candidate and merged-main Android 10 and 15 suites each passed 174 of 174. The verified handset artifact is **GZ Editor Pro 0.12.8 Test**. [Repair PR](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/26) · [Repair evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608) · [Verified APK](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102).
+Lance supplied GPT-6 Pro's independent PR #26 review (CHANGES REQUIRED), authorized fixing the defects and requested the complete intended professional-app roadmap. **The successor read-only hold is lifted.** Engineering/PRs/verified merges are authorized. The combined phone candidate stays held until the four corrections pass. Formal workspace locks and publication remain owner decisions.
 
-**Successor review hold.** The new project chat may read and reconcile the handoff. It waits for the owner to provide the current GPT‑6 Pro review before beginning engineering. The second audit and earlier execution prompts document prior instructions. The current owner direction governs work at this checkpoint. [Original second audit](gz-editor-pro-audit-2-20261123/00_REPOSITORY_START_HERE.md) · [Release gates](RELEASE_GATE.md).
+Start with the [single work ledger](WORK_LEDGER.md), [complete roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family capability inventory](CAPABILITY_MATRIX.md), [product requirements](PRODUCT_SPEC.md) and [release gates](RELEASE_GATE.md). R0 covers fresh-cover manual Crop, Regular serialization limits, complete long Draw/cancel and complete Pro lasso. Its linked PR is the exact current execution receipt. After its gate passes, proceed to R1 without replaying intake.
+
+Play Console is not set up. Setup occurs last, after a fully functioning app AND completion of the Greenezone website. No website work is authorized here. Video waits for four formal pre-Video locks; final English/Spanish customer onboarding follows all five editing workspaces.
+
+## Prior verified application baseline (historical)
+
+PR #26 merge `372e0e947caacb2ceaf603bc4ff5a60e44cc33ec` passed JVM and 174/174 tests on each API29/API35 at candidate and merge. Version 0.12.8 Test is prior engineering evidence, not the newly recommended combined candidate. Intake main `d2a8f4de41839e25ad54060be803746d7307bee8` includes documentation refreshes only. [Prior repair evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Prior merged workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608).
+
+The original November 23 handoff required waiting for the review. Lance has now supplied it and authorized action; do not revive that historical hold. The private complete source transcript and intake archives remain supplemental evidence.
 
 ## Revision 4 and the engineering field guide (2026-11-22)
 
@@ -30,7 +38,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 - Preserve the photo-first Regular interface, Looks, curves, color, Blur & cover, and Undo/Redo. Legacy Regular masks remain readable and renderable. New masking and selections belong in Pro.
 
 ## Hard rules
-Trace owner-visible failures through production entry points. Test JVM and Android bitmap/Compose behavior, inspect rendered output, and link verification to the exact candidate commit. After the owner lifts the current hold, engineering and merge authority follow the owner's instructions for the approved scope. Handset qualification, formal workspace locks, and commercial release each require their own evidence or owner decision. Keep changes inside the GZ app repository and its supplemental intake.
+Trace owner-visible failures through production entry points. Test JVM and Android bitmap/Compose behavior, inspect rendered output, and link verification to the exact candidate commit. Engineering and verified merge authority follow the current owner instructions above. Handset qualification, formal workspace locks, and commercial release each require their own evidence or owner decision. Keep changes inside the GZ app repository and its supplemental intake.
 
 ## Collage wave v0.8.0 (2026-11-21 local)
 Verified main baseline at the start of the historical v0.8 wave: `7508ff715d39dbb13ae543961b943cee5c78c22b` (GZ Editor Pro 0.7).

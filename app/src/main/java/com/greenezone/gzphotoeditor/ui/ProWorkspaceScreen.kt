@@ -179,6 +179,7 @@ internal fun ProWorkspaceScreenContent(
     var selectionKind by remember { mutableStateOf(session.selectionKind) }
     var selectionStart by remember { mutableStateOf<BrushPoint?>(null) }
     var draftSelection by remember { mutableStateOf<ProSelection?>(null) }
+    var selectionBeforeDrag by remember { mutableStateOf<ProSelection?>(null) }
     var retouchSource by remember { mutableStateOf<BrushPoint?>(null) }
     var retouchSourceImage by remember { mutableStateOf<BrushPoint?>(null) }
     var retouchKind by remember { mutableStateOf(session.retouchKind) }
@@ -215,6 +216,7 @@ internal fun ProWorkspaceScreenContent(
     val active = document.layers.getOrNull(selected)
 
     fun clearToolDrafts() {
+        selectionBeforeDrag = null
         selectionStart = null
         draftSelection = null
         retouchSource = null
@@ -228,6 +230,7 @@ internal fun ProWorkspaceScreenContent(
     }
     fun selectTool(tool: ProSection) {
         if (tool != section) {
+            selectionBeforeDrag = null
             selectionStart = null
             retouchSource = null
             retouchSourceImage = null
@@ -1015,6 +1018,7 @@ internal fun ProWorkspaceScreenContent(
                                 }
                                 if (section == ProSection.SELECT && active?.visible == true && active.opacity > 0f &&
                                     (active.kind == ProLayerKind.IMAGE || active.kind == ProLayerKind.ADJUSTMENT)) {
+                                    selectionBeforeDrag = draftSelection
                                     selectionStart = point
                                     draftSelection = if (selectionKind == ProSelectionKind.LASSO)
                                         ProSelection(selectionKind, points = listOf(point))
@@ -1045,9 +1049,8 @@ internal fun ProWorkspaceScreenContent(
                                     ProSection.SELECT -> if (selectionStart != null) {
                                         draftSelection = if (selectionKind == ProSelectionKind.LASSO) {
                                             val points = draftSelection?.points.orEmpty()
-                                            if (points.size < ProToolMath.MAX_LASSO_POINTS)
-                                                ProSelection(selectionKind, points = points + point)
-                                            else draftSelection
+                                            ProSelection(selectionKind, points = ProStrokeSampling.append(
+                                                points, point, before.canvasAspectRatio, ProToolMath.MAX_LASSO_POINTS))
                                         } else ProToolMath.rectangle(start, point, selectionKind)
                                     }
                                     else -> Unit
@@ -1057,7 +1060,7 @@ internal fun ProWorkspaceScreenContent(
                                 val before = dragStart
                                 if (cancel) {
                                     if (section == ProSection.MOVE && before != null) onDocument(before.document)
-                                    if (selectionStart != null) draftSelection = null
+                                    if (selectionStart != null) draftSelection = selectionBeforeDrag
                                 } else if (before != null && section == ProSection.MOVE) {
                                     history = history.checkpoint(before, historyEntry(lastDragValue ?: before.document))
                                 } else if (section == ProSection.PAINT && before?.document == document) {
@@ -1076,6 +1079,7 @@ internal fun ProWorkspaceScreenContent(
                                 activeStroke = null
                                 brushFrame = null
                                 selectionStart = null
+                                selectionBeforeDrag = null
                             },
                             changeView = { viewport = it }
                         ), modifier = Modifier.fillMaxSize())
@@ -1296,6 +1300,7 @@ internal fun ProWorkspaceScreenContent(
                                     selectionKind = it
                                     draftSelection = null
                                     selectionStart = null
+                                    selectionBeforeDrag = null
                                 },
                                 draft = draftSelection,
                                 onApply = {

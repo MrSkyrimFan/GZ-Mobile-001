@@ -2,7 +2,7 @@
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-Audit 2 repairs are merged in `372e0e947caacb2ceaf603bc4ff5a60e44cc33ec`. The verified handset build is **GZ Editor Pro 0.12.8 Test**. The successor handoff is in owner-review status, with handset acceptance open. [Continuity](docs/CONTINUITY.md) · [Repair evidence](docs/AUDIT_2_REPAIR_VERIFICATION.md) · [Verified handset build](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102).
+The supplied independent PR #26 review requires four corrections before the next combined handset candidate. Engineering is authorized; the former successor hold is lifted. The complete intended app scope and ordered delivery are now tracked in one [roadmap](docs/GZ_ENGINEERING_ROADMAP.md), [77-family capability inventory](docs/CAPABILITY_MATRIX.md) and [active work ledger](docs/WORK_LEDGER.md). [Continuity](docs/CONTINUITY.md) · [Prior Audit 2 evidence](docs/AUDIT_2_REPAIR_VERIFICATION.md). The prior v0.12.8 APK remains historical evidence.
 
 The product requirements and release gates describe the ongoing scope. The earlier QA notes and version sections below record historical checkpoints. [Product requirements](docs/PRODUCT_SPEC.md) · [Release gates](docs/RELEASE_GATE.md) · [Historical v0.12.2 QA notes](docs/PHONE_QA_014.md).
 
