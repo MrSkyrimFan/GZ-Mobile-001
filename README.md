@@ -2,7 +2,9 @@
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-[Revision 4 product requirements](docs/PRODUCT_SPEC.md) govern the current field-correction work. The owner reported stalled edited GIF playback, unreliable crop grips, and difficult Pro navigation and controls. The field acceptance checklist is in [Release gates](docs/RELEASE_GATE.md). The [v0.12.2 QA notes](docs/PHONE_QA_014.md) and version sections below record historical builds and tests.
+Audit 2 repairs are merged in `372e0e947caacb2ceaf603bc4ff5a60e44cc33ec`. The verified handset build is **GZ Editor Pro 0.12.8 Test**. The successor handoff is in owner-review status, with handset acceptance open. [Continuity](docs/CONTINUITY.md) · [Repair evidence](docs/AUDIT_2_REPAIR_VERIFICATION.md) · [Verified handset build](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102).
+
+The product requirements and release gates describe the ongoing scope. The earlier QA notes and version sections below record historical checkpoints. [Product requirements](docs/PRODUCT_SPEC.md) · [Release gates](docs/RELEASE_GATE.md) · [Historical v0.12.2 QA notes](docs/PHONE_QA_014.md).
 
 ## Core contract
 - Fully offline. No runtime AI, subscriptions, ads, account, telemetry, in-app purchases, watermarks or network permission.
@@ -38,7 +40,7 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 - **GIF is now video-first**: import an actual local video, preview and select a clip up to twelve seconds, choose 4/6/8/10 FPS, 50%/100%/200% speed, reverse or forward, trim/scrub, Fit/Fill, canvas output and loop. Android's MediaMetadataRetriever decodes timestamped video frames one by one; a genuine GIF89a file is exported. Previously saved photo-sequence projects remain accessible through **Open saved GIF project**, but the new-project screen is video-first and offers no photo-sequence creation controls. No audio is included in GIFs. This is *not* the full video editor, which remains a later phase.
 - **Photo Pro uses a typed layer stack**: bitmap, text, shape, vector brush and non-destructive global adjustment layers can be independently ordered, hidden, styled, drawn or edited. One selected layer at a time, with direct canvas gestures, grouped inspectors, controls for blending/opacity/transforms, local project persistence and quick help. Earlier v1 Pro projects are still decodable. No claim of Photoshop feature parity yet.
 - The existing regular photo editor and seven-layout collage were not redesigned. The complete user feedback and remaining professional-grade work are in `docs/PRODUCTION_REBUILD_010.md`.
-- Qualification requires exact branch/PR + merged-main JVM and Android instrumentation checks and a physical handset review. Android's native frame retrieval is timestamp-approximate and some hardware codecs may refuse particular HDR/protected videos. GIFs use an eight-bit fixed palette (not a professional true-color video format).
+- Qualification requires exact branch/PR + merged-main JVM and Android instrumentation checks and a physical handset review. Android's native frame retrieval is timestamp-approximate and some hardware codecs may refuse particular HDR/protected videos. GIF output uses indexed colors with frame-adaptive palettes.
 
 ## Separate editing workspaces (v0.9)
 - **Top-right Photo ▾** selects Photo editing (regular), Photo editing Pro, Collage maker, GIF maker or Video editing (Coming soon and disabled). Each workspace owns its editing controls.
@@ -79,7 +81,7 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 - Blur/pixelation are not secure redaction. Use a fully opaque black covering for sensitive material.
 
 ## Build and test
-GitHub Actions **GZ Editor Pro Android CI** runs Android compilation, JVM geometry/codec tests, Android emulator image/format/Compose tests and uploads debug-signed artifact `gz-editor-pro-debug` containing `app-debug.apk`. A passing automated build does **not** establish physical-device usability, commercial readiness or professional color fidelity.
+GitHub Actions runs JVM tests and instrumented Android 10 and Android 15 suites. For Audit 2, each Android version passed 174 of 174 cases on the exact candidate and merged application commit. The verified phone ZIP comes from the API 35 emulator's `gz-editor-pro-phone-test` artifact. The physical handset and commercial release gates remain open. [Merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608) · [Phone-test artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102) · [Release gates](docs/RELEASE_GATE.md).
 
 See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`.
 
