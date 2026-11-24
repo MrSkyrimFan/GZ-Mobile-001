@@ -19,6 +19,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertIsDisplayed
@@ -31,6 +32,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
@@ -202,8 +204,19 @@ class AndroidRegularToolsTest {
         }
         fun expectClipping(white: Double) {
             val label = String.format(Locale.getDefault(), "Black %.1f%%  ·  White %.1f%%", 50.0, white)
-            rule.waitUntil(10_000) { rule.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty() }
-            rule.onNodeWithText(label).assertIsDisplayed()
+            val clipping = rule.onAllNodesWithTag("photo-histogram-clipping", useUnmergedTree = true)
+            fun readClipping(): List<String> = clipping.fetchSemanticsNodes().flatMap { node ->
+                if (SemanticsProperties.Text in node.config) {
+                    node.config[SemanticsProperties.Text].map { it.text }
+                } else emptyList()
+            }
+            try {
+                rule.waitUntil(10_000) { label in readClipping() }
+            } catch (timeout: androidx.compose.ui.test.ComposeTimeoutException) {
+                throw AssertionError("Histogram expected '$label', displayed ${readClipping()}", timeout)
+            }
+            rule.onNodeWithTag("photo-histogram-clipping", useUnmergedTree = true)
+                .performScrollTo().assertIsDisplayed()
         }
         openHistogram()
         expectClipping(50.0)

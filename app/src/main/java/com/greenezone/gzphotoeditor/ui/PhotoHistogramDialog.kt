@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+private data class MeasuredPreview(val bitmap: Bitmap, val histogram: PhotoHistogram)
+
 @Composable
 internal fun PhotoHistogramDialog(
     image: Bitmap?,
@@ -44,14 +47,20 @@ internal fun PhotoHistogramDialog(
     onDismiss: () -> Unit
 ) {
     var rgb by remember { mutableStateOf(true) }
-    var histogram by remember(image) { mutableStateOf<PhotoHistogram?>(null) }
-    LaunchedEffect(image, showingBefore, sourceGeneration, exposure) {
+    var measurement by remember { mutableStateOf<MeasuredPreview?>(null) }
+    LaunchedEffect(image) {
         val preview = image ?: return@LaunchedEffect
         val measured = withContext(Dispatchers.Default) {
             val job = currentCoroutineContext()
             PhotoHistogram.fromPreview(preview) { job.ensureActive() }
         }
-        histogram = measured
+        measurement = MeasuredPreview(preview, measured)
+    }
+    val displayed = measurement?.takeIf { it.bitmap === image }
+    LaunchedEffect(displayed, showingBefore, sourceGeneration, exposure) {
+        val current = displayed ?: return@LaunchedEffect
+        val preview = current.bitmap
+        val measured = current.histogram
         Log.d("GzPhotoHistogram", "source=$sourceGeneration exposure=$exposure before=$showingBefore " +
             "preview=${preview.width}x${preview.height} id=${System.identityHashCode(preview)} " +
             "visible=${measured.visiblePixels} black=${measured.blackPixels} white=${measured.whitePixels}")
@@ -70,7 +79,7 @@ internal fun PhotoHistogramDialog(
                     DockChip("RGB", rgb) { rgb = true }
                     DockChip("Luminance", !rgb) { rgb = false }
                 }
-                val current = histogram
+                val current = displayed?.histogram
                 when {
                     image == null -> Text("Updating photo preview…")
                     current == null -> Text("Measuring photo…")
@@ -119,7 +128,10 @@ private fun HistogramReadout(histogram: PhotoHistogram, rgb: Boolean) {
     }
     fun percent(count: Int): String =
         String.format(Locale.getDefault(), "%.1f%%", 100.0 * count / histogram.visiblePixels)
-    Text("Black ${percent(histogram.blackPixels)}  ·  White ${percent(histogram.whitePixels)}")
+    Text(
+        text = "Black ${percent(histogram.blackPixels)}  ·  White ${percent(histogram.whitePixels)}",
+        modifier = Modifier.testTag("photo-histogram-clipping")
+    )
     Text("Channel clipping at 0 / 255", fontSize = 12.sp)
     Text("R  ${percent(histogram.red[0])} / ${percent(histogram.red[255])}")
     Text("G  ${percent(histogram.green[0])} / ${percent(histogram.green[255])}")

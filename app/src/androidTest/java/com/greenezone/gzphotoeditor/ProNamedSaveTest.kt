@@ -113,6 +113,8 @@ class ProNamedSaveTest {
             assertProject(nameA, a, Color.RED)
             openProject(nameB)
             rule.onNodeWithText("B blue layer · Shape").assertExists()
+            click("Stack (2)")
+            click("B yellow layer")
             rule.onNodeWithText("B yellow layer · Shape").assertExists()
             assertProject(nameB, editedB, Color.WHITE)
         } finally {
@@ -178,3 +180,4 @@ class ProNamedSaveTest {
         }
     }
 }
+
