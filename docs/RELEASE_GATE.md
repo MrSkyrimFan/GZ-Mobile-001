@@ -2,6 +2,14 @@
 
 ## Current independent-review correction gate (2026-11-24)
 
+**Latest correction gate:** the independent PR #29 review found R29-01/02 in Regular/Collage Eraser. Lance explicitly authorized fixes. Do not recommend the previous 0.12.9 APK as the current combined candidate. [Focused correction evidence](ERASER_REPAIR_VERIFICATION.md).
+
+- [ ] Actual UI regression shows first/later capacity refusal preserves the full gesture baseline, unrelated strokes, dirty state/history and saved/output pixels.
+- [ ] Sparse/long visible segments erase correctly in Regular and the selected Collage tile; cancel, parent history, named reopen and decoded PNG retain sibling independence.
+- [ ] Final candidate and merge retain the original 186 cases, pass JVM/API29/API35, and qualify the exact replacement phone APK.
+
+### Retained PR #29 checkpoint
+
 - [x] R0 fresh-cover/manual-Crop, bounded Regular save/export, complete long Draw/cancel and Pro lasso have regression evidence against actual flows.
 - [x] Exact corrected candidate and merged application pass JVM and full API29/API35; preserve prior 174 cases and established GIF budgets. Independently review failure receipts and output assertions.
 - [x] Qualified exercised v0.12.9/code 21 phone APK has source/run/artifact/hash/package/signature recorded in the repair PR. This engineering gate is complete; owner phone acceptance remains below.
