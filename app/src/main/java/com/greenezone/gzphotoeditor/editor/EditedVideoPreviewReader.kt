@@ -181,8 +181,8 @@ internal class EditedVideoPreviewReader private constructor(
             (standard == null && maxOf(clip.width, clip.height) >= 1280)
         val axes = sampleAxes?.takeIf { it.width == width && it.height == height && it.crop == crop }
             ?: SampleAxes(width, height, crop, rotation, filterDownscaling).also { sampleAxes = it }
-        return SamplePicture(Plane(planes[0]), Plane(planes[1]), Plane(planes[2]),
-            axes, PreviewColor(hd, fullRange))
+        return SamplePicture(Plane(planes[0], axes.lumaRows), Plane(planes[1], axes.uRows),
+            Plane(planes[2], axes.vRows), axes, PreviewColor(hd, fullRange))
     }
 
     private class SampleAxes(
@@ -207,6 +207,9 @@ internal class EditedVideoPreviewReader private constructor(
         private val sourceColumns = if (transposed) height else width
         private val sourceRows = if (transposed) width else height
         private val filtered = filterDownscaling && (sourceColumns < crop.width() || sourceRows < crop.height())
+        val lumaRows = if (filtered) FilterRows() else null
+        val uRows = if (filtered) FilterRows() else null
+        val vRows = if (filtered) FilterRows() else null
         private val xWeights = if (filtered) filterCoordinates(sourceColumns, crop.left, crop.width(),
             rotation == 180 || rotation == 270) else emptyArray()
         private val yWeights = if (filtered) filterCoordinates(sourceRows, crop.top, crop.height(),
@@ -222,7 +225,35 @@ internal class EditedVideoPreviewReader private constructor(
                     ((coordinate - low) * 256).roundToInt())
             }
 
-        fun sample(y: Plane, u: Plane, v: Plane, row: Int, column: Int): Int {
+        inline fun forEachSample(
+            y: Plane,
+            u: Plane,
+            v: Plane,
+            checkActive: () -> Unit,
+            consume: (Int, Int) -> Unit
+        ) {
+            // Scan along decoded rows for filtered output so each YUV row pair is bulk-read once.
+            // A sideways picture visits destination columns first but keeps the same pixel indexes.
+            val byColumn = filtered && transposed
+            val rows = if (byColumn) width else height
+            val columns = if (byColumn) height else width
+            for (outer in 0 until rows) {
+                if (outer % 32 == 0) checkActive()
+                if (filtered) {
+                    val taps = yWeights[outer]
+                    y.cacheRows(taps, crop, 0)
+                    u.cacheRows(taps, crop, 1)
+                    v.cacheRows(taps, crop, 1)
+                }
+                for (inner in 0 until columns) {
+                    val row = if (byColumn) inner else outer
+                    val column = if (byColumn) outer else inner
+                    consume(row * width + column, sample(y, u, v, row, column))
+                }
+            }
+        }
+
+        private fun sample(y: Plane, u: Plane, v: Plane, row: Int, column: Int): Int {
             val xIndex = if (transposed) row else column
             val yIndex = if (transposed) column else row
             if (filtered) {
@@ -245,23 +276,20 @@ internal class EditedVideoPreviewReader private constructor(
         val axes: SampleAxes,
         val color: PreviewColor
     ) {
-        fun toBitmap(checkActive: () -> Unit): Bitmap =
-            previewBitmap(axes.width, axes.height, checkActive) { row, column, _ ->
-                val samples = axes.sample(y, u, v, row, column)
-                color.pixel(samples and 255, (samples shr 8) and 255, samples shr 16)
+        fun toBitmap(checkActive: () -> Unit): Bitmap {
+            val pixels = IntArray(axes.width * axes.height)
+            axes.forEachSample(y, u, v, checkActive) { index, sample ->
+                pixels[index] = color.pixel(sample and 255, (sample shr 8) and 255, sample shr 16)
             }
+            return Bitmap.createBitmap(pixels, axes.width, axes.height, Bitmap.Config.ARGB_8888)
+        }
 
         fun copySamplesTo(samples: ByteArray, checkActive: () -> Unit) {
             val pitch = axes.width * axes.height
-            for (row in 0 until axes.height) {
-                if (row % 32 == 0) checkActive()
-                for (column in 0 until axes.width) {
-                    val sample = axes.sample(y, u, v, row, column)
-                    val index = row * axes.width + column
-                    samples[index] = sample.toByte()
-                    samples[pitch + index] = (sample shr 8).toByte()
-                    samples[2 * pitch + index] = (sample shr 16).toByte()
-                }
+            axes.forEachSample(y, u, v, checkActive) { index, sample ->
+                samples[index] = sample.toByte()
+                samples[pitch + index] = (sample shr 8).toByte()
+                samples[2 * pitch + index] = (sample shr 16).toByte()
             }
         }
     }
@@ -373,28 +401,61 @@ internal class EditedVideoPreviewReader private constructor(
 
     private data class FilterTaps(val low: Int, val high: Int, val highWeight: Int)
 
-    private class Plane(plane: Image.Plane) {
+    private class FilterRows {
+        var start = 0
+        var upper = ByteArray(0)
+        var lower = ByteArray(0)
+
+        fun reserve(size: Int) {
+            if (upper.size >= size) return
+            upper = ByteArray(size)
+            lower = ByteArray(size)
+        }
+    }
+
+    private class Plane(plane: Image.Plane, private val filtered: FilterRows?) {
         private val buffer = plane.buffer
+        private val rowBuffer = if (filtered != null) buffer.duplicate() else null
         private val origin = buffer.position()
         private val rowStride = plane.rowStride
         private val pixelStride = plane.pixelStride
 
         fun read(x: Int, y: Int) = buffer.get(origin + y * rowStride + x * pixelStride).toInt() and 255
 
-        fun bilinear(x: FilterTaps, y: FilterTaps, subsampleShift: Int): Int {
-            val left = x.low shr subsampleShift
-            val right = x.high shr subsampleShift
+        fun cacheRows(y: FilterTaps, crop: Rect, subsampleShift: Int) {
+            val rows = requireNotNull(filtered)
+            val view = requireNotNull(rowBuffer)
+            val start = crop.left shr subsampleShift
+            val end = (crop.right - 1) shr subsampleShift
+            val byteCount = (end - start) * pixelStride + 1
+            val left = origin + start * pixelStride
             val top = y.low shr subsampleShift
             val bottom = y.high shr subsampleShift
+            rows.start = start
+            rows.reserve(byteCount)
+            view.position(left + top * rowStride)
+            view.get(rows.upper, 0, byteCount)
+            if (top != bottom && y.highWeight != 0) {
+                view.position(left + bottom * rowStride)
+                view.get(rows.lower, 0, byteCount)
+            }
+        }
+
+        fun bilinear(x: FilterTaps, y: FilterTaps, subsampleShift: Int): Int {
+            val rows = requireNotNull(filtered)
+            val left = x.low shr subsampleShift
+            val right = x.high shr subsampleShift
             val horizontal = if (left == right) 0 else x.highWeight
-            val vertical = if (top == bottom) 0 else y.highWeight
-            val first = read(left, top)
+            val vertical = if ((y.low shr subsampleShift) == (y.high shr subsampleShift)) 0 else y.highWeight
+            val leftOffset = (left - rows.start) * pixelStride
+            val rightOffset = (right - rows.start) * pixelStride
+            val first = rows.upper[leftOffset].toInt() and 255
             if (horizontal == 0 && vertical == 0) return first
-            val upper = if (horizontal == 0) first * 256
-                else first * (256 - horizontal) + read(right, top) * horizontal
+            val upper = first * (256 - horizontal) +
+                (if (horizontal == 0) 0 else (rows.upper[rightOffset].toInt() and 255) * horizontal)
             if (vertical == 0) return (upper + 128) shr 8
-            val lower = read(left, bottom) * (256 - horizontal) +
-                (if (horizontal == 0) 0 else read(right, bottom) * horizontal)
+            val lower = (rows.lower[leftOffset].toInt() and 255) * (256 - horizontal) +
+                (if (horizontal == 0) 0 else (rows.lower[rightOffset].toInt() and 255) * horizontal)
             return (upper * (256 - vertical) + lower * vertical + 32768) shr 16
         }
     }

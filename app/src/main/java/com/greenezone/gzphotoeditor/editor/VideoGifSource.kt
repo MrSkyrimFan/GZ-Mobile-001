@@ -8,6 +8,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.util.Log
 import java.io.Closeable
 import java.io.IOException
 import java.io.OutputStream
@@ -552,10 +553,17 @@ object VideoGifSource {
         val times = GifVideoMath.frameTimesMs(clip)
         val delays = GifVideoMath.frameDelaysMs(clip)
         val (w, h) = GifMath.dimensions(doc)
+        val start = System.nanoTime()
+        var sourceReadNanos = 0L
+        var firstFrameNanos = 0L
         openReader().use { reader ->
             GifEncoder.writeFrames(out, doc, times.size, delays.first(), cancel,
                 delayAt = { delays[it] }) { index ->
+                val readStart = System.nanoTime()
                 val frame = reader.frame(times[index], maxOf(w, h))
+                val readEnd = System.nanoTime()
+                sourceReadNanos += readEnd - readStart
+                if (index == 0) firstFrameNanos = readEnd - start
                 try {
                     onProgress?.invoke(index + 1, times.size)
                     frame
@@ -565,5 +573,9 @@ object VideoGifSource {
                 }
             }
         }
+        val total = System.nanoTime() - start
+        Log.d("GzGifExportStage",
+            "frames=${times.size} canvas=${w}x$h sourceReadMs=${sourceReadNanos / 1_000_000} " +
+                "firstFrameMs=${firstFrameNanos / 1_000_000} totalMs=${total / 1_000_000}")
     }
 }

@@ -135,11 +135,47 @@ object ImagePipeline {
         }
     }
 
+    /** Bounded, exact cache for repeated input colors in a single GIF export. */
+    internal class GifColors private constructor(internal val prepared: ToneMath.Prepared) {
+        private val keys = IntArray(16_384)
+        private val results = IntArray(keys.size)
+        private val occupied = BooleanArray(keys.size)
+
+        fun adjust(argb: Int): Int {
+            val slot = (argb * -1640531527) ushr 18
+            if (occupied[slot] && keys[slot] == argb) return results[slot]
+            val adjusted = ToneMath.adjustPrepared(argb, prepared, 0, 0, 1, 1)
+            keys[slot] = argb
+            results[slot] = adjusted
+            occupied[slot] = true
+            return adjusted
+        }
+
+        companion object {
+            fun forGrade(grade: Grade): GifColors? {
+                // These controls depend on the image coordinate or nearby source pixels.
+                if (grade.vignette > 0f || grade.grain > 0f || grade.sharpen != 0f ||
+                    grade.texture != 0f || grade.clarity != 0f || grade.denoise > 0f
+                ) return null
+                val prepared = ToneMath.prepare(grade)
+                return if (prepared.isNeutral) null else GifColors(prepared)
+            }
+        }
+    }
+
     /**
      * Five sliding source rows and one rendered row. Does not allocate frame-sized
      * pixel IntArrays. Detail, curves and masks share one final-resolution render.
      */
-    fun render(input: Bitmap, document: EditDocument, cancelCheck: (() -> Unit)? = null): Bitmap {
+    fun render(input: Bitmap, document: EditDocument, cancelCheck: (() -> Unit)? = null): Bitmap =
+        render(input, document, null, cancelCheck)
+
+    internal fun render(
+        input: Bitmap,
+        document: EditDocument,
+        gifColors: GifColors?,
+        cancelCheck: (() -> Unit)?
+    ): Bitmap {
         val view = PhotoGeometry.from(document)
         val plan = PhotoGeometryPlan(input.width, input.height, view)
         val source = geometry(input, plan)
@@ -166,7 +202,7 @@ object ImagePipeline {
                 }
                 return target
             }
-            val prepared = ToneMath.prepare(document.grade)
+            val prepared = gifColors?.prepared ?: ToneMath.prepare(document.grade)
             val masks = MaskMath.prepare(document.masks)
             if (prepared.isNeutral && masks.isEmpty()) {
                 if (document.privacy.isEmpty() && CreativeRaster.isEmpty(document.creative)) {
@@ -228,7 +264,8 @@ object ImagePipeline {
                             lightRows[2][x], horizontal3 / 9f, horizontal5 / 25f, document.grade
                         )
                     } else 0f
-                    val base = ToneMath.adjustPrepared(sourcePixel, prepared, x, y, width, height, detail)
+                    val base = gifColors?.adjust(sourcePixel)
+                        ?: ToneMath.adjustPrepared(sourcePixel, prepared, x, y, width, height, detail)
                     rendered[x] = MaskMath.adjust(base, masks, x, y, width, height)
                     if (vertical3 != null && vertical5 != null) {
                         horizontal3 += vertical3[min(width - 1, x + 2)] -

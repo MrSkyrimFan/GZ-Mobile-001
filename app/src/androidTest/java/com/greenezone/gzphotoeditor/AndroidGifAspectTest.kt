@@ -162,6 +162,11 @@ class AndroidGifAspectTest {
             EditedVideoPreviewReader.open(context, clip) {}.use { reader ->
                 assertRaster(reader.frame(0, 480), 144 to 256)
             }
+            // Export filters the decoded planes before executing the track rotation.
+            // This exercises the transposed row scan at a smaller output size.
+            EditedVideoPreviewReader.open(context, clip, filterDownscaling = true) {}.use { reader ->
+                assertRaster(reader.frame(0, 128), 72 to 128)
+            }
         } finally {
             clearMedia()
         }

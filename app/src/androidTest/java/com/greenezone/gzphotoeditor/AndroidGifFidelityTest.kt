@@ -18,6 +18,8 @@ import com.greenezone.gzphotoeditor.editor.GifStore
 import com.greenezone.gzphotoeditor.editor.GifVideoClip
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
+import com.greenezone.gzphotoeditor.editor.Grade
+import com.greenezone.gzphotoeditor.editor.ImagePipeline
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -93,6 +95,41 @@ class AndroidGifFidelityTest {
                 assertEquals(expected.second, frame.getPixel(expected.first, 5))
             }
         } finally { frame.recycle() }
+    }
+
+    @Test fun repeatedGifColorsMatchTheUncachedRasterIncludingAlpha() {
+        val size = 96
+        val sourcePixels = IntArray(size * size) { index ->
+            // Exercise repeated colors as well as cache collisions.
+            index * -1640531527
+        }
+        val source = Bitmap.createBitmap(sourcePixels, size, size, Bitmap.Config.ARGB_8888)
+        try {
+            val edits = EditDocument(grade = Grade(exposure = .35f, saturation = -1f))
+            val cache = requireNotNull(ImagePipeline.GifColors.forGrade(edits.grade))
+            val uncached = ImagePipeline.render(source, edits)
+            try {
+                repeat(2) {
+                    val cached = ImagePipeline.render(source, edits, cache, null)
+                    try {
+                        val expected = IntArray(sourcePixels.size)
+                        val actual = IntArray(sourcePixels.size)
+                        uncached.getPixels(expected, 0, size, 0, 0, size, size)
+                        cached.getPixels(actual, 0, size, 0, 0, size, size)
+                        assertArrayEquals(expected, actual)
+                    } finally {
+                        cached.recycle()
+                    }
+                }
+            } finally {
+                uncached.recycle()
+            }
+            assertNull(ImagePipeline.GifColors.forGrade(edits.grade.copy(grain = .4f)))
+            assertNull(ImagePipeline.GifColors.forGrade(edits.grade.copy(vignette = .4f)))
+            assertNull(ImagePipeline.GifColors.forGrade(edits.grade.copy(texture = .4f)))
+        } finally {
+            source.recycle()
+        }
     }
 
     @Test fun slowedLongHoldReopensWithTheSameDurationAndColorBoundary() {
