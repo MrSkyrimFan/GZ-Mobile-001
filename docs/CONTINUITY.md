@@ -2,7 +2,9 @@
 
 ## Current owner direction (2026-11-23)
 
-The [independent second audit](gz-editor-pro-audit-2-20261123/00_REPOSITORY_START_HERE.md) is the current repair handoff. Its docs merged at `cdaf4f08981bc7f813f3b739b7b28172789fe543`. Use the [repair evidence index](AUDIT_2_REPAIR_VERIFICATION.md) and [release gates](RELEASE_GATE.md) for the repaired workspaces. [PR #26](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/26) carries the exact build and run identities.
+The Audit 2 application baseline is PR #26 merge `372e0e947caacb2ceaf603bc4ff5a60e44cc33ec`. Its candidate and merged-main Android 10 and 15 suites each passed 174 of 174. The verified handset artifact is **GZ Editor Pro 0.12.8 Test**. [Repair PR](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/26) · [Repair evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608) · [Verified APK](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102).
+
+**Successor review hold.** The new project chat may read and reconcile the handoff. It waits for the owner to provide the current GPT‑6 Pro review before beginning engineering. The second audit and earlier execution prompts document prior instructions. The current owner direction governs work at this checkpoint. [Original second audit](gz-editor-pro-audit-2-20261123/00_REPOSITORY_START_HERE.md) · [Release gates](RELEASE_GATE.md).
 
 ## Revision 4 and the engineering field guide (2026-11-22)
 
@@ -28,7 +30,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 - Preserve the photo-first Regular interface, Looks, curves, color, Blur & cover, and Undo/Redo. Legacy Regular masks remain readable and renderable. New masking and selections belong in Pro.
 
 ## Hard rules
-Trace owner-visible failures through production entry points. Test JVM and Android bitmap/Compose behavior, inspect rendered output, and link verification to the exact candidate commit. Engineering may merge verified changes under the owner's authority. Handset qualification, formal workspace locks, and commercial release each require their own evidence or owner decision. Keep changes inside the GZ app repository and its supplemental intake.
+Trace owner-visible failures through production entry points. Test JVM and Android bitmap/Compose behavior, inspect rendered output, and link verification to the exact candidate commit. After the owner lifts the current hold, engineering and merge authority follow the owner's instructions for the approved scope. Handset qualification, formal workspace locks, and commercial release each require their own evidence or owner decision. Keep changes inside the GZ app repository and its supplemental intake.
 
 ## Collage wave v0.8.0 (2026-11-21 local)
 Current verified main baseline before this wave: `7508ff715d39dbb13ae543961b943cee5c78c22b` (GZ Editor Pro 0.7).

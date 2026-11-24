@@ -2,6 +2,14 @@
 
 The [November 23 audit](gz-editor-pro-audit-2-20261123/00_REPOSITORY_START_HERE.md) was merged at `cdaf4f08981bc7f813f3b739b7b28172789fe543`. The [baseline merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45244985410) passed Verify and both Android lanes. The [repair pull request](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/26) carries the exact repair, merge and artifact identities.
 
+## Verified Audit 2 baseline
+
+- Candidate `6a8cceba719dc990d663768f626ab87d9436aad4`, merged application commit `372e0e947caacb2ceaf603bc4ff5a60e44cc33ec`, shared Git tree `8222cee20633f8d4af2bfd36d32225eccdfdac46`. Each workflow passed Verify and 174 of 174 cases on Android 10 and Android 15 with zero failures, errors or skips. [Candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45337105839) · [Merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608).
+- The merged-main edited portrait GIF saved in 4.557 seconds on Android 10 and 5.867 seconds on Android 15. Both independently decoded and replayed the reopened 180 × 320, 88-frame, 2.950-second animation. [Android 10 receipt](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895404392) · [Android 15 receipt](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14894984798).
+- The Android 15 emulator-exercised handset ZIP contains `app-debug.apk`, GZ Editor Pro 0.12.8 Test, package `com.greenezone.gzphotoeditor.phonetest.v20`, version code 20, minimum API 29 and target API 36. Its Android Debug v2 signature verified. The APK SHA-256 is `47dbecda29cdb326eaf797594e14a5840e8517133f8e5445b56f8a7b604d957c`. [Verified phone artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102).
+
+## Finding-to-test map
+
 | Audit item | Implementation and verification |
 | --- | --- |
 | PRO-01 and GIF-01 | Named project identity travels with the edited document through opens and history. Replacement needs confirmation. `ProNamedSaveTest` and `AndroidGifProjectIdentityTest` verify the ordinary Save and Open paths and confirm both named recipes survive. |

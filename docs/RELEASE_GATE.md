@@ -6,7 +6,7 @@
 - [ ] Enter Regular Crop through the normal UI. Drag four corners, four edges and the interior in Freeform and fixed ratio with touch input. Verify predictable anchoring, pointer-down acquisition, letterbox interactions, expected crop pixels and saved-project reopen. Confirm Regular and Collage tile editing omit Masks authoring and retain Text, Blur & cover and old mask-bearing projects.
 - [ ] Enter Pro from an edited portrait in Regular. Confirm Yes transfers the current appearance and geometry. Confirm No opens an empty editor and dismissal keeps Regular open. Switch back via the menu and Back, and verify Regular's source, edits, history and output still match. Check Pro Text authoring is absent and legacy text still renders, and exercise File → Delete current work with Cancel and Confirm. Verify originals, Regular edits and named saved projects survive.
 - [ ] Exercise Pro layer selection, transform, masks, opacity/blend, painting and repair through pixel change, Undo/Redo, save/reopen and export. Check Back through active tools, menus, dialogs, keyboard and workspaces. Verify physical gestures from both edges, half-cancel and rapid double Back on a handset, including picker/IME ownership.
-- [ ] Run JVM and complete API 29/API 35 instrumentation on the repair commit, including independent Collage tile rendering and save/reopen. For a combined phone build, provide the commit, run, APK artifact, APK hash, signing/package/version details, and one compact phone script. Engineering merge authority and owner acceptance are separate. Mark physical-device and formal workspace acceptance only from the corresponding results.
+- [x] Audit 2 engineering gate for v0.12.8 Test. The exact candidate and merged application commit passed JVM verification and 174 of 174 instrumented tests on Android 10 and on Android 15. The emulator-exercised APK identity and hash are recorded in the repair evidence. Owner phone checks above remain open. [Repair evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45337105839) · [Merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608) · [APK artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102).
 
 ### November 23 independent audit cases
 
@@ -29,7 +29,7 @@ Use the [audit repair evidence index](AUDIT_2_REPAIR_VERIFICATION.md) and [PR #2
 - Widen both ends of a long trim at a fixed frame rate. Keep the selected FPS and stop at its exact frame-budget limit. Cover unspecified decoder color tags, edited playback of metadata-rotated clips, failed-codec fallback and actual edited export.
 - Move a square crop off-center, apply a Look, hand it into Pro, and verify the rendered crop, saved edit recipe, and intact Regular draft.
 
-## Retained automated Collage and photo verification (0.8)
+## Historical v0.8 Collage and photo verification criteria
 - [ ] Main original photo edit screen unchanged aside from GZ brand on landing and Create collage entry.
 - [ ] Crop/blur/text/shapes/brush active guides persist while main toolbar is hidden, and editing remains possible.
 - [ ] Pure layout checks: all seven arrangements, counts 1–20, nonoverlap, bounds, tap selection, max spacing and budget.
@@ -55,7 +55,7 @@ Native app profiling, large-photo/20-tile memory pressure, long session/ANR, col
 
 Refer also to `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md` for lawful original-code Lightroom-class **non-AI** features, RAW/license decisions and later video editing.
 
-## Additional v0.9 gates
+## Historical v0.9 verification criteria
 - [ ] Top-right mode dropdown on Regular, Pro, GIF and Collage. Video disabled / Coming soon. Regular toolbar compact, no destroyed existing tools.
 - [ ] Pro image compositor: independent image edits, blend/position/size/opacity/visibility/order/undo/persist/export.
 - [ ] Real GIF89a multi-frame output with tested Android decoder, timing/loop/ordering, saved project/undo and safe source ownership.
@@ -63,7 +63,9 @@ Refer also to `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md` for lawful original-cod
 - [ ] Exact PR HEAD passed CI, merged main Android bitmap/Compose tests passed, expected APK artifact exists.
 - [ ] Historical 0.8 and 0.9 physical phone check `PHONE_TEST_WAVE8.md`; commercial release and professional/RAW/video work remain open.
 
-## v0.12.1 independent AAA audit — release gate remains OPEN
+## Historical v0.12.1 independent AAA audit criteria
+
+The commercial gate above remains open.
 - Source audit: `docs/AAA_RELEASE_AUDIT_013.md`. Owner requested complete AAA verification; **not achieved** at this stage.
 - [ ] API29 minimum-device and API35 full Android emulator tests green at identical source SHA.
 - [ ] Real GIF color-gradient and moving-transparent-object output decoded without ghosting or color damage.
