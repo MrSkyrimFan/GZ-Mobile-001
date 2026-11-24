@@ -214,7 +214,7 @@ object ProStore {
 
     internal data class SavedProject(val document: ProDocument, val resetDocument: ProDocument)
 
-    private fun encodeProject(document: ProDocument, resetDocument: ProDocument?): ByteArray {
+    internal fun encodeProject(document: ProDocument, resetDocument: ProDocument?): ByteArray {
         val encoded = encode(document)
         if (resetDocument == null || resetDocument == document) return encoded.toByteArray(Charsets.UTF_8)
         val baseline = if (resetDocument.layers.isEmpty()) {
@@ -231,7 +231,8 @@ object ProStore {
             .also { if (it.size > MAX_PROJECT_BYTES) throw ProjectTooLarge() }
     }
 
-    private fun decodeProject(data: String): SavedProject? {
+    internal fun decodeProject(data: String): SavedProject? {
+        if (data.length > MAX_PROJECT_BYTES) return null
         val json = JSONObject(data)
         val reset = json.remove(RESET_DOCUMENT) as? JSONObject
         val document = decode(if (reset == null) data else json.toString(), recoverLegacyRecipe = true)

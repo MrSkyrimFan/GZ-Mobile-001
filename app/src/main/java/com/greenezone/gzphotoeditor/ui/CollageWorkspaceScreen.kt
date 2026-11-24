@@ -77,6 +77,11 @@ import com.greenezone.gzphotoeditor.editor.CollageStore
 import com.greenezone.gzphotoeditor.editor.CollageTemplate
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.ExportSettings
+import com.greenezone.gzphotoeditor.editor.ExportWorkspace
+import com.greenezone.gzphotoeditor.editor.PendingExport
+import com.greenezone.gzphotoeditor.editor.PendingExportJournal
+import com.greenezone.gzphotoeditor.editor.PendingExportPhase
+import com.greenezone.gzphotoeditor.editor.PendingImageRecipe
 import com.greenezone.gzphotoeditor.editor.ExportSizing
 import com.greenezone.gzphotoeditor.editor.GeometryMath
 import com.greenezone.gzphotoeditor.editor.writeStagedImage
@@ -118,7 +123,16 @@ private data class TileSourceChoice(val id: String, val keepEdits: Boolean)
 private data class CollageExport(
     val collage: CollageDocument,
     val settings: ExportSettings
-)
+) {
+    fun encode(): String = PendingImageRecipe(settings, CollageStore.encode(collage)).encode()
+
+    companion object {
+        fun decode(pending: PendingExport): CollageExport? {
+            val image = PendingImageRecipe.decode(pending.recipe) ?: return null
+            return CollageStore.decode(image.payload)?.let { CollageExport(it, image.settings) }
+        }
+    }
+}
 
 @Composable
 fun CollageWorkspaceScreen(
@@ -170,8 +184,15 @@ internal fun CollageWorkspaceScreenContent(
     var exporting by remember { mutableStateOf(false) }
     var editingTile by remember { mutableIntStateOf(-1) }
     var showExport by remember { mutableStateOf(false) }
-    var exportSettings by remember { mutableStateOf(ExportSettings()) }
-    var pending by remember { mutableStateOf<CollageExport?>(null) }
+    val exportJournal = remember(context) { PendingExportJournal(context.filesDir) }
+    val recoveredExport = remember { exportJournal.read(ExportWorkspace.COLLAGE) }
+    var exportSettings by remember {
+        mutableStateOf(recoveredExport?.let(CollageExport::decode)?.settings ?: ExportSettings())
+    }
+    var pendingExport by remember { mutableStateOf(recoveredExport) }
+    var exportLaunchId by remember { mutableStateOf<String?>(null) }
+    var showExportRecovery by remember { mutableStateOf(recoveredExport != null) }
+    var exportRecoveryError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var confirmNew by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf("") }
@@ -364,15 +385,28 @@ internal fun CollageWorkspaceScreenContent(
         ) else notice = "Maximum of twenty photos reached."
     }
 
-    fun runExport(uri: Uri, request: CollageExport) {
+    fun retainExportForRetry(pending: PendingExport, message: String) {
+        notice = message
+        exportRecoveryError = message
+        try {
+            pendingExport = exportJournal.failed(pending)
+        } catch (_: Exception) {
+            pendingExport = exportJournal.read(ExportWorkspace.COLLAGE)
+        }
+        showExportRecovery = pendingExport != null
+    }
+
+    fun runExport(uri: Uri, request: CollageExport, pending: PendingExport) {
         if (request.collage.photos.any { it.uri == uri.toString() }) {
-            notice = "Export destination cannot overwrite a source photo."
+            retainExportForRetry(pending, "Export destination cannot overwrite a source photo.")
             return
         }
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val budget = GeometryMath.safeExportPixels(manager.memoryClass)
         scope.launch {
             exporting = true
+            showExportRecovery = false
+            exportRecoveryError = null
             notice = "Exporting collage…"
             try {
                 val size = withContext(Dispatchers.Default) {
@@ -392,7 +426,10 @@ internal fun CollageWorkspaceScreenContent(
                         composed = target
                         withContext(Dispatchers.IO) {
                             writeStagedImage(context.cacheDir,
-                                openDestination = { resolver.openOutputStream(uri, "wt") },
+                                openDestination = {
+                                    exportJournal.copying(pending)
+                                    resolver.openOutputStream(uri, "wt")
+                                },
                                 checkActive = { ensureActive() }) { stream -> ImageExportWriter.write(target, request.settings, stream) }
                         }
                         target.width.toString() + " × " + target.height
@@ -401,39 +438,74 @@ internal fun CollageWorkspaceScreenContent(
                         image?.let { if (!it.isRecycled) it.recycle() }
                     }
                 }
+                exportJournal.discard(pending)
+                pendingExport = null
                 notice = "Collage saved • " + size + " • No watermark"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                notice = "Export failed: " + (error.message ?: "unavailable photo")
+                retainExportForRetry(pending, "Export failed: " + (error.message ?: "unavailable photo"))
             } catch (_: OutOfMemoryError) {
-                notice = "Not enough memory. Try Standard or High quality."
+                retainExportForRetry(pending, "Not enough memory. Try Standard or High quality.")
             } finally {
                 exporting = false
             }
         }
     }
 
-    val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val request = pending
-        pending = null
-        if (result.resultCode == Activity.RESULT_OK &&
-            result.data?.data != null && request != null) {
-            runExport(result.data!!.data!!, request)
+    RecoverableExportPicker(
+        pending = pendingExport,
+        launchId = exportLaunchId,
+        onLaunch = { if (exportLaunchId == it) exportLaunchId = null },
+        onLaunchFailed = { pending, error ->
+            retainExportForRetry(pending, error.message ?: "Could not open the destination picker")
+        },
+        onResult = resultReceived@ { pending, result ->
+            try {
+                val active = exportJournal.read(ExportWorkspace.COLLAGE)
+                if (active == null || active.id != pending.id || active.phase != PendingExportPhase.PICKING) {
+                    return@resultReceived
+                }
+                if (result.resultCode != Activity.RESULT_OK) {
+                    if (exportJournal.cancelPicker(pending)) {
+                        pendingExport = null
+                        showExportRecovery = false
+                        notice = "Collage export canceled"
+                    }
+                } else {
+                    val uri = result.data?.data
+                    val request = CollageExport.decode(pending)
+                    if (uri == null || request == null) {
+                        retainExportForRetry(pending, "The export destination or collage could not be restored.")
+                    } else {
+                        val claimed = exportJournal.claim(pending, uri)
+                        if (claimed != null) {
+                            pendingExport = claimed
+                            runExport(uri, request, claimed)
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                retainExportForRetry(pending, error.message ?: "Could not start the collage export")
+            }
         }
-    }
+    )
     fun askToSave() {
         if (!CollageMath.validCount(document.photos.size)) return
-        pending = CollageExport(document, exportSettings)
         showExport = false
-        exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = exportSettings.format.mime
-            putExtra(Intent.EXTRA_TITLE,
-                "GZEditorPro_Collage." + exportSettings.format.extension)
-        })
+        if (pendingExport != null) {
+            showExportRecovery = true
+            return
+        }
+        val settings = exportSettings
+        try {
+            val pending = exportJournal.begin(ExportWorkspace.COLLAGE, settings.format.mime,
+                "GZEditorPro_Collage." + settings.format.extension, CollageExport(document, settings).encode())
+            pendingExport = pending
+            exportLaunchId = pending.id
+        } catch (error: Exception) {
+            notice = "Could not prepare collage export: " + (error.message ?: "local storage failed")
+        }
     }
 
     LaunchedEffect(document) {
@@ -677,6 +749,36 @@ internal fun CollageWorkspaceScreenContent(
                     Text("Cancel", color = EditorMuted)
                 }
             }
+        )
+    }
+    val recovery = pendingExport
+    if (showExportRecovery && recovery != null && !exporting) {
+        val canRecover = remember(recovery.id) { CollageExport.decode(recovery) != null }
+        RecoverableExportDialog(
+            request = recovery,
+            onRetry = {
+                try {
+                    val retry = exportJournal.retry(recovery)
+                    pendingExport = retry
+                    showExportRecovery = false
+                    exportLaunchId = retry.id
+                } catch (error: Exception) {
+                    notice = error.message ?: "Could not retry collage export"
+                }
+            },
+            onDiscard = {
+                try {
+                    exportJournal.discard(recovery)
+                    pendingExport = null
+                    showExportRecovery = false
+                } catch (error: Exception) {
+                    notice = error.message ?: "Could not clear the collage export request"
+                }
+            },
+            onDismiss = { showExportRecovery = false },
+            unavailable = if (canRecover) null
+                else "The saved collage export recipe could not be read. Discard this request to export the current collage.",
+            failure = exportRecoveryError
         )
     }
     if (showExport) {

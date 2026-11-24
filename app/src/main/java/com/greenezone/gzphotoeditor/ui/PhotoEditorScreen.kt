@@ -68,6 +68,10 @@ import com.greenezone.gzphotoeditor.editor.AutoEnhanceMath
 import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.BrushStroke
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.EditDocumentCodec
+import com.greenezone.gzphotoeditor.editor.PendingExport
+import com.greenezone.gzphotoeditor.editor.PendingExportPhase
+import com.greenezone.gzphotoeditor.editor.CollageStore
 import com.greenezone.gzphotoeditor.editor.CropFrame
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
@@ -88,6 +92,7 @@ import com.greenezone.gzphotoeditor.editor.InkStroke
 import com.greenezone.gzphotoeditor.editor.CreativeRaster
 import com.greenezone.gzphotoeditor.editor.TextOverlay
 import com.greenezone.gzphotoeditor.editor.EditHistory
+import com.greenezone.gzphotoeditor.editor.ExportWorkspace
 import com.greenezone.gzphotoeditor.editor.GeometryMath
 import com.greenezone.gzphotoeditor.editor.Grade
 import com.greenezone.gzphotoeditor.editor.ImagePipeline
@@ -100,6 +105,9 @@ import com.greenezone.gzphotoeditor.editor.PrivacyEdit
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
 import com.greenezone.gzphotoeditor.editor.PhotoGeometry
 import com.greenezone.gzphotoeditor.editor.PhotoGeometryPlan
+import com.greenezone.gzphotoeditor.editor.PendingExportJournal
+import com.greenezone.gzphotoeditor.editor.PendingImageRecipe
+import com.greenezone.gzphotoeditor.editor.PendingProExportRecipe
 import com.greenezone.gzphotoeditor.editor.PrivacyMath
 import com.greenezone.gzphotoeditor.editor.PrivacyRaster
 import com.greenezone.gzphotoeditor.editor.SavedLooks
@@ -113,6 +121,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import org.json.JSONObject
 import kotlin.math.roundToInt
 
 private data class PhotoReplacement(
@@ -125,7 +134,29 @@ private data class ExportRequest(
     val source: Uri,
     val settings: ExportSettings,
     val edits: EditDocument
-)
+) {
+    fun encode(): String {
+        val photo = JSONObject().apply {
+            put("source", source.toString())
+            put("edits", EditDocumentCodec.encode(edits))
+        }
+        return PendingImageRecipe(settings, photo.toString()).encode()
+    }
+
+    companion object {
+        fun decode(pending: PendingExport): ExportRequest? {
+            if (pending.workspace != ExportWorkspace.PHOTO) return null
+            val image = PendingImageRecipe.decode(pending.recipe) ?: return null
+            if (image.settings.format.mime != pending.mime) return null
+            return try {
+                val photo = JSONObject(image.payload)
+                val source = Uri.parse(photo.getString("source"))
+                val edits = EditDocumentCodec.decode(photo.getString("edits")) ?: return null
+                source.takeIf { it.scheme == "content" }?.let { ExportRequest(it, image.settings, edits) }
+            } catch (_: Exception) { null }
+        }
+    }
+}
 private data class PreviewStamp(val source: Bitmap, val edits: EditDocument)
 
 private data class CropPreview(val source: Bitmap, val edits: EditDocument, val bitmap: Bitmap)
@@ -152,11 +183,41 @@ fun PhotoEditorScreen(
     // entry snapshot immutable while the nested editor loads/saves other media.
     val tileEntryBaseline = remember(initialCollagePhoto) { initialCollagePhoto }
 
-    var workspaceNavigation by remember { mutableStateOf(WorkspaceNavigation()) }
-    var collageDocument by remember { mutableStateOf(CollageDocument()) }
+    val startupJournal = remember(context) { PendingExportJournal(context.filesDir) }
+    val startupWorkspace = remember(startupJournal, tileEntryBaseline) {
+        if (tileEntryBaseline == null) startupJournal.latestWorkspace() else null
+    }
+    val coldExport = remember(startupWorkspace) {
+        startupWorkspace?.takeIf { it == ExportWorkspace.PRO || it == ExportWorkspace.COLLAGE }
+            ?.let(startupJournal::read)
+    }
+    val recoveredWorkspace = when (startupWorkspace) {
+        ExportWorkspace.PRO -> WorkspaceMode.PRO
+        ExportWorkspace.COLLAGE -> WorkspaceMode.COLLAGE
+        ExportWorkspace.GIF -> WorkspaceMode.GIF
+        else -> WorkspaceMode.PHOTO
+    }
+    var workspaceNavigation by remember {
+        mutableStateOf(WorkspaceNavigation(current = recoveredWorkspace))
+    }
+    var collageDocument by remember {
+        val restored = coldExport?.takeIf { it.workspace == ExportWorkspace.COLLAGE }
+            ?.let { PendingImageRecipe.decode(it.recipe) }
+            ?.payload?.let(CollageStore::decode)
+        mutableStateOf(restored ?: CollageDocument())
+    }
     var collageSession by remember { mutableStateOf(CollageWorkspaceSession()) }
-    var proDocument by remember { mutableStateOf(ProDocument()) }
-    var proSession by remember { mutableStateOf(ProWorkspaceSession()) }
+    val recoveredPro = remember(coldExport) {
+        coldExport?.takeIf { it.workspace == ExportWorkspace.PRO }
+            ?.let(PendingProExportRecipe::decode)
+    }
+    var proDocument by remember { mutableStateOf(recoveredPro?.document ?: ProDocument()) }
+    var proSession by remember {
+        val restored = recoveredPro?.let {
+            ProWorkspaceSession(documentEstablished = true, resetDocument = it.resetDocument)
+        }
+        mutableStateOf(restored ?: ProWorkspaceSession())
+    }
     var gifDocument by remember { mutableStateOf(GifDocument()) }
     var gifSession by remember { mutableStateOf(GifWorkspaceSession()) }
 
@@ -190,8 +251,16 @@ fun PhotoEditorScreen(
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var loadingToken by remember { mutableIntStateOf(0) }
-    var exportSettings by remember { mutableStateOf(ExportSettings()) }
-    var pendingExport by remember { mutableStateOf<ExportRequest?>(null) }
+    val exportJournal = startupJournal
+    val recoveredExport = remember {
+        if (tileEntryBaseline == null) exportJournal.read(ExportWorkspace.PHOTO) else null
+    }
+    var exportSettings by remember {
+        mutableStateOf(recoveredExport?.let(ExportRequest::decode)?.settings ?: ExportSettings())
+    }
+    var pendingExport by remember { mutableStateOf(recoveredExport) }
+    var exportLaunchId by remember { mutableStateOf<String?>(null) }
+    var showExportRecovery by remember { mutableStateOf(recoveredExport != null) }
     var creativeTools by remember { mutableStateOf(CreativeToolState()) }
     var currentInk by remember { mutableStateOf<InkStroke?>(null) }
     var showTextDialog by remember { mutableStateOf(false) }
@@ -246,12 +315,13 @@ fun PhotoEditorScreen(
     fun loadPhoto(
         uri: Uri,
         restored: EditDocument? = null,
-        establishBaseline: Boolean = tileEntryBaseline == null
+        establishBaseline: Boolean = tileEntryBaseline == null,
+        restoringExport: Boolean = false
     ) {
         val request = ++loadingToken
         scope.launch {
             busy = true
-            notice = "Opening photo…"
+            if (!restoringExport) notice = "Opening photo…"
             try {
                 try {
                     resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -313,11 +383,13 @@ fun PhotoEditorScreen(
                 zoom = 1f
                 panX = 0f
                 panY = 0f
-                notice = if (restored == null) "Media opened" else "Project restored"
+                if (!restoringExport) {
+                    notice = if (restored == null) "Media opened" else "Project restored"
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                if (request == loadingToken) {
+                if (request == loadingToken && (!restoringExport || !exporting)) {
                     notice = "Could not open photo: " +
                         (error.message ?: "file missing or permission revoked")
                 }
@@ -327,15 +399,27 @@ fun PhotoEditorScreen(
         }
     }
 
-    fun exportImage(output: Uri, request: ExportRequest) {
+    fun retainExportForRetry(pending: PendingExport, message: String) {
+        notice = message
+        try {
+            pendingExport = exportJournal.failed(pending)
+        } catch (_: Exception) {
+            // The last persisted phase still prevents another write on redelivery.
+            pendingExport = exportJournal.read(ExportWorkspace.PHOTO)
+        }
+        showExportRecovery = pendingExport != null
+    }
+
+    fun exportImage(output: Uri, request: ExportRequest, pending: PendingExport) {
         val source = request.source
         if (source == output) {
-            notice = "Export destination cannot overwrite the original."
+            retainExportForRetry(pending, "Export destination cannot overwrite the original.")
             return
         }
         scope.launch {
             exporting = true
             showExport = false
+            showExportRecovery = false
             notice = "Exporting image…"
             try {
                 val dimensions = withContext(Dispatchers.Default) {
@@ -353,7 +437,10 @@ fun PhotoEditorScreen(
                         sized = photo
                         withContext(Dispatchers.IO) {
                             writeStagedImage(context.cacheDir,
-                                openDestination = { resolver.openOutputStream(output, "wt") },
+                                openDestination = {
+                                    exportJournal.copying(pending)
+                                    resolver.openOutputStream(output, "wt")
+                                },
                                 checkActive = { ensureActive() }) { stream -> ImageExportWriter.write(photo, request.settings, stream) }
                         }
                         photo.width.toString() + " × " + photo.height
@@ -363,13 +450,16 @@ fun PhotoEditorScreen(
                         decoded?.let { if (!it.isRecycled) it.recycle() }
                     }
                 }
+                exportJournal.discard(pending)
+                pendingExport = null
                 notice = "Saved " + dimensions + " • Original unchanged"
             } catch (cancelled: CancellationException) {
+                // The existing phase stays on disk. A new host can offer a new destination.
                 throw cancelled
             } catch (_: OutOfMemoryError) {
-                notice = "Not enough memory to export. Choose a smaller size."
+                retainExportForRetry(pending, "Not enough memory to export. Choose a smaller size.")
             } catch (error: Exception) {
-                notice = "Export failed: " + (error.message ?: "unknown error")
+                retainExportForRetry(pending, "Export failed: " + (error.message ?: "unknown error"))
             } finally {
                 exporting = false
             }
@@ -442,7 +532,7 @@ fun PhotoEditorScreen(
         val originalTile = initialCollagePhoto ?: return
         val image = sourceUri?.toString() ?: originalTile.uri
         showTileExit = false
-        onDoneCollagePhoto?.invoke(CollagePhoto(image, document))
+        onDoneCollagePhoto?.invoke(originalTile.copy(uri = image, edits = document))
     }
 
     fun isPhotoDirty(): Boolean {
@@ -501,7 +591,6 @@ fun PhotoEditorScreen(
         panY = 0f
         notice = ""
         showExport = false
-        pendingExport = null
         showTextDialog = false
         showRegularExit = false
         showTileExit = false
@@ -685,30 +774,72 @@ fun PhotoEditorScreen(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
         if (it != null) requestPhotoReplacement(PhotoReplacement(it))
     }
-    val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val request = pendingExport
-        pendingExport = null
-        val output = result.data?.data
-        if (result.resultCode == Activity.RESULT_OK && output != null && request != null) {
-            exportImage(output, request)
+    RecoverableExportPicker(
+        pending = pendingExport,
+        launchId = exportLaunchId,
+        onLaunch = { if (exportLaunchId == it) exportLaunchId = null },
+        onLaunchFailed = { pending, error ->
+            retainExportForRetry(pending, error.message ?: "Could not open the destination picker")
+        },
+        onResult = resultReceived@ { pending, result ->
+            try {
+                val active = exportJournal.read(ExportWorkspace.PHOTO)
+                if (active == null || active.id != pending.id || active.phase != PendingExportPhase.PICKING) {
+                    return@resultReceived
+                }
+                if (result.resultCode != Activity.RESULT_OK) {
+                    if (exportJournal.cancelPicker(pending)) {
+                        pendingExport = null
+                        showExportRecovery = false
+                        notice = "Export canceled"
+                    }
+                } else {
+                    val output = result.data?.data
+                    val request = ExportRequest.decode(pending)
+                    if (output == null || request == null) {
+                        retainExportForRetry(pending, "The export destination or recipe could not be restored.")
+                    } else {
+                        val claimed = exportJournal.claim(pending, output)
+                        if (claimed != null) {
+                            pendingExport = claimed
+                            exportImage(output, request, claimed)
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                retainExportForRetry(pending, error.message ?: "Could not start the export")
+            }
         }
-    }
+    )
     fun requestExport() {
         val source = sourceUri ?: return
-        val settings = exportSettings
-        pendingExport = ExportRequest(source, settings, document)
         showExport = false
-        val suffix = settings.format.extension
+        if (pendingExport != null) {
+            showExportRecovery = true
+            return
+        }
+        val settings = exportSettings
         val target = if (settings.preset == com.greenezone.gzphotoeditor.editor.SocialPreset.ORIGINAL)
             "GZEditorPro_Edit" else "GZEditorPro_" + settings.preset.name
-        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = settings.format.mime
-            putExtra(Intent.EXTRA_TITLE, target + "." + suffix)
+        try {
+            val pending = exportJournal.begin(ExportWorkspace.PHOTO, settings.format.mime,
+                target + "." + settings.format.extension, ExportRequest(source, settings, document).encode())
+            pendingExport = pending
+            exportLaunchId = pending.id
+        } catch (error: Exception) {
+            notice = "Could not prepare export: " + (error.message ?: "local storage failed")
         }
-        exporter.launch(intent)
+    }
+    LaunchedEffect(recoveredExport?.id, workspaceNavigation.current) {
+        if (workspaceNavigation.current != WorkspaceMode.PHOTO || sourceUri != null) return@LaunchedEffect
+        recoveredExport?.let { pending ->
+            val request = ExportRequest.decode(pending)
+            if (request != null) {
+                loadPhoto(request.source, request.edits, restoringExport = true)
+            } else {
+                notice = "The previous export recipe could not be restored."
+            }
+        }
     }
     fun openPicker() {
         if (!busy && !exporting) {
@@ -1430,6 +1561,35 @@ fun PhotoEditorScreen(
             sourceGeneration = loadingToken,
             exposure = previewEdits.grade.exposure
         ) { showHistogram = false }
+    }
+    val recovery = pendingExport
+    if (showExportRecovery && recovery != null && !busy && !exporting) {
+        val recoverable = remember(recovery.id) { ExportRequest.decode(recovery) != null }
+        RecoverableExportDialog(
+            request = recovery,
+            unavailable = if (recoverable) null else "The previous export recipe could not be restored.",
+            failure = notice.takeIf { it.startsWith("Export failed:") },
+            onRetry = {
+                try {
+                    val retry = exportJournal.retry(recovery)
+                    pendingExport = retry
+                    showExportRecovery = false
+                    exportLaunchId = retry.id
+                } catch (error: Exception) {
+                    notice = error.message ?: "Could not retry the export"
+                }
+            },
+            onDiscard = {
+                try {
+                    exportJournal.discard(recovery)
+                    pendingExport = null
+                    showExportRecovery = false
+                } catch (error: Exception) {
+                    notice = error.message ?: "Could not clear the export request"
+                }
+            },
+            onDismiss = { showExportRecovery = false }
+        )
     }
     if (showExport) {
         val originalOutput = sourceSize?.let { (width, height) ->

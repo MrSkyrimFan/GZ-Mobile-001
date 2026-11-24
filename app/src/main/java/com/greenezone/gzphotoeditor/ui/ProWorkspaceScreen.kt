@@ -84,13 +84,6 @@ private data class ProSaveRequest(
     val target: ProSaveTarget
 )
 
-private data class ProExportRequest(
-    val document: ProDocument,
-    val reset: ProDocument?,
-    val settings: ExportSettings,
-    val size: ProPixelSize
-)
-
 internal data class ProWorkspaceSession(
     val documentEstablished: Boolean = false,
     val selectedLayer: Int = 0,
@@ -202,7 +195,13 @@ internal fun ProWorkspaceScreenContent(
     var notice by remember { mutableStateOf("") }
     var showExport by remember { mutableStateOf(false) }
     var exportSettings by remember { mutableStateOf(ExportSettings()) }
-    var pendingExport by remember { mutableStateOf<ProExportRequest?>(null) }
+    val exportJournal = remember(context) { PendingExportJournal(context.filesDir) }
+    var exportJournalReady by remember { mutableStateOf(false) }
+    var pendingExport by remember { mutableStateOf<PendingExport?>(null) }
+    var exportLaunchId by remember { mutableStateOf<String?>(null) }
+    var showExportRecovery by remember { mutableStateOf(false) }
+    var exportFailure by remember { mutableStateOf<String?>(null) }
+    var exportRecoveryUnavailable by remember { mutableStateOf<String?>(null) }
     var showSave by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
     var pendingSavedDelete by remember { mutableStateOf<String?>(null) }
@@ -579,67 +578,170 @@ internal fun ProWorkspaceScreenContent(
     val intendedExportSize = ProMath.intendedCanvasSize(document)
     val safeExportSize = intendedExportSize.within(ProMath.MAX_EXPORT_EDGE, exportPixelBudget)
 
-    fun export(destination: Uri, request: ProExportRequest) {
-        val protectedLayers = request.document.layers + request.reset?.layers.orEmpty()
+    suspend fun retainExportForRetry(pending: PendingExport, message: String) {
+        notice = message
+        exportFailure = message
+        pendingExport = withContext(Dispatchers.IO) {
+            runCatching { exportJournal.failed(pending) }.getOrElse {
+                runCatching { exportJournal.read(ExportWorkspace.PRO) }.getOrNull()
+            }
+        }
+        showExportRecovery = pendingExport != null
+    }
+
+    suspend fun export(destination: Uri, request: PendingProExportRecipe, pending: PendingExport) {
+        val protectedLayers = request.document.layers + request.resetDocument.layers
         if (protectedLayers.any { it.uri.isNotEmpty() && it.uri == destination.toString() }) {
-            notice = "Export cannot overwrite an original image."
+            retainExportForRetry(pending, "Export cannot overwrite an original image.")
             return
         }
-        scope.launch {
-            exporting = true
-            notice = "Exporting editable composition…"
+        showExportRecovery = false
+        notice = "Exporting editable composition…"
+        val dimensions = withContext(Dispatchers.Default) {
+            val coroutine = currentCoroutineContext()
+            val image = ProRaster.render(resolver, request.document, request.size.width, request.size.height, false) {
+                coroutine.ensureActive()
+            }
             try {
-                val result = withContext(Dispatchers.Default) {
-                    var image: Bitmap? = null
-                    var sized: Bitmap? = null
-                    try {
-                        val coroutine = currentCoroutineContext()
-                        image = ProRaster.render(resolver, request.document, request.size.width, request.size.height, false) {
-                            coroutine.ensureActive()
+                val sized = ExportSizing.layout(image, request.settings)
+                try {
+                    withContext(Dispatchers.IO) {
+                        writeStagedImage(context.cacheDir,
+                            openDestination = {
+                                exportJournal.copying(pending)
+                                resolver.openOutputStream(destination, "wt")
+                            },
+                            checkActive = { ensureActive() }) { out ->
+                            ImageExportWriter.write(sized, request.settings, out)
                         }
-                        sized = ExportSizing.layout(image, request.settings)
-                        withContext(Dispatchers.IO) {
-                            writeStagedImage(context.cacheDir,
-                                openDestination = { resolver.openOutputStream(destination, "wt") },
-                                checkActive = { ensureActive() }) { out ->
-                                ImageExportWriter.write(sized, request.settings, out)
+                    }
+                    "${sized.width} × ${sized.height}"
+                } finally {
+                    if (sized !== image) sized.recycle()
+                }
+            } finally {
+                image.recycle()
+            }
+        }
+        withContext(Dispatchers.IO) { exportJournal.discard(pending) }
+        pendingExport = null
+        notice = "Exported $dimensions. Original media unchanged."
+    }
+
+    LaunchedEffect(exportJournal) {
+        val restored = withContext(Dispatchers.IO) {
+            runCatching { exportJournal.read(ExportWorkspace.PRO) }.getOrNull()
+        }
+        pendingExport = restored
+        showExportRecovery = restored != null
+        exportJournalReady = true
+    }
+
+    RecoverableExportPicker(
+        pending = pendingExport,
+        launchId = exportLaunchId,
+        onLaunch = { if (exportLaunchId == it) exportLaunchId = null },
+        onLaunchFailed = { pending, error ->
+            scope.launch { retainExportForRetry(pending, error.message ?: "Could not open the export destination.") }
+        },
+        onResult = { pending, response ->
+            if (pendingExport?.id == pending.id && !exporting) {
+                exporting = true
+                scope.launch {
+                    try {
+                        if (response.resultCode != Activity.RESULT_OK) {
+                            if (withContext(Dispatchers.IO) { exportJournal.cancelPicker(pending) }) {
+                                pendingExport = null
+                                showExportRecovery = false
+                                notice = "Export canceled."
+                            }
+                        } else {
+                            val destination = response.data?.data
+                            val request = withContext(Dispatchers.IO) { PendingProExportRecipe.decode(pending) }
+                            if (destination == null || request == null) {
+                                if (request == null) exportRecoveryUnavailable =
+                                    "Discard this unreadable request to start a new Pro export."
+                                retainExportForRetry(pending, "The export destination or Pro edits could not be restored.")
+                            } else {
+                                val claimed = withContext(Dispatchers.IO) { exportJournal.claim(pending, destination) }
+                                if (claimed != null) {
+                                    pendingExport = claimed
+                                    export(destination, request, claimed)
+                                }
                             }
                         }
-                        sized.width.toString() + " × " + sized.height
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: OutOfMemoryError) {
+                        retainExportForRetry(pending, "Not enough device memory to export this composition.")
+                    } catch (error: Exception) {
+                        retainExportForRetry(pending, "Export failed: " + (error.message ?: "source unavailable"))
                     } finally {
-                        sized?.let { if (it !== image && !it.isRecycled) it.recycle() }
-                        image?.let { if (!it.isRecycled) it.recycle() }
+                        exporting = false
                     }
                 }
-                notice = "Exported " + result + ". Original media unchanged."
+            }
+        }
+    )
+
+    fun startExport() {
+        if (busy || exporting || !exportJournalReady || !ProMath.valid(document)) return
+        showExport = false
+        if (pendingExport != null) {
+            showExportRecovery = true
+            return
+        }
+        exportFailure = null
+        exportRecoveryUnavailable = null
+        val request = PendingProExportRecipe(document, resetDocument ?: document, exportSettings, safeExportSize)
+        val format = request.settings.format
+        busy = true
+        scope.launch {
+            try {
+                val pending = withContext(Dispatchers.IO) {
+                    exportJournal.begin(ExportWorkspace.PRO, format.mime,
+                        "GZEditorPro_Pro." + format.extension, request.encode())
+                }
+                pendingExport = pending
+                exportLaunchId = pending.id
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: OutOfMemoryError) {
-                notice = "Not enough device memory. Try a smaller image."
-            } catch (failure: Exception) {
-                notice = "Export failed: " + (failure.message ?: "source unavailable")
-            } finally { exporting = false }
+                notice = "Not enough device memory to keep this export request."
+            } catch (error: Exception) {
+                notice = "Could not keep the Pro export request. " +
+                    (error.message ?: "Try reducing the complexity of the project.")
+            } finally {
+                busy = false
+            }
         }
     }
-    val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { response ->
-        val request = pendingExport
-        pendingExport = null
-        val uri = response.data?.data
-        if (response.resultCode == Activity.RESULT_OK && uri != null && request != null) {
-            export(uri, request)
+
+    fun resolveExportRecovery(retry: Boolean) {
+        val pending = pendingExport ?: return
+        if (busy || exporting) return
+        busy = true
+        scope.launch {
+            try {
+                if (retry) {
+                    val next = withContext(Dispatchers.IO) { exportJournal.retry(pending) }
+                    pendingExport = next
+                    exportLaunchId = next.id
+                } else {
+                    withContext(Dispatchers.IO) { exportJournal.discard(pending) }
+                    pendingExport = null
+                }
+                exportFailure = null
+                exportRecoveryUnavailable = null
+                showExportRecovery = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                notice = error.message ?: "Could not resolve the pending Pro export."
+            } finally {
+                busy = false
+            }
         }
-    }
-    fun startExport() {
-        if (!ProMath.valid(document)) return
-        pendingExport = ProExportRequest(document, resetDocument, exportSettings, safeExportSize)
-        showExport = false
-        exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = exportSettings.format.mime
-            putExtra(Intent.EXTRA_TITLE, "GZEditorPro_Pro." + exportSettings.format.extension)
-        })
     }
 
     // A hardware display list can retain the previous preview after recomposition.
@@ -805,8 +907,13 @@ internal fun ProWorkspaceScreenContent(
                                         saveError = null
                                         showSave = true
                                     })
-                                DropdownMenuItem(text = { Text("Export image") }, enabled = ProMath.valid(document),
-                                    onClick = { showFile = false; showExport = true })
+                                DropdownMenuItem(text = { Text("Export image") },
+                                    enabled = exportJournalReady && (ProMath.valid(document) || pendingExport != null),
+                                    onClick = {
+                                        showFile = false
+                                        showExportRecovery = pendingExport != null
+                                        showExport = !showExportRecovery
+                                    })
                                 DropdownMenuItem(text = { Text("Fit canvas") }, enabled = document.layers.isNotEmpty(),
                                     onClick = { showFile = false; viewport = ProViewport() })
                                 DropdownMenuItem(text = { Text("Pro help") }, onClick = {
@@ -1407,6 +1514,15 @@ internal fun ProWorkspaceScreenContent(
         confirmButton = { TextButton(onClick = { showAdd = false }) {
             Text("Close", color = EditorMuted)
         } }
+    )
+    val recoverable = pendingExport
+    if (showExportRecovery && recoverable != null && !busy && !exporting) RecoverableExportDialog(
+        request = recoverable,
+        onRetry = { resolveExportRecovery(retry = true) },
+        onDiscard = { resolveExportRecovery(retry = false) },
+        onDismiss = { showExportRecovery = false },
+        unavailable = exportRecoveryUnavailable,
+        failure = exportFailure
     )
     if (showExport) ExportDialog(
         settings = exportSettings, onSettings = { exportSettings = it },

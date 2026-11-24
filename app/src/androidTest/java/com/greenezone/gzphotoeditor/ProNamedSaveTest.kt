@@ -31,9 +31,9 @@ class ProNamedSaveTest {
     }
 
     private fun shape(name: String, color: Int, x: Float = .5f) = ProLayer(
-        uri = "", name = name, kind = ProLayerKind.SHAPE,
+        uri = "", name = name, kind = ProLayerKind.SHAPE, x = x,
         edits = EditDocument(creative = CreativeDocument(shapes = listOf(
-            ShapeOverlay(x = x, width = .2f, height = .2f, color = color, filled = true)
+            ShapeOverlay(width = .2f, height = .2f, color = color, filled = true)
         )))
     )
 

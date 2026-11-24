@@ -46,6 +46,8 @@ import com.greenezone.gzphotoeditor.editor.LocalMask
 import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.PhotoHistogram
 import com.greenezone.gzphotoeditor.editor.ProjectStore
+import com.greenezone.gzphotoeditor.editor.ExportWorkspace
+import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 import com.greenezone.gzphotoeditor.editor.TextOverlay
 import com.greenezone.gzphotoeditor.editor.CreativeDocument
@@ -108,7 +110,9 @@ class AndroidRegularToolsTest {
                 CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
                     MaterialTheme(colorScheme = darkColorScheme()) {
                         PhotoEditorScreen(
-                            initialCollagePhoto = tileEdits?.let { CollagePhoto(uri.toString(), it) },
+                            initialCollagePhoto = tileEdits?.let {
+                                CollagePhoto(uri.toString(), it, id = "legacy-mask-tile")
+                            },
                             onDoneCollagePhoto = onTileDone
                         )
                     }
@@ -284,7 +288,7 @@ class AndroidRegularToolsTest {
         withRegularPhoto(tileEdits = historical, onTileDone = { applied = it }) { uri ->
             assertNoMasksInPhotoTools()
             rule.onNodeWithText("Done").performClick()
-            rule.runOnIdle { assertEquals(CollagePhoto(uri.toString(), historical), applied) }
+            rule.runOnIdle { assertEquals(CollagePhoto(uri.toString(), historical, id = "legacy-mask-tile"), applied) }
         }
     }
 
@@ -507,7 +511,8 @@ class AndroidRegularToolsTest {
     }
 
     @Test fun failedSourceDecodePreservesExistingPhotoDestination() {
-        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val resolver = context.contentResolver
         val destination = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, "gz-existing-destination.jpg")
@@ -525,7 +530,11 @@ class AndroidRegularToolsTest {
                 }
                 assertArrayEquals(existing, resolver.openInputStream(destination)!!.use { it.readBytes() })
             }
-        } finally { resolver.delete(destination, null, null) }
+        } finally {
+            val journal = PendingExportJournal(context.filesDir)
+            journal.read(ExportWorkspace.PHOTO)?.let { journal.discard(it) }
+            resolver.delete(destination, null, null)
+        }
     }
 
     @Test fun blurShowsRealPixelsDuringTheStrokeWithTheControlsHidden() = withRegularPhoto {
@@ -541,19 +550,38 @@ class AndroidRegularToolsTest {
             val inset = (minOf(image.width, image.height) * .012f).toInt()
             return image.getPixel(image.width / 2 + inset, image.height / 2)
         }
-        assertTrue(Color.red(sample()) > 240)
-        canvas.performTouchInput {
-            down(center - Offset(width * .16f, 0f))
-            moveTo(center - Offset(width * .07f, 0f))
-            moveTo(center + Offset(width * .09f, 0f))
+        fun holdStroke() {
+            canvas.performTouchInput {
+                down(center - Offset(width * .16f, 0f))
+                moveTo(center - Offset(width * .07f, 0f))
+                moveTo(center + Offset(width * .09f, 0f))
+            }
         }
-        try {
+
+        fun expectBlurred() {
             rule.waitUntil(15_000) {
                 val color = sample()
                 Color.red(color) in 120..225 && Color.red(color) == Color.green(color) &&
                     Color.green(color) == Color.blue(color)
             }
-        } finally { canvas.performTouchInput { up() } }
+        }
+
+        assertTrue(Color.red(sample()) > 240)
+        holdStroke()
+        try {
+            expectBlurred()
+        } finally {
+            canvas.performTouchInput { cancel() }
+        }
+        rule.waitUntil(15_000) { Color.red(sample()) > 240 }
+
+        holdStroke()
+        try {
+            expectBlurred()
+        } finally {
+            canvas.performTouchInput { up() }
+        }
+        expectBlurred()
         rule.onNodeWithTag("photo-tools").assertDoesNotExist()
     }
 }

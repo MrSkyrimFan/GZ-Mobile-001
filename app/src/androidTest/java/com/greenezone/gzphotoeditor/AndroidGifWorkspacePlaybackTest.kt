@@ -42,7 +42,9 @@ class AndroidGifWorkspacePlaybackTest {
             override val activityResultRegistry = object : ActivityResultRegistry() {
                 override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>,
                     input: I, options: ActivityOptionsCompat?) {
-                    check(contract is ActivityResultContracts.CreateDocument && destination != null)
+                    check(contract is ActivityResultContracts.StartActivityForResult && destination != null)
+                    val intent = input as Intent
+                    check(intent.action == Intent.ACTION_CREATE_DOCUMENT && intent.type == "image/gif")
                     dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(destination))
                 }
             }

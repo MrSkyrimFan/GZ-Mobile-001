@@ -125,23 +125,36 @@ class AndroidGifFidelityTest {
             val output = ByteArrayOutputStream().also { VideoGifSource.write(context, edited, it) }.toByteArray()
 
             val reopened = VideoGifSource.document(context, publish("gz-long-hold-output.gif", output))
-            assertEquals(655560L, reopened.video!!.durationMs)
-            val delays = GifVideoMath.frameDelaysMs(reopened.video!!)
-            assertEquals(655360, delays.dropLast(1).sum())
+            val reopenedClip = requireNotNull(reopened.video)
+            val colorBoundaryMs = 655360
+            assertEquals(655560L, reopenedClip.durationMs)
+            val delays = GifVideoMath.frameDelaysMs(reopenedClip)
+            assertEquals(colorBoundaryMs, delays.dropLast(1).sum())
             assertEquals(200, delays.last())
 
             val decoded = requireNotNull(Movie.decodeByteArray(output, 0, output.size))
             assertEquals(655560, decoded.duration())
             val image = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
             try {
-                decoded.setTime(655359)
+                // Android Movie selects the outgoing frame at an exact cumulative delay.
+                decoded.setTime(colorBoundaryMs - 1)
                 decoded.draw(Canvas(image), 0f, 0f)
                 assertEquals(Color.RED, image.getPixel(0, 0))
-                decoded.setTime(655360)
+                decoded.setTime(colorBoundaryMs + 1)
                 decoded.draw(Canvas(image), 0f, 0f)
                 assertEquals(Color.BLUE, image.getPixel(0, 0))
             } finally {
                 image.recycle()
+            }
+            VideoGifSource.open(context, reopenedClip).use { reader ->
+                for ((time, color) in listOf(colorBoundaryMs - 1 to Color.RED, colorBoundaryMs to Color.BLUE)) {
+                    val frame = reader.frame(time.toLong(), edge = 1)
+                    try {
+                        assertEquals("Reopened frame at ${time} ms", color, frame.getPixel(0, 0))
+                    } finally {
+                        frame.recycle()
+                    }
+                }
             }
         } finally {
             media.forEach { resolver.delete(it, null, null) }
