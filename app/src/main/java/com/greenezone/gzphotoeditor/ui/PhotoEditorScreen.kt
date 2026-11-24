@@ -1,8 +1,5 @@
 package com.greenezone.gzphotoeditor.ui
 
-import android.app.Activity
-import android.app.ActivityManager
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -43,7 +40,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -68,9 +64,6 @@ import com.greenezone.gzphotoeditor.editor.AutoEnhanceMath
 import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.BrushStroke
 import com.greenezone.gzphotoeditor.editor.EditDocument
-import com.greenezone.gzphotoeditor.editor.EditDocumentCodec
-import com.greenezone.gzphotoeditor.editor.PendingExport
-import com.greenezone.gzphotoeditor.editor.PendingExportPhase
 import com.greenezone.gzphotoeditor.editor.CollageStore
 import com.greenezone.gzphotoeditor.editor.CropFrame
 import com.greenezone.gzphotoeditor.editor.CollageDocument
@@ -83,10 +76,6 @@ import com.greenezone.gzphotoeditor.editor.ProPixelSize
 import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
-import com.greenezone.gzphotoeditor.editor.ExportSettings
-import com.greenezone.gzphotoeditor.editor.writeStagedImage
-import com.greenezone.gzphotoeditor.editor.ImageExportWriter
-import com.greenezone.gzphotoeditor.editor.ExportSizing
 import com.greenezone.gzphotoeditor.editor.InkMath
 import com.greenezone.gzphotoeditor.editor.InkStroke
 import com.greenezone.gzphotoeditor.editor.CreativeRaster
@@ -104,7 +93,6 @@ import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.editor.PrivacyEdit
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
 import com.greenezone.gzphotoeditor.editor.PhotoGeometry
-import com.greenezone.gzphotoeditor.editor.PhotoGeometryPlan
 import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.editor.PendingImageRecipe
 import com.greenezone.gzphotoeditor.editor.PendingProExportRecipe
@@ -116,12 +104,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
-import org.json.JSONObject
 import kotlin.math.roundToInt
 
 private data class PhotoReplacement(
@@ -130,36 +115,6 @@ private data class PhotoReplacement(
     val projectName: String? = null
 )
 
-private data class ExportRequest(
-    val source: Uri,
-    val settings: ExportSettings,
-    val edits: EditDocument
-) {
-    fun encode(): String {
-        val photo = JSONObject().apply {
-            put("source", source.toString())
-            put("edits", EditDocumentCodec.encode(edits))
-        }
-        return PendingImageRecipe(settings, photo.toString()).encode()
-    }
-
-    companion object {
-        fun decode(pending: PendingExport): ExportRequest? {
-            if (pending.workspace != ExportWorkspace.PHOTO) return null
-            val image = PendingImageRecipe.decode(pending.recipe) ?: return null
-            if (image.settings.format.mime != pending.mime) return null
-            return try {
-                val photo = JSONObject(image.payload)
-                val source = Uri.parse(photo.getString("source"))
-                val edits = EditDocumentCodec.decode(photo.getString("edits")) ?: return null
-                source.takeIf { it.scheme == "content" }?.let { ExportRequest(it, image.settings, edits) }
-            } catch (_: Exception) { null }
-        }
-    }
-}
-private data class PreviewStamp(val source: Bitmap, val edits: EditDocument)
-
-private data class CropPreview(val source: Bitmap, val edits: EditDocument, val bitmap: Bitmap)
 
 /**
  * Image-first editor. The image covers the entire canvas behind lightweight chrome.
@@ -175,10 +130,6 @@ fun PhotoEditorScreen(
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
-    val exportMaxPixels = remember(context) {
-        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        GeometryMath.safeExportPixels(manager.memoryClass)
-    }
     // The parent Collage record changes only through Apply or Done. Keep this
     // entry snapshot immutable while the nested editor loads/saves other media.
     val tileEntryBaseline = remember(initialCollagePhoto) { initialCollagePhoto }
@@ -224,13 +175,7 @@ fun PhotoEditorScreen(
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
     var sourceSize by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var processed by remember { mutableStateOf<Bitmap?>(null) }
-    var processedStamp by remember { mutableStateOf<PreviewStamp?>(null) }
-    var beforeStamp by remember { mutableStateOf<Pair<Bitmap, PhotoGeometry>?>(null) }
-    var cropPreview by remember { mutableStateOf<CropPreview?>(null) }
-    var beforeImage by remember { mutableStateOf<Bitmap?>(null) }
-    var filterThumbs by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
-    var quickSource by remember { mutableStateOf<Bitmap?>(null) }
+    val previewState = remember { RegularPhotoPreviewState() }
     var liveGesture by remember { mutableStateOf(false) }
     var painting by remember { mutableStateOf(false) }
     var document by remember { mutableStateOf(EditDocument()) }
@@ -249,18 +194,11 @@ fun PhotoEditorScreen(
     var panY by remember { mutableFloatStateOf(0f) }
     var notice by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var exporting by remember { mutableStateOf(false) }
+    val photoExport = rememberPhotoExportController(startupJournal, restorePending = tileEntryBaseline == null) {
+        notice = it
+    }
+    val exporting by photoExport.inProgress
     var loadingToken by remember { mutableIntStateOf(0) }
-    val exportJournal = startupJournal
-    val recoveredExport = remember {
-        if (tileEntryBaseline == null) exportJournal.read(ExportWorkspace.PHOTO) else null
-    }
-    var exportSettings by remember {
-        mutableStateOf(recoveredExport?.let(ExportRequest::decode)?.settings ?: ExportSettings())
-    }
-    var pendingExport by remember { mutableStateOf(recoveredExport) }
-    var exportLaunchId by remember { mutableStateOf<String?>(null) }
-    var showExportRecovery by remember { mutableStateOf(recoveredExport != null) }
     var creativeTools by remember { mutableStateOf(CreativeToolState()) }
     var currentInk by remember { mutableStateOf<InkStroke?>(null) }
     var showTextDialog by remember { mutableStateOf(false) }
@@ -276,7 +214,6 @@ fun PhotoEditorScreen(
     var showTileExit by remember { mutableStateOf(false) }
     var closeAfterProjectSave by remember { mutableStateOf(false) }
 
-    var showExport by remember { mutableStateOf(false) }
     var showHistogram by remember { mutableStateOf(false) }
     var showSaveLook by remember { mutableStateOf(false) }
     var showSaveProject by remember { mutableStateOf(false) }
@@ -354,14 +291,14 @@ fun PhotoEditorScreen(
                 sourceUri = uri
                 original = bitmap
                 sourceSize = dimensions
-                processed = initialPreview
-                processedStamp = PreviewStamp(
+                previewState.processed = initialPreview
+                previewState.processedStamp = PreviewStamp(
                     bitmap, restored?.takeIf { it.privacy.isNotEmpty() } ?: EditDocument()
                 )
-                beforeImage = bitmap
-                beforeStamp = bitmap to PhotoGeometry.from(EditDocument())
-                filterThumbs = emptyList()
-                quickSource = null
+                previewState.beforeImage = bitmap
+                previewState.beforeStamp = bitmap to PhotoGeometry.from(EditDocument())
+                previewState.filterThumbs = emptyList()
+                previewState.quickSource = null
                 painting = false
                 liveGesture = false
                 val loadedDocument = restored ?: EditDocument()
@@ -398,74 +335,6 @@ fun PhotoEditorScreen(
             }
         }
     }
-
-    fun retainExportForRetry(pending: PendingExport, message: String) {
-        notice = message
-        try {
-            pendingExport = exportJournal.failed(pending)
-        } catch (_: Exception) {
-            // The last persisted phase still prevents another write on redelivery.
-            pendingExport = exportJournal.read(ExportWorkspace.PHOTO)
-        }
-        showExportRecovery = pendingExport != null
-    }
-
-    fun exportImage(output: Uri, request: ExportRequest, pending: PendingExport) {
-        val source = request.source
-        if (source == output) {
-            retainExportForRetry(pending, "Export destination cannot overwrite the original.")
-            return
-        }
-        scope.launch {
-            exporting = true
-            showExport = false
-            showExportRecovery = false
-            notice = "Exporting image…"
-            try {
-                val dimensions = withContext(Dispatchers.Default) {
-                    var decoded: Bitmap? = null
-                    var rendered: Bitmap? = null
-                    var sized: Bitmap? = null
-                    try {
-                        val originalFull = ImagePipeline.decode(
-                            resolver, source, ImagePipeline.EXPORT_MAX_EDGE, exportMaxPixels
-                        )
-                        decoded = originalFull
-                        val full = ImagePipeline.render(originalFull, request.edits) { ensureActive() }
-                        rendered = full
-                        val photo = ExportSizing.layout(full, request.settings)
-                        sized = photo
-                        withContext(Dispatchers.IO) {
-                            writeStagedImage(context.cacheDir,
-                                openDestination = {
-                                    exportJournal.copying(pending)
-                                    resolver.openOutputStream(output, "wt")
-                                },
-                                checkActive = { ensureActive() }) { stream -> ImageExportWriter.write(photo, request.settings, stream) }
-                        }
-                        photo.width.toString() + " × " + photo.height
-                    } finally {
-                        sized?.let { if (it !== rendered && !it.isRecycled) it.recycle() }
-                        rendered?.let { if (it !== decoded && !it.isRecycled) it.recycle() }
-                        decoded?.let { if (!it.isRecycled) it.recycle() }
-                    }
-                }
-                exportJournal.discard(pending)
-                pendingExport = null
-                notice = "Saved " + dimensions + " • Original unchanged"
-            } catch (cancelled: CancellationException) {
-                // The existing phase stays on disk. A new host can offer a new destination.
-                throw cancelled
-            } catch (_: OutOfMemoryError) {
-                retainExportForRetry(pending, "Not enough memory to export. Choose a smaller size.")
-            } catch (error: Exception) {
-                retainExportForRetry(pending, "Export failed: " + (error.message ?: "unknown error"))
-            } finally {
-                exporting = false
-            }
-        }
-    }
-
 
     fun chooseWorkspace(mode: WorkspaceMode) {
         if (onDoneCollagePhoto != null || busy || exporting) return
@@ -567,12 +436,12 @@ fun PhotoEditorScreen(
         sourceUri = null
         original = null
         sourceSize = null
-        processed = null
-        processedStamp = null
-        beforeImage = null
-        beforeStamp = null
-        filterThumbs = emptyList()
-        quickSource = null
+        previewState.processed = null
+        previewState.processedStamp = null
+        previewState.beforeImage = null
+        previewState.beforeStamp = null
+        previewState.filterThumbs = emptyList()
+        previewState.quickSource = null
         document = EditDocument()
         baselineUri = null
         baselineDocument = EditDocument()
@@ -590,7 +459,7 @@ fun PhotoEditorScreen(
         panX = 0f
         panY = 0f
         notice = ""
-        showExport = false
+        photoExport.closeDialog()
         showTextDialog = false
         showRegularExit = false
         showTileExit = false
@@ -774,71 +643,18 @@ fun PhotoEditorScreen(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
         if (it != null) requestPhotoReplacement(PhotoReplacement(it))
     }
-    RecoverableExportPicker(
-        pending = pendingExport,
-        launchId = exportLaunchId,
-        onLaunch = { if (exportLaunchId == it) exportLaunchId = null },
-        onLaunchFailed = { pending, error ->
-            retainExportForRetry(pending, error.message ?: "Could not open the destination picker")
-        },
-        onResult = resultReceived@ { pending, result ->
-            try {
-                val active = exportJournal.read(ExportWorkspace.PHOTO)
-                if (active == null || active.id != pending.id || active.phase != PendingExportPhase.PICKING) {
-                    return@resultReceived
-                }
-                if (result.resultCode != Activity.RESULT_OK) {
-                    if (exportJournal.cancelPicker(pending)) {
-                        pendingExport = null
-                        showExportRecovery = false
-                        notice = "Export canceled"
-                    }
-                } else {
-                    val output = result.data?.data
-                    val request = ExportRequest.decode(pending)
-                    if (output == null || request == null) {
-                        retainExportForRetry(pending, "The export destination or recipe could not be restored.")
-                    } else {
-                        val claimed = exportJournal.claim(pending, output)
-                        if (claimed != null) {
-                            pendingExport = claimed
-                            exportImage(output, request, claimed)
-                        }
-                    }
-                }
-            } catch (error: Exception) {
-                retainExportForRetry(pending, error.message ?: "Could not start the export")
-            }
-        }
-    )
-    fun requestExport() {
-        val source = sourceUri ?: return
-        showExport = false
-        if (pendingExport != null) {
-            showExportRecovery = true
-            return
-        }
-        val settings = exportSettings
-        val target = if (settings.preset == com.greenezone.gzphotoeditor.editor.SocialPreset.ORIGINAL)
-            "GZEditorPro_Edit" else "GZEditorPro_" + settings.preset.name
-        try {
-            val pending = exportJournal.begin(ExportWorkspace.PHOTO, settings.format.mime,
-                target + "." + settings.format.extension, ExportRequest(source, settings, document).encode())
-            pendingExport = pending
-            exportLaunchId = pending.id
-        } catch (error: Exception) {
-            notice = "Could not prepare export: " + (error.message ?: "local storage failed")
-        }
-    }
-    LaunchedEffect(recoveredExport?.id, workspaceNavigation.current) {
-        if (workspaceNavigation.current != WorkspaceMode.PHOTO || sourceUri != null) return@LaunchedEffect
-        recoveredExport?.let { pending ->
-            val request = ExportRequest.decode(pending)
-            if (request != null) {
-                loadPhoto(request.source, request.edits, restoringExport = true)
-            } else {
-                notice = "The previous export recipe could not be restored."
-            }
+    var recoveredPhotoHandled by remember(photoExport.initialRecoveryId) { mutableStateOf(false) }
+    LaunchedEffect(photoExport.initialRecoveryId, workspaceNavigation.current) {
+        if (photoExport.initialRecoveryId == null || workspaceNavigation.current != WorkspaceMode.PHOTO ||
+            recoveredPhotoHandled
+        ) return@LaunchedEffect
+        recoveredPhotoHandled = true
+        if (sourceUri != null) return@LaunchedEffect
+        val request = photoExport.recoveredRequest
+        if (request != null) {
+            loadPhoto(request.source, request.edits, restoringExport = true)
+        } else {
+            notice = "The previous export recipe could not be restored."
         }
     }
     fun openPicker() {
@@ -1001,120 +817,25 @@ fun PhotoEditorScreen(
         }
     }
 
-    LaunchedEffect(original) {
-        val input = original ?: run { quickSource = null; return@LaunchedEffect }
-        val small = withContext(Dispatchers.Default) {
-            val scale = minOf(1f, 660f / maxOf(input.width, input.height))
-            if (scale >= 1f) input
-            else Bitmap.createScaledBitmap(input,
-                (input.width * scale).roundToInt().coerceAtLeast(1),
-                (input.height * scale).roundToInt().coerceAtLeast(1), true)
-        }
-        quickSource = small
-    }
-
     val editingBlurBrush = selectedTab == EditTab.PRIVACY &&
         document.privacy.getOrNull(selectedPrivacy)?.kind == PrivacyKind.BLUR_BRUSH
-    LaunchedEffect(quickSource, painting, editingBlurBrush) {
-        val fast = quickSource ?: return@LaunchedEffect
-        if (!painting || !editingBlurBrush) return@LaunchedEffect
-        try {
-            // Complete the current frame, then render the newest pointer position.
-            snapshotFlow { document }.conflate().collect { edits ->
-                processed = withContext(Dispatchers.Default) {
-                    val running = currentCoroutineContext()
-                    ImagePipeline.render(fast, edits) { running.ensureActive() }
-                }
-                processedStamp = original?.let { PreviewStamp(it, edits) }
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            notice = "Preview error: " + (error.message ?: "unexpected error")
-        }
-    }
-
     val cropTab = selectedTab == EditTab.CROP
     val previewEdits = if (cropTab) {
         PrivacyMath.retainAuthoringGeometry(document,
             document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f,
                 cropCenterY = .5f, cropFrameRatioLocked = false))
     } else document
-    LaunchedEffect(original, if (painting) null else previewEdits, liveGesture, quickSource, painting, cropTab) {
-        if (!cropTab) cropPreview = null
-        val input = original ?: run { processed = null; cropPreview = null; return@LaunchedEffect }
-        if (painting) return@LaunchedEffect
-        delay(if (liveGesture) 20L else 45L)
-        try {
-            val fast = quickSource
-            if (fast != null && fast !== input && (!cropTab || liveGesture)) {
-                val preview = withContext(Dispatchers.Default) {
-                    val running = currentCoroutineContext()
-                    ImagePipeline.render(fast, previewEdits) { running.ensureActive() }
-                }
-                processed = preview
-                processedStamp = PreviewStamp(input, previewEdits)
-            }
-            if (!liveGesture || fast == null || fast === input) {
-                if (fast != null && fast !== input && !cropTab) delay(140L)
-                val quality = withContext(Dispatchers.Default) {
-                    val running = currentCoroutineContext()
-                    ImagePipeline.render(input, previewEdits) { running.ensureActive() }
-                }
-                processed = quality
-                processedStamp = PreviewStamp(input, previewEdits)
-                if (cropTab) cropPreview = CropPreview(input, previewEdits, quality)
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            notice = "Preview error: " + (error.message ?: "unexpected error")
-        }
-    }
-
-    // Keep before/after geometry identical; compute outside the UI thread.
-    LaunchedEffect(original, previewEdits.quarterTurns, previewEdits.mirrored,
-        previewEdits.flipVertical, previewEdits.crop, previewEdits.cropFrame, previewEdits.cropCenterX,
-        previewEdits.cropCenterY, previewEdits.straightenDegrees, previewEdits.cropFrameRatioLocked) {
-        val input = original ?: run { beforeImage = null; return@LaunchedEffect }
-        try {
-            val result = withContext(Dispatchers.Default) {
-                ImagePipeline.geometry(input, previewEdits)
-            }
-            beforeImage = result
-            beforeStamp = input to PhotoGeometry.from(previewEdits)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            beforeImage = input
-            beforeStamp = null
-        }
-    }
-
-    LaunchedEffect(original) {
-        val input = original ?: run { filterThumbs = emptyList(); return@LaunchedEffect }
-        try {
-            val created = withContext(Dispatchers.Default) {
-                val working = currentCoroutineContext()
-                val longest = maxOf(input.width, input.height)
-                val sizeFactor = 128f / longest.coerceAtLeast(1)
-                val width = (input.width * sizeFactor).roundToInt().coerceAtLeast(1)
-                val height = (input.height * sizeFactor).roundToInt().coerceAtLeast(1)
-                val thumbnail = Bitmap.createScaledBitmap(input, width, height, true)
-                listOf(thumbnail) + Looks.all.map { look ->
-                    working.ensureActive()
-                    ImagePipeline.render(thumbnail, EditDocument(grade = look.grade)) {
-                        working.ensureActive()
-                    }
-                }
-            }
-            filterThumbs = created
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            filterThumbs = emptyList()
-        }
-    }
+    RenderRegularPhotoPreview(
+        state = previewState,
+        original = original,
+        previewEdits = previewEdits,
+        cropTab = cropTab,
+        liveGesture = liveGesture,
+        painting = painting,
+        editingBlurBrush = editingBlurBrush,
+        currentDocument = { document },
+        onError = { notice = it }
+    )
 
     LaunchedEffect(notice) {
         if (notice.isNotEmpty()) {
@@ -1159,9 +880,9 @@ fun PhotoEditorScreen(
 
     // The last processed image may be a cropped preview from another tool.
     // Only attach handles when the matching uncropped image is actually shown.
-    val readyCrop = cropPreview?.takeIf { cropTab && it.source === original && it.edits == previewEdits }
-    val selectedImage = if (compare) beforeImage ?: original
-        else readyCrop?.bitmap ?: processed ?: original
+    val readyCrop = previewState.cropPreview?.takeIf { cropTab && it.source === original && it.edits == previewEdits }
+    val selectedImage = if (compare) previewState.beforeImage ?: original
+        else readyCrop?.bitmap ?: previewState.processed ?: original
     val cropEditing = readyCrop != null && !compare && !busy && !exporting && zoom <= 1.001f
     val cropInset = if (cropTab) 16.dp else 0.dp
     val cropImageSize = readyCrop?.bitmap?.let { it.width to it.height } ?: original?.let {
@@ -1196,7 +917,7 @@ fun PhotoEditorScreen(
             // Fit the crop image, Before image, and gesture coordinates inside the
             // same viewport so visible handles stay clear of the header and dock.
             Box(Modifier.fillMaxSize().then(viewportInsets)) {
-                val stableCoordinates = beforeImage ?: selectedImage
+                val stableCoordinates = previewState.beforeImage ?: selectedImage
                 Image(
                     bitmap = selectedImage.asImageBitmap(),
                     contentDescription = "Photo editing canvas. Tap to hide or show tools.",
@@ -1399,7 +1120,7 @@ fun PhotoEditorScreen(
                     TextButton(
                         onClick = {
                             if (onDoneCollagePhoto != null) finishCollageTile()
-                            else showExport = true
+                            else photoExport.openDialog()
                         },
                         enabled = !busy && !exporting
                     ) {
@@ -1482,51 +1203,55 @@ fun PhotoEditorScreen(
                         } else Modifier)
                         .navigationBarsPadding()
                 ) {
-                    EditorDock(
-                        tab = selectedTab,
-                        onTab = {
-                            selectedTab = it
-                            if (it == EditTab.PRIVACY || it == EditTab.TEXT || it == EditTab.DRAW ||
-                                it == EditTab.SHAPES || it == EditTab.CROP) {
-                                zoom = 1f; panX = 0f; panY = 0f
-                            }
-                        },
-                        document = document,
-                        original = original,
-                        thumbnails = filterThumbs,
-                        savedLooks = savedLooks,
-                        activeLook = activeLook,
-                        busy = busy || exporting,
-                        selectedPrivacyIndex = selectedPrivacy,
-                        onSelectPrivacy = { selectedPrivacy = it },
-                        onAddPrivacy = ::addPrivacy,
-                        onDeletePrivacy = ::removePrivacy,
-                        onUndoPrivacyStroke = { privacyStrokeEdit(false) },
-                        onClearPrivacy = { privacyStrokeEdit(true) },
-                        onCommit = {
-                            commit(it)
-                            activeLook = "custom"
-                        },
-                        onSlide = ::slide,
-                        onSlideFinished = ::finishSlide,
-                        onSelectLook = ::applyLook,
-                        onAutoTone = ::autoTone,
-                        onAutoWB = ::autoWB,
-                        onSaveLook = ::saveLook,
-                        onSaveProject = ::saveProject,
-                        onProjects = ::openProjects,
-                        onOpen = ::openPicker,
-                        onCollage = { chooseWorkspace(WorkspaceMode.COLLAGE) },
-                        showCollage = onDoneCollagePhoto == null,
-                        creativeTool = creativeTools,
-                        onCreativeTool = { creativeTools = it },
-                        onNewText = { editWords(true) },
-                        onEditText = { editWords(false) },
-                        cropImageWidth = cropImageSize?.first ?: 1,
-                        cropImageHeight = cropImageSize?.second ?: 1,
-                        onHistogram = if (tileEntryBaseline == null && onDoneCollagePhoto == null) {
-                            { showHistogram = true }
-                        } else null
+                    RegularPhotoDock(
+                        state = RegularDockState(
+                            tab = selectedTab,
+                            document = document,
+                            original = original,
+                            thumbnails = previewState.filterThumbs,
+                            savedLooks = savedLooks,
+                            activeLook = activeLook,
+                            busy = busy || exporting,
+                            privacyIndex = selectedPrivacy,
+                            isStandalone = onDoneCollagePhoto == null,
+                            showHistogram = tileEntryBaseline == null && onDoneCollagePhoto == null,
+                            creativeTool = creativeTools,
+                            cropSize = cropImageSize
+                        ),
+                        actions = RegularDockActions(
+                            onTab = {
+                                selectedTab = it
+                                if (it == EditTab.PRIVACY || it == EditTab.TEXT || it == EditTab.DRAW ||
+                                    it == EditTab.SHAPES || it == EditTab.CROP) {
+                                    zoom = 1f
+                                    panX = 0f
+                                    panY = 0f
+                                }
+                            },
+                            onSelectPrivacy = { selectedPrivacy = it },
+                            onAddPrivacy = ::addPrivacy,
+                            onDeletePrivacy = ::removePrivacy,
+                            onUndoPrivacyStroke = { privacyStrokeEdit(false) },
+                            onClearPrivacy = { privacyStrokeEdit(true) },
+                            onCommit = {
+                                commit(it)
+                                activeLook = "custom"
+                            },
+                            onSlide = ::slide,
+                            onSlideFinished = ::finishSlide,
+                            onSelectLook = ::applyLook,
+                            onAutoTone = ::autoTone,
+                            onAutoWB = ::autoWB,
+                            onSaveLook = ::saveLook,
+                            onSaveProject = ::saveProject,
+                            onProjects = ::openProjects,
+                            onOpen = ::openPicker,
+                            onCollage = { chooseWorkspace(WorkspaceMode.COLLAGE) },
+                            onCreativeTool = { creativeTools = it },
+                            onNewText = { editWords(true) },
+                            onEditText = { editWords(false) },
+                            onHistogram = { showHistogram = true }
+                        )
                     )
                 }
             }
@@ -1552,8 +1277,8 @@ fun PhotoEditorScreen(
 
     if (showHistogram && selectedImage != null) {
         val image = original?.let { input ->
-            if (compare) beforeImage.takeIf { beforeStamp == (input to PhotoGeometry.from(previewEdits)) }
-            else selectedImage.takeIf { processedStamp == PreviewStamp(input, previewEdits) }
+            if (compare) previewState.beforeImage.takeIf { previewState.beforeStamp == (input to PhotoGeometry.from(previewEdits)) }
+            else selectedImage.takeIf { previewState.processedStamp == PreviewStamp(input, previewEdits) }
         }
         PhotoHistogramDialog(
             image = image,
@@ -1562,54 +1287,7 @@ fun PhotoEditorScreen(
             exposure = previewEdits.grade.exposure
         ) { showHistogram = false }
     }
-    val recovery = pendingExport
-    if (showExportRecovery && recovery != null && !busy && !exporting) {
-        val recoverable = remember(recovery.id) { ExportRequest.decode(recovery) != null }
-        RecoverableExportDialog(
-            request = recovery,
-            unavailable = if (recoverable) null else "The previous export recipe could not be restored.",
-            failure = notice.takeIf { it.startsWith("Export failed:") },
-            onRetry = {
-                try {
-                    val retry = exportJournal.retry(recovery)
-                    pendingExport = retry
-                    showExportRecovery = false
-                    exportLaunchId = retry.id
-                } catch (error: Exception) {
-                    notice = error.message ?: "Could not retry the export"
-                }
-            },
-            onDiscard = {
-                try {
-                    exportJournal.discard(recovery)
-                    pendingExport = null
-                    showExportRecovery = false
-                } catch (error: Exception) {
-                    notice = error.message ?: "Could not clear the export request"
-                }
-            },
-            onDismiss = { showExportRecovery = false }
-        )
-    }
-    if (showExport) {
-        val originalOutput = sourceSize?.let { (width, height) ->
-            val (decodeWidth, decodeHeight) = ImagePipeline.decodeSize(
-                width, height, ImagePipeline.EXPORT_MAX_EDGE, exportMaxPixels
-            )
-            val geometry = PhotoGeometryPlan(decodeWidth, decodeHeight, PhotoGeometry.from(document))
-            val result = "${geometry.width} × ${geometry.height} pixels"
-            if (width != decodeWidth || height != decodeHeight) {
-                "$result (limited by device memory or maximum image size)"
-            } else result
-        } ?: "Available after opening a photo"
-        ExportDialog(
-            settings = exportSettings,
-            onSettings = { exportSettings = it },
-            onSave = ::requestExport,
-            onDismiss = { showExport = false },
-            originalOutput = originalOutput
-        )
-    }
+    PhotoExportDialogs(photoExport, sourceUri, sourceSize, document, busy, notice)
     if (showTextDialog) {
         TextEditDialog(
             content = textDraft,

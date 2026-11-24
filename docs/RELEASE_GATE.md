@@ -8,6 +8,16 @@
 - [ ] Exercise Pro layer selection, transform, masks, opacity/blend, painting and repair through pixel change, Undo/Redo, save/reopen and export. Check Back through active tools, menus, dialogs, keyboard and workspaces. Verify physical gestures from both edges, half-cancel and rapid double Back on a handset, including picker/IME ownership.
 - [ ] Run JVM and complete API 29/API 35 instrumentation on the repair commit, including independent Collage tile rendering and save/reopen. For a combined phone build, provide the commit, run, APK artifact, APK hash, signing/package/version details, and one compact phone script. Engineering merge authority and owner acceptance are separate. Mark physical-device and formal workspace acceptance only from the corresponding results.
 
+### November 23 independent audit cases
+
+Use the [audit repair evidence index](AUDIT_2_REPAIR_VERIFICATION.md) and [PR #26](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/26) for the exact candidate, current main, receipt archives, and APK identity.
+
+- Exercise default Save across named project opens and Undo/Redo in Pro and GIF. Check confirmed replacement and deletion, and verify old and newly written editable projects after reopen. Reject a Pro recipe that exceeds its reader budget while preserving the previous save.
+- Follow protected source pixels through flips, quarter turns, straightening, crop and reopen. Check decoded exported pixels for Regular and a selected Collage tile. Verify named deletion, dirty-photo replacement, duplicate-source tile movement, relink and staged storage failure.
+- Confirm a delayed Android picker result can write the original immutable recipe after an Activity recreation. Check cancellation and duplicate delivery, and verify retry to a fresh destination after an ambiguous write. Check real process reclamation with a PID change and a separate picker on a handset.
+- Verify video GIF crop, aspect, timeline, delays, export time, reopen and playback with independent media decoders while keeping normal-resolution baseline performance. Check both Android 10 and 15.
+- Physical Back and provider-specific behavior remain handset acceptance cases. Exercise both edges, canceled gestures, picker and keyboard ownership, source grant loss, and a provider with aliases or a partial write.
+
 ### Regression cases found after Revision 4
 
 - In Pro, check brush opacity and masking against an occluding image while the pointer is still down. Check that live erasing reveals the lower layer or transparency and that a second pointer cancels without an Undo entry. Verify committed paint and erase through raster output and Undo/Redo.
@@ -51,7 +61,7 @@ Refer also to `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md` for lawful original-cod
 - [ ] Real GIF89a multi-frame output with tested Android decoder, timing/loop/ordering, saved project/undo and safe source ownership.
 - [ ] No new permission, dependency, AI, ad, account, watermark or network regressions.
 - [ ] Exact PR HEAD passed CI, merged main Android bitmap/Compose tests passed, expected APK artifact exists.
-- [ ] Combined physical phone check `PHONE_TEST_WAVE8.md` for 0.8 + 0.9; commercial release and professional/RAW/video work remain open.
+- [ ] Historical 0.8 and 0.9 physical phone check `PHONE_TEST_WAVE8.md`; commercial release and professional/RAW/video work remain open.
 
 ## v0.12.1 independent AAA audit — release gate remains OPEN
 - Source audit: `docs/AAA_RELEASE_AUDIT_013.md`. Owner requested complete AAA verification; **not achieved** at this stage.

@@ -26,7 +26,9 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performScrollToNode
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -38,6 +40,20 @@ import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.performTextInput
+import com.greenezone.gzphotoeditor.editor.CollageDocument
+import com.greenezone.gzphotoeditor.editor.CollageLayout
+import com.greenezone.gzphotoeditor.editor.CollagePhoto
+import com.greenezone.gzphotoeditor.editor.CollageQuality
+import com.greenezone.gzphotoeditor.editor.CollageStore
+import com.greenezone.gzphotoeditor.editor.CollageTemplate
+import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.PendingImageRecipe
+import com.greenezone.gzphotoeditor.editor.PrivacyEdit
+import com.greenezone.gzphotoeditor.editor.PrivacyKind
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -111,6 +127,16 @@ class AndroidExportRecoveryTest {
             } finally { actual.recycle() }
             assertArrayEquals(SENTINEL, resolver.openInputStream(duplicateDestination)!!.use { it.readBytes() })
             assertNull(journal.read(ExportWorkspace.PHOTO))
+
+            rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
+            rule.onNodeWithText("Open media").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Photo editing Pro").performClick()
+            rule.onNodeWithText("Add first photo").assertIsDisplayed()
+            rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
+            rule.onNodeWithText("Open media").assertIsDisplayed()
+            rule.waitForIdle()
+            rule.onNodeWithTag("photo-tools").assertDoesNotExist()
         }
     }
 
@@ -125,6 +151,106 @@ class AndroidExportRecoveryTest {
         }
     }
 
+    @Test fun delayedCollageDestinationRestoresBothTilesAndWritesPngOnceAfterRecreation() {
+        journal.read(ExportWorkspace.COLLAGE)?.let { journal.discard(it) }
+        val first = createMedia("recovery-collage-left.png")
+        val second = createMedia("recovery-collage-right.png")
+        val destination = createMedia("recovery-collage-export.png")
+        val duplicate = createMedia("recovery-collage-unrelated.png")
+        val id = System.nanoTime()
+        val originalName = "Recovery source $id"
+        val restoredName = "Recovery result $id"
+        val saved = CollageDocument(
+            photos = listOf(
+                CollagePhoto(first.toString(), EditDocument(privacy = listOf(
+                    PrivacyEdit(kind = PrivacyKind.BLACK_BAR, width = .5f, height = .5f)
+                )), id = "recovery-left"),
+                CollagePhoto(second.toString(), EditDocument(flipVertical = true), id = "recovery-right")
+            ),
+            layout = CollageLayout(template = CollageTemplate.SIDE_BY_SIDE, margin = 0f, gap = 0f,
+                cornerRadius = 0f, border = 0f, quality = CollageQuality.STANDARD)
+        )
+        try {
+            writeSource(first, Bitmap.createBitmap(IntArray(96 * 192) { Color.RED },
+                96, 192, Bitmap.Config.ARGB_8888))
+            writeSource(second, Bitmap.createBitmap(IntArray(96 * 192) { index ->
+                if (index / 96 < 96) Color.BLUE else Color.GREEN
+            }, 96, 192, Bitmap.Config.ARGB_8888))
+            listOf(destination, duplicate).forEach { uri ->
+                resolver.openOutputStream(uri)!!.use { it.write(SENTINEL) }
+            }
+            check(CollageStore.save(context, originalName, saved))
+
+            val registry = DelayedPicker(first)
+            rule.setContent { Workspace(registry) }
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Collage maker").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Projects").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("Projects").performClick()
+            rule.onNodeWithText(originalName).performClick()
+            rule.onNodeWithText("Open").performClick()
+            waitForCollagePreview()
+            rule.onNodeWithText("Export").performClick()
+            rule.onNodeWithText("JPEG · JPG  ▾").performClick()
+            rule.onNodeWithText("PNG · Lossless").performClick()
+            rule.onNodeWithText("Save PNG").performClick()
+            rule.runOnIdle { assertEquals(1, registry.launches) }
+            val pending = requireNotNull(journal.read(ExportWorkspace.COLLAGE))
+            assertEquals(PendingExportPhase.PICKING, pending.phase)
+            val encoded = requireNotNull(PendingImageRecipe.decode(pending.recipe))
+            assertEquals(saved, CollageStore.decode(encoded.payload))
+
+            val restoredPicker = recreateWithPendingPicker(registry, first)
+            assertEquals(pending.id, journal.read(ExportWorkspace.COLLAGE)?.id)
+            waitForCollagePreview()
+            rule.runOnIdle {
+                restoredPicker.deliver(Activity.RESULT_OK, destination)
+                restoredPicker.deliver(Activity.RESULT_OK, duplicate)
+            }
+            rule.waitUntil(30_000) {
+                rule.onAllNodesWithText("Collage saved", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            val options = BitmapFactory.Options()
+            val output = resolver.openInputStream(destination)!!.use {
+                requireNotNull(BitmapFactory.decodeStream(it, null, options))
+            }
+            try {
+                assertEquals("image/png", options.outMimeType)
+                val side = output.width
+                assertEquals(side, output.height)
+                assertTrue("Expected export resolution above preview size", side in 961..1600)
+                assertEquals(Color.BLACK, output.getPixel(side / 4, side / 2))
+                assertEquals(Color.RED, output.getPixel(side / 4, side / 8))
+                assertEquals(Color.GREEN, output.getPixel(3 * side / 4, side / 4))
+                assertEquals(Color.BLUE, output.getPixel(3 * side / 4, 3 * side / 4))
+            } finally { output.recycle() }
+            assertArrayEquals(SENTINEL, resolver.openInputStream(duplicate)!!.use { it.readBytes() })
+            assertNull(journal.read(ExportWorkspace.COLLAGE))
+
+            // Save the restored editor itself. Export pixels alone only prove the journal recipe.
+            rule.onNodeWithTag("collage-sections").performScrollToNode(hasText("Photos"))
+            rule.onNodeWithText("Photos").performClick()
+            rule.onNodeWithTag("collage-tile-actions").performScrollToNode(hasText("Save project"))
+            rule.onNodeWithText("Save project").performClick()
+            rule.onNode(hasSetTextAction()).performTextInput(restoredName)
+            rule.onNodeWithText("Save").performClick()
+            assertEquals(saved, CollageStore.load(context, restoredName))
+        } finally {
+            journal.read(ExportWorkspace.COLLAGE)?.let { journal.discard(it) }
+            CollageStore.delete(context, originalName)
+            CollageStore.delete(context, restoredName)
+            listOf(first, second, destination, duplicate).forEach { resolver.delete(it, null, null) }
+        }
+    }
+
+    private fun waitForCollagePreview() {
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     private fun withDelayedExport(
         test: (DelayedPicker, Uri, Uri, Uri) -> Unit
     ) {
@@ -136,13 +262,7 @@ class AndroidExportRecoveryTest {
             val original = Bitmap.createBitmap(IntArray(256 * 128) { index ->
                 if (index % 256 < 128) Color.RED else Color.BLUE
             }, 256, 128, Bitmap.Config.ARGB_8888)
-            try {
-                resolver.openOutputStream(source)!!.use {
-                    check(original.compress(Bitmap.CompressFormat.PNG, 100, it))
-                }
-            } finally { original.recycle() }
-            resolver.update(source,
-                ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            writeSource(source, original)
             listOf(destination, duplicate).forEach { uri ->
                 resolver.openOutputStream(uri)!!.use { it.write(SENTINEL) }
             }
@@ -164,27 +284,41 @@ class AndroidExportRecoveryTest {
             val pending = requireNotNull(journal.read(ExportWorkspace.PHOTO))
             assertEquals(PendingExportPhase.PICKING, pending.phase)
 
-            val oldActivity = rule.activity
-            val registryState = Bundle()
-            val externalRequestCode = rule.runOnIdle {
-                registry.activityResultRegistry.onSaveInstanceState(registryState)
-                requireNotNull(registry.exportRequestCode)
-            }
-            rule.activityRule.scenario.recreate()
-            val restoredPicker = DelayedPicker(source, externalRequestCode)
-            rule.activityRule.scenario.onActivity { activity ->
-                assertNotSame(oldActivity, activity)
-                restoredPicker.activityResultRegistry.onRestoreInstanceState(registryState)
-                activity.setContent { Workspace(restoredPicker) }
-            }
-            rule.waitForIdle()
-            rule.runOnIdle { assertEquals(0, restoredPicker.launches) }
+            val restoredPicker = recreateWithPendingPicker(registry, source)
             assertEquals(pending.id, journal.read(ExportWorkspace.PHOTO)?.id)
             test(restoredPicker, source, destination, duplicate)
         } finally {
             journal.read(ExportWorkspace.PHOTO)?.let { journal.discard(it) }
             listOf(source, destination, duplicate).forEach { resolver.delete(it, null, null) }
         }
+    }
+
+    private fun recreateWithPendingPicker(registry: DelayedPicker, source: Uri): DelayedPicker {
+        val oldActivity = rule.activity
+        val registryState = Bundle()
+        val externalRequestCode = rule.runOnIdle {
+            registry.activityResultRegistry.onSaveInstanceState(registryState)
+            requireNotNull(registry.exportRequestCode)
+        }
+        rule.activityRule.scenario.recreate()
+        val restoredPicker = DelayedPicker(source, externalRequestCode)
+        rule.activityRule.scenario.onActivity { activity ->
+            assertNotSame(oldActivity, activity)
+            restoredPicker.activityResultRegistry.onRestoreInstanceState(registryState)
+            activity.setContent { Workspace(restoredPicker) }
+        }
+        rule.waitForIdle()
+        rule.runOnIdle { assertEquals(0, restoredPicker.launches) }
+        return restoredPicker
+    }
+
+    private fun writeSource(uri: Uri, bitmap: Bitmap) {
+        try {
+            resolver.openOutputStream(uri)!!.use {
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        } finally { bitmap.recycle() }
+        resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
     }
 
     private fun createMedia(name: String): Uri = requireNotNull(

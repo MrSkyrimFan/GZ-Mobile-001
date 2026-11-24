@@ -1,12 +1,16 @@
 # GZ Editor Pro — continuity / engineering custody
 
-## Current owner direction (2026-11-22)
+## Current owner direction (2026-11-23)
+
+The [independent second audit](gz-editor-pro-audit-2-20261123/00_REPOSITORY_START_HERE.md) is the current repair handoff. Its docs merged at `cdaf4f08981bc7f813f3b739b7b28172789fe543`. Use the [repair evidence index](AUDIT_2_REPAIR_VERIFICATION.md) and [release gates](RELEASE_GATE.md) for the repaired workspaces. [PR #26](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/26) carries the exact build and run identities.
+
+## Revision 4 and the engineering field guide (2026-11-22)
 
 The [engineering field guide](gz-editor-pro-field-guide/00_START_HERE.md) records verified repair revisions, known-answer fixtures, and end-to-end checks for the current workspaces. Use the live repository and the [release gates](RELEASE_GATE.md) to confirm which results apply to the build under review.
 
 [Product requirements](PRODUCT_SPEC.md) reflect the owner's latest instructions and Revision 4. Use these to resolve conflicts with earlier handoffs and version records. Check live GitHub refs before issuing builds or relying on historical branch IDs. Work directly in the authorized GitHub repository. Keep owner evidence and the active task package in the supplemental intake until the work it governs is complete. Keep original handoff archives intact.
 
-The 0.12.3 handset test is the Revision 4 baseline. The follow-up repair verifies the issues found in its post-merge audit, including limited GIF trim budgets, small Crop hit targets, and Pro reset and layer ownership across Undo. Field qualification still includes real post-edit GIF motion, finger-friendly Regular crop, workspace tool ownership, Pro File reset and Back, and the confirmation-based Regular-to-Pro handoff. Protect working Regular and independent Collage workflows. Pro tools may be reorganized where the existing interface obstructs the job. Follow [Release gates](RELEASE_GATE.md) for engineering verification and owner acceptance.
+The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repair verifies the issues found in its post-merge audit, including limited GIF trim budgets, small Crop hit targets, and Pro reset and layer ownership across Undo. Field qualification still includes real post-edit GIF motion, finger-friendly Regular crop, workspace tool ownership, Pro File reset and Back, and the confirmation-based Regular-to-Pro handoff. Protect working Regular and independent Collage workflows. Pro tools may be reorganized where the existing interface obstructs the job. Follow [Release gates](RELEASE_GATE.md) for engineering verification and owner acceptance.
 
 ## Repos / identifiers
 - Single authorized repo: `MrSkyrimFan/GZ-Mobile-001`.
@@ -34,7 +38,7 @@ The owner added an explicit 2–20-photo collage requirement, independent photo 
 Core source: `CollageModel.kt` for cell geometry/templates, `CollageRaster.kt` for incremental tile composition, `CollageStore.kt` for local project custody and `CollageWorkspaceScreen.kt` for a separate swipeable collage workflow. Route through existing `PhotoEditorScreen` so original photo-session state is retained and each tile opens the existing entire editor.
 Fix prior screenshots' crop/blur/text/shape guides: editing overlays remain visible while UI toolbars hide, and the current tool remains interactive. Restore GZ Editor Pro top-left on empty launch.
 
-Next future phase: same-app video editing via independently reviewed Media3 Transformer and frame-indexed edit documents. No video feature is claimed shipped. Source research and legal/patent/license gates live in `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md`.
+The later Video phase is gated by formal owner acceptance of all four current workspaces. It can then evaluate Media3 Transformer and frame-indexed edit documents. No video feature is claimed shipped. Source research and legal/patent/license gates live in `docs/PROFESSIONAL_ENGINEERING_ROADMAP.md`.
 
 **Do not alter corporate Greenezone website or other repos.** Test in CI before merging, then one consolidated real-phone check.
 
@@ -46,4 +50,4 @@ The collage header uses two compact rows to prevent clipping, exposes an always-
 - New non-negotiable interface: top-right dropdown with independent Regular, Pro, Collage, GIF and Video (Coming soon) workspaces. Do not cram all features into regular editor.
 - Target $2.99 **one time**, no AI/ads/IAP/cloud. Prior features and files preserved. **Video last.**
 - Branch `feature/workspaces-pro-layers-gif-09`: Pro image-layer foundation and local GIF89a creation, plus persistent offline projects. Not a complete Photoshop/Lightroom or video implementation. Details and missing work in `UNIFIED_PRODUCT_SCOPE_09.md`.
-- Complete branch CI/PR SHA/merged-main CI first; perform only one combined owner phone check via `PHONE_TEST_WAVE8.md`. No corporate site, XForge, GZFX or Beside-Me changes.
+- The historical Wave 8 example is `PHONE_TEST_WAVE8.md`. Use the current repair PR and release gates for the next combined owner phone check. No corporate site, XForge, GZFX or Beside-Me changes.
