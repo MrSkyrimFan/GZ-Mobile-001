@@ -49,8 +49,8 @@ object PrivacyRaster {
     private class Placement(output: Bitmap, mark: PrivacyEdit, val projection: PrivacyProjection?) {
         val width = projection?.authorWidth ?: output.width
         val height = projection?.authorHeight ?: output.height
-        val authoredBounds = PrivacyMath.bounds(mark, width, height)
-        val bounds = projection?.boundsInView(authoredBounds) ?: authoredBounds
+        val authoredBounds: PrivacyMath.Bounds = PrivacyMath.bounds(mark, width, height)
+        val bounds: PrivacyMath.Bounds = projection?.boundsInView(authoredBounds) ?: authoredBounds
 
         fun rectWeight(mark: PrivacyEdit, x: Int, y: Int): Float {
             val px = x + .5f

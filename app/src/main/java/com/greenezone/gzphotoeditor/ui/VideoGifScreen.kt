@@ -614,30 +614,36 @@ internal fun VideoGifScreenContent(
             showSave = false
             notice = "Project saved"
         }, onDismiss = { showSave = false })
-    if (showSaved) AlertDialog(onDismissRequest = { showSaved = false }, title = { Text("Saved GIF projects") },
-        text = {
-            Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
-                if (savedNames.isEmpty()) Text("No saved GIF projects yet.")
-                savedNames.forEach { name ->
-                    TextButton(onClick = {
-                        showSaved = false
-                        busy = true
-                        scope.launch {
-                            try {
-                                val saved = withContext(Dispatchers.IO) { GifStore.load(context, name) }
-                                if (saved == null) notice = "Could not read the saved project or its source file."
-                                else {
-                                    finishSlide()
-                                    if (saved.video == null) finishVideoRouteExit()
-                                    commit(saved, 0, nextName = name)
-                                    lastExport = null
-                                }
-                            } finally { busy = false }
-                        }
-                    }) { Text(name) }
+    if (showSaved) GifSavedProjectsDialog(
+        names = savedNames,
+        enabled = enabled,
+        onOpen = { name ->
+            showSaved = false
+            busy = true
+            scope.launch {
+                try {
+                    val saved = withContext(Dispatchers.IO) { GifStore.load(context, name) }
+                    if (saved == null) notice = "Could not read the saved project or its source file."
+                    else {
+                        if (saved.video == null) finishVideoRouteExit() else finishSlide()
+                        commit(saved, 0, nextName = name)
+                        lastExport = null
+                    }
+                } finally { busy = false }
+            }
+        },
+        onDelete = { name ->
+            GifStore.deleteProject(context, name).also { deleted ->
+                if (deleted) {
+                    finishSlide()
+                    if (savedName == name) savedName = null
+                    history = history.withoutSavedProject(name)
+                    savedNames = GifStore.names(context)
                 }
             }
-        }, confirmButton = { TextButton(onClick = { showSaved = false }) { Text("Close") } })
+        },
+        onDismiss = { showSaved = false }
+    )
 }
 
 @Composable

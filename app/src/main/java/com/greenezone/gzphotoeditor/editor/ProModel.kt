@@ -128,7 +128,7 @@ object ProMath {
                     ProLayerKind.SHAPE -> item.uri.isEmpty() && item.edits.creative.shapes.size == 1
                     ProLayerKind.DRAWING -> item.uri.isEmpty() &&
                         item.edits.creative.strokes.size <= CreativeRaster.MAX_INK &&
-                        item.edits.creative.strokes.all { it.points.size <= 500 }
+                        item.edits.creative.strokes.all { it.points.size <= ProStrokeSampling.MAX_POINTS }
                     ProLayerKind.ADJUSTMENT -> item.uri.isEmpty()
                 }
                 sourceValid && item.name.isNotBlank() && item.name.length <= 42 &&

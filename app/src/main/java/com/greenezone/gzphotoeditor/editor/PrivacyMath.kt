@@ -72,10 +72,18 @@ object PrivacyMath {
     fun retainAuthoringGeometry(previous: EditDocument, next: EditDocument): EditDocument {
         if (next.privacy.isEmpty()) return next
         val old = PhotoGeometry.from(previous)
-        if (old == PhotoGeometry.from(next)) return next
-        return next.copy(privacy = next.privacy.map { mark ->
-            if (mark.authoringGeometry == null) mark.copy(authoringGeometry = old) else mark
-        })
+        val changed = old != PhotoGeometry.from(next)
+        val marks = next.privacy.mapIndexed { index, mark ->
+            if (mark.authoringGeometry != null) return@mapIndexed mark
+            // A slider can emit another value before its Compose callback refreshes.
+            // Keep the anchor applied by the first update of the same mark.
+            val existing = previous.privacy.getOrNull(index)?.let { before ->
+                before.authoringGeometry?.takeIf { before.copy(authoringGeometry = null) == mark }
+            }
+            val anchor = existing ?: old.takeIf { changed }
+            if (anchor == null) mark else mark.copy(authoringGeometry = anchor)
+        }
+        return if (marks == next.privacy) next else next.copy(privacy = marks)
     }
 
     fun projection(width: Int, height: Int, document: EditDocument, mark: PrivacyEdit): PrivacyProjection? {

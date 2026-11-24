@@ -48,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -95,6 +96,8 @@ import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.editor.PrivacyEdit
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
+import com.greenezone.gzphotoeditor.editor.PhotoGeometry
+import com.greenezone.gzphotoeditor.editor.PhotoGeometryPlan
 import com.greenezone.gzphotoeditor.editor.PrivacyMath
 import com.greenezone.gzphotoeditor.editor.PrivacyRaster
 import com.greenezone.gzphotoeditor.editor.SavedLooks
@@ -116,7 +119,11 @@ private data class PhotoReplacement(
     val projectName: String? = null
 )
 
-private data class ExportRequest(val settings: ExportSettings, val edits: EditDocument)
+private data class ExportRequest(
+    val source: Uri,
+    val settings: ExportSettings,
+    val edits: EditDocument
+)
 private data class CropPreview(val source: Bitmap, val edits: EditDocument, val bitmap: Bitmap)
 
 /**
@@ -133,6 +140,10 @@ fun PhotoEditorScreen(
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
+    val exportMaxPixels = remember(context) {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        GeometryMath.safeExportPixels(manager.memoryClass)
+    }
     // The parent Collage record changes only through Apply or Done. Keep this
     // entry snapshot immutable while the nested editor loads/saves other media.
     val tileEntryBaseline = remember(initialCollagePhoto) { initialCollagePhoto }
@@ -147,6 +158,7 @@ fun PhotoEditorScreen(
 
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
+    var sourceSize by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var processed by remember { mutableStateOf<Bitmap?>(null) }
     var cropPreview by remember { mutableStateOf<CropPreview?>(null) }
     var beforeImage by remember { mutableStateOf<Bitmap?>(null) }
@@ -240,16 +252,33 @@ fun PhotoEditorScreen(
                 } catch (_: SecurityException) {
                     // Some pickers grant access only for this session.
                 }
-                val bitmap = withContext(Dispatchers.IO) {
-                    ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L)
+                val (bitmap, dimensions) = withContext(Dispatchers.IO) {
+                    var header: Pair<Int, Int>? = null
+                    val preview = ImagePipeline.decode(
+                        resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L
+                    ) { width, height -> header = width to height }
+                    preview to checkNotNull(header)
+                }
+                val initialPreview = try {
+                    if (restored != null && restored.privacy.isNotEmpty()) {
+                        withContext(Dispatchers.Default) {
+                            val job = currentCoroutineContext()
+                            ImagePipeline.render(bitmap, restored) { job.ensureActive() }
+                        }
+                    } else bitmap
+                } catch (error: Throwable) {
+                    bitmap.recycle()
+                    throw error
                 }
                 if (request != loadingToken) {
+                    if (initialPreview !== bitmap) initialPreview.recycle()
                     bitmap.recycle()
                     return@launch
                 }
                 sourceUri = uri
                 original = bitmap
-                processed = bitmap
+                sourceSize = dimensions
+                processed = initialPreview
                 beforeImage = bitmap
                 filterThumbs = emptyList()
                 quickSource = null
@@ -289,13 +318,11 @@ fun PhotoEditorScreen(
     }
 
     fun exportImage(output: Uri, request: ExportRequest) {
-        val source = sourceUri ?: return
+        val source = request.source
         if (source == output) {
             notice = "Export destination cannot overwrite the original."
             return
         }
-        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val maxPixels = GeometryMath.safeExportPixels(manager.memoryClass)
         scope.launch {
             exporting = true
             showExport = false
@@ -306,7 +333,9 @@ fun PhotoEditorScreen(
                     var rendered: Bitmap? = null
                     var sized: Bitmap? = null
                     try {
-                        val originalFull = ImagePipeline.decode(resolver, source, 12_000, maxPixels)
+                        val originalFull = ImagePipeline.decode(
+                            resolver, source, ImagePipeline.EXPORT_MAX_EDGE, exportMaxPixels
+                        )
                         decoded = originalFull
                         val full = ImagePipeline.render(originalFull, request.edits) { ensureActive() }
                         rendered = full
@@ -444,6 +473,7 @@ fun PhotoEditorScreen(
         loadingToken += 1
         sourceUri = null
         original = null
+        sourceSize = null
         processed = null
         beforeImage = null
         filterThumbs = emptyList()
@@ -593,7 +623,7 @@ fun PhotoEditorScreen(
         if (!mark.kind.usesBrush) return
         val point = authoringPoint(mark, viewPoint)
         if (point.x !in 0f..1f || point.y !in 0f..1f) return
-        if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 640) {
+        if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 639) {
             notice = "Brush limit reached. Undo a stroke or add another brush."
             return
         }
@@ -610,7 +640,7 @@ fun PhotoEditorScreen(
         if (selectedTab != EditTab.PRIVACY) return
         val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
         val last = mark.strokes.lastOrNull() ?: return
-        if (mark.strokes.sumOf { it.points.size } >= 640) return
+        val pointLimit = 640 - (mark.strokes.sumOf { it.points.size } - last.points.size)
         val point = authoringPoint(mark, viewPoint)
         if (point.x !in 0f..1f || point.y !in 0f..1f) return
         val previous = last.points.last()
@@ -618,14 +648,33 @@ fun PhotoEditorScreen(
         val dy = point.y - previous.y
         if (dx * dx + dy * dy < .000012f) return
         val updated = document.privacy.toMutableList()
+        val points = if (last.points.size < pointLimit) last.points
+            else last.points.filterIndexed { index, _ -> index % 2 == 0 && index < last.points.lastIndex }
         updated[selectedPrivacy] = mark.copy(strokes =
-            mark.strokes.dropLast(1) + last.copy(points = last.points + point))
+            mark.strokes.dropLast(1) + last.copy(points = points + point))
         document = document.copy(privacy = updated)
     }
 
     fun finishPaint() {
+        if (!painting) return
         painting = false
         finishSlide()
+    }
+
+    fun cancelPaint() {
+        if (!painting) return
+        gestureStart?.let { document = it }
+        painting = false
+        gestureStart = null
+        liveGesture = false
+    }
+
+    fun transformPhoto(pinch: Float, translation: Offset, width: Float, height: Float) {
+        zoom = (zoom * pinch).coerceIn(1f, 6f)
+        val maxX = width * (zoom - 1f) / 2f
+        val maxY = height * (zoom - 1f) / 2f
+        panX = (panX + translation.x).coerceIn(-maxX, maxX)
+        panY = (panY + translation.y).coerceIn(-maxY, maxY)
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
@@ -642,8 +691,9 @@ fun PhotoEditorScreen(
         }
     }
     fun requestExport() {
+        val source = sourceUri ?: return
         val settings = exportSettings
-        pendingExport = ExportRequest(settings, document)
+        pendingExport = ExportRequest(source, settings, document)
         showExport = false
         val suffix = settings.format.extension
         val target = if (settings.preset == com.greenezone.gzphotoeditor.editor.SocialPreset.ORIGINAL)
@@ -984,7 +1034,7 @@ fun PhotoEditorScreen(
     val drawingActive = selectedTab == EditTab.DRAW && !compare && !busy && !exporting &&
         zoom <= 1.001f
     val activePrivacy = document.privacy.getOrNull(selectedPrivacy)
-    val brushSelected = !compare && !busy && !exporting && zoom <= 1.001f &&
+    val brushSelected = !compare && !busy && !exporting &&
         selectedTab == EditTab.PRIVACY && activePrivacy?.kind?.usesBrush == true
     val privacyRegionSelected = !compare && !busy && !exporting &&
         selectedTab == EditTab.PRIVACY && activePrivacy != null &&
@@ -1025,11 +1075,7 @@ fun PhotoEditorScreen(
                             detectTransformGestures { _, pan, pinch, _ ->
                                 if (!brushSelected && (!cropTab || compare) && !textEditing &&
                                     !shapeEditing && !drawingActive) {
-                                    zoom = (zoom * pinch).coerceIn(1f, 6f)
-                                    val maxX = size.width * (zoom - 1f) / 2f
-                                    val maxY = size.height * (zoom - 1f) / 2f
-                                    panX = (panX + pan.x).coerceIn(-maxX, maxX)
-                                    panY = (panY + pan.y).coerceIn(-maxY, maxY)
+                                    transformPhoto(pinch, pan, size.width.toFloat(), size.height.toFloat())
                                 }
                             }
                         }
@@ -1065,7 +1111,11 @@ fun PhotoEditorScreen(
                         onContinue = ::continuePaint,
                         onFinish = ::finishPaint,
                         onTap = { chromeVisible = !chromeVisible },
-                        showGuides = !editingBlurBrush
+                        showGuides = !editingBlurBrush,
+                        onCancel = ::cancelPaint,
+                        zoom = zoom,
+                        pan = Offset(panX, panY),
+                        onTransform = ::transformPhoto
                     )
                 }
                 if (privacyRegionSelected && activePrivacy != null) {
@@ -1363,11 +1413,22 @@ fun PhotoEditorScreen(
         PhotoHistogramDialog(selectedImage, compare) { showHistogram = false }
     }
     if (showExport) {
+        val originalOutput = sourceSize?.let { (width, height) ->
+            val (decodeWidth, decodeHeight) = ImagePipeline.decodeSize(
+                width, height, ImagePipeline.EXPORT_MAX_EDGE, exportMaxPixels
+            )
+            val geometry = PhotoGeometryPlan(decodeWidth, decodeHeight, PhotoGeometry.from(document))
+            val result = "${geometry.width} × ${geometry.height} pixels"
+            if (width != decodeWidth || height != decodeHeight) {
+                "$result (limited by device memory or maximum image size)"
+            } else result
+        } ?: "Available after opening a photo"
         ExportDialog(
             settings = exportSettings,
             onSettings = { exportSettings = it },
             onSave = ::requestExport,
-            onDismiss = { showExport = false }
+            onDismiss = { showExport = false },
+            originalOutput = originalOutput
         )
     }
     if (showTextDialog) {

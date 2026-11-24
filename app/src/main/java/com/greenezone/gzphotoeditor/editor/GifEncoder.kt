@@ -12,6 +12,7 @@ import kotlin.math.min
 
 /** Streaming GIF89a writer with per-frame source-adaptive palettes. */
 object GifEncoder {
+    private const val MAX_DELAY_TICKS = 65535
     private val neutral = EditDocument()
     private fun OutputStream.byte(value: Int) { write(value and 255) }
     private fun OutputStream.short(value: Int) { byte(value); byte(value shr 8) }
@@ -171,7 +172,9 @@ object GifEncoder {
                 }
                 var ticks = ((delayAt(i) + 5) / 10).coerceAtLeast(1)
                 while (ticks > 0) {
-                    val hold = min(65535, ticks)
+                    // Readers treat a one-tick hold as a fallback. Borrow a tick for the final block.
+                    val hold = if (ticks == MAX_DELAY_TICKS + 1) MAX_DELAY_TICKS - 1
+                        else min(MAX_DELAY_TICKS, ticks)
                     stream.byte(0x21); stream.byte(0xf9); stream.byte(4)
                     stream.byte(if (palette.transparent) 0x09 else 0x04)
                     stream.short(hold); stream.byte(0); stream.byte(0)

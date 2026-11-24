@@ -8,7 +8,8 @@ import java.util.Base64
  * No external files, source photos, network identifiers or executable data.
  */
 object EditDocumentCodec {
-    private const val VERSION = "1"
+    private const val LEGACY_VERSION = "1"
+    private const val ANCHORED_PRIVACY_VERSION = "2"
     private const val MAX_STROKES = 40
     private const val MAX_BRUSH_POINTS = 640
     private const val MAX_INK_POINTS = 500
@@ -16,7 +17,9 @@ object EditDocumentCodec {
 
     fun encode(document: EditDocument): String {
         val fields = sortedMapOf<String, String>()
-        fields["version"] = VERSION
+        val privacy = document.privacy.take(PrivacyRaster.MAX_EDITS)
+        fields["version"] = if (privacy.any { it.authoringGeometry != null })
+            ANCHORED_PRIVACY_VERSION else LEGACY_VERSION
         ControlCatalog.all.forEach { control ->
             fields["control." + control.name] = control.read(document.grade).toString()
         }
@@ -49,7 +52,6 @@ object EditDocumentCodec {
                     stroke.points.take(MAX_BRUSH_POINTS).joinToString(";") { "${it.x},${it.y}" }
             }
         }
-        val privacy = document.privacy.take(PrivacyRaster.MAX_EDITS)
         fields["privacy.count"] = privacy.size.toString()
         for ((index, mark) in privacy.withIndex()) {
             val prefix = "privacy.$index."
@@ -147,7 +149,8 @@ object EditDocumentCodec {
             val index = line.indexOf('=')
             if (index <= 0) null else line.substring(0, index) to line.substring(index + 1)
         }.toMap()
-        if (fields["version"] != VERSION) return null
+        val version = fields["version"]
+        if (version != LEGACY_VERSION && version != ANCHORED_PRIVACY_VERSION) return null
         fun numeric(key: String, default: Float, min: Float, max: Float): Float {
             val parsed = fields[key]?.toFloatOrNull()
             return if (parsed != null && parsed.isFinite()) parsed.coerceIn(min, max) else default
@@ -212,13 +215,15 @@ object EditDocumentCodec {
             val crop = CropRatio.entries.firstOrNull { it.name == fields[anchor + "cropRatio"] }
                 ?: return null
             val frame = cropFrame(anchor + "frame")
-            return PhotoGeometry(
-                rotation, fields[anchor + "horizontalFlip"] == "true",
-                fields[anchor + "verticalFlip"] == "true", crop,
-                numeric(anchor + "cropX", .5f, 0f, 1f), numeric(anchor + "cropY", .5f, 0f, 1f),
-                numeric(anchor + "straighten", 0f, -15f, 15f), frame,
-                frame != null && fields[anchor + "frame.locked"] == "true"
-            )
+            if (fields.containsKey(anchor + "frame") && frame == null) return null
+            val flipX = fields[anchor + "horizontalFlip"]?.toBooleanStrictOrNull() ?: return null
+            val flipY = fields[anchor + "verticalFlip"]?.toBooleanStrictOrNull() ?: return null
+            val centerX = numeric(anchor + "cropX", Float.NaN, 0f, 1f)
+            val centerY = numeric(anchor + "cropY", Float.NaN, 0f, 1f)
+            val straighten = numeric(anchor + "straighten", Float.NaN, -15f, 15f)
+            if (!centerX.isFinite() || !centerY.isFinite() || !straighten.isFinite()) return null
+            return PhotoGeometry(rotation, flipX, flipY, crop, centerX, centerY, straighten, frame,
+                frame != null && fields[anchor + "frame.locked"] == "true")
         }
         val privacy = ArrayList<PrivacyEdit>()
         for (i in 0 until count("privacy.count", PrivacyRaster.MAX_EDITS)) {
@@ -239,6 +244,10 @@ object EditDocumentCodec {
                 }
                 if (points.isNotEmpty()) strokes.add(BrushStroke(points))
             }
+            val hasAnchorFields = fields.keys.any { it.startsWith(prefix + "geometry.") }
+            val authoringGeometry = if (version == ANCHORED_PRIVACY_VERSION && hasAnchorFields)
+                privacyGeometry(prefix) ?: return null
+            else null
             privacy.add(PrivacyEdit(
                 kind = kind,
                 centerX = numeric(prefix + "x", .5f, 0f, 1f),
@@ -250,9 +259,10 @@ object EditDocumentCodec {
                 brushSize = numeric(prefix + "brushSize", .055f, .005f, .20f),
                 color = (fields[prefix + "color"]?.toIntOrNull() ?: -0x1000000) or -0x1000000,
                 strokes = strokes,
-                authoringGeometry = privacyGeometry(prefix)
+                authoringGeometry = authoringGeometry
             ))
         }
+        if (version == ANCHORED_PRIVACY_VERSION && privacy.none { it.authoringGeometry != null }) return null
         val frame = cropFrame("crop.frame")
         fun color(key: String, fallback: Int): Int = fields[key]?.toIntOrNull() ?: fallback
         fun points(key: String): List<BrushPoint> =

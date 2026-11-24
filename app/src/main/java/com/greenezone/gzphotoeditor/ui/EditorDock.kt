@@ -517,7 +517,7 @@ private fun CropDeck(
     imageHeight: Int
 ) {
     LazyRow(
-        modifier = Modifier.fillMaxWidth().height(44.dp),
+        modifier = Modifier.fillMaxWidth().height(44.dp).testTag("crop-transforms"),
         contentPadding = PaddingValues(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {

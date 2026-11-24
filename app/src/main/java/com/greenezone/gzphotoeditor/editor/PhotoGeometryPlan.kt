@@ -7,7 +7,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
-internal class PhotoGeometryPlan(width: Int, height: Int, geometry: PhotoGeometry) {
+internal class PhotoGeometryPlan(inputWidth: Int, inputHeight: Int, geometry: PhotoGeometry) {
     val orientation = Matrix()
     val straighten = Matrix()
     val safeLeft: Int
@@ -25,11 +25,11 @@ internal class PhotoGeometryPlan(width: Int, height: Int, geometry: PhotoGeometr
             orientation.postScale(
                 if (geometry.mirrored) -1f else 1f,
                 if (geometry.flipVertical) -1f else 1f,
-                width / 2f, height / 2f
+                inputWidth / 2f, inputHeight / 2f
             )
         }
-        if (quarter != 0) orientation.postRotate(quarter * 90f, width / 2f, height / 2f)
-        val oriented = applyBitmapTransform(orientation, width, height)
+        if (quarter != 0) orientation.postRotate(quarter * 90f, inputWidth / 2f, inputHeight / 2f)
+        val oriented = applyBitmapTransform(orientation, inputWidth, inputHeight)
         val angle = geometry.straightenDegrees.coerceIn(-15f, 15f)
         if (abs(angle) > .001f) straighten.setRotate(angle)
         val spun = applyBitmapTransform(straighten, oriented.first, oriented.second)

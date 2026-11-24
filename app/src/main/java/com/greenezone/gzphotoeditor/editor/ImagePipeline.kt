@@ -56,21 +56,34 @@ object ImagePipeline {
     const val PREVIEW_MAX_EDGE = 1400
     const val MAX_EXPORT_PIXELS = 24_000_000L
 
-    fun decode(resolver: ContentResolver, uri: Uri, maxEdge: Int, maxPixels: Long): Bitmap {
+    const val EXPORT_MAX_EDGE = 12_000
+
+    internal fun decodeSize(
+        width: Int, height: Int, maxEdge: Int, maxPixels: Long
+    ): Pair<Int, Int> {
+        require(width > 0 && height > 0 && maxEdge > 0 && maxPixels > 0)
+        val sideScale = min(1.0, maxEdge.toDouble() / maxOf(width, height))
+        val pixelScale = min(1.0, sqrt(maxPixels.toDouble() / (width.toLong() * height)))
+        val scale = min(sideScale, pixelScale)
+        return maxOf(1, (width * scale).roundToInt()) to maxOf(1, (height * scale).roundToInt())
+    }
+
+    fun decode(
+        resolver: ContentResolver,
+        uri: Uri,
+        maxEdge: Int,
+        maxPixels: Long,
+        onHeader: ((width: Int, height: Int) -> Unit)? = null
+    ): Bitmap {
         require(maxEdge > 0 && maxPixels > 0) { "Invalid image decode budget" }
         val src = ImageDecoder.createSource(resolver, uri)
         return ImageDecoder.decodeBitmap(src) { decoder, info, _ ->
-            val width = info.size.width.toLong()
-            val height = info.size.height.toLong()
-            require(width > 0 && height > 0) { "Invalid image dimensions" }
-            val sideScale = min(1.0, maxEdge.toDouble() / maxOf(width, height))
-            val pixelScale = min(1.0, sqrt(maxPixels.toDouble() / (width * height)))
-            val scale = min(sideScale, pixelScale)
-            if (scale < 1.0) {
-                decoder.setTargetSize(
-                    maxOf(1, (width * scale).roundToInt()),
-                    maxOf(1, (height * scale).roundToInt())
-                )
+            val width = info.size.width
+            val height = info.size.height
+            val (targetWidth, targetHeight) = decodeSize(width, height, maxEdge, maxPixels)
+            onHeader?.invoke(width, height)
+            if (targetWidth != width || targetHeight != height) {
+                decoder.setTargetSize(targetWidth, targetHeight)
             }
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))

@@ -157,6 +157,20 @@ object GifStore {
         } catch (_: Exception) { SaveResult.FAILED }
     }
 
+    @Synchronized internal fun deleteProject(context: Context, name: String): Boolean {
+        val id = id(name) ?: return false
+        val file = File(folder(context), "$id.gzgif")
+        val backup = File(file.path + ".bak")
+        val staged = File(file.path + ".new")
+        if (!file.isFile && !backup.isFile) return false
+        val files = listOf(staged, file, backup)
+        if (files.any { it.exists() && !it.isFile }) return false
+        // A legacy backup is authoritative until recovery. Remove it last.
+        return try {
+            files.all { !it.exists() || it.delete() }
+        } catch (_: SecurityException) { false }
+    }
+
     @Synchronized fun load(context: Context, name: String): GifDocument? {
         val id = id(name) ?: return null
         val file = File(folder(context), "$id.gzgif")

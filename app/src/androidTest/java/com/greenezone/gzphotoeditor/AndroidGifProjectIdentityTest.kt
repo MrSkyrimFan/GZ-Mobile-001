@@ -41,6 +41,7 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.io.OutputStream
 import java.nio.file.Files
+import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
 class AndroidGifProjectIdentityTest {
@@ -170,6 +171,72 @@ class AndroidGifProjectIdentityTest {
         rule.onNodeWithText("Redo").assertIsNotEnabled()
     }
 
+    @Test fun deletingNamedBackupOnlyProjectReclaimsCapacityWithoutLosingCurrentEdits() = withProjects { storage ->
+        val red = photo("gz-quota-red.png", Color.RED)
+        val blue = photo("gz-quota-blue.png", Color.BLUE)
+        val recipe = GifDocument(frames = listOf(red.toString(), blue.toString()))
+        val protected = (1..11).associate { slot ->
+            "Slot $slot" to recipe.copy(delayMs = 350 + 10 * slot)
+        }
+        for ((name, document) in protected) assertTrue(GifStore.save(storage, name, document))
+        val obsoleteName = "Obsolete GIF"
+        assertTrue(GifStore.save(storage, obsoleteName, recipe))
+        mount(storage.filesDir)
+
+        rule.onNodeWithText("Open saved GIF project").performClick()
+        rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()
+        rule.onNodeWithText("Delete GIF project?").assertIsDisplayed()
+        rule.onNodeWithText("Cancel").performClick()
+        rule.onNodeWithText(obsoleteName).performScrollTo().performClick()
+        waitPhotoColor(Color.RED)
+        rule.onNodeWithText("Timing").performScrollTo().performClick()
+        rule.onNodeWithText("Play once").performClick()
+        rule.waitUntil(15_000) { !current.forever }
+        val working = current
+
+        photoSave()
+        rule.onNode(hasSetTextAction()).performTextReplacement("New GIF recipe")
+        rule.onNodeWithText("Save").performClick()
+        rule.onNodeWithText("The saved GIF project list is full", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Cancel").performClick()
+
+        val key = Base64.getUrlEncoder().withoutPadding().encodeToString(obsoleteName.toByteArray(Charsets.UTF_8))
+        val base = File(storage.filesDir, "gz_gif_projects/$key.gzgif")
+        val backup = File(base.path + ".bak")
+        val blocked = File(base.path + ".new")
+        assertTrue(base.renameTo(backup))
+        assertTrue(blocked.mkdir())
+        rule.onNodeWithText("Photos").performScrollTo().performClick()
+        rule.onNodeWithText("Open saved").performScrollTo().performClick()
+        fun deleteObsolete() {
+            rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()
+            rule.onNodeWithText("Delete").performClick()
+        }
+        deleteObsolete()
+        rule.onNodeWithText("Could not delete this GIF project.").assertIsDisplayed()
+        assertTrue(backup.isFile)
+        assertTrue(blocked.delete())
+
+        deleteObsolete()
+        rule.onNodeWithText(obsoleteName).assertDoesNotExist()
+        rule.onNodeWithText("Close").performClick()
+        assertFalse(backup.exists())
+        assertNull(GifStore.load(storage, obsoleteName))
+        assertEquals(working, current)
+        waitPhotoColor(Color.RED)
+        photoSave()
+        assertEquals("", draftName())
+        submitName("New GIF recipe")
+
+        assertEquals(working, GifStore.load(storage, "New GIF recipe"))
+        for ((name, doc) in protected) assertEquals(name, doc, GifStore.load(storage, name))
+        assertEquals(12, GifStore.names(storage).size)
+        restartWorkspace()
+        videoOpen("New GIF recipe")
+        waitPhotoColor(Color.RED)
+        assertEquals(working, current)
+    }
+
     private val media = mutableListOf<Uri>()
 
     private fun withProjects(test: (Context) -> Unit) {
@@ -273,14 +340,14 @@ class AndroidGifProjectIdentityTest {
     private fun videoOpen(name: String) {
         if (current.video == null) rule.onNodeWithText("Open saved GIF project").performClick()
         else videoFile("Open saved GIF project")
-        rule.onNodeWithText(name).performClick()
+        rule.onNodeWithText(name).performScrollTo().performClick()
     }
 
     private fun videoSave() = videoFile("Save project")
 
     private fun photoOpen(name: String) {
         rule.onNodeWithText("Open saved").performScrollTo().performClick()
-        rule.onNodeWithText(name).performClick()
+        rule.onNodeWithText(name).performScrollTo().performClick()
     }
 
     private fun photoSave() {

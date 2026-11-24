@@ -65,7 +65,7 @@ fun ExportDialog(
     onSettings: (ExportSettings) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit,
-    error: String? = null
+    originalOutput: String = "Original edited image dimensions"
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -103,7 +103,7 @@ fun ExportDialog(
                             color = EditorMuted, fontSize = 12.sp)
                     }
                 } else {
-                    Text("Output: Original edited image dimensions",
+                    Text("Output: " + originalOutput,
                         color = EditorMuted, fontSize = 12.sp)
                 }
                 val qualityApplicable = settings.format == ImageExportFormat.JPEG ||
@@ -185,7 +185,8 @@ fun SaveNameDialog(
     name: String,
     onName: (String) -> Unit,
     onSave: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    error: String? = null
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,

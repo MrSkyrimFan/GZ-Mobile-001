@@ -888,12 +888,15 @@ internal fun ProWorkspaceScreenContent(
                                 lastDragValue = null
                                 dragStart = historyEntry()
                                 if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
-                                    active.visible && active.opacity > 0f &&
-                                    active.edits.creative.strokes.size < CreativeRaster.MAX_INK) {
-                                    nextBrushId += 1
-                                    activeStroke = ProBrushDraft(nextBrushId, selected,
-                                        InkStroke(listOf(point), color = brushColor,
-                                            thickness = brushSize, opacity = brushOpacity, erase = eraserMode))
+                                    active.visible && active.opacity > 0f) {
+                                    if (active.edits.creative.strokes.size >= CreativeRaster.MAX_INK) {
+                                        notice = "This brush layer is full. Add another brush layer or undo a stroke."
+                                    } else {
+                                        nextBrushId += 1
+                                        activeStroke = ProBrushDraft(nextBrushId, selected,
+                                            InkStroke(listOf(point), color = brushColor,
+                                                thickness = brushSize, opacity = brushOpacity, erase = eraserMode))
+                                    }
                                 }
                                 if (section == ProSection.SELECT && active?.visible == true && active.opacity > 0f &&
                                     (active.kind == ProLayerKind.IMAGE || active.kind == ProLayerKind.ADJUSTMENT)) {
@@ -919,9 +922,9 @@ internal fun ProWorkspaceScreenContent(
                                     }
                                     ProSection.PAINT -> activeStroke?.let { draft ->
                                         val stroke = draft.stroke
-                                        if (draft.layer == selected && stroke.points.size < 500 &&
-                                            stroke.points.last() != point) {
-                                            activeStroke = draft.copy(stroke = stroke.copy(points = stroke.points + point))
+                                        if (draft.layer == selected && stroke.points.last() != point) {
+                                            val points = ProStrokeSampling.append(stroke.points, point, before.canvasAspectRatio)
+                                            activeStroke = draft.copy(stroke = stroke.copy(points = points))
                                         }
                                     }
                                     ProSection.SELECT -> if (selectionStart != null) {

@@ -18,12 +18,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -56,10 +54,10 @@ import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.writeStagedImage
 import com.greenezone.gzphotoeditor.editor.GifEncoder
 import com.greenezone.gzphotoeditor.editor.GifFit
-import com.greenezone.gzphotoeditor.editor.GifHistory
 import com.greenezone.gzphotoeditor.editor.GifMath
 import com.greenezone.gzphotoeditor.editor.GifSize
 import com.greenezone.gzphotoeditor.editor.GifStore
+import com.greenezone.gzphotoeditor.editor.GifUndoStack
 import com.greenezone.gzphotoeditor.editor.ImagePipeline
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +78,13 @@ internal data class GifProjectSnapshot(
     val savedName: String?,
     val route: GifWorkspaceRoute
 )
+
+internal fun GifUndoStack<GifProjectSnapshot>.withoutSavedProject(name: String): GifUndoStack<GifProjectSnapshot> {
+    fun detach(snapshot: GifProjectSnapshot): GifProjectSnapshot =
+        if (snapshot.savedName == name) snapshot.copy(savedName = null) else snapshot
+
+    return copy(undo = undo.map(::detach), redo = redo.map(::detach))
+}
 
 internal data class GifWorkspaceSession(
     val route: GifWorkspaceRoute? = null,
@@ -541,33 +546,36 @@ internal fun GifMakerScreenContent(
             saveOpen = false
             notice = "GIF project saved"
         }, onDismiss = { saveOpen = false })
-    if (projectsOpen) AlertDialog(
-        onDismissRequest = { if (!openingProject) projectsOpen = false },
-        title = { Text("Saved GIF projects") },
-        text = {
-            Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
-                if (savedNames.isEmpty()) Text("No saved GIF projects yet.", color = EditorMuted)
-                savedNames.forEach { name ->
-                    TextButton(enabled = !openingProject, onClick = {
-                        openingProject = true
-                        scope.launch {
-                            try {
-                                val restored = withContext(Dispatchers.IO) { GifStore.load(context, name) }
-                                projectsOpen = false
-                                if (restored == null) notice = "Could not read the saved project or its source file."
-                                else {
-                                    playing = false
-                                    index = 0
-                                    commit(restored, name)
-                                    notice = "GIF project opened"
-                                }
-                            } finally { openingProject = false }
-                        }
-                    }) { Text(name, color = EditorMint) }
+    if (projectsOpen) GifSavedProjectsDialog(
+        names = savedNames,
+        enabled = !openingProject,
+        onOpen = { name ->
+            openingProject = true
+            scope.launch {
+                try {
+                    val restored = withContext(Dispatchers.IO) { GifStore.load(context, name) }
+                    projectsOpen = false
+                    if (restored == null) notice = "Could not read the saved project or its source file."
+                    else {
+                        playing = false
+                        index = 0
+                        commit(restored, name)
+                        notice = "GIF project opened"
+                    }
+                } finally { openingProject = false }
+            }
+        },
+        onDelete = { name ->
+            GifStore.deleteProject(context, name).also { deleted ->
+                if (deleted) {
+                    finishPhotoTiming()
+                    if (savedName == name) savedName = null
+                    history = history.withoutSavedProject(name)
+                    savedNames = GifStore.names(context)
                 }
             }
         },
-        confirmButton = { TextButton(enabled = !openingProject, onClick = { projectsOpen = false }) { Text("Close") } }
+        onDismiss = { projectsOpen = false }
     )
     if (newOpen) AlertDialog(
         onDismissRequest = { newOpen = false },

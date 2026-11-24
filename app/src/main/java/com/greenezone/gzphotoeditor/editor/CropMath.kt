@@ -88,7 +88,10 @@ object CropMath {
             CropRatio.WIDE -> CropRatio.STORY
             else -> CropRatio.FREE
         }
-        val wasLocked = document.cropFrameRatioLocked || document.cropFrame == null
+        // An older preset may have rounded to a non-exact ratio. Preserve those
+        // actual pixels rather than shrinking further when applying the new lock.
+        val wasLocked = document.cropFrameRatioLocked || (document.cropFrame == null &&
+            ratio.ratio != null && h * ratio.unitsHigh == w * ratio.unitsWide)
         return document.copy(
             quarterTurns = rotation, cropFrame = frame, crop = ratio,
             cropFrameRatioLocked = wasLocked && ratio.ratio != null
