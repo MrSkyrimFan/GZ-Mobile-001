@@ -33,6 +33,7 @@ object ProStore {
     fun encode(document: ProDocument): String {
         require(ProMath.valid(document))
         val layers = JSONArray()
+        var recipeChars = 0
         document.layers.forEach { layer ->
             layers.put(JSONObject().apply {
                 put("uri", layer.uri); put("name", layer.name)
@@ -80,7 +81,10 @@ object ProStore {
                     }
                 })
                 val edits = EditDocumentCodec.encode(layer.edits)
-                if (edits.length > EditDocumentCodec.MAX_ENCODED_CHARS) throw ProjectTooLarge()
+                recipeChars += edits.length
+                if (edits.length > EditDocumentCodec.MAX_ENCODED_CHARS || recipeChars > MAX_BYTES) {
+                    throw ProjectTooLarge()
+                }
                 put("edits", edits)
             })
         }
@@ -239,7 +243,7 @@ object ProStore {
                     background = value(it.optString("background"), ProBackground.WHITE),
                     sourceAspectRatio = it.optDouble("sourceAspectRatio").toFloat()
                         .takeIf(ProMath::validSourceAspect),
-                    canvasSize = it.pixelSize("canvasSize")
+                    canvasSize = runCatching { it.pixelSize("canvasSize") }.getOrNull()
                 )
             } else decode(it.toString(), recoverLegacyRecipe = true)
         }
@@ -335,6 +339,8 @@ object ProStore {
             SaveResult.Saved(target.name)
         } catch (_: ProjectTooLarge) {
             SaveResult.TooLarge
+        } catch (_: OutOfMemoryError) {
+            SaveResult.TooLarge
         } catch (_: Exception) {
             SaveResult.Failed
         }
@@ -364,7 +370,11 @@ object ProStore {
                 text.toString()
             }
             decodeProject(data)
-        } catch (_: Exception) { null }
+        } catch (_: OutOfMemoryError) {
+            null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     @Synchronized fun delete(context: Context, name: String): Boolean {

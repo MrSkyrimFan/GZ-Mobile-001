@@ -314,9 +314,12 @@ object ProRaster {
         loader: (ProLayer, Int, Long) -> Bitmap
     ): Bitmap {
         val original = layer.sourceSize
-        val edited = original?.let { ProImageGeometry.editedSize(it, layer.edits) }
-        val cropFactor = if (original != null && edited != null) {
-            maxOf(original.width.toDouble() / edited.width, original.height.toDouble() / edited.height).coerceAtLeast(1.0)
+        val editedDimensions = original?.let { ProImageGeometry.editedSize(it, layer.edits) }
+        val cropFactor = if (original != null && editedDimensions != null) {
+            val turned = layer.edits.quarterTurns % 2 != 0
+            val orientedWidth = if (turned) original.height else original.width
+            val orientedHeight = if (turned) original.width else original.height
+            maxOf(1.0, orientedWidth.toDouble() / editedDimensions.width, orientedHeight.toDouble() / editedDimensions.height)
         } else 1.0
         val edge = (maxOf(width, height) * layer.scale.coerceIn(.1f, 2f) * 1.3 * cropFactor)
             .roundToInt().coerceIn(96, if (preview) 2048 else 5600)

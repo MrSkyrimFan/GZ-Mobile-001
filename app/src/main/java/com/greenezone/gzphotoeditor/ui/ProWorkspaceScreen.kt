@@ -443,6 +443,10 @@ internal fun ProWorkspaceScreenContent(
                 when (result) {
                     is ProStore.SaveResult.Saved -> {
                         saveTarget = request.target.copy(name = result.name)
+                        if (replaceName == result.name && request.target.name != result.name) {
+                            // Other work that had targeted the replaced file now needs its own name.
+                            history = history.forgetSavedName(result.name)
+                        }
                         history = history.bindSavedName(saveTarget)
                         showSave = false
                         notice = "Editable Pro project saved"

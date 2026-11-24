@@ -75,6 +75,7 @@ import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProDocument
 import com.greenezone.gzphotoeditor.editor.ProImageGeometry
 import com.greenezone.gzphotoeditor.editor.ProLayer
+import com.greenezone.gzphotoeditor.editor.ProPixelSize
 import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
