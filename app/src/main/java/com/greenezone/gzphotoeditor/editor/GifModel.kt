@@ -23,15 +23,22 @@ data class GifDocument(
 ) {
     val loopCount: Int get() = if (forever) 0 else repeatCount ?: -1
 }
-data class GifHistory(val undo: List<GifDocument> = emptyList(),
-                      val redo: List<GifDocument> = emptyList()) {
-    fun checkpoint(before: GifDocument, after: GifDocument): GifHistory =
+data class GifUndoStack<T>(
+    val undo: List<T> = emptyList(),
+    val redo: List<T> = emptyList()
+) {
+    fun checkpoint(before: T, after: T): GifUndoStack<T> =
         if (before == after) this else copy(undo = (undo + before).takeLast(30), redo = emptyList())
-    fun undo(now: GifDocument): Pair<GifDocument, GifHistory>? =
+
+    fun undo(now: T): Pair<T, GifUndoStack<T>>? =
         undo.lastOrNull()?.let { it to copy(undo = undo.dropLast(1), redo = (redo + now).takeLast(30)) }
-    fun redo(now: GifDocument): Pair<GifDocument, GifHistory>? =
+
+    fun redo(now: T): Pair<T, GifUndoStack<T>>? =
         redo.lastOrNull()?.let { it to copy(redo = redo.dropLast(1), undo = (undo + now).takeLast(30)) }
 }
+
+typealias GifHistory = GifUndoStack<GifDocument>
+
 object GifMath {
     const val MAX_FRAMES = 20
     fun valid(doc: GifDocument): Boolean =
@@ -39,8 +46,9 @@ object GifMath {
         else doc.frames.size in 2..MAX_FRAMES && doc.delayMs in 100..1500 &&
             doc.frames.all { it.startsWith("content://") && it.length <= 4096 }
     fun dimensions(doc: GifDocument, maxEdge: Int? = null): Pair<Int, Int> {
-        var width = doc.video?.width ?: 480
-        var height = doc.video?.height ?: 480
+        val source = doc.video
+        var width = source?.displayWidth ?: source?.width ?: 480
+        var height = source?.displayHeight ?: source?.height ?: 480
         if (doc.edits.quarterTurns % 2 != 0) {
             val swapped = width
             width = height

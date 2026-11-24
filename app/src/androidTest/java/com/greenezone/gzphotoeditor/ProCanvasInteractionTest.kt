@@ -203,6 +203,68 @@ class ProCanvasInteractionTest {
         rule.runOnIdle { assertTrue(result.layers.single().edits.creative.strokes.last().erase) }
     }
 
+    @Test fun longBrushAndEraserReachTheLateBendLiveAndCommitAsSingleGestures() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "Long stroke " + System.nanoTime().toString().takeLast(10)
+        open(ProDocument(listOf(ProLayer(uri = "", name = "Long ink", kind = ProLayerKind.DRAWING))))
+        tool("Brush")
+        fun stageLongGesture() {
+            canvas.performTouchInput {
+                val edge = minOf(width, height).toFloat()
+                val first = center + Offset(-.33f * edge, -.20f * edge)
+                val bend = center + Offset(.28f * edge, -.20f * edge)
+                val tail = center + Offset(.28f * edge, .24f * edge)
+                down(first)
+                repeat(700) { i ->
+                    moveTo(first + (bend - first) * ((i + 1) / 700f))
+                }
+                repeat(180) { i ->
+                    moveTo(bend + (tail - bend) * ((i + 1) / 180f))
+                }
+            }
+        }
+        fun tailHasInk(): Boolean {
+            val frame = canvas.captureToImage()
+            val scale = minOf(frame.width, frame.height)
+            val sample = frame.toPixelMap()[frame.width / 2 + (.28f * scale).toInt(),
+                frame.height / 2 + (.20f * scale).toInt()]
+            return sample.green > sample.red + .15f && sample.green > sample.blue
+        }
+        try {
+            stageLongGesture()
+            rule.waitUntil(15_000) { tailHasInk() }
+            rule.runOnIdle { assertTrue(result.layers.single().edits.creative.strokes.isEmpty()) }
+            canvas.performTouchInput { up() }
+            val painted = rule.runOnIdle {
+                val stroke = result.layers.single().edits.creative.strokes.single()
+                assertEquals(.74f, stroke.points.last().y, .02f)
+                result
+            }
+            rule.onNodeWithText("Eraser").performClick()
+            stageLongGesture()
+            rule.waitUntil(15_000) { !tailHasInk() }
+            canvas.performTouchInput { up() }
+            val erased = rule.runOnIdle {
+                val strokes = result.layers.single().edits.creative.strokes
+                assertEquals(2, strokes.size)
+                assertTrue(strokes.last().erase)
+                assertEquals(.74f, strokes.last().points.last().y, .02f)
+                result
+            }
+            rule.onNodeWithText("Undo").performClick()
+            rule.runOnIdle { assertEquals(painted, result) }
+            rule.onNodeWithText("Redo").performClick()
+            rule.runOnIdle { assertEquals(erased, result) }
+            assertTrue(ProStore.save(context, name, erased))
+            val reopened = requireNotNull(ProStore.load(context, name))
+            assertEquals(erased, reopened)
+            val pixels = ProRaster.render(context.contentResolver, reopened, 512, 512, false)
+            try { assertEquals(Color.WHITE, pixels.getPixel(399, 358)) } finally { pixels.recycle() }
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+
     @Test fun maskDraftSurvivesHiddenCanvasAndCommitsOnTheSelectedAdjustmentLayer() {
         open(ProDocument(listOf(ProLayer(uri = "", name = "Color grade", kind = ProLayerKind.ADJUSTMENT))))
         tool("Select & mask")
@@ -258,3 +320,4 @@ class ProCanvasInteractionTest {
         } finally { resolver.delete(uri, null, null) }
     }
 }
+

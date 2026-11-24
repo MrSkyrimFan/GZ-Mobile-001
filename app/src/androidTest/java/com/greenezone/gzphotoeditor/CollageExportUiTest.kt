@@ -27,6 +27,8 @@ import com.greenezone.gzphotoeditor.editor.CollagePhoto
 import com.greenezone.gzphotoeditor.editor.CollageQuality
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.ImageExportFormat
+import com.greenezone.gzphotoeditor.editor.ExportWorkspace
+import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.editor.PrivacyEdit
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
 import com.greenezone.gzphotoeditor.ui.CollageWorkspaceScreen
@@ -40,7 +42,9 @@ import kotlin.math.abs
 @RunWith(AndroidJUnit4::class)
 class CollageExportUiTest {
     @get:Rule val rule = createComposeRule()
-    private val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+    private val resolver = context.contentResolver
+    private val journal = PendingExportJournal(context.filesDir)
     private val temporaryMedia = mutableListOf<Uri>()
 
     private fun document(name: String, mime: String): Uri {
@@ -54,6 +58,7 @@ class CollageExportUiTest {
     }
 
     @After fun removeTestMedia() {
+        journal.read(ExportWorkspace.COLLAGE)?.let { journal.discard(it) }
         temporaryMedia.forEach { resolver.delete(it, null, null) }
     }
 
@@ -69,15 +74,19 @@ class CollageExportUiTest {
         return uri
     }
 
-    private fun chooseDestination(destination: Uri, format: ImageExportFormat) =
+    private fun chooseDestination(destination: Uri, format: ImageExportFormat, cancelFirst: Boolean = false) =
         object : ActivityResultRegistryOwner {
             override val activityResultRegistry = object : ActivityResultRegistry() {
+                private var launches = 0
+
                 override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>,
                     input: I, options: ActivityOptionsCompat?) {
                     check(contract is ActivityResultContracts.StartActivityForResult && input is Intent)
                     assertEquals(Intent.ACTION_CREATE_DOCUMENT, input.action)
                     assertEquals(format.mime, input.type)
-                    dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(destination))
+                    launches++
+                    if (cancelFirst && launches == 1) dispatchResult(requestCode, Activity.RESULT_CANCELED, null)
+                    else dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(destination))
                 }
             }
         }
@@ -155,6 +164,41 @@ class CollageExportUiTest {
             rule.onAllNodesWithText("Export failed", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
         assertArrayEquals(before, resolver.openInputStream(destination)!!.use { it.readBytes() })
+    }
+
+    @Test fun cancelingCollagePickerKeepsDestinationAndAllowsAnotherExport() {
+        val photos = listOf(CollagePhoto(source(0, Color.BLUE).toString()),
+            CollagePhoto(source(1, Color.GREEN).toString()))
+        val destination = source(7, Color.MAGENTA)
+        val before = resolver.openInputStream(destination)!!.use { it.readBytes() }
+        val chooser = chooseDestination(destination, ImageExportFormat.PNG, cancelFirst = true)
+        rule.setContent {
+            CompositionLocalProvider(LocalActivityResultRegistryOwner provides chooser) {
+                CollageWorkspaceScreen(CollageDocument(photos), {}, {})
+            }
+        }
+        rule.onNodeWithText("Export").performClick()
+        rule.onNodeWithText("JPEG · JPG  ▾").performClick()
+        rule.onNodeWithText("PNG · Lossless").performClick()
+        rule.onNodeWithText("Save PNG").performClick()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Collage export canceled").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertArrayEquals(before, resolver.openInputStream(destination)!!.use { it.readBytes() })
+        assertNull(journal.read(ExportWorkspace.COLLAGE))
+
+        rule.onNodeWithText("Export").performClick()
+        rule.onNodeWithText("Save PNG").performClick()
+        rule.waitUntil(30_000) {
+            rule.onAllNodesWithText("Collage saved", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        val output = requireNotNull(resolver.openInputStream(destination)).use {
+            requireNotNull(BitmapFactory.decodeStream(it))
+        }
+        try {
+            assertTrue(output.width > 32)
+        } finally { output.recycle() }
+        assertNull(journal.read(ExportWorkspace.COLLAGE))
     }
 
     @Test fun savePngKeepsTwentyIndependentTilesAndTheSourcePhoto() {

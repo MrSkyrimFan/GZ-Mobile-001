@@ -7,6 +7,8 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Typeface
+import android.icu.text.BreakIterator
+import android.icu.util.ULocale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
@@ -125,22 +127,56 @@ object CreativeRaster {
         c.restore()
     }
 
-    private fun lines(content: String, textPaint: Paint, maxWidth: Float): List<String> {
+    private class TextSpacing(private val paint: Paint, val gap: Float) {
+        private val characters = BreakIterator.getCharacterInstance(ULocale.ROOT)
+
+        fun parts(value: String): List<String> {
+            characters.setText(value)
+            val clusters = ArrayList<String>()
+            var start = characters.first()
+            var end = characters.next()
+            while (end != BreakIterator.DONE) {
+                clusters.add(value.substring(start, end))
+                start = end
+                end = characters.next()
+            }
+            return clusters
+        }
+
+        fun width(value: String): Float {
+            if (gap <= .0001f) return paint.measureText(value)
+            val clusters = parts(value)
+            return clusters.sumOf { paint.measureText(it).toDouble() }.toFloat() +
+                (clusters.size - 1).coerceAtLeast(0) * gap
+        }
+
+        fun fitPrefix(value: String, maxWidth: Float): Int {
+            val clusters = parts(value)
+            var end = 0
+            // Always advance by a whole grapheme, even if one glyph exceeds the box.
+            for (cluster in clusters.dropLast(1)) {
+                val next = end + cluster.length
+                if (end > 0 && width(value.substring(0, next)) > maxWidth) break
+                end = next
+            }
+            return end
+        }
+    }
+
+    private fun lines(content: String, spacing: TextSpacing, maxWidth: Float): List<String> {
         val wrapped = ArrayList<String>()
-        val cleaned = content.take(500)
+        val cleaned = content.take(500).dropLastWhile { Character.isHighSurrogate(it) }
         for (paragraph in cleaned.split('\n')) {
-            if (paragraph.isEmpty()) { wrapped.add(""); continue }
             var line = ""
             for (word in paragraph.split(' ')) {
-                val test = if (line.isEmpty()) word else line + " " + word
-                if (line.isNotEmpty() && textPaint.measureText(test) > maxWidth) {
+                val test = if (line.isEmpty()) word else "$line $word"
+                if (line.isNotEmpty() && spacing.width(test) > maxWidth) {
                     wrapped.add(line)
                     line = word
                 } else line = test
-                // Long unbroken words may need splitting rather than overflowing.
-                while (line.length > 1 && textPaint.measureText(line) > maxWidth) {
-                    val fit = textPaint.breakText(line, true, maxWidth, null)
-                        .coerceIn(1, line.length - 1)
+                while (spacing.width(line) > maxWidth) {
+                    val fit = spacing.fitPrefix(line, maxWidth)
+                    if (fit == 0) break
                     wrapped.add(line.substring(0, fit))
                     line = line.substring(fit)
                 }
@@ -156,24 +192,22 @@ object CreativeRaster {
         x: Float,
         y: Float,
         paint: Paint,
-        spacing: Float
+        spacing: TextSpacing
     ) {
-        if (spacing <= .0001f || value.length <= 1) {
+        if (spacing.gap <= .0001f || value.length <= 1) {
             canvas.drawText(value, x, y, paint)
             return
         }
-        val width = paint.measureText(value) + (value.length - 1) * spacing
-        val start = when (paint.textAlign) {
+        val width = spacing.width(value)
+        var cursor = when (paint.textAlign) {
             Paint.Align.LEFT -> x
             Paint.Align.RIGHT -> x - width
             else -> x - width / 2f
         }
-        val p = Paint(paint).apply { textAlign = Paint.Align.LEFT }
-        var cursor = start
-        for (char in value) {
-            val part = char.toString()
-            canvas.drawText(part, cursor, y, p)
-            cursor += p.measureText(part) + spacing
+        val leftAligned = Paint(paint).apply { textAlign = Paint.Align.LEFT }
+        for (cluster in spacing.parts(value)) {
+            canvas.drawText(cluster, cursor, y, leftAligned)
+            cursor += leftAligned.measureText(cluster) + spacing.gap
         }
     }
 
@@ -205,7 +239,8 @@ object CreativeRaster {
             }
         }
         val rowHeight = size * 1.21f
-        val rows = lines(layer.content, brush, bw * .94f)
+        val spacing = TextSpacing(brush, layer.letterSpacing.coerceIn(0f, .3f) * size)
+        val rows = lines(layer.content, spacing, bw * .94f)
         if (rows.isEmpty()) return
         val contentHeight = rows.size * rowHeight
         val fit = minOf(1f, bh / contentHeight.coerceAtLeast(1f))
@@ -230,11 +265,9 @@ object CreativeRaster {
                     strokeJoin = Paint.Join.ROUND
                     strokeWidth = outline * short * .014f
                 }
-                drawSpaced(canvas, row, drawX, y, edge,
-                    layer.letterSpacing.coerceIn(0f, .3f) * size)
+                drawSpaced(canvas, row, drawX, y, edge, spacing)
             }
-            drawSpaced(canvas, row, drawX, y, brush,
-                layer.letterSpacing.coerceIn(0f, .3f) * size)
+            drawSpaced(canvas, row, drawX, y, brush, spacing)
         }
         canvas.restore()
     }

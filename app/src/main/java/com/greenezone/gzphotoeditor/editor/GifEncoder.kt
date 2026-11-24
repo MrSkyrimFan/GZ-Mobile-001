@@ -12,6 +12,7 @@ import kotlin.math.min
 
 /** Streaming GIF89a writer with per-frame source-adaptive palettes. */
 object GifEncoder {
+    private const val MAX_DELAY_TICKS = 65535
     private val neutral = EditDocument()
     private fun OutputStream.byte(value: Int) { write(value and 255) }
     private fun OutputStream.short(value: Int) { byte(value); byte(value shr 8) }
@@ -86,14 +87,21 @@ object GifEncoder {
 
     /** One shared composition recipe for animated preview and final GIF frames. */
     fun renderFrame(source: Bitmap, doc: GifDocument, maxEdge: Int? = null,
-                    cancel: (() -> Unit)? = null): Bitmap {
+                    cancel: (() -> Unit)? = null): Bitmap =
+        renderFrame(source, doc, maxEdge, cancel, null)
+
+    private fun renderFrame(
+        source: Bitmap, doc: GifDocument, maxEdge: Int?, cancel: (() -> Unit)?,
+        colors: ImagePipeline.GifColors?
+    ): Bitmap {
         require(source.width > 0 && source.height > 0 && !source.isRecycled)
         val (w, h) = GifMath.dimensions(doc, maxEdge)
         require(w.toLong() * h <= 16_777_216L) { "Choose a smaller export size for this canvas" }
         val target = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         var edited: Bitmap? = null
         try {
-            val input = if (doc.edits == neutral) source else ImagePipeline.render(source, doc.edits, cancel)
+            val input = if (doc.edits == neutral) source
+                else ImagePipeline.render(source, doc.edits, colors, cancel)
             edited = input
             val canvas = Canvas(target)
             if (doc.video?.isGif != true) canvas.drawColor(Color.BLACK)
@@ -141,6 +149,7 @@ object GifEncoder {
         val stream = BufferedOutputStream(output, 64 * 1024)
         val writer = LzwWriter(stream, cancel)
         val palette = GifPalette(w, cancel, reserveTransparency = doc.video?.isGif == true)
+        val colors = ImagePipeline.GifColors.forGrade(doc.edits.grade)
         val pixels = ByteArray(w * h)
         val table = ByteArray(256 * 3)
         stream.ascii("GIF89a")
@@ -161,7 +170,7 @@ object GifEncoder {
                 // Photo sequences composite transparent input onto the same black canvas as preview.
                 val needsPhotoBackground = doc.video == null && source.hasAlpha()
                 val image = if (source.width == w && source.height == h && doc.edits == neutral && !needsPhotoBackground)
-                    source else renderFrame(source, doc, cancel = cancel)
+                    source else renderFrame(source, doc, maxEdge = null, cancel = cancel, colors = colors)
                 target = image
                 palette.index(image, pixels)
                 palette.colors.forEachIndexed { idx, color ->
@@ -171,7 +180,9 @@ object GifEncoder {
                 }
                 var ticks = ((delayAt(i) + 5) / 10).coerceAtLeast(1)
                 while (ticks > 0) {
-                    val hold = min(65535, ticks)
+                    // Readers treat a one-tick hold as a fallback. Borrow a tick for the final block.
+                    val hold = if (ticks == MAX_DELAY_TICKS + 1) MAX_DELAY_TICKS - 1
+                        else min(MAX_DELAY_TICKS, ticks)
                     stream.byte(0x21); stream.byte(0xf9); stream.byte(4)
                     stream.byte(if (palette.transparent) 0x09 else 0x04)
                     stream.short(hold); stream.byte(0); stream.byte(0)

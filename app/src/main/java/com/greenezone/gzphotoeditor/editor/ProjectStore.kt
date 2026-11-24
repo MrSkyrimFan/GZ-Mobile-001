@@ -30,9 +30,11 @@ object ProjectStore {
             } catch (_: Exception) { null }
         }.sortedBy { it.name.lowercase() }
 
+    fun normalizedName(input: String): String = input.trim().replace(Regex("\\s+"), " ").take(28)
+
     fun save(context: Context, nameInput: String, image: Uri, document: EditDocument): Boolean {
         if (image.scheme != "content") return false
-        val name = nameInput.trim().replace(Regex("\\s+"), " ").take(28)
+        val name = normalizedName(nameInput)
         if (name.isBlank()) return false
         val key = Base64.getUrlEncoder().withoutPadding().encodeToString(
             name.toByteArray(StandardCharsets.UTF_8)
@@ -45,10 +47,10 @@ object ProjectStore {
         return prefs.edit().putString(key, value).commit()
     }
 
-    fun delete(context: Context, name: String) {
+    fun delete(context: Context, name: String): Boolean {
         val key = Base64.getUrlEncoder().withoutPadding().encodeToString(
             name.toByteArray(StandardCharsets.UTF_8)
         )
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(key).apply()
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(key).commit()
     }
 }

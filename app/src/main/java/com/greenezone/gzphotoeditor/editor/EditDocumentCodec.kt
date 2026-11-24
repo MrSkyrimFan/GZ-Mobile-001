@@ -8,14 +8,51 @@ import java.util.Base64
  * No external files, source photos, network identifiers or executable data.
  */
 object EditDocumentCodec {
-    private const val VERSION = "1"
+    private const val LEGACY_VERSION = "1"
+    private const val ANCHORED_PRIVACY_VERSION = "2"
     private const val MAX_STROKES = 40
     private const val MAX_BRUSH_POINTS = 640
     private const val MAX_INK_POINTS = 500
+    internal const val MAX_ENCODED_CHARS = 2_000_000
 
-    fun encode(document: EditDocument): String {
-        val fields = sortedMapOf<String, String>()
-        fields["version"] = VERSION
+    internal class RecipeTooLarge : IllegalArgumentException("Edit recipe is too large")
+
+    private class RecipeFields(private val limit: Int) {
+        private val values = sortedMapOf<String, String>()
+        private var lengthWithTrailingNewline = 0L
+
+        operator fun set(key: String, value: String) {
+            val previous = values.put(key, value)
+            lengthWithTrailingNewline += if (previous == null) {
+                key.length.toLong() + value.length + 2
+            } else {
+                (value.length - previous.length).toLong()
+            }
+            if (lengthWithTrailingNewline - 1 > limit) throw RecipeTooLarge()
+        }
+
+        fun encode(): String {
+            // Keys, enums, numbers and flags are ASCII. Free text is encoded in Base64.
+            // Allocate the exact byte count instead of growing a large UTF-16 buffer.
+            val bytes = ByteArray((lengthWithTrailingNewline - 1).toInt())
+            var offset = 0
+            for ((key, value) in values) {
+                if (offset != 0) bytes[offset++] = '\n'.code.toByte()
+                for (char in key) bytes[offset++] = char.code.toByte()
+                bytes[offset++] = '='.code.toByte()
+                for (char in value) bytes[offset++] = char.code.toByte()
+            }
+            return String(bytes, StandardCharsets.US_ASCII)
+        }
+    }
+
+    fun encode(document: EditDocument): String = encodeBounded(document, Int.MAX_VALUE)
+
+    internal fun encodeBounded(document: EditDocument, maxChars: Int = MAX_ENCODED_CHARS): String {
+        val fields = RecipeFields(maxChars)
+        val privacy = document.privacy.take(PrivacyRaster.MAX_EDITS)
+        fields["version"] = if (privacy.any { it.authoringGeometry != null })
+            ANCHORED_PRIVACY_VERSION else LEGACY_VERSION
         ControlCatalog.all.forEach { control ->
             fields["control." + control.name] = control.read(document.grade).toString()
         }
@@ -48,7 +85,6 @@ object EditDocumentCodec {
                     stroke.points.take(MAX_BRUSH_POINTS).joinToString(";") { "${it.x},${it.y}" }
             }
         }
-        val privacy = document.privacy.take(PrivacyRaster.MAX_EDITS)
         fields["privacy.count"] = privacy.size.toString()
         for ((index, mark) in privacy.withIndex()) {
             val prefix = "privacy.$index."
@@ -61,6 +97,21 @@ object EditDocumentCodec {
             fields[prefix + "feather"] = mark.feather.toString()
             fields[prefix + "brushSize"] = mark.brushSize.toString()
             fields[prefix + "color"] = mark.color.toString()
+            mark.authoringGeometry?.let { geometry ->
+                val anchor = prefix + "geometry."
+                fields[anchor + "rotation"] = geometry.quarterTurns.toString()
+                fields[anchor + "horizontalFlip"] = geometry.mirrored.toString()
+                fields[anchor + "verticalFlip"] = geometry.flipVertical.toString()
+                fields[anchor + "cropRatio"] = geometry.crop.name
+                fields[anchor + "cropX"] = geometry.cropCenterX.toString()
+                fields[anchor + "cropY"] = geometry.cropCenterY.toString()
+                fields[anchor + "straighten"] = geometry.straightenDegrees.toString()
+                geometry.cropFrame?.let { frame ->
+                    fields[anchor + "frame"] = listOf(frame.left, frame.top, frame.right, frame.bottom)
+                        .joinToString(",")
+                    if (geometry.cropFrameRatioLocked) fields[anchor + "frame.locked"] = "true"
+                }
+            }
             val strokes = mark.strokes.take(MAX_STROKES)
             fields[prefix + "stroke.count"] = strokes.size.toString()
             strokes.forEachIndexed { i, stroke ->
@@ -116,16 +167,23 @@ object EditDocumentCodec {
                 it.x.toString() + "," + it.y.toString()
             }
         }
-        return fields.entries.joinToString("\n") { "${it.key}=${it.value}" }
+        return fields.encode()
     }
 
-    fun decode(content: String): EditDocument? {
-        if (content.length > 2_000_000) return null
+    fun decode(content: String): EditDocument? = decode(content, MAX_ENCODED_CHARS)
+
+    // Older Pro files could contain a larger recipe within their bounded project envelope.
+    internal fun recoverProRecipe(content: String, projectLimit: Int): EditDocument? =
+        decode(content, projectLimit)
+
+    private fun decode(content: String, limit: Int): EditDocument? {
+        if (content.length > limit) return null
         val fields = content.lineSequence().take(6000).mapNotNull { line ->
             val index = line.indexOf('=')
             if (index <= 0) null else line.substring(0, index) to line.substring(index + 1)
         }.toMap()
-        if (fields["version"] != VERSION) return null
+        val version = fields["version"]
+        if (version != LEGACY_VERSION && version != ANCHORED_PRIVACY_VERSION) return null
         fun numeric(key: String, default: Float, min: Float, max: Float): Float {
             val parsed = fields[key]?.toFloatOrNull()
             return if (parsed != null && parsed.isFinite()) parsed.coerceIn(min, max) else default
@@ -177,6 +235,29 @@ object EditDocumentCodec {
                 strokes = strokes
             ))
         }
+        fun cropFrame(key: String): CropFrame? {
+            val parts = fields[key]?.split(',') ?: return null
+            if (parts.size != 4) return null
+            val values = parts.mapNotNull { it.toFloatOrNull() }
+            if (values.size != 4 || values.any { !it.isFinite() }) return null
+            return CropMath.sanitize(CropFrame(values[0], values[1], values[2], values[3]))
+        }
+        fun privacyGeometry(prefix: String): PhotoGeometry? {
+            val anchor = prefix + "geometry."
+            val rotation = fields[anchor + "rotation"]?.toIntOrNull()?.takeIf { it in 0..3 } ?: return null
+            val crop = CropRatio.entries.firstOrNull { it.name == fields[anchor + "cropRatio"] }
+                ?: return null
+            val frame = cropFrame(anchor + "frame")
+            if (fields.containsKey(anchor + "frame") && frame == null) return null
+            val flipX = fields[anchor + "horizontalFlip"]?.toBooleanStrictOrNull() ?: return null
+            val flipY = fields[anchor + "verticalFlip"]?.toBooleanStrictOrNull() ?: return null
+            val centerX = numeric(anchor + "cropX", Float.NaN, 0f, 1f)
+            val centerY = numeric(anchor + "cropY", Float.NaN, 0f, 1f)
+            val straighten = numeric(anchor + "straighten", Float.NaN, -15f, 15f)
+            if (!centerX.isFinite() || !centerY.isFinite() || !straighten.isFinite()) return null
+            return PhotoGeometry(rotation, flipX, flipY, crop, centerX, centerY, straighten, frame,
+                frame != null && fields[anchor + "frame.locked"] == "true")
+        }
         val privacy = ArrayList<PrivacyEdit>()
         for (i in 0 until count("privacy.count", PrivacyRaster.MAX_EDITS)) {
             val prefix = "privacy.$i."
@@ -196,6 +277,10 @@ object EditDocumentCodec {
                 }
                 if (points.isNotEmpty()) strokes.add(BrushStroke(points))
             }
+            val hasAnchorFields = fields.keys.any { it.startsWith(prefix + "geometry.") }
+            val authoringGeometry = if (version == ANCHORED_PRIVACY_VERSION && hasAnchorFields)
+                privacyGeometry(prefix) ?: return null
+            else null
             privacy.add(PrivacyEdit(
                 kind = kind,
                 centerX = numeric(prefix + "x", .5f, 0f, 1f),
@@ -206,16 +291,12 @@ object EditDocumentCodec {
                 feather = numeric(prefix + "feather", .22f, 0f, .8f),
                 brushSize = numeric(prefix + "brushSize", .055f, .005f, .20f),
                 color = (fields[prefix + "color"]?.toIntOrNull() ?: -0x1000000) or -0x1000000,
-                strokes = strokes
+                strokes = strokes,
+                authoringGeometry = authoringGeometry
             ))
         }
-        val frame = fields["crop.frame"]?.split(',')?.let { parts ->
-            if (parts.size != 4) null else {
-                val values = parts.mapNotNull { it.toFloatOrNull() }
-                if (values.size != 4 || values.any { !it.isFinite() }) null
-                else CropMath.sanitize(CropFrame(values[0], values[1], values[2], values[3]))
-            }
-        }
+        if (version == ANCHORED_PRIVACY_VERSION && privacy.none { it.authoringGeometry != null }) return null
+        val frame = cropFrame("crop.frame")
         fun color(key: String, fallback: Int): Int = fields[key]?.toIntOrNull() ?: fallback
         fun points(key: String): List<BrushPoint> =
             fields[key]?.split(';')?.take(MAX_INK_POINTS)?.mapNotNull { pair ->

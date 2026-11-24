@@ -66,6 +66,38 @@ object CropMath {
             (left + cropWidth).toFloat() / width, (top + cropHeight).toFloat() / height)
     }
 
+    fun rotate(document: EditDocument, width: Int, height: Int, clockwise: Boolean): EditDocument {
+        val rotation = (document.quarterTurns + if (clockwise) 1 else 3) % 4
+        if (document.crop == CropRatio.ORIGINAL && document.cropFrame == null) {
+            return document.copy(quarterTurns = rotation)
+        }
+        val (x, y, w, h) = document.cropFrame?.let {
+            pixelBounds(width, height, it, document.crop.takeIf { document.cropFrameRatioLocked })
+        } ?: presetBounds(width, height, document.crop, document.cropCenterX, document.cropCenterY)
+        val left = x.toFloat() / width
+        val right = (x + w).toFloat() / width
+        val top = y.toFloat() / height
+        val bottom = (y + h).toFloat() / height
+        val frame = if (clockwise) CropFrame(1f - bottom, left, 1f - top, right)
+            else CropFrame(top, 1f - right, bottom, 1f - left)
+        val ratio = when (document.crop) {
+            CropRatio.SQUARE -> CropRatio.SQUARE
+            CropRatio.TALL -> CropRatio.CLASSIC
+            CropRatio.CLASSIC -> CropRatio.TALL
+            CropRatio.STORY -> CropRatio.WIDE
+            CropRatio.WIDE -> CropRatio.STORY
+            else -> CropRatio.FREE
+        }
+        // An older preset may have rounded to a non-exact ratio. Preserve those
+        // actual pixels rather than shrinking further when applying the new lock.
+        val wasLocked = document.cropFrameRatioLocked || (document.cropFrame == null &&
+            ratio.ratio != null && h * ratio.unitsHigh == w * ratio.unitsWide)
+        return document.copy(
+            quarterTurns = rotation, cropFrame = frame, crop = ratio,
+            cropFrameRatioLocked = wasLocked && ratio.ratio != null
+        )
+    }
+
     private fun fitAspect(frame: CropFrame, normalizedRatio: Float): CropFrame {
         val f = sanitize(frame)
         val width = minOf(f.width, f.height * normalizedRatio)

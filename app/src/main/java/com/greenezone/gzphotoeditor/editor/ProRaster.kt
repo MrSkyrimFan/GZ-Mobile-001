@@ -270,8 +270,8 @@ object ProRaster {
                 var retained = prepared != null
                 try {
                     if (!retained) retained = images?.keep(index, outputImage) == true
-                    val frame = ProMath.bounds(layer, width, height,
-                        outputImage.width, outputImage.height)
+                    val frame = if (layer.sourceSize != null) ProMath.bounds(layer, width, height)
+                        else ProMath.bounds(layer, width, height, outputImage.width, outputImage.height)
                     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
                         alpha = (layer.opacity * 255).roundToInt().coerceIn(0, 255)
                         blendMode = blend(layer.blend)
@@ -313,9 +313,17 @@ object ProRaster {
         previewSourceLimit: Long?, cancel: (() -> Unit)?,
         loader: (ProLayer, Int, Long) -> Bitmap
     ): Bitmap {
-        val edge = (maxOf(width, height) * layer.scale.coerceIn(.1f, 2f) * 1.3f)
+        val original = layer.sourceSize
+        val editedDimensions = original?.let { ProImageGeometry.editedSize(it, layer.edits) }
+        val cropFactor = if (original != null && editedDimensions != null) {
+            val turned = layer.edits.quarterTurns % 2 != 0
+            val orientedWidth = if (turned) original.height else original.width
+            val orientedHeight = if (turned) original.width else original.height
+            maxOf(1.0, orientedWidth.toDouble() / editedDimensions.width, orientedHeight.toDouble() / editedDimensions.height)
+        } else 1.0
+        val edge = (maxOf(width, height) * layer.scale.coerceIn(.1f, 2f) * 1.3 * cropFactor)
             .roundToInt().coerceIn(96, if (preview) 2048 else 5600)
-        val pixels = (width.toLong() * height * 2)
+        val pixels = (width.toDouble() * height * 2 * cropFactor * cropFactor).toLong()
             .coerceIn(250_000L, if (preview) 3_000_000L else 12_000_000L)
         val source = try {
             loader(layer, edge, minOf(pixels, previewSourceLimit ?: pixels))
@@ -339,3 +347,4 @@ object ProRaster {
         }
     }
 }
+

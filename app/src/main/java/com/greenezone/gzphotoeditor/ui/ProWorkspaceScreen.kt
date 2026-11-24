@@ -77,6 +77,12 @@ internal enum class ProTransform(val title: String) {
 
 private data class ProBrushDraft(val id: Long, val layer: Int, val stroke: InkStroke)
 private data class ProBrushFrame(val draftId: Long, val bitmap: Bitmap)
+private data class ProSaveRequest(
+    val name: String,
+    val document: ProDocument,
+    val reset: ProDocument?,
+    val target: ProSaveTarget
+)
 
 internal data class ProWorkspaceSession(
     val documentEstablished: Boolean = false,
@@ -96,7 +102,9 @@ internal data class ProWorkspaceSession(
     val selectionKind: ProSelectionKind = ProSelectionKind.RECTANGLE,
     val retouchKind: ProRetouchKind = ProRetouchKind.CLONE,
     val retouchRadius: Float = .04f,
-    val retouchStrength: Float = 1f
+    val retouchStrength: Float = 1f,
+    val saveTarget: ProSaveTarget = ProSaveTarget(),
+    val nextWorkId: Long = 1
 )
 
 /** True independently editable bitmap/vector/adjustment layer workspace. */
@@ -155,6 +163,8 @@ internal fun ProWorkspaceScreenContent(
     var resetDocument by remember {
         mutableStateOf(session.resetDocument ?: document.takeIf { it.layers.isNotEmpty() })
     }
+    var saveTarget by remember { mutableStateOf(session.saveTarget) }
+    var nextWorkId by remember { mutableLongStateOf(session.nextWorkId) }
     var sliderStart by remember { mutableStateOf<ProHistoryEntry?>(null) }
     var lastSliderValue by remember { mutableStateOf<ProDocument?>(null) }
     var lastDragValue by remember { mutableStateOf<ProDocument?>(null) }
@@ -185,12 +195,21 @@ internal fun ProWorkspaceScreenContent(
     var notice by remember { mutableStateOf("") }
     var showExport by remember { mutableStateOf(false) }
     var exportSettings by remember { mutableStateOf(ExportSettings()) }
-    var pendingExport by remember { mutableStateOf<Pair<ProDocument, ExportSettings>?>(null) }
+    val exportJournal = remember(context) { PendingExportJournal(context.filesDir) }
+    var exportJournalReady by remember { mutableStateOf(false) }
+    var pendingExport by remember { mutableStateOf<PendingExport?>(null) }
+    var exportLaunchId by remember { mutableStateOf<String?>(null) }
+    var showExportRecovery by remember { mutableStateOf(false) }
+    var exportFailure by remember { mutableStateOf<String?>(null) }
+    var exportRecoveryUnavailable by remember { mutableStateOf<String?>(null) }
     var showSave by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
     var pendingSavedDelete by remember { mutableStateOf<String?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf("") }
+    var pendingReplace by remember { mutableStateOf<ProSaveRequest?>(null) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var openError by remember { mutableStateOf<String?>(null) }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val active = document.layers.getOrNull(selected)
@@ -220,11 +239,16 @@ internal fun ProWorkspaceScreenContent(
         showTools = false
     }
     fun historyEntry(current: ProDocument = document) =
-        ProHistoryEntry(current, resetDocument, selected)
+        ProHistoryEntry(current, resetDocument, selected, saveTarget)
 
-    fun commit(next: ProDocument, nextReset: ProDocument? = resetDocument) {
-        history = history.checkpoint(historyEntry(), historyEntry(next).copy(resetDocument = nextReset))
+    fun commit(
+        next: ProDocument,
+        nextReset: ProDocument? = resetDocument,
+        nextTarget: ProSaveTarget = saveTarget
+    ) {
+        history = history.checkpoint(historyEntry(), ProHistoryEntry(next, nextReset, selected, nextTarget))
         resetDocument = nextReset
+        saveTarget = nextTarget
         sliderStart = null
         lastSliderValue = null
         onDocument(next)
@@ -297,7 +321,9 @@ internal fun ProWorkspaceScreenContent(
             selectionKind = selectionKind,
             retouchKind = retouchKind,
             retouchRadius = retouchRadius,
-            retouchStrength = retouchStrength
+            retouchStrength = retouchStrength,
+            saveTarget = saveTarget,
+            nextWorkId = nextWorkId
         ))
     }
 
@@ -318,6 +344,7 @@ internal fun ProWorkspaceScreenContent(
         clearToolDrafts()
         history = nextHistory
         resetDocument = restored.resetDocument
+        saveTarget = restored.saveTarget
         selected = restored.selectionAfter(current)
         onDocument(restored.document)
     }
@@ -380,6 +407,7 @@ internal fun ProWorkspaceScreenContent(
         lastDragValue = null
         replacement = null
         history = ProHistory()
+        saveTarget = ProSaveTarget(nextWorkId++)
         selected = 0
         section = ProSection.LAYERS
         transform = ProTransform.SIZE
@@ -401,6 +429,64 @@ internal fun ProWorkspaceScreenContent(
         notice = "Current Pro work discarded."
     }
 
+    fun saveProject(request: ProSaveRequest, replaceName: String?) {
+        if (busy) return
+        busy = true
+        saveError = null
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    ProStore.saveProject(context, request.name, request.document, request.reset, replaceName)
+                }
+                pendingReplace = null
+                when (result) {
+                    is ProStore.SaveResult.Saved -> {
+                        saveTarget = request.target.copy(name = result.name)
+                        if (replaceName == result.name && request.target.name != result.name) {
+                            // Other work that had targeted the replaced file now needs its own name.
+                            history = history.forgetSavedName(result.name)
+                        }
+                        history = history.bindSavedName(saveTarget)
+                        showSave = false
+                        notice = "Editable Pro project saved"
+                    }
+                    is ProStore.SaveResult.Exists -> pendingReplace = request.copy(name = result.name)
+                    ProStore.SaveResult.TooLarge -> saveError =
+                        "This project exceeds the saved edit limit. Remove some complex brush strokes or layers and try again."
+                    ProStore.SaveResult.Failed -> saveError =
+                        "Could not save. Check the name, project limit, and available storage."
+                }
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    fun openProject(name: String) {
+        if (busy) return
+        busy = true
+        openError = null
+        scope.launch {
+            try {
+                val restored = withContext(Dispatchers.IO) {
+                    ProStore.loadProject(context, name)?.let { ProImageGeometry.recover(resolver, it) }
+                }
+                if (restored == null) {
+                    openError = "Project unreadable or invalid."
+                } else {
+                    finishPendingHistory()
+                    clearToolDrafts()
+                    commit(restored.document, restored.resetDocument, ProSaveTarget(nextWorkId++, name))
+                    selected = 0
+                    showProjects = false
+                    notice = "Pro project opened"
+                }
+            } finally {
+                busy = false
+            }
+        }
+    }
+
     BackHandler { requestBack() }
 
     val picker = rememberLauncherForActivityResult(
@@ -417,12 +503,9 @@ internal fun ProWorkspaceScreenContent(
                                 resolver.takePersistableUriPermission(
                                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             } catch (_: SecurityException) {}
-                            val small = ImagePipeline.decode(resolver, uri, 200, 50_000L)
-                            val aspect = try { small.width.toFloat() / small.height }
-                                finally { if (!small.isRecycled) small.recycle() }
-                            ProLayer(uri = uri.toString(),
-                                name = "Image " + (document.layers.size + index + 1),
-                                aspect = aspect.coerceIn(.1f, 10f))
+                            ProImageGeometry.bind(ProLayer(
+                                uri = uri.toString(), name = "Image " + (document.layers.size + index + 1)
+                            ), ProImageGeometry.sourceSize(resolver, uri))
                         }
                     }
                     if (layers.isNotEmpty()) {
@@ -460,24 +543,18 @@ internal fun ProWorkspaceScreenContent(
         busy = true
         scope.launch {
             try {
-                val aspect = withContext(Dispatchers.IO) {
+                val nextLayer = withContext(Dispatchers.IO) {
                     try {
                         resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     } catch (_: SecurityException) {}
-                    val sample = ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L)
-                    try {
-                        val image = ImagePipeline.geometry(sample, layer.edits)
-                        try { image.width.toFloat() / image.height }
-                        finally { if (image !== sample) image.recycle() }
-                    } finally { sample.recycle() }
+                    ProImageGeometry.bind(layer.copy(uri = uri.toString()), ProImageGeometry.sourceSize(resolver, uri))
                 }
                 if (latestDocument !== requestedDocument) {
                     notice = "The layer changed. Select it and try Replace image again."
                     return@launch
                 }
-                check(ProMath.validSourceAspect(aspect))
                 commit(requestedDocument.copy(layers = requestedDocument.layers.toMutableList().also {
-                    it[index] = layer.copy(uri = uri.toString(), aspect = aspect)
+                    it[index] = nextLayer
                 }))
                 clearToolDrafts()
                 selected = index
@@ -494,70 +571,177 @@ internal fun ProWorkspaceScreenContent(
         }
     }
 
-    fun export(destination: Uri, request: Pair<ProDocument, ExportSettings>) {
-        val protectedLayers = request.first.layers + resetDocument?.layers.orEmpty()
+    val exportPixelBudget = remember(context) {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        GeometryMath.safeExportPixels(manager.memoryClass)
+    }
+    val intendedExportSize = ProMath.intendedCanvasSize(document)
+    val safeExportSize = intendedExportSize.within(ProMath.MAX_EXPORT_EDGE, exportPixelBudget)
+
+    suspend fun retainExportForRetry(pending: PendingExport, message: String) {
+        notice = message
+        exportFailure = message
+        pendingExport = withContext(Dispatchers.IO) {
+            runCatching { exportJournal.failed(pending) }.getOrElse {
+                runCatching { exportJournal.read(ExportWorkspace.PRO) }.getOrNull()
+            }
+        }
+        showExportRecovery = pendingExport != null
+    }
+
+    suspend fun export(destination: Uri, request: PendingProExportRecipe, pending: PendingExport) {
+        val protectedLayers = request.document.layers + request.resetDocument.layers
         if (protectedLayers.any { it.uri.isNotEmpty() && it.uri == destination.toString() }) {
-            notice = "Export cannot overwrite an original image."
+            retainExportForRetry(pending, "Export cannot overwrite an original image.")
             return
         }
-        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val budget = GeometryMath.safeExportPixels(manager.memoryClass)
-        scope.launch {
-            exporting = true
-            notice = "Exporting editable composition…"
+        showExportRecovery = false
+        notice = "Exporting editable composition…"
+        val dimensions = withContext(Dispatchers.Default) {
+            val coroutine = currentCoroutineContext()
+            val image = ProRaster.render(resolver, request.document, request.size.width, request.size.height, false) {
+                coroutine.ensureActive()
+            }
             try {
-                val result = withContext(Dispatchers.Default) {
-                    var image: Bitmap? = null
-                    var sized: Bitmap? = null
-                    try {
-                        val (w, h) = ProMath.dimensions(request.first, 4096, budget)
-                        val coroutine = currentCoroutineContext()
-                        image = ProRaster.render(resolver, request.first, w, h, false) {
-                            coroutine.ensureActive()
+                val sized = ExportSizing.layout(image, request.settings)
+                try {
+                    withContext(Dispatchers.IO) {
+                        writeStagedImage(context.cacheDir,
+                            openDestination = {
+                                exportJournal.copying(pending)
+                                resolver.openOutputStream(destination, "wt")
+                            },
+                            checkActive = { ensureActive() }) { out ->
+                            ImageExportWriter.write(sized, request.settings, out)
                         }
-                        sized = ExportSizing.layout(image, request.second)
-                        withContext(Dispatchers.IO) {
-                            writeStagedImage(context.cacheDir,
-                                openDestination = { resolver.openOutputStream(destination, "wt") },
-                                checkActive = { ensureActive() }) { out ->
-                                ImageExportWriter.write(sized, request.second, out)
+                    }
+                    "${sized.width} × ${sized.height}"
+                } finally {
+                    if (sized !== image) sized.recycle()
+                }
+            } finally {
+                image.recycle()
+            }
+        }
+        withContext(Dispatchers.IO) { exportJournal.discard(pending) }
+        pendingExport = null
+        notice = "Exported $dimensions. Original media unchanged."
+    }
+
+    LaunchedEffect(exportJournal) {
+        val restored = withContext(Dispatchers.IO) {
+            runCatching { exportJournal.read(ExportWorkspace.PRO) }.getOrNull()
+        }
+        pendingExport = restored
+        showExportRecovery = restored != null
+        exportJournalReady = true
+    }
+
+    RecoverableExportPicker(
+        pending = pendingExport,
+        launchId = exportLaunchId,
+        onLaunch = { if (exportLaunchId == it) exportLaunchId = null },
+        onLaunchFailed = { pending, error ->
+            scope.launch { retainExportForRetry(pending, error.message ?: "Could not open the export destination.") }
+        },
+        onResult = { pending, response ->
+            if (pendingExport?.id == pending.id && !exporting) {
+                exporting = true
+                scope.launch {
+                    try {
+                        if (response.resultCode != Activity.RESULT_OK) {
+                            if (withContext(Dispatchers.IO) { exportJournal.cancelPicker(pending) }) {
+                                pendingExport = null
+                                showExportRecovery = false
+                                notice = "Export canceled."
+                            }
+                        } else {
+                            val destination = response.data?.data
+                            val request = withContext(Dispatchers.IO) { PendingProExportRecipe.decode(pending) }
+                            if (destination == null || request == null) {
+                                if (request == null) exportRecoveryUnavailable =
+                                    "Discard this unreadable request to start a new Pro export."
+                                retainExportForRetry(pending, "The export destination or Pro edits could not be restored.")
+                            } else {
+                                val claimed = withContext(Dispatchers.IO) { exportJournal.claim(pending, destination) }
+                                if (claimed != null) {
+                                    pendingExport = claimed
+                                    export(destination, request, claimed)
+                                }
                             }
                         }
-                        sized.width.toString() + " × " + sized.height
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: OutOfMemoryError) {
+                        retainExportForRetry(pending, "Not enough device memory to export this composition.")
+                    } catch (error: Exception) {
+                        retainExportForRetry(pending, "Export failed: " + (error.message ?: "source unavailable"))
                     } finally {
-                        sized?.let { if (it !== image && !it.isRecycled) it.recycle() }
-                        image?.let { if (!it.isRecycled) it.recycle() }
+                        exporting = false
                     }
                 }
-                notice = "Exported " + result + ". Original media unchanged."
+            }
+        }
+    )
+
+    fun startExport() {
+        if (busy || exporting || !exportJournalReady || !ProMath.valid(document)) return
+        showExport = false
+        if (pendingExport != null) {
+            showExportRecovery = true
+            return
+        }
+        exportFailure = null
+        exportRecoveryUnavailable = null
+        val request = PendingProExportRecipe(document, resetDocument ?: document, exportSettings, safeExportSize)
+        val format = request.settings.format
+        busy = true
+        scope.launch {
+            try {
+                val pending = withContext(Dispatchers.IO) {
+                    exportJournal.begin(ExportWorkspace.PRO, format.mime,
+                        "GZEditorPro_Pro." + format.extension, request.encode())
+                }
+                pendingExport = pending
+                exportLaunchId = pending.id
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: OutOfMemoryError) {
-                notice = "Not enough device memory. Try a smaller image."
-            } catch (failure: Exception) {
-                notice = "Export failed: " + (failure.message ?: "source unavailable")
-            } finally { exporting = false }
+                notice = "Not enough device memory to keep this export request."
+            } catch (error: Exception) {
+                notice = "Could not keep the Pro export request. " +
+                    (error.message ?: "Try reducing the complexity of the project.")
+            } finally {
+                busy = false
+            }
         }
     }
-    val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { response ->
-        val request = pendingExport
-        pendingExport = null
-        val uri = response.data?.data
-        if (response.resultCode == Activity.RESULT_OK && uri != null && request != null) {
-            export(uri, request)
+
+    fun resolveExportRecovery(retry: Boolean) {
+        val pending = pendingExport ?: return
+        if (busy || exporting) return
+        busy = true
+        scope.launch {
+            try {
+                if (retry) {
+                    val next = withContext(Dispatchers.IO) { exportJournal.retry(pending) }
+                    pendingExport = next
+                    exportLaunchId = next.id
+                } else {
+                    withContext(Dispatchers.IO) { exportJournal.discard(pending) }
+                    pendingExport = null
+                }
+                exportFailure = null
+                exportRecoveryUnavailable = null
+                showExportRecovery = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                notice = error.message ?: "Could not resolve the pending Pro export."
+            } finally {
+                busy = false
+            }
         }
-    }
-    fun startExport() {
-        if (!ProMath.valid(document)) return
-        pendingExport = document to exportSettings
-        showExport = false
-        exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = exportSettings.format.mime
-            putExtra(Intent.EXTRA_TITLE, "GZEditorPro_Pro." + exportSettings.format.extension)
-        })
     }
 
     // A hardware display list can retain the previous preview after recomposition.
@@ -710,12 +894,26 @@ internal fun ProWorkspaceScreenContent(
                             TextButton(onClick = { showFile = true }, enabled = available) { Text("File ▾") }
                             DropdownMenu(expanded = showFile, onDismissRequest = { showFile = false }) {
                                 DropdownMenuItem(text = { Text("Open project") }, onClick = {
-                                    showFile = false; savedNames = ProStore.names(context); showProjects = true
+                                    showFile = false
+                                    openError = null
+                                    savedNames = ProStore.names(context)
+                                    showProjects = true
                                 })
                                 DropdownMenuItem(text = { Text("Save project") }, enabled = ProMath.valid(document),
-                                    onClick = { showFile = false; showSave = true })
-                                DropdownMenuItem(text = { Text("Export image") }, enabled = ProMath.valid(document),
-                                    onClick = { showFile = false; showExport = true })
+                                    onClick = {
+                                        showFile = false
+                                        finishPendingHistory()
+                                        draftName = saveTarget.name.orEmpty()
+                                        saveError = null
+                                        showSave = true
+                                    })
+                                DropdownMenuItem(text = { Text("Export image") },
+                                    enabled = exportJournalReady && (ProMath.valid(document) || pendingExport != null),
+                                    onClick = {
+                                        showFile = false
+                                        showExportRecovery = pendingExport != null
+                                        showExport = !showExportRecovery
+                                    })
                                 DropdownMenuItem(text = { Text("Fit canvas") }, enabled = document.layers.isNotEmpty(),
                                     onClick = { showFile = false; viewport = ProViewport() })
                                 DropdownMenuItem(text = { Text("Pro help") }, onClick = {
@@ -805,12 +1003,15 @@ internal fun ProWorkspaceScreenContent(
                                 lastDragValue = null
                                 dragStart = historyEntry()
                                 if (section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
-                                    active.visible && active.opacity > 0f &&
-                                    active.edits.creative.strokes.size < CreativeRaster.MAX_INK) {
-                                    nextBrushId += 1
-                                    activeStroke = ProBrushDraft(nextBrushId, selected,
-                                        InkStroke(listOf(point), color = brushColor,
-                                            thickness = brushSize, opacity = brushOpacity, erase = eraserMode))
+                                    active.visible && active.opacity > 0f) {
+                                    if (active.edits.creative.strokes.size >= CreativeRaster.MAX_INK) {
+                                        notice = "This brush layer is full. Add another brush layer or undo a stroke."
+                                    } else {
+                                        nextBrushId += 1
+                                        activeStroke = ProBrushDraft(nextBrushId, selected,
+                                            InkStroke(listOf(point), color = brushColor,
+                                                thickness = brushSize, opacity = brushOpacity, erase = eraserMode))
+                                    }
                                 }
                                 if (section == ProSection.SELECT && active?.visible == true && active.opacity > 0f &&
                                     (active.kind == ProLayerKind.IMAGE || active.kind == ProLayerKind.ADJUSTMENT)) {
@@ -836,9 +1037,9 @@ internal fun ProWorkspaceScreenContent(
                                     }
                                     ProSection.PAINT -> activeStroke?.let { draft ->
                                         val stroke = draft.stroke
-                                        if (draft.layer == selected && stroke.points.size < 500 &&
-                                            stroke.points.last() != point) {
-                                            activeStroke = draft.copy(stroke = stroke.copy(points = stroke.points + point))
+                                        if (draft.layer == selected && stroke.points.last() != point) {
+                                            val points = ProStrokeSampling.append(stroke.points, point, before.canvasAspectRatio)
+                                            activeStroke = draft.copy(stroke = stroke.copy(points = points))
                                         }
                                     }
                                     ProSection.SELECT -> if (selectionStart != null) {
@@ -1238,7 +1439,7 @@ internal fun ProWorkspaceScreenContent(
                                     ProAspect.entries.forEach { aspect ->
                                         DockChip(aspect.label,
                                             document.sourceAspectRatio == null && document.aspect == aspect) {
-                                            commit(document.copy(aspect = aspect, sourceAspectRatio = null))
+                                            commit(ProMath.withAspect(document, aspect))
                                         }
                                     }
                                 }
@@ -1314,51 +1515,83 @@ internal fun ProWorkspaceScreenContent(
             Text("Close", color = EditorMuted)
         } }
     )
+    val recoverable = pendingExport
+    if (showExportRecovery && recoverable != null && !busy && !exporting) RecoverableExportDialog(
+        request = recoverable,
+        onRetry = { resolveExportRecovery(retry = true) },
+        onDiscard = { resolveExportRecovery(retry = false) },
+        onDismiss = { showExportRecovery = false },
+        unavailable = exportRecoveryUnavailable,
+        failure = exportFailure
+    )
     if (showExport) ExportDialog(
         settings = exportSettings, onSettings = { exportSettings = it },
-        onSave = ::startExport, onDismiss = { showExport = false }
+        onSave = ::startExport, onDismiss = { showExport = false },
+        originalOutput = if (safeExportSize == intendedExportSize) {
+            "${safeExportSize.width} × ${safeExportSize.height} pixels"
+        } else {
+            "${safeExportSize.width} × ${safeExportSize.height} pixels on this device. " +
+                "Project canvas: ${intendedExportSize.width} × ${intendedExportSize.height} pixels."
+        }
     )
-    if (showSave) SaveNameDialog(
+    if (showSave && pendingReplace == null) SaveNameDialog(
         title = "Save Pro project",
-        description = "Preserves individual layers, order, adjustments and local image references.",
-        name = draftName, onName = { draftName = it },
-        onSave = {
-            if (ProStore.save(context, draftName, document, resetDocument)) {
-                showSave = false; notice = "Editable Pro project saved"
-            } else notice = "Could not save. Check the name, project limit, and available storage."
+        description = when {
+            busy -> "Saving project…"
+            saveError != null -> saveError.orEmpty()
+            else -> "Preserves individual layers, order, adjustments and local image references."
         },
-        onDismiss = { showSave = false }
+        name = draftName,
+        onName = {
+            if (!busy) {
+                draftName = it
+                saveError = null
+            }
+        },
+        onSave = {
+            saveProject(ProSaveRequest(draftName, document, resetDocument, saveTarget), saveTarget.name)
+        },
+        onDismiss = { if (!busy) showSave = false }
     )
+    pendingReplace?.let { request ->
+        AlertDialog(
+            onDismissRequest = { if (!busy) pendingReplace = null },
+            title = { Text("Replace saved Pro project?") },
+            text = { Text("Replace “${request.name}” with the current Pro work?") },
+            confirmButton = {
+                TextButton(onClick = { saveProject(request, request.name) }, enabled = !busy) {
+                    Text("Replace project", color = EditorMint)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingReplace = null }, enabled = !busy) { Text("Cancel") }
+            }
+        )
+    }
     if (showProjects && pendingSavedDelete == null) AlertDialog(
-        onDismissRequest = { showProjects = false },
+        onDismissRequest = { if (!busy) showProjects = false },
         title = { Text("Saved Pro projects") },
         text = {
             Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                openError?.let { Text(it, color = EditorMuted) }
+                if (busy) Text("Opening project…", color = EditorMuted)
                 if (savedNames.isEmpty()) Text("No saved Pro projects yet.", color = EditorMuted)
                 savedNames.forEach { name ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = {
-                            val restored = ProStore.loadProject(context, name)
-                            if (restored == null) notice = "Project unreadable or invalid."
-                            else {
-                                finishPendingHistory()
-                                clearToolDrafts()
-                                commit(restored.document, restored.resetDocument)
-                                selected = 0
-                                showProjects = false
-                                notice = "Pro project opened"
-                            }
-                        }) { Text(name, color = EditorMint) }
+                        TextButton(onClick = { openProject(name) }, enabled = !busy) {
+                            Text(name, color = EditorMint)
+                        }
                         Spacer(Modifier.weight(1f))
                         TextButton(
                             onClick = { pendingSavedDelete = name },
+                            enabled = !busy,
                             modifier = Modifier.semantics { contentDescription = "Delete saved project $name" }
                         ) { Text("Delete", color = Color(0xFFFF9D9D)) }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { showProjects = false }) {
+        confirmButton = { TextButton(onClick = { showProjects = false }, enabled = !busy) {
             Text("Close")
         } }
     )
@@ -1370,6 +1603,11 @@ internal fun ProWorkspaceScreenContent(
             confirmButton = {
                 TextButton(onClick = {
                     val deleted = ProStore.delete(context, name)
+                    if (deleted) {
+                        finishPendingHistory()
+                        if (saveTarget.name == name) saveTarget = saveTarget.copy(name = null)
+                        history = history.forgetSavedName(name)
+                    }
                     savedNames = ProStore.names(context)
                     pendingSavedDelete = null
                     notice = if (deleted) "Saved Pro project deleted." else "Could not delete saved Pro project."

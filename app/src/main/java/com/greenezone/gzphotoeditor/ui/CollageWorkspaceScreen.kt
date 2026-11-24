@@ -75,7 +75,13 @@ import com.greenezone.gzphotoeditor.editor.CollageQuality
 import com.greenezone.gzphotoeditor.editor.CollageRaster
 import com.greenezone.gzphotoeditor.editor.CollageStore
 import com.greenezone.gzphotoeditor.editor.CollageTemplate
+import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.ExportSettings
+import com.greenezone.gzphotoeditor.editor.ExportWorkspace
+import com.greenezone.gzphotoeditor.editor.PendingExport
+import com.greenezone.gzphotoeditor.editor.PendingExportJournal
+import com.greenezone.gzphotoeditor.editor.PendingExportPhase
+import com.greenezone.gzphotoeditor.editor.PendingImageRecipe
 import com.greenezone.gzphotoeditor.editor.ExportSizing
 import com.greenezone.gzphotoeditor.editor.GeometryMath
 import com.greenezone.gzphotoeditor.editor.writeStagedImage
@@ -106,13 +112,27 @@ internal data class CollageWorkspaceSession(
     val history: CollageHistory = CollageHistory(),
     val section: CollageSection = CollageSection.TEMPLATES,
     val control: FrameControl = FrameControl.GAP,
-    val toolsVisible: Boolean = true
+    val toolsVisible: Boolean = true,
+    val savedDocument: CollageDocument = CollageDocument()
 )
+
+private data class SavedCollageChoice(val name: String, val document: CollageDocument)
+
+private data class TileSourceChoice(val id: String, val keepEdits: Boolean)
 
 private data class CollageExport(
     val collage: CollageDocument,
     val settings: ExportSettings
-)
+) {
+    fun encode(): String = PendingImageRecipe(settings, CollageStore.encode(collage)).encode()
+
+    companion object {
+        fun decode(pending: PendingExport): CollageExport? {
+            val image = PendingImageRecipe.decode(pending.recipe) ?: return null
+            return CollageStore.decode(image.payload)?.let { CollageExport(it, image.settings) }
+        }
+    }
+}
 
 @Composable
 fun CollageWorkspaceScreen(
@@ -156,20 +176,34 @@ internal fun CollageWorkspaceScreenContent(
     var control by remember { mutableStateOf(session.control) }
     var toolsVisible by remember { mutableStateOf(session.toolsVisible) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
+    var missingTileId by remember { mutableStateOf<String?>(null) }
+    var tileSourceChoice by remember { mutableStateOf<TileSourceChoice?>(null) }
     var notice by remember { mutableStateOf("") }
     var rendering by remember { mutableStateOf(false) }
     var renderGeneration by remember { mutableIntStateOf(0) }
     var exporting by remember { mutableStateOf(false) }
     var editingTile by remember { mutableIntStateOf(-1) }
     var showExport by remember { mutableStateOf(false) }
-    var exportSettings by remember { mutableStateOf(ExportSettings()) }
-    var pending by remember { mutableStateOf<CollageExport?>(null) }
+    val exportJournal = remember(context) { PendingExportJournal(context.filesDir) }
+    val recoveredExport = remember { exportJournal.read(ExportWorkspace.COLLAGE) }
+    var exportSettings by remember {
+        mutableStateOf(recoveredExport?.let(CollageExport::decode)?.settings ?: ExportSettings())
+    }
+    var pendingExport by remember { mutableStateOf(recoveredExport) }
+    var exportLaunchId by remember { mutableStateOf<String?>(null) }
+    var showExportRecovery by remember { mutableStateOf(recoveredExport != null) }
+    var exportRecoveryError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var confirmNew by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf("") }
     var savedList by remember { mutableStateOf(false) }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var savedChoice by remember { mutableStateOf<String?>(null) }
+    var savedDocument by remember { mutableStateOf(session.savedDocument) }
+    var openAfterDecision by remember { mutableStateOf<SavedCollageChoice?>(null) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var openingAfterSave by remember { mutableStateOf(false) }
+    var deleteChoice by remember { mutableStateOf<String?>(null) }
 
     fun commit(next: CollageDocument) {
         history = history.checkpoint(document, next)
@@ -197,19 +231,41 @@ internal fun CollageWorkspaceScreenContent(
         layoutGestureLatest = null
     }
 
+    fun moveSelectionTo(next: CollageDocument) {
+        val selectedId = document.photos.getOrNull(selected)?.id
+        val sameTile = next.photos.indexOfFirst { it.id == selectedId }
+        selected = if (sameTile >= 0) sameTile else {
+            selected.coerceIn(0, next.photos.lastIndex.coerceAtLeast(0))
+        }
+    }
+
+    fun openSaved(next: CollageDocument) {
+        preview = null
+        missingTileId = null
+        history = CollageHistory()
+        layoutGestureStart = null
+        layoutGestureLatest = null
+        savedDocument = next
+        selected = 0
+        openAfterDecision = null
+        savedList = false
+        onDocument(next)
+        notice = "Saved collage opened"
+    }
+
     fun undoCollage() {
         history.undo(document)?.let { (previous, next) ->
             history = next
+            moveSelectionTo(previous)
             onDocument(previous)
-            selected = selected.coerceAtMost(previous.photos.lastIndex).coerceAtLeast(0)
         }
     }
 
     fun redoCollage() {
         history.redo(document)?.let { (nextDoc, next) ->
             history = next
+            moveSelectionTo(nextDoc)
             onDocument(nextDoc)
-            selected = selected.coerceAtMost(nextDoc.photos.lastIndex).coerceAtLeast(0)
         }
     }
 
@@ -219,7 +275,8 @@ internal fun CollageWorkspaceScreenContent(
             history = history,
             section = section,
             control = control,
-            toolsVisible = toolsVisible
+            toolsVisible = toolsVisible,
+            savedDocument = savedDocument
         ))
     }
 
@@ -279,7 +336,7 @@ internal fun CollageWorkspaceScreenContent(
             onDoneCollagePhoto = { item ->
                 val copy = document.photos.toMutableList()
                 if (index in copy.indices) {
-                    copy[index] = item
+                    copy[index] = item.copy(id = copy[index].id)
                     commit(document.copy(photos = copy))
                 }
                 editingTile = -1
@@ -297,14 +354,30 @@ internal fun CollageWorkspaceScreenContent(
     val replacePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri != null && selected in document.photos.indices) {
-            retainReadPermission(uri)
-            val copy = document.photos.toMutableList()
-            copy[selected] = CollagePhoto(uri.toString())
-            commit(document.copy(photos = copy))
-            notice = "Photo replaced; its old adjustments were cleared."
+        val choice = tileSourceChoice
+        tileSourceChoice = null
+        if (uri != null && choice != null) {
+            val index = document.photos.indexOfFirst { it.id == choice.id }
+            if (index >= 0) {
+                retainReadPermission(uri)
+                val copy = document.photos.toMutableList()
+                val tile = copy[index]
+                copy[index] = tile.copy(
+                    uri = uri.toString(),
+                    edits = if (choice.keepEdits) tile.edits else EditDocument()
+                )
+                commit(document.copy(photos = copy))
+                notice = if (choice.keepEdits) "Source relinked with its adjustments."
+                    else "Photo replaced; its old adjustments were cleared."
+            }
         }
     }
+    fun chooseTileSource(keepEdits: Boolean) {
+        val tile = document.photos.getOrNull(selected) ?: return
+        tileSourceChoice = TileSourceChoice(tile.id, keepEdits)
+        replacePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
     fun openMulti() {
         val slots = CollageMath.MAX_PHOTOS - document.photos.size
         if (slots > 0) picker.launch(
@@ -312,15 +385,28 @@ internal fun CollageWorkspaceScreenContent(
         ) else notice = "Maximum of twenty photos reached."
     }
 
-    fun runExport(uri: Uri, request: CollageExport) {
+    fun retainExportForRetry(pending: PendingExport, message: String) {
+        notice = message
+        exportRecoveryError = message
+        try {
+            pendingExport = exportJournal.failed(pending)
+        } catch (_: Exception) {
+            pendingExport = exportJournal.read(ExportWorkspace.COLLAGE)
+        }
+        showExportRecovery = pendingExport != null
+    }
+
+    fun runExport(uri: Uri, request: CollageExport, pending: PendingExport) {
         if (request.collage.photos.any { it.uri == uri.toString() }) {
-            notice = "Export destination cannot overwrite a source photo."
+            retainExportForRetry(pending, "Export destination cannot overwrite a source photo.")
             return
         }
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val budget = GeometryMath.safeExportPixels(manager.memoryClass)
         scope.launch {
             exporting = true
+            showExportRecovery = false
+            exportRecoveryError = null
             notice = "Exporting collage…"
             try {
                 val size = withContext(Dispatchers.Default) {
@@ -340,7 +426,10 @@ internal fun CollageWorkspaceScreenContent(
                         composed = target
                         withContext(Dispatchers.IO) {
                             writeStagedImage(context.cacheDir,
-                                openDestination = { resolver.openOutputStream(uri, "wt") },
+                                openDestination = {
+                                    exportJournal.copying(pending)
+                                    resolver.openOutputStream(uri, "wt")
+                                },
                                 checkActive = { ensureActive() }) { stream -> ImageExportWriter.write(target, request.settings, stream) }
                         }
                         target.width.toString() + " × " + target.height
@@ -349,39 +438,74 @@ internal fun CollageWorkspaceScreenContent(
                         image?.let { if (!it.isRecycled) it.recycle() }
                     }
                 }
+                exportJournal.discard(pending)
+                pendingExport = null
                 notice = "Collage saved • " + size + " • No watermark"
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                notice = "Export failed: " + (error.message ?: "unavailable photo")
+                retainExportForRetry(pending, "Export failed: " + (error.message ?: "unavailable photo"))
             } catch (_: OutOfMemoryError) {
-                notice = "Not enough memory. Try Standard or High quality."
+                retainExportForRetry(pending, "Not enough memory. Try Standard or High quality.")
             } finally {
                 exporting = false
             }
         }
     }
 
-    val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val request = pending
-        pending = null
-        if (result.resultCode == Activity.RESULT_OK &&
-            result.data?.data != null && request != null) {
-            runExport(result.data!!.data!!, request)
+    RecoverableExportPicker(
+        pending = pendingExport,
+        launchId = exportLaunchId,
+        onLaunch = { if (exportLaunchId == it) exportLaunchId = null },
+        onLaunchFailed = { pending, error ->
+            retainExportForRetry(pending, error.message ?: "Could not open the destination picker")
+        },
+        onResult = resultReceived@ { pending, result ->
+            try {
+                val active = exportJournal.read(ExportWorkspace.COLLAGE)
+                if (active == null || active.id != pending.id || active.phase != PendingExportPhase.PICKING) {
+                    return@resultReceived
+                }
+                if (result.resultCode != Activity.RESULT_OK) {
+                    if (exportJournal.cancelPicker(pending)) {
+                        pendingExport = null
+                        showExportRecovery = false
+                        notice = "Collage export canceled"
+                    }
+                } else {
+                    val uri = result.data?.data
+                    val request = CollageExport.decode(pending)
+                    if (uri == null || request == null) {
+                        retainExportForRetry(pending, "The export destination or collage could not be restored.")
+                    } else {
+                        val claimed = exportJournal.claim(pending, uri)
+                        if (claimed != null) {
+                            pendingExport = claimed
+                            runExport(uri, request, claimed)
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                retainExportForRetry(pending, error.message ?: "Could not start the collage export")
+            }
         }
-    }
+    )
     fun askToSave() {
         if (!CollageMath.validCount(document.photos.size)) return
-        pending = CollageExport(document, exportSettings)
         showExport = false
-        exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = exportSettings.format.mime
-            putExtra(Intent.EXTRA_TITLE,
-                "GZEditorPro_Collage." + exportSettings.format.extension)
-        })
+        if (pendingExport != null) {
+            showExportRecovery = true
+            return
+        }
+        val settings = exportSettings
+        try {
+            val pending = exportJournal.begin(ExportWorkspace.COLLAGE, settings.format.mime,
+                "GZEditorPro_Collage." + settings.format.extension, CollageExport(document, settings).encode())
+            pendingExport = pending
+            exportLaunchId = pending.id
+        } catch (error: Exception) {
+            notice = "Could not prepare collage export: " + (error.message ?: "local storage failed")
+        }
     }
 
     LaunchedEffect(document) {
@@ -389,6 +513,7 @@ internal fun CollageWorkspaceScreenContent(
         val generation = renderGeneration
         if (document.photos.isEmpty()) {
             preview = null
+            missingTileId = null
             rendering = false
             savedNames = withContext(Dispatchers.IO) { CollageStore.names(context) }
             return@LaunchedEffect
@@ -404,14 +529,21 @@ internal fun CollageWorkspaceScreenContent(
                 }
             }
             preview = value
+            missingTileId = null
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: CollageRaster.MissingPhoto) {
+            preview = null
+            missingTileId = document.photos.getOrNull(error.position)?.id
             selected = error.position
             section = CollageSection.TILES
+            toolsVisible = true
             notice = "Photo " + (error.position + 1) +
-                " is inaccessible. Choose Photos → Replace."
+                " is inaccessible. Relink its source or replace the tile."
         } catch (error: Exception) {
+            preview = null
+            missingTileId = null
+            toolsVisible = true
             notice = "Cannot render collage: " + (error.message ?: "missing source photo")
         } finally {
             if (renderGeneration == generation) rendering = false
@@ -420,7 +552,7 @@ internal fun CollageWorkspaceScreenContent(
 
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10)), contentAlignment = Alignment.Center) {
         val shown = preview
-        if (shown == null) {
+        if (document.photos.isEmpty()) {
             Column(horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(15.dp)) {
                 Text("Collage", color = EditorWhite, fontSize = 27.sp,
@@ -434,7 +566,7 @@ internal fun CollageWorkspaceScreenContent(
                     )
                 ) { Text("Add photos") }
             }
-        } else {
+        } else if (shown != null) {
             Image(
                 bitmap = shown.asImageBitmap(),
                 contentDescription = "Photo collage preview",
@@ -545,10 +677,10 @@ internal fun CollageWorkspaceScreenContent(
                         onControl = { control = it },
                         onSelect = { selected = it },
                         onAdd = ::openMulti,
-                        onReplace = {
-                            replacePicker.launch(PickVisualMediaRequest(
-                                ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        },
+                        onReplace = { chooseTileSource(keepEdits = false) },
+                        onRelink = if (missingTileId != null &&
+                            document.photos.getOrNull(selected)?.id == missingTileId
+                        ) ({ chooseTileSource(keepEdits = true) }) else null,
                         onEdit = { if (selected in document.photos.indices) editingTile = selected },
                         onLeft = {
                             commit(document.copy(photos =
@@ -566,8 +698,12 @@ internal fun CollageWorkspaceScreenContent(
                             selected = selected.coerceAtMost(document.photos.lastIndex - 1)
                                 .coerceAtLeast(0)
                         },
-                        onSave = { naming = ""; saving = true },
-                        onOpen = { savedNames = CollageStore.names(context); savedList = true },
+                        onSave = { naming = ""; saveError = null; saving = true },
+                        onOpen = {
+                            savedNames = CollageStore.names(context)
+                            savedChoice = null
+                            savedList = true
+                        },
                         onNew = { confirmNew = true }
                     )
                 }
@@ -615,6 +751,36 @@ internal fun CollageWorkspaceScreenContent(
             }
         )
     }
+    val recovery = pendingExport
+    if (showExportRecovery && recovery != null && !exporting) {
+        val canRecover = remember(recovery.id) { CollageExport.decode(recovery) != null }
+        RecoverableExportDialog(
+            request = recovery,
+            onRetry = {
+                try {
+                    val retry = exportJournal.retry(recovery)
+                    pendingExport = retry
+                    showExportRecovery = false
+                    exportLaunchId = retry.id
+                } catch (error: Exception) {
+                    notice = error.message ?: "Could not retry collage export"
+                }
+            },
+            onDiscard = {
+                try {
+                    exportJournal.discard(recovery)
+                    pendingExport = null
+                    showExportRecovery = false
+                } catch (error: Exception) {
+                    notice = error.message ?: "Could not clear the collage export request"
+                }
+            },
+            onDismiss = { showExportRecovery = false },
+            unavailable = if (canRecover) null
+                else "The saved collage export recipe could not be read. Discard this request to export the current collage.",
+            failure = exportRecoveryError
+        )
+    }
     if (showExport) {
         ExportDialog(
             settings = exportSettings,
@@ -628,14 +794,24 @@ internal fun CollageWorkspaceScreenContent(
             title = "Save editable collage",
             description = "All tile edits and photo references stay on this device.",
             name = naming,
-            onName = { naming = it },
+            onName = { naming = it; saveError = null },
+            error = saveError,
             onSave = {
-                if (CollageStore.save(context, naming, document)) {
+                if (openingAfterSave && CollageStore.normalizedName(naming) == openAfterDecision?.name) {
+                    saveError = "Choose a different name from the collage you are opening."
+                } else if (CollageStore.save(context, naming, document)) {
+                    savedDocument = document
                     saving = false
-                    notice = "Collage project saved"
-                } else notice = "Unable to save collage (limit 12 or project too large)."
+                    val next = openAfterDecision.takeIf { openingAfterSave }
+                    openingAfterSave = false
+                    if (next != null) openSaved(next.document) else notice = "Collage project saved"
+                } else saveError = "Could not save collage. Use two to twenty photos and at most twelve projects."
             },
-            onDismiss = { saving = false }
+            onDismiss = {
+                saving = false
+                openingAfterSave = false
+                openAfterDecision = null
+            }
         )
     }
     if (savedList) {
@@ -655,15 +831,17 @@ internal fun CollageWorkspaceScreenContent(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val candidate = savedChoice?.let { CollageStore.load(context, it) }
+                    val candidate = savedChoice?.let { name ->
+                        CollageStore.load(context, name)?.let { SavedCollageChoice(name, it) }
+                    }
                     if (candidate != null) {
-                        history = CollageHistory()
-                        layoutGestureStart = null
-                        layoutGestureLatest = null
-                        onDocument(candidate)
-                        selected = 0
-                        savedList = false
-                        notice = "Saved collage opened"
+                        finishLayout()
+                        if (document.photos.isNotEmpty() && document != savedDocument) {
+                            openAfterDecision = candidate
+                            savedList = false
+                        } else {
+                            openSaved(candidate.document)
+                        }
                     } else notice = "Saved collage cannot be opened."
                 }, enabled = savedChoice != null) {
                     Text("Open", color = EditorMint)
@@ -672,14 +850,62 @@ internal fun CollageWorkspaceScreenContent(
             dismissButton = {
                 Row {
                     TextButton(enabled = savedChoice != null, onClick = {
-                        savedChoice?.let { CollageStore.delete(context, it) }
-                        savedNames = CollageStore.names(context)
-                        savedChoice = null
+                        deleteChoice = savedChoice
+                        savedList = false
                     }) { Text("Delete", color = EditorMuted) }
                     TextButton(onClick = { savedList = false }) {
                         Text("Cancel", color = EditorMuted)
                     }
                 }
+            }
+        )
+    }
+    val candidate = openAfterDecision
+    if (candidate != null && !openingAfterSave) {
+        val keepEditing = { openAfterDecision = null }
+        AlertDialog(
+            onDismissRequest = keepEditing,
+            title = { Text("Keep your collage edits?") },
+            text = { Text("Save or discard your current collage edits before opening another project.") },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = keepEditing) { Text("Keep editing") }
+                    TextButton(onClick = {
+                        openingAfterSave = true
+                        naming = ""
+                        saveError = null
+                        saving = true
+                    }) { Text("Save project") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { openSaved(candidate.document) }) { Text("Discard") }
+            }
+        )
+    }
+    deleteChoice?.let { name ->
+        val returnToProjects = {
+            deleteChoice = null
+            savedList = true
+        }
+        AlertDialog(
+            onDismissRequest = returnToProjects,
+            title = { Text("Delete saved collage?") },
+            text = { Text("Delete \"$name\" from saved collages. Your original photos stay on your phone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (CollageStore.delete(context, name)) {
+                        savedNames = CollageStore.names(context)
+                        savedChoice = null
+                        notice = "Saved collage deleted."
+                    } else {
+                        notice = "Could not delete saved collage."
+                    }
+                    returnToProjects()
+                }) { Text("Delete collage") }
+            },
+            dismissButton = {
+                TextButton(onClick = returnToProjects) { Text("Cancel") }
             }
         )
     }
@@ -699,6 +925,7 @@ private fun CollageControls(
     onSelect: (Int) -> Unit,
     onAdd: () -> Unit,
     onReplace: () -> Unit,
+    onRelink: (() -> Unit)?,
     onEdit: () -> Unit,
     onLeft: () -> Unit,
     onRight: () -> Unit,
@@ -805,6 +1032,9 @@ private fun CollageControls(
                 item { DockChip("+ Add", false,
                     document.photos.size < CollageMath.MAX_PHOTOS, onAdd) }
                 item { DockChip("Edit selected", false, true, onEdit) }
+                if (onRelink != null) {
+                    item { DockChip("Relink source", false, true, onRelink) }
+                }
                 item { DockChip("Replace", false, true, onReplace) }
                 item { DockChip("Move left", false, selected > 0, onLeft) }
                 item { DockChip("Move right", false, selected < document.photos.lastIndex, onRight) }

@@ -50,10 +50,13 @@ object PrivacyMath {
         )
     }
 
-    fun rectCoverage(mark: PrivacyEdit, x: Int, y: Int, imageWidth: Int, imageHeight: Int): Float {
-        if (imageWidth <= 0 || imageHeight <= 0) return 0f
-        val dx = kotlin.math.abs((x + .5f) / imageWidth - mark.centerX)
-        val dy = kotlin.math.abs((y + .5f) / imageHeight - mark.centerY)
+    fun rectCoverage(mark: PrivacyEdit, x: Int, y: Int, imageWidth: Int, imageHeight: Int): Float =
+        rectCoverageAt(mark, x + .5f, y + .5f, imageWidth, imageHeight)
+
+    internal fun rectCoverageAt(mark: PrivacyEdit, x: Float, y: Float, width: Int, height: Int): Float {
+        if (width <= 0 || height <= 0 || x < 0f || y < 0f || x >= width || y >= height) return 0f
+        val dx = kotlin.math.abs(x / width - mark.centerX)
+        val dy = kotlin.math.abs(y / height - mark.centerY)
         val halfW = mark.width.coerceIn(.02f, 1f) / 2f
         val halfH = mark.height.coerceIn(.02f, 1f) / 2f
         if (dx > halfW || dy > halfH) return 0f
@@ -64,6 +67,30 @@ object PrivacyMath {
         val edgeY = ((halfH - dy) / (halfH * feather)).coerceIn(0f, 1f)
         val a = minOf(edgeX, edgeY)
         return a * a * (3f - 2f * a)
+    }
+
+    fun retainAuthoringGeometry(previous: EditDocument, next: EditDocument): EditDocument {
+        if (next.privacy.isEmpty()) return next
+        val old = PhotoGeometry.from(previous)
+        val changed = old != PhotoGeometry.from(next)
+        val marks = next.privacy.mapIndexed { index, mark ->
+            if (mark.authoringGeometry != null) return@mapIndexed mark
+            // A slider can emit another value before its Compose callback refreshes.
+            // Keep the anchor applied by the first update of the same mark.
+            val existing = previous.privacy.getOrNull(index)?.let { before ->
+                before.authoringGeometry?.takeIf { before.copy(authoringGeometry = null) == mark }
+            }
+            val anchor = existing ?: old.takeIf { changed }
+            if (anchor == null) mark else mark.copy(authoringGeometry = anchor)
+        }
+        return if (marks == next.privacy) next else next.copy(privacy = marks)
+    }
+
+    fun projection(width: Int, height: Int, document: EditDocument, mark: PrivacyEdit): PrivacyProjection? {
+        val view = PhotoGeometry.from(document)
+        val anchor = mark.authoringGeometry?.takeUnless { it == view } ?: return null
+        return PhotoGeometryPlan(width, height, view)
+            .projectFrom(PhotoGeometryPlan(width, height, anchor))
     }
 
     fun withCenter(mark: PrivacyEdit, x: Float, y: Float) = mark.copy(

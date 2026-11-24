@@ -1,6 +1,8 @@
 # GZ Editor Pro product requirements
 
-## Current scope (Revision 4 and latest owner instructions, 2026-11-22)
+## Current scope
+
+The [November 23 audit](gz-editor-pro-audit-2-20261123/00_REPOSITORY_START_HERE.md) supplies the current defect priorities. The [release gates](RELEASE_GATE.md) govern engineering verification and owner acceptance.
 
 - **Regular and Collage.** Preserve the familiar photo-first interface, Text, Draw, Shapes, Blur & cover, and independent edits across all 20 Collage tiles. Regular and the selected-tile editor have no visible Masks authoring. Keep saved mask data, rendering and round-trip compatibility. Give all four Crop corners and all four edges density-aware touch targets of at least 48 dp and select the drag target on pointer down. Preserve predictable Freeform and fixed-ratio geometry and exact exported crops.
 - **Regular → Pro.** From a loaded standalone Regular photo, selecting Photo editing Pro presents a choice to continue the current image with its edits. Yes opens the current edited result in Pro, preserving its orientation, crop and appearance. No opens an empty Pro editor with “Select an image to edit.” Dismissing the choice leaves Regular open. Regular keeps its own source, edits and history when the user switches back, and stays independent of any Pro changes. Saving, deleting or opening a new Regular image follows the normal Regular commands. A failed handoff keeps the Regular work safe and explains the failure.
@@ -20,9 +22,11 @@
 ## Engine / document changes
 `CreativeModel.kt`, `CreativeRaster.kt`, `InkMath.kt`, `CropMath.kt`, `ImageExportWriter.kt`, `CreativeCanvasOverlays.kt`, `CreativeDecks.kt`, edit/codec/render/UI integration and automated tests.
 
-Text, ink and shapes remain editable data in `EditDocument.creative`, with bounds and colors encoded in the existing version-1 keyed local project format. Free crop is `CropFrame` normalized on the oriented/straightened photo; legacy crop center settings continue to load for previously created projects. Main render draws pixel adjustments, privacy operations, then creative overlays, preserving source image. Export sizes are composed **after** all edits on the rendered copy.
+Text, ink and shapes remain editable data in `EditDocument.creative`. The keyed local format continues to read version 1. A recipe with source-anchored privacy geometry uses version 2. Free crop is `CropFrame` normalized on the oriented/straightened photo; legacy crop center settings continue to load for previously created projects. Main render draws pixel adjustments, privacy operations, then creative overlays, preserving source image. Export sizes are composed **after** all edits on the rendered copy.
 
 ## Export behavior
+
+Export a captured recipe and source. Persist the pending operation before opening Android’s destination picker. After a possible interrupted provider write, offer the retained recipe with a fresh destination. Regular and Pro show the expected dimensions after crop, orientation and device export limits.
 File formats: JPEG, PNG, WebP lossy, WebP lossless, BMP 24-bit RGB, TIFF uncompressed RGB 8-bit, PDF one page. Browser/Gallery preview support for BMP/TIFF is not universal. JPEG/BMP/TIFF/PDF flatten transparency to white. Quality only for lossy formats or WebP lossless compression effort. WebP lossless on Android 10 uses the documented legacy 100-quality format.
 
 Social presets: original, Instagram square/portrait/story/reel cover, Facebook square/landscape/story, TikTok photo 9:16, YouTube HD/4K thumbnail, Pinterest pin, LinkedIn square, X landscape, Snapchat story. Fit pads to exact canvas size and preserves all content, Fill crops edges and fills full canvas. No automatic posting, uploader, network or API.
@@ -30,7 +34,7 @@ Social presets: original, Instagram square/portrait/story/reel cover, Facebook s
 ## Verification levels
 - Separate pure Kotlin and Android emulator tests, including crop geometry and corner ratio, codec legacy/snapshot roundtrip, text fonts and raster pixels, shapes and ink, export format signatures, social exact target size, alpha behavior.
 - PR CI, merge verified SHA, merged-main CI and exact APK artifact.
-- One field session on Samsung with short steps for text editing, brush and eraser, shape placement, drag crop, export dropdowns and existing privacy control regression.
+- One phone session exercises the consolidated current repair. Include the owner’s GIF workflow, Regular crop and privacy, named Pro and GIF projects, Collage tile edits and relink, and physical Back and picker behavior.
 - Commercial release still blocked by real-device UX/memory/color, legal/privacy/trademark, Play compliance and production signed AAB.
 
 **No external website or project changes.**

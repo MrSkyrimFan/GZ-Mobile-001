@@ -20,7 +20,9 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.greenezone.gzphotoeditor.editor.ExportWorkspace
 import com.greenezone.gzphotoeditor.editor.GifDocument
+import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.editor.ProDocument
 import com.greenezone.gzphotoeditor.editor.ProLayer
 import com.greenezone.gzphotoeditor.ui.GifMakerScreen
@@ -35,12 +37,16 @@ class ProAndGifExportFailureTest {
     @get:Rule val rule = createComposeRule()
 
     private fun verify(
+        workspace: ExportWorkspace,
         content: @Composable (Uri) -> Unit,
         previewError: String,
         failure: String,
         export: () -> Unit
     ) {
-        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val resolver = context.contentResolver
+        val journal = PendingExportJournal(context.filesDir)
+        journal.read(workspace)?.let { journal.discard(it) }
         fun create(name: String): Uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, name)
@@ -74,10 +80,14 @@ class ProAndGifExportFailureTest {
                 }
                 assertArrayEquals(previous, resolver.openInputStream(output)!!.use { it.readBytes() })
             } finally { resolver.delete(output, null, null) }
-        } finally { resolver.delete(source, null, null) }
+        } finally {
+            journal.read(workspace)?.let { journal.discard(it) }
+            resolver.delete(source, null, null)
+        }
     }
 
     @Test fun unreadableProLayerPreservesDestination() = verify(
+        workspace = ExportWorkspace.PRO,
         content = { source -> ProWorkspaceScreen(ProDocument(listOf(ProLayer(uri = source.toString()))), {}, {}, {}) },
         previewError = "Source for image layer 1 is unavailable",
         failure = "Export failed"
@@ -88,6 +98,7 @@ class ProAndGifExportFailureTest {
     }
 
     @Test fun unreadablePhotoSequenceFramePreservesDestination() = verify(
+        workspace = ExportWorkspace.GIF,
         content = { source -> GifMakerScreen(GifDocument(frames = listOf(source.toString(), source.toString())),
             {}, {}, {}) },
         previewError = "Photo 1 unavailable",
@@ -96,3 +107,4 @@ class ProAndGifExportFailureTest {
         rule.onNodeWithText("Export GIF").performScrollTo().performClick()
     }
 }
+

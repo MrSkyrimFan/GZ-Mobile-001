@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import android.provider.MediaStore
@@ -159,7 +160,7 @@ class AndroidBackNavigationTest {
         false
     }
 
-    private fun singlePhotoPicker(uri: Uri): ActivityResultRegistryOwner =
+    private fun singlePhotoPicker(uri: Uri, exportDestination: Uri? = null): ActivityResultRegistryOwner =
         object : ActivityResultRegistryOwner {
             override val activityResultRegistry = object : ActivityResultRegistry() {
                 override fun <I, O> onLaunch(
@@ -168,8 +169,18 @@ class AndroidBackNavigationTest {
                     input: I,
                     options: ActivityOptionsCompat?
                 ) {
-                    check(contract is ActivityResultContracts.PickVisualMedia)
-                    dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(uri))
+                    val result = when (contract) {
+                        is ActivityResultContracts.PickVisualMedia -> uri
+                        is ActivityResultContracts.StartActivityForResult -> {
+                            val request = input as Intent
+                            check(request.action == Intent.ACTION_CREATE_DOCUMENT)
+                            assertEquals("image/png", request.type)
+                            assertEquals("GZEditorPro_Pro.png", request.getStringExtra(Intent.EXTRA_TITLE))
+                            requireNotNull(exportDestination)
+                        }
+                        else -> error("Unexpected activity result: $contract")
+                    }
+                    dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(result))
                 }
             }
         }
@@ -178,6 +189,7 @@ class AndroidBackNavigationTest {
         width: Int = 96,
         height: Int = 64,
         colorAt: ((Int, Int) -> Int)? = null,
+        exportDestination: Uri? = null,
         test: (Uri, ByteArray) -> Unit
     ) {
         val uri = createPhoto("gz-back-regular-" + System.nanoTime(), width, height, colorAt)
@@ -185,7 +197,7 @@ class AndroidBackNavigationTest {
         var contentSet = false
         try {
             val original = resolver.openInputStream(uri)!!.use { it.readBytes() }
-            val picker = singlePhotoPicker(uri)
+            val picker = singlePhotoPicker(uri, exportDestination)
             rule.setContent {
                 CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
                     MaterialTheme(colorScheme = darkColorScheme()) {
@@ -720,8 +732,17 @@ class AndroidBackNavigationTest {
         assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
     }
 
-    @Test fun offCenterCropAndLookSurviveRegularProHandoffAndProjectSave() =
-        withLoadedRegular(width = 120, height = 80, colorAt = { x, y ->
+    @Test fun offCenterCropAndLookSurviveRegularProHandoffAndProjectSave() {
+        val output = createPhoto("gz-pro-exact-export-" + System.nanoTime(), 1, 1)
+        try {
+            verifyExactHandoffExport(output)
+        } finally {
+            resolver.delete(output, null, null)
+        }
+    }
+
+    private fun verifyExactHandoffExport(output: Uri) =
+        withLoadedRegular(width = 120, height = 80, exportDestination = output, colorAt = { x, y ->
             val column = x / 20
             val row = y / 20
             Color.rgb(32 + 34 * column, 32 + 52 * row, 28 + 33 * ((column + row * 2) % 6))
@@ -735,6 +756,32 @@ class AndroidBackNavigationTest {
             val look = Looks.all.single { it.name == "Golden" }.grade
             val expected = ImagePipeline.render(cropped, EditDocument(grade = look))
             val probes = listOf(.15f, .4f, .65f, .9f)
+            fun exportAndCheck() {
+                rule.onNodeWithText("File ▾").performClick()
+                rule.onNodeWithText("Export image").performClick()
+                rule.onNodeWithText("Output: 80 × 80 pixels").performScrollTo().assertIsDisplayed()
+                if (rule.onAllNodesWithText("JPEG · JPG", substring = true).fetchSemanticsNodes().isNotEmpty()) {
+                    rule.onNodeWithText("JPEG · JPG", substring = true).performScrollTo().performClick()
+                    rule.onNodeWithText("PNG · Lossless").performClick()
+                }
+                rule.onNodeWithText("Save PNG").performClick()
+                rule.waitUntil(30_000) {
+                    rule.onAllNodesWithText("Exported 80 × 80.", substring = true).fetchSemanticsNodes().isNotEmpty()
+                }
+                val decoded = requireNotNull(resolver.openInputStream(output)?.use { BitmapFactory.decodeStream(it) })
+                try {
+                    assertEquals(80, decoded.width)
+                    assertEquals(80, decoded.height)
+                    for (y in probes) for (x in probes) {
+                        val column = (x * 80).toInt()
+                        val row = (y * 80).toInt()
+                        assertTrue("Export pixel $column,$row changed",
+                            pixelDistance(decoded.getPixel(column, row), expected.getPixel(column, row)) <= 12)
+                    }
+                } finally {
+                    decoded.recycle()
+                }
+            }
             fun matchesEditedCrop(node: SemanticsNodeInteraction): Boolean {
                 val shown = node.captureToImage().asAndroidBitmap()
                 val edge = minOf(shown.width, shown.height)
@@ -787,7 +834,10 @@ class AndroidBackNavigationTest {
                 rule.onNodeWithText("Save project").performClick()
                 rule.onNode(hasSetTextAction()).performTextInput(name)
                 rule.onNodeWithText("Save", ignoreCase = true).performClick()
-                rule.waitUntil(15_000) { ProStore.names(context).contains(name) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Save Pro project").fetchSemanticsNodes().isEmpty() &&
+                        ProStore.names(context).contains(name)
+                }
                 val saved = requireNotNull(ProStore.load(context, name))
                 val layer = saved.layers.single()
                 assertEquals(uri.toString(), layer.uri)
@@ -801,6 +851,13 @@ class AndroidBackNavigationTest {
                 assertEquals(112f / 120f, frame.right, .01f)
                 assertEquals(0f, frame.top, .001f)
                 assertEquals(1f, frame.bottom, .001f)
+
+                exportAndCheck()
+                rule.onNodeWithText("File ▾").performClick()
+                rule.onNodeWithText("Open project").performClick()
+                rule.onNodeWithText(name).performScrollTo().performClick()
+                rule.waitUntil(15_000) { rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty() }
+                exportAndCheck()
 
                 pressBackThroughDispatcher()
                 rule.onNodeWithTag("photo-tools").assertIsDisplayed()
@@ -1095,3 +1152,4 @@ class AndroidBackNavigationTest {
         }
 
 }
+

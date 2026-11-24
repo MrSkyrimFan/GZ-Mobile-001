@@ -126,6 +126,9 @@ class ProWorkingDocumentTest {
     private fun openSaved(name: String) {
         openSavedList()
         rule.onNodeWithText(name).performScrollTo().performClick()
+        rule.waitUntil(10_000) {
+            rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty()
+        }
     }
 
     @Test fun undoOpenRestoresThePriorPhotosResetBaseline() {
@@ -160,7 +163,10 @@ class ProWorkingDocumentTest {
             rule.onNodeWithText("Save project").performClick()
             rule.onNode(hasSetTextAction()).performTextInput(name)
             rule.onNodeWithText("Save").performClick()
-            rule.waitUntil(5_000) { ProStore.load(context, name) == edited }
+            rule.waitUntil(10_000) {
+                rule.onAllNodesWithText("Save Pro project").fetchSemanticsNodes().isEmpty() &&
+                    ProStore.load(context, name) == edited
+            }
 
             rule.onNodeWithText("Hide").performScrollTo().performClick()
             rule.runOnIdle { assertEquals(hidden, current) }
@@ -274,9 +280,7 @@ class ProWorkingDocumentTest {
         try {
             File(directory, filename).writeText(olderFile.toString())
             open(ProDocument())
-            rule.onNodeWithText("File ▾").performClick()
-            rule.onNodeWithText("Open project").performClick()
-            rule.onNodeWithText(name).performScrollTo().performClick()
+            openSaved(name)
             rule.onNodeWithText("Old caption · Text").assertIsDisplayed()
             rule.onNodeWithText("Edit text").assertDoesNotExist()
             rule.onNodeWithText("Duplicate").assertDoesNotExist()
@@ -287,8 +291,12 @@ class ProWorkingDocumentTest {
             rule.onNodeWithText("Close").performClick()
             rule.onNodeWithText("File ▾").performClick()
             rule.onNodeWithText("Save project").performClick()
-            rule.onNode(hasSetTextAction()).performTextInput(resavedName)
+            rule.onNode(hasSetTextAction()).performTextReplacement(resavedName)
             rule.onNodeWithText("Save").performClick()
+            rule.waitUntil(10_000) {
+                rule.onAllNodesWithText("Save Pro project").fetchSemanticsNodes().isEmpty() &&
+                    ProStore.names(context).contains(resavedName)
+            }
             val reopened = requireNotNull(ProStore.load(context, resavedName))
             assertEquals(legacy, reopened)
             val image = ProRaster.render(context.contentResolver, reopened, 256, 256, false)

@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenezone.gzphotoeditor.editor.EditDocument
@@ -71,7 +72,7 @@ fun PrivacyDeck(
     val current = document.privacy.getOrNull(selected)
     var chosen by remember(selected, current?.kind) { mutableIntStateOf(0) }
     LazyRow(
-        modifier = Modifier.fillMaxWidth().height(45.dp),
+        modifier = Modifier.fillMaxWidth().height(45.dp).testTag("privacy-edits"),
         contentPadding = PaddingValues(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {

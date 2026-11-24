@@ -10,10 +10,118 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.security.MessageDigest
 import java.util.Base64
+import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 class AndroidProAtomicStoreTest {
+    private fun denseDrawing(strokeCount: Int = 160): ProDocument {
+        val points = List(500) { index ->
+            val a = 0.00012345678f
+            val b = 0.00045678912f
+            if (index % 2 == 0) BrushPoint(a, b) else BrushPoint(b, a)
+        }
+        val edits = EditDocument(creative = CreativeDocument(strokes = List(strokeCount) { InkStroke(points) }))
+        return ProDocument(listOf(ProLayer("", edits = edits, name = "Dense QA ink", kind = ProLayerKind.DRAWING)))
+    }
+
+    private fun coordinateText(drawing: ProDocument): String =
+        drawing.layers.single().edits.creative.strokes.first().points.joinToString(";") { "${it.x},${it.y}" }
+
+    private fun writeLegacyDrawing(file: File, drawing: ProDocument) {
+        val envelope = JSONObject(file.readText())
+        val layer = envelope.getJSONArray("layers").getJSONObject(0)
+        val strokes = drawing.layers.single().edits.creative.strokes
+        val stroke = strokes.first()
+        val neutral = layer.getString("edits")
+        val recipe = neutral.replace("creative.ink.count=0", "creative.ink.count=${strokes.size}")
+        assertNotEquals(neutral, recipe)
+        val placeholder = "gz-audit-legacy-recipe"
+        layer.put("edits", placeholder)
+        val outside = envelope.toString()
+        val field = JSONObject.quote(placeholder)
+        val coordinates = coordinateText(drawing)
+        assertTrue(coordinates.length * strokes.size > 2_000_000)
+        file.bufferedWriter(Charsets.UTF_8).use { writer ->
+            writer.write(outside.substringBefore(field))
+            writer.write(JSONObject.quote(recipe).dropLast(1))
+            repeat(strokes.size) { index ->
+                val key = "creative.ink.$index."
+                writer.write("\\n${key}color=${stroke.color}\\n${key}opacity=${stroke.opacity}")
+                writer.write("\\n${key}width=${stroke.thickness}\\n${key}erase=${stroke.erase}")
+                writer.write("\\n${key}points=")
+                writer.write(coordinates)
+            }
+            writer.write('"'.code)
+            writer.write(outside.substringAfter(field))
+        }
+    }
+
+    private fun fileSha256(file: File): ByteArray {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val chunk = ByteArray(8192)
+            while (true) {
+                val read = input.read(chunk)
+                if (read < 0) break
+                digest.update(chunk, 0, read)
+            }
+        }
+        return digest.digest()
+    }
+
+    private fun projectFile(root: File, name: String): File {
+        val id = Base64.getUrlEncoder().withoutPadding().encodeToString(name.toByteArray(Charsets.UTF_8))
+        return File(root, "gz_pro_projects/$id.gzpro")
+    }
+
+    @Test fun oversizedCurrentOrResetRecipeCannotReplaceAHealthyNamedProject() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "Dense guard " + System.nanoTime().toString().takeLast(10)
+        val healthy = ProDocument(listOf(ProLayer("", name = "Healthy", kind = ProLayerKind.DRAWING)))
+        val reset = healthy.copy(layers = listOf(healthy.layers.single().copy(name = "Prior baseline")))
+        val dense = denseDrawing()
+        val file = projectFile(context.filesDir, name)
+        try {
+            assertTrue(ProMath.valid(dense))
+            val strokes = dense.layers.single().edits.creative.strokes
+            assertTrue(coordinateText(dense).length * strokes.size > 2_000_000)
+            assertTrue(ProStore.save(context, name, healthy, reset))
+            val priorBytes = file.readBytes()
+
+            assertFalse("Oversized current recipe was reported saved", ProStore.save(context, name, dense, reset))
+            assertArrayEquals(priorBytes, file.readBytes())
+            assertFalse("Oversized reset recipe was reported saved", ProStore.save(context, name, healthy, dense))
+            assertArrayEquals(priorBytes, file.readBytes())
+            val recovered = requireNotNull(ProStore.loadProject(context, name))
+            assertEquals(healthy, recovered.document)
+            assertEquals(reset, recovered.resetDocument)
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+
+    @Test fun loadRecoversAnOlderOversizedRecipeWithinTheExistingProjectBudget() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "Legacy ink " + System.nanoTime().toString().takeLast(10)
+        val dense = denseDrawing(strokeCount = 154)
+        val skeleton = dense.copy(layers = listOf(dense.layers.single().copy(edits = EditDocument())))
+        val file = projectFile(context.filesDir, name)
+        try {
+            assertTrue(ProStore.save(context, name, skeleton))
+            writeLegacyDrawing(file, dense)
+            assertTrue(file.length() < 3_000_000)
+            assertTrue(file.length() <= Runtime.getRuntime().maxMemory() / 8L)
+            val before = fileSha256(file)
+
+            assertEquals(dense, ProStore.load(context, name))
+            assertArrayEquals(before, fileSha256(file))
+        } finally {
+            ProStore.delete(context, name)
+        }
+    }
+
     @Test fun twoProjectSavesRemainReadableAndLatestWins() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "qa-atomic-pro-write"
@@ -100,3 +208,4 @@ class AndroidProAtomicStoreTest {
         }
     }
 }
+

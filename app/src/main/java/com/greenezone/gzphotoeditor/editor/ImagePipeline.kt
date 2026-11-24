@@ -4,7 +4,6 @@ import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
 import android.graphics.ImageDecoder
-import android.graphics.Matrix
 import android.net.Uri
 import kotlin.math.PI
 import kotlin.math.abs
@@ -57,21 +56,34 @@ object ImagePipeline {
     const val PREVIEW_MAX_EDGE = 1400
     const val MAX_EXPORT_PIXELS = 24_000_000L
 
-    fun decode(resolver: ContentResolver, uri: Uri, maxEdge: Int, maxPixels: Long): Bitmap {
+    const val EXPORT_MAX_EDGE = 12_000
+
+    internal fun decodeSize(
+        width: Int, height: Int, maxEdge: Int, maxPixels: Long
+    ): Pair<Int, Int> {
+        require(width > 0 && height > 0 && maxEdge > 0 && maxPixels > 0)
+        val sideScale = min(1.0, maxEdge.toDouble() / maxOf(width, height))
+        val pixelScale = min(1.0, sqrt(maxPixels.toDouble() / (width.toLong() * height)))
+        val scale = min(sideScale, pixelScale)
+        return maxOf(1, (width * scale).roundToInt()) to maxOf(1, (height * scale).roundToInt())
+    }
+
+    fun decode(
+        resolver: ContentResolver,
+        uri: Uri,
+        maxEdge: Int,
+        maxPixels: Long,
+        onHeader: ((width: Int, height: Int) -> Unit)? = null
+    ): Bitmap {
         require(maxEdge > 0 && maxPixels > 0) { "Invalid image decode budget" }
         val src = ImageDecoder.createSource(resolver, uri)
         return ImageDecoder.decodeBitmap(src) { decoder, info, _ ->
-            val width = info.size.width.toLong()
-            val height = info.size.height.toLong()
-            require(width > 0 && height > 0) { "Invalid image dimensions" }
-            val sideScale = min(1.0, maxEdge.toDouble() / maxOf(width, height))
-            val pixelScale = min(1.0, sqrt(maxPixels.toDouble() / (width * height)))
-            val scale = min(sideScale, pixelScale)
-            if (scale < 1.0) {
-                decoder.setTargetSize(
-                    maxOf(1, (width * scale).roundToInt()),
-                    maxOf(1, (height * scale).roundToInt())
-                )
+            val width = info.size.width
+            val height = info.size.height
+            val (targetWidth, targetHeight) = decodeSize(width, height, maxEdge, maxPixels)
+            onHeader?.invoke(width, height)
+            if (targetWidth != width || targetHeight != height) {
+                decoder.setTargetSize(targetWidth, targetHeight)
             }
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
@@ -86,57 +98,31 @@ object ImagePipeline {
      * Straightening produces a transparent-cornered intermediate, then a conservative
      * centered safe crop before the regular aspect/position crop.
      */
-    fun geometry(input: Bitmap, document: EditDocument): Bitmap {
+    fun geometry(input: Bitmap, document: EditDocument): Bitmap =
+        geometry(input, PhotoGeometryPlan(input.width, input.height, PhotoGeometry.from(document)))
+
+    private fun geometry(input: Bitmap, plan: PhotoGeometryPlan): Bitmap {
         var working = input
         try {
-            val quarter = ((document.quarterTurns % 4) + 4) % 4
-            if (quarter != 0 || document.mirrored || document.flipVertical) {
-                val transform = Matrix()
-                if (document.mirrored || document.flipVertical) {
-                    transform.postScale(
-                        if (document.mirrored) -1f else 1f,
-                        if (document.flipVertical) -1f else 1f,
-                        working.width / 2f, working.height / 2f
-                    )
-                }
-                if (quarter != 0) transform.postRotate(
-                    quarter * 90f, working.width / 2f, working.height / 2f
+            if (!plan.orientation.isIdentity) {
+                working = Bitmap.createBitmap(
+                    input, 0, 0, input.width, input.height, plan.orientation, true
                 )
-                val oriented = Bitmap.createBitmap(
-                    working, 0, 0, working.width, working.height, transform, true
-                )
-                if (working !== input && working !== oriented) working.recycle()
-                working = oriented
             }
-
-            val angle = document.straightenDegrees.coerceIn(-15f, 15f)
-            if (abs(angle) > .001f) {
-                val beforeWidth = working.width
-                val beforeHeight = working.height
-                val matrix = Matrix().apply { postRotate(angle) }
+            if (!plan.straighten.isIdentity) {
                 val spun = Bitmap.createBitmap(
-                    working, 0, 0, beforeWidth, beforeHeight, matrix, true
+                    working, 0, 0, working.width, working.height, plan.straighten, true
                 )
                 if (working !== input && working !== spun) working.recycle()
                 working = spun
-                val (safeW, safeH) = GeometryMath.safeStraightenCrop(beforeWidth, beforeHeight, angle)
-                val safeWidth = safeW.coerceAtMost(working.width)
-                val safeHeight = safeH.coerceAtMost(working.height)
-                if (safeWidth < working.width || safeHeight < working.height) {
-                    val centered = Bitmap.createBitmap(
-                        working, (working.width - safeWidth) / 2, (working.height - safeHeight) / 2,
-                        safeWidth, safeHeight
-                    )
+                if (plan.safeWidth < working.width || plan.safeHeight < working.height) {
+                    val centered = Bitmap.createBitmap(working, plan.safeLeft, plan.safeTop,
+                        plan.safeWidth, plan.safeHeight)
                     if (working !== input && working !== centered) working.recycle()
                     working = centered
                 }
             }
-
-            val (originX, originY, cropWidth, cropHeight) = document.cropFrame?.let {
-                CropMath.pixelBounds(working.width, working.height, it,
-                    document.crop.takeIf { document.cropFrameRatioLocked })
-            } ?: CropMath.presetBounds(working.width, working.height, document.crop,
-                document.cropCenterX, document.cropCenterY)
+            val (originX, originY, cropWidth, cropHeight) = plan.crop
             if (cropWidth < working.width || cropHeight < working.height) {
                 val crop = Bitmap.createBitmap(working, originX, originY, cropWidth, cropHeight)
                 if (working !== input && working !== crop) working.recycle()
@@ -149,12 +135,57 @@ object ImagePipeline {
         }
     }
 
+    /** Bounded, exact cache for repeated input colors in a single GIF export. */
+    internal class GifColors private constructor(internal val prepared: ToneMath.Prepared) {
+        private val keys = IntArray(16_384)
+        private val results = IntArray(keys.size)
+        private val occupied = BooleanArray(keys.size)
+
+        fun adjust(argb: Int): Int {
+            val slot = (argb * -1640531527) ushr 18
+            if (occupied[slot] && keys[slot] == argb) return results[slot]
+            val adjusted = ToneMath.adjustPrepared(argb, prepared, 0, 0, 1, 1)
+            keys[slot] = argb
+            results[slot] = adjusted
+            occupied[slot] = true
+            return adjusted
+        }
+
+        companion object {
+            fun forGrade(grade: Grade): GifColors? {
+                // These controls depend on the image coordinate or nearby source pixels.
+                if (grade.vignette > 0f || grade.grain > 0f || grade.sharpen != 0f ||
+                    grade.texture != 0f || grade.clarity != 0f || grade.denoise > 0f
+                ) return null
+                val prepared = ToneMath.prepare(grade)
+                return if (prepared.isNeutral) null else GifColors(prepared)
+            }
+        }
+    }
+
     /**
      * Five sliding source rows and one rendered row. Does not allocate frame-sized
      * pixel IntArrays. Detail, curves and masks share one final-resolution render.
      */
-    fun render(input: Bitmap, document: EditDocument, cancelCheck: (() -> Unit)? = null): Bitmap {
-        val source = geometry(input, document)
+    fun render(input: Bitmap, document: EditDocument, cancelCheck: (() -> Unit)? = null): Bitmap =
+        render(input, document, null, cancelCheck)
+
+    internal fun render(
+        input: Bitmap,
+        document: EditDocument,
+        gifColors: GifColors?,
+        cancelCheck: (() -> Unit)?
+    ): Bitmap {
+        val view = PhotoGeometry.from(document)
+        val plan = PhotoGeometryPlan(input.width, input.height, view)
+        val source = geometry(input, plan)
+        val projections = HashMap<PhotoGeometry, PrivacyProjection>()
+        fun project(mark: PrivacyEdit): PrivacyProjection? {
+            val anchor = mark.authoringGeometry?.takeUnless { it == view } ?: return null
+            return projections.getOrPut(anchor) {
+                plan.projectFrom(PhotoGeometryPlan(input.width, input.height, anchor))
+            }
+        }
         var output: Bitmap? = null
         var returnedGeometry = false
         try {
@@ -171,7 +202,7 @@ object ImagePipeline {
                 }
                 return target
             }
-            val prepared = ToneMath.prepare(document.grade)
+            val prepared = gifColors?.prepared ?: ToneMath.prepare(document.grade)
             val masks = MaskMath.prepare(document.masks)
             if (prepared.isNeutral && masks.isEmpty()) {
                 if (document.privacy.isEmpty() && CreativeRaster.isEmpty(document.creative)) {
@@ -179,7 +210,7 @@ object ImagePipeline {
                     return source
                 }
                 val photo = if (document.privacy.isEmpty()) source
-                    else PrivacyRaster.apply(source, document.privacy, cancelCheck)
+                    else PrivacyRaster.applyProjected(source, document.privacy, cancelCheck, ::project)
                 try {
                     return composite(photo, photo !== source)
                 } catch (error: Throwable) {
@@ -233,7 +264,8 @@ object ImagePipeline {
                             lightRows[2][x], horizontal3 / 9f, horizontal5 / 25f, document.grade
                         )
                     } else 0f
-                    val base = ToneMath.adjustPrepared(sourcePixel, prepared, x, y, width, height, detail)
+                    val base = gifColors?.adjust(sourcePixel)
+                        ?: ToneMath.adjustPrepared(sourcePixel, prepared, x, y, width, height, detail)
                     rendered[x] = MaskMath.adjust(base, masks, x, y, width, height)
                     if (vertical3 != null && vertical5 != null) {
                         horizontal3 += vertical3[min(width - 1, x + 2)] -
@@ -256,7 +288,7 @@ object ImagePipeline {
                 }
             }
             if (document.privacy.isNotEmpty()) {
-                val privacyResult = PrivacyRaster.apply(result, document.privacy, cancelCheck)
+                val privacyResult = PrivacyRaster.applyProjected(result, document.privacy, cancelCheck, ::project)
                 output = privacyResult
                 result.recycle()
             }

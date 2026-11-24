@@ -50,8 +50,30 @@ data class PrivacyEdit(
     val feather: Float = .22f,
     val brushSize: Float = .055f,
     val color: Int = -0x1000000,
-    val strokes: List<BrushStroke> = emptyList()
+    val strokes: List<BrushStroke> = emptyList(),
+    // Older marks use the current view until its geometry changes.
+    val authoringGeometry: PhotoGeometry? = null
 )
+
+data class PhotoGeometry(
+    val quarterTurns: Int,
+    val mirrored: Boolean,
+    val flipVertical: Boolean,
+    val crop: CropRatio,
+    val cropCenterX: Float,
+    val cropCenterY: Float,
+    val straightenDegrees: Float,
+    val cropFrame: CropFrame?,
+    val cropFrameRatioLocked: Boolean
+) {
+    companion object {
+        fun from(document: EditDocument) = PhotoGeometry(
+            document.quarterTurns, document.mirrored, document.flipVertical,
+            document.crop, document.cropCenterX, document.cropCenterY,
+            document.straightenDegrees, document.cropFrame, document.cropFrameRatioLocked
+        )
+    }
+}
 
 data class BrushPoint(val x: Float, val y: Float)
 data class BrushStroke(val points: List<BrushPoint>)

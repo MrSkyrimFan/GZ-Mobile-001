@@ -13,15 +13,18 @@ object GifStore {
     private const val MAX_FILES = 12
     private const val MAX_BYTES = 2_400_000
     private fun folder(context: Context) = File(context.filesDir, "gz_gif_projects").also { it.mkdirs() }
-    private fun id(name: String): String? {
-        val clean = name.trim().replace(Regex("\\s+"), " ").take(32)
-        if (clean.isBlank()) return null
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(clean.toByteArray(Charsets.UTF_8))
+    internal fun projectName(name: String): String? =
+        name.trim().replace(Regex("\\s+"), " ").take(32).takeUnless(String::isBlank)
+
+    private fun id(name: String): String? = projectName(name)?.let {
+        Base64.getUrlEncoder().withoutPadding().encodeToString(it.toByteArray(Charsets.UTF_8))
     }
+
+    internal enum class SaveResult { SAVED, NAME_IN_USE, FULL, FAILED }
     fun encode(doc: GifDocument): String {
         require(GifMath.valid(doc))
         return JSONObject().apply {
-            put("version", 4)
+            put("version", 5)
             put("delayMs", doc.delayMs)
             put("size", doc.size.name)
             put("fit", doc.fit.name)
@@ -37,6 +40,8 @@ object GifStore {
                     put("fps", clip.fps); put("speed", clip.speedPercent)
                     put("reverse", clip.reverse)
                     put("width", clip.width); put("height", clip.height)
+                    clip.displayWidth?.let { put("displayWidth", it) }
+                    clip.displayHeight?.let { put("displayHeight", it) }
                     put("isGif", clip.isGif); put("loopCount", clip.loopCount)
                     put("times", JSONArray(clip.sourceTimesMs))
                 })
@@ -50,7 +55,7 @@ object GifStore {
         return try {
             val obj = JSONObject(data)
             val version = obj.optInt("version", 0)
-            if (version !in 1..4) return null
+            if (version !in 1..5) return null
             val array = obj.optJSONArray("frames") ?: return null
             if (array.length() > GifMath.MAX_FRAMES) return null
             val list = (0 until array.length()).map { array.optString(it, "") }
@@ -71,7 +76,9 @@ object GifStore {
                     reverse = v.optBoolean("reverse", false),
                     width = v.optInt("width", 480), height = v.optInt("height", 480),
                     sourceTimesMs = stamps, isGif = v.optBoolean("isGif"),
-                    loopCount = v.optInt("loopCount", -1)
+                    loopCount = v.optInt("loopCount", -1),
+                    displayWidth = if (version >= 5 && v.has("displayWidth")) v.getInt("displayWidth") else null,
+                    displayHeight = if (version >= 5 && v.has("displayHeight")) v.getInt("displayHeight") else null
                 )
             } else null
             fun <T : Enum<T>> find(items: Array<T>, key: String, fallback: T): T =
@@ -113,7 +120,8 @@ object GifStore {
             minOf(clip.endMs, source.durationMs) else clip.endMs
         val restored = source.copy(durationMs = maxOf(source.durationMs, end),
             startMs = clip.startMs, endMs = end, fps = clip.fps,
-            speedPercent = clip.speedPercent, reverse = clip.reverse)
+            speedPercent = clip.speedPercent, reverse = clip.reverse,
+            displayWidth = clip.displayWidth, displayHeight = clip.displayHeight)
         return document.copy(video = restored).takeIf(GifMath::valid)
     }
 
@@ -124,11 +132,20 @@ object GifStore {
             Charsets.UTF_8) } catch (_: Exception) { null }
     }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
 
-    @Synchronized fun save(context: Context, name: String, doc: GifDocument): Boolean {
-        val id = id(name) ?: return false
-        val dir = folder(context)
-        val file = File(dir, "$id.gzgif")
-        if (!file.exists() && !File(file.path + ".bak").isFile && names(context).size >= MAX_FILES) return false
+    fun save(context: Context, name: String, doc: GifDocument): Boolean =
+        saveProject(context, name, doc, replaceExisting = true) == SaveResult.SAVED
+
+    @Synchronized internal fun saveProject(
+        context: Context,
+        name: String,
+        doc: GifDocument,
+        replaceExisting: Boolean
+    ): SaveResult {
+        val id = id(name) ?: return SaveResult.FAILED
+        val file = File(folder(context), "$id.gzgif")
+        val exists = file.exists() || File(file.path + ".bak").isFile
+        if (exists && !replaceExisting) return SaveResult.NAME_IN_USE
+        if (!exists && names(context).size >= MAX_FILES) return SaveResult.FULL
         return try {
             val data = encode(doc).toByteArray(Charsets.UTF_8)
             require(data.size <= MAX_BYTES)
@@ -141,9 +158,24 @@ object GifStore {
                 atomic.failWrite(stream)
                 throw e
             }
-            true
-        } catch (_: Exception) { false }
+            SaveResult.SAVED
+        } catch (_: Exception) { SaveResult.FAILED }
     }
+
+    @Synchronized internal fun deleteProject(context: Context, name: String): Boolean {
+        val id = id(name) ?: return false
+        val file = File(folder(context), "$id.gzgif")
+        val backup = File(file.path + ".bak")
+        val staged = File(file.path + ".new")
+        if (!file.isFile && !backup.isFile) return false
+        val files = listOf(staged, file, backup)
+        if (files.any { it.exists() && !it.isFile }) return false
+        // A legacy backup is authoritative until recovery. Remove it last.
+        return try {
+            files.all { !it.exists() || it.delete() }
+        } catch (_: SecurityException) { false }
+    }
+
     @Synchronized fun load(context: Context, name: String): GifDocument? {
         val id = id(name) ?: return null
         val file = File(folder(context), "$id.gzgif")

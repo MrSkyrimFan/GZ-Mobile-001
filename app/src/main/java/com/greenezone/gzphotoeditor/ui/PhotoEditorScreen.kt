@@ -1,8 +1,5 @@
 package com.greenezone.gzphotoeditor.ui
 
-import android.app.Activity
-import android.app.ActivityManager
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -43,11 +40,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -67,24 +64,24 @@ import com.greenezone.gzphotoeditor.editor.AutoEnhanceMath
 import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.BrushStroke
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.CollageStore
 import com.greenezone.gzphotoeditor.editor.CropFrame
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
 import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProDocument
+import com.greenezone.gzphotoeditor.editor.ProImageGeometry
 import com.greenezone.gzphotoeditor.editor.ProLayer
+import com.greenezone.gzphotoeditor.editor.ProPixelSize
 import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.CropMath
 import com.greenezone.gzphotoeditor.editor.CropRatio
-import com.greenezone.gzphotoeditor.editor.ExportSettings
-import com.greenezone.gzphotoeditor.editor.writeStagedImage
-import com.greenezone.gzphotoeditor.editor.ImageExportWriter
-import com.greenezone.gzphotoeditor.editor.ExportSizing
 import com.greenezone.gzphotoeditor.editor.InkMath
 import com.greenezone.gzphotoeditor.editor.InkStroke
 import com.greenezone.gzphotoeditor.editor.CreativeRaster
 import com.greenezone.gzphotoeditor.editor.TextOverlay
 import com.greenezone.gzphotoeditor.editor.EditHistory
+import com.greenezone.gzphotoeditor.editor.ExportWorkspace
 import com.greenezone.gzphotoeditor.editor.GeometryMath
 import com.greenezone.gzphotoeditor.editor.Grade
 import com.greenezone.gzphotoeditor.editor.ImagePipeline
@@ -95,6 +92,10 @@ import com.greenezone.gzphotoeditor.editor.MaskKind
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.editor.PrivacyEdit
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
+import com.greenezone.gzphotoeditor.editor.PhotoGeometry
+import com.greenezone.gzphotoeditor.editor.PendingExportJournal
+import com.greenezone.gzphotoeditor.editor.PendingImageRecipe
+import com.greenezone.gzphotoeditor.editor.PendingProExportRecipe
 import com.greenezone.gzphotoeditor.editor.PrivacyMath
 import com.greenezone.gzphotoeditor.editor.PrivacyRaster
 import com.greenezone.gzphotoeditor.editor.SavedLooks
@@ -103,15 +104,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private data class ExportRequest(val settings: ExportSettings, val edits: EditDocument)
-private data class CropPreview(val source: Bitmap, val edits: EditDocument, val bitmap: Bitmap)
+private data class PhotoReplacement(
+    val uri: Uri,
+    val edits: EditDocument? = null,
+    val projectName: String? = null
+)
+
 
 /**
  * Image-first editor. The image covers the entire canvas behind lightweight chrome.
@@ -131,21 +134,48 @@ fun PhotoEditorScreen(
     // entry snapshot immutable while the nested editor loads/saves other media.
     val tileEntryBaseline = remember(initialCollagePhoto) { initialCollagePhoto }
 
-    var workspaceNavigation by remember { mutableStateOf(WorkspaceNavigation()) }
-    var collageDocument by remember { mutableStateOf(CollageDocument()) }
+    val startupJournal = remember(context) { PendingExportJournal(context.filesDir) }
+    val startupWorkspace = remember(startupJournal, tileEntryBaseline) {
+        if (tileEntryBaseline == null) startupJournal.latestWorkspace() else null
+    }
+    val coldExport = remember(startupWorkspace) {
+        startupWorkspace?.takeIf { it == ExportWorkspace.PRO || it == ExportWorkspace.COLLAGE }
+            ?.let(startupJournal::read)
+    }
+    val recoveredWorkspace = when (startupWorkspace) {
+        ExportWorkspace.PRO -> WorkspaceMode.PRO
+        ExportWorkspace.COLLAGE -> WorkspaceMode.COLLAGE
+        ExportWorkspace.GIF -> WorkspaceMode.GIF
+        else -> WorkspaceMode.PHOTO
+    }
+    var workspaceNavigation by remember {
+        mutableStateOf(WorkspaceNavigation(current = recoveredWorkspace))
+    }
+    var collageDocument by remember {
+        val restored = coldExport?.takeIf { it.workspace == ExportWorkspace.COLLAGE }
+            ?.let { PendingImageRecipe.decode(it.recipe) }
+            ?.payload?.let(CollageStore::decode)
+        mutableStateOf(restored ?: CollageDocument())
+    }
     var collageSession by remember { mutableStateOf(CollageWorkspaceSession()) }
-    var proDocument by remember { mutableStateOf(ProDocument()) }
-    var proSession by remember { mutableStateOf(ProWorkspaceSession()) }
+    val recoveredPro = remember(coldExport) {
+        coldExport?.takeIf { it.workspace == ExportWorkspace.PRO }
+            ?.let(PendingProExportRecipe::decode)
+    }
+    var proDocument by remember { mutableStateOf(recoveredPro?.document ?: ProDocument()) }
+    var proSession by remember {
+        val restored = recoveredPro?.let {
+            ProWorkspaceSession(documentEstablished = true, resetDocument = it.resetDocument)
+        }
+        mutableStateOf(restored ?: ProWorkspaceSession())
+    }
     var gifDocument by remember { mutableStateOf(GifDocument()) }
     var gifSession by remember { mutableStateOf(GifWorkspaceSession()) }
 
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var original by remember { mutableStateOf<Bitmap?>(null) }
-    var processed by remember { mutableStateOf<Bitmap?>(null) }
-    var cropPreview by remember { mutableStateOf<CropPreview?>(null) }
-    var beforeImage by remember { mutableStateOf<Bitmap?>(null) }
-    var filterThumbs by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
-    var quickSource by remember { mutableStateOf<Bitmap?>(null) }
+    var sourceSize by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val previewState = remember { RegularPhotoPreviewState() }
     var liveGesture by remember { mutableStateOf(false) }
     var painting by remember { mutableStateOf(false) }
     var document by remember { mutableStateOf(EditDocument()) }
@@ -164,10 +194,11 @@ fun PhotoEditorScreen(
     var panY by remember { mutableFloatStateOf(0f) }
     var notice by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    var exporting by remember { mutableStateOf(false) }
+    val photoExport = rememberPhotoExportController(startupJournal, restorePending = tileEntryBaseline == null) {
+        notice = it
+    }
+    val exporting by photoExport.inProgress
     var loadingToken by remember { mutableIntStateOf(0) }
-    var exportSettings by remember { mutableStateOf(ExportSettings()) }
-    var pendingExport by remember { mutableStateOf<ExportRequest?>(null) }
     var creativeTools by remember { mutableStateOf(CreativeToolState()) }
     var currentInk by remember { mutableStateOf<InkStroke?>(null) }
     var showTextDialog by remember { mutableStateOf(false) }
@@ -176,14 +207,17 @@ fun PhotoEditorScreen(
     var baselineUri by remember { mutableStateOf<String?>(null) }
     var baselineDocument by remember { mutableStateOf(EditDocument()) }
     var showRegularExit by remember { mutableStateOf(false) }
+    var replacement by remember { mutableStateOf<PhotoReplacement?>(null) }
+    var replacementAfterSave by remember { mutableStateOf(false) }
+    var projectToDelete by remember { mutableStateOf<String?>(null) }
     var showProHandoff by remember { mutableStateOf(false) }
     var showTileExit by remember { mutableStateOf(false) }
     var closeAfterProjectSave by remember { mutableStateOf(false) }
 
-    var showExport by remember { mutableStateOf(false) }
     var showHistogram by remember { mutableStateOf(false) }
     var showSaveLook by remember { mutableStateOf(false) }
     var showSaveProject by remember { mutableStateOf(false) }
+    var projectSaveError by remember { mutableStateOf<String?>(null) }
     var showProjects by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf("") }
     var selectedProject by remember { mutableStateOf<String?>(null) }
@@ -191,14 +225,15 @@ fun PhotoEditorScreen(
     var savedProjects by remember { mutableStateOf(ProjectStore.load(context)) }
 
     fun commit(next: EditDocument) {
-        history = history.checkpoint(document, next)
-        document = next
+        val updated = PrivacyMath.retainAuthoringGeometry(document, next)
+        history = history.checkpoint(document, updated)
+        document = updated
         gestureStart = null
         liveGesture = false
     }
     fun slide(next: EditDocument) {
         if (gestureStart == null) gestureStart = document
-        document = next
+        document = PrivacyMath.retainAuthoringGeometry(document, next)
         liveGesture = true
         activeLook = "custom"
     }
@@ -217,31 +252,53 @@ fun PhotoEditorScreen(
     fun loadPhoto(
         uri: Uri,
         restored: EditDocument? = null,
-        establishBaseline: Boolean = tileEntryBaseline == null
+        establishBaseline: Boolean = tileEntryBaseline == null,
+        restoringExport: Boolean = false
     ) {
         val request = ++loadingToken
         scope.launch {
             busy = true
-            notice = "Opening photo…"
+            if (!restoringExport) notice = "Opening photo…"
             try {
                 try {
                     resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 } catch (_: SecurityException) {
                     // Some pickers grant access only for this session.
                 }
-                val bitmap = withContext(Dispatchers.IO) {
-                    ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L)
+                val (bitmap, dimensions) = withContext(Dispatchers.IO) {
+                    var header: Pair<Int, Int>? = null
+                    val preview = ImagePipeline.decode(
+                        resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L
+                    ) { width, height -> header = width to height }
+                    preview to checkNotNull(header)
+                }
+                val initialPreview = try {
+                    if (restored != null && restored.privacy.isNotEmpty()) {
+                        withContext(Dispatchers.Default) {
+                            val job = currentCoroutineContext()
+                            ImagePipeline.render(bitmap, restored) { job.ensureActive() }
+                        }
+                    } else bitmap
+                } catch (error: Throwable) {
+                    bitmap.recycle()
+                    throw error
                 }
                 if (request != loadingToken) {
+                    if (initialPreview !== bitmap) initialPreview.recycle()
                     bitmap.recycle()
                     return@launch
                 }
                 sourceUri = uri
                 original = bitmap
-                processed = bitmap
-                beforeImage = bitmap
-                filterThumbs = emptyList()
-                quickSource = null
+                sourceSize = dimensions
+                previewState.processed = initialPreview
+                previewState.processedStamp = PreviewStamp(
+                    bitmap, restored?.takeIf { it.privacy.isNotEmpty() } ?: EditDocument()
+                )
+                previewState.beforeImage = bitmap
+                previewState.beforeStamp = bitmap to PhotoGeometry.from(EditDocument())
+                previewState.filterThumbs = emptyList()
+                previewState.quickSource = null
                 painting = false
                 liveGesture = false
                 val loadedDocument = restored ?: EditDocument()
@@ -263,11 +320,13 @@ fun PhotoEditorScreen(
                 zoom = 1f
                 panX = 0f
                 panY = 0f
-                notice = if (restored == null) "Media opened" else "Project restored"
+                if (!restoringExport) {
+                    notice = if (restored == null) "Media opened" else "Project restored"
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                if (request == loadingToken) {
+                if (request == loadingToken && (!restoringExport || !exporting)) {
                     notice = "Could not open photo: " +
                         (error.message ?: "file missing or permission revoked")
                 }
@@ -276,56 +335,6 @@ fun PhotoEditorScreen(
             }
         }
     }
-
-    fun exportImage(output: Uri, request: ExportRequest) {
-        val source = sourceUri ?: return
-        if (source == output) {
-            notice = "Export destination cannot overwrite the original."
-            return
-        }
-        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val maxPixels = GeometryMath.safeExportPixels(manager.memoryClass)
-        scope.launch {
-            exporting = true
-            showExport = false
-            notice = "Exporting image…"
-            try {
-                val dimensions = withContext(Dispatchers.Default) {
-                    var decoded: Bitmap? = null
-                    var rendered: Bitmap? = null
-                    var sized: Bitmap? = null
-                    try {
-                        val originalFull = ImagePipeline.decode(resolver, source, 12_000, maxPixels)
-                        decoded = originalFull
-                        val full = ImagePipeline.render(originalFull, request.edits) { ensureActive() }
-                        rendered = full
-                        val photo = ExportSizing.layout(full, request.settings)
-                        sized = photo
-                        withContext(Dispatchers.IO) {
-                            writeStagedImage(context.cacheDir,
-                                openDestination = { resolver.openOutputStream(output, "wt") },
-                                checkActive = { ensureActive() }) { stream -> ImageExportWriter.write(photo, request.settings, stream) }
-                        }
-                        photo.width.toString() + " × " + photo.height
-                    } finally {
-                        sized?.let { if (it !== rendered && !it.isRecycled) it.recycle() }
-                        rendered?.let { if (it !== decoded && !it.isRecycled) it.recycle() }
-                        decoded?.let { if (!it.isRecycled) it.recycle() }
-                    }
-                }
-                notice = "Saved " + dimensions + " • Original unchanged"
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: OutOfMemoryError) {
-                notice = "Not enough memory to export. Choose a smaller size."
-            } catch (error: Exception) {
-                notice = "Export failed: " + (error.message ?: "unknown error")
-            } finally {
-                exporting = false
-            }
-        }
-    }
-
 
     fun chooseWorkspace(mode: WorkspaceMode) {
         if (onDoneCollagePhoto != null || busy || exporting) return
@@ -348,34 +357,27 @@ fun PhotoEditorScreen(
 
     fun openProWithRegularEdits() {
         val uri = sourceUri ?: return
-        val input = original ?: return
-        if (busy || exporting) return
+        if (original == null || busy || exporting) return
         showProHandoff = false
         finishSlide()
         val edits = document
         busy = true
         scope.launch {
             try {
-                val editedRatio = withContext(Dispatchers.Default) {
-                    // The current preview may still show the previous frame or the
-                    // uncropped Crop view. Use the committed edit geometry instead.
-                    val frame = ImagePipeline.geometry(input, edits)
-                    try {
-                        frame.width.toFloat() / frame.height
-                    } finally {
-                        if (frame !== input) frame.recycle()
-                    }
-                }
-                val originalRatio = input.width.toFloat() / input.height
-                val source = ProLayer(uri = uri.toString(), name = "Original photo", aspect = originalRatio)
+                val sourcePixels = sourceSize?.let { (width, height) -> ProPixelSize(width, height) }
+                    ?: withContext(Dispatchers.IO) { ProImageGeometry.sourceSize(resolver, uri) }
+                val editedSize = ProImageGeometry.editedSize(sourcePixels, edits)
+                val source = ProImageGeometry.bind(ProLayer(uri = uri.toString(), name = "Original photo"), sourcePixels)
                 val resetDocument = ProDocument(
                     layers = listOf(source),
                     background = ProBackground.TRANSPARENT,
-                    sourceAspectRatio = originalRatio
+                    sourceAspectRatio = sourcePixels.aspect,
+                    canvasSize = sourcePixels
                 )
                 proDocument = resetDocument.copy(
-                    layers = listOf(source.copy(edits = edits, aspect = editedRatio)),
-                    sourceAspectRatio = editedRatio
+                    layers = listOf(ProImageGeometry.bind(source.copy(edits = edits), sourcePixels)),
+                    sourceAspectRatio = editedSize.aspect,
+                    canvasSize = editedSize
                 )
                 proSession = ProWorkspaceSession(documentEstablished = true, resetDocument = resetDocument)
                 workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
@@ -399,7 +401,7 @@ fun PhotoEditorScreen(
         val originalTile = initialCollagePhoto ?: return
         val image = sourceUri?.toString() ?: originalTile.uri
         showTileExit = false
-        onDoneCollagePhoto?.invoke(CollagePhoto(image, document))
+        onDoneCollagePhoto?.invoke(originalTile.copy(uri = image, edits = document))
     }
 
     fun isPhotoDirty(): Boolean {
@@ -411,14 +413,35 @@ fun PhotoEditorScreen(
         return sourceUri?.toString() != baselineUri || document != baselineDocument
     }
 
+    fun requestPhotoReplacement(candidate: PhotoReplacement) {
+        if (busy || exporting) return
+        finishSlide()
+        if (isPhotoDirty()) {
+            replacement = candidate
+            showRegularExit = true
+        } else {
+            loadPhoto(candidate.uri, candidate.edits)
+        }
+    }
+
+    fun completeReplacement() {
+        val candidate = replacement ?: return
+        replacement = null
+        showRegularExit = false
+        loadPhoto(candidate.uri, candidate.edits)
+    }
+
     fun closeCurrentPhoto() {
         loadingToken += 1
         sourceUri = null
         original = null
-        processed = null
-        beforeImage = null
-        filterThumbs = emptyList()
-        quickSource = null
+        sourceSize = null
+        previewState.processed = null
+        previewState.processedStamp = null
+        previewState.beforeImage = null
+        previewState.beforeStamp = null
+        previewState.filterThumbs = emptyList()
+        previewState.quickSource = null
         document = EditDocument()
         baselineUri = null
         baselineDocument = EditDocument()
@@ -436,12 +459,13 @@ fun PhotoEditorScreen(
         panX = 0f
         panY = 0f
         notice = ""
-        showExport = false
-        pendingExport = null
+        photoExport.closeDialog()
         showTextDialog = false
         showRegularExit = false
         showTileExit = false
         closeAfterProjectSave = false
+        replacement = null
+        replacementAfterSave = false
         selectedProject = null
         creativeTools = CreativeToolState()
     }
@@ -541,19 +565,28 @@ fun PhotoEditorScreen(
         commit(document.copy(privacy = updated))
     }
 
+    fun authoringPoint(mark: PrivacyEdit, point: BrushPoint): BrushPoint {
+        val input = original ?: return point
+        return PrivacyMath.projection(input.width, input.height, document, mark)
+            ?.toAuthoring(point) ?: point
+    }
+
     fun movePrivacy(x: Float, y: Float) {
         val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
         if (mark.kind.usesBrush) return
         val updated = document.privacy.toMutableList()
-        updated[selectedPrivacy] = PrivacyMath.withCenter(mark, x, y)
+        val point = authoringPoint(mark, BrushPoint(x, y))
+        updated[selectedPrivacy] = PrivacyMath.withCenter(mark, point.x, point.y)
         slide(document.copy(privacy = updated))
     }
 
-    fun startPaint(point: BrushPoint) {
+    fun startPaint(viewPoint: BrushPoint) {
         if (selectedTab != EditTab.PRIVACY) return
         val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
         if (!mark.kind.usesBrush) return
-        if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 640) {
+        val point = authoringPoint(mark, viewPoint)
+        if (point.x !in 0f..1f || point.y !in 0f..1f) return
+        if (mark.strokes.size >= 40 || mark.strokes.sumOf { it.points.size } >= 639) {
             notice = "Brush limit reached. Undo a stroke or add another brush."
             return
         }
@@ -565,53 +598,64 @@ fun PhotoEditorScreen(
         document = document.copy(privacy = updated)
     }
 
-    fun continuePaint(point: BrushPoint) {
+    fun continuePaint(viewPoint: BrushPoint) {
         if (!painting || gestureStart == null) return
         if (selectedTab != EditTab.PRIVACY) return
         val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
         val last = mark.strokes.lastOrNull() ?: return
-        if (mark.strokes.sumOf { it.points.size } >= 640) return
+        val pointLimit = 640 - (mark.strokes.sumOf { it.points.size } - last.points.size)
+        val point = authoringPoint(mark, viewPoint)
+        if (point.x !in 0f..1f || point.y !in 0f..1f) return
         val previous = last.points.last()
         val dx = point.x - previous.x
         val dy = point.y - previous.y
         if (dx * dx + dy * dy < .000012f) return
         val updated = document.privacy.toMutableList()
+        val points = if (last.points.size < pointLimit) last.points
+            else last.points.filterIndexed { index, _ -> index % 2 == 0 && index < last.points.lastIndex }
         updated[selectedPrivacy] = mark.copy(strokes =
-            mark.strokes.dropLast(1) + last.copy(points = last.points + point))
+            mark.strokes.dropLast(1) + last.copy(points = points + point))
         document = document.copy(privacy = updated)
     }
 
     fun finishPaint() {
+        if (!painting) return
         painting = false
         finishSlide()
     }
 
+    fun cancelPaint() {
+        if (!painting) return
+        gestureStart?.let { document = it }
+        painting = false
+        gestureStart = null
+        liveGesture = false
+    }
+
+    fun transformPhoto(pinch: Float, translation: Offset, width: Float, height: Float) {
+        zoom = (zoom * pinch).coerceIn(1f, 6f)
+        val maxX = width * (zoom - 1f) / 2f
+        val maxY = height * (zoom - 1f) / 2f
+        panX = (panX + translation.x).coerceIn(-maxX, maxX)
+        panY = (panY + translation.y).coerceIn(-maxY, maxY)
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
-        if (it != null) loadPhoto(it)
+        if (it != null) requestPhotoReplacement(PhotoReplacement(it))
     }
-    val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val request = pendingExport
-        pendingExport = null
-        val output = result.data?.data
-        if (result.resultCode == Activity.RESULT_OK && output != null && request != null) {
-            exportImage(output, request)
+    var recoveredPhotoHandled by remember(photoExport.initialRecoveryId) { mutableStateOf(false) }
+    LaunchedEffect(photoExport.initialRecoveryId, workspaceNavigation.current) {
+        if (photoExport.initialRecoveryId == null || workspaceNavigation.current != WorkspaceMode.PHOTO ||
+            recoveredPhotoHandled
+        ) return@LaunchedEffect
+        recoveredPhotoHandled = true
+        if (sourceUri != null) return@LaunchedEffect
+        val request = photoExport.recoveredRequest
+        if (request != null) {
+            loadPhoto(request.source, request.edits, restoringExport = true)
+        } else {
+            notice = "The previous export recipe could not be restored."
         }
-    }
-    fun requestExport() {
-        val settings = exportSettings
-        pendingExport = ExportRequest(settings, document)
-        showExport = false
-        val suffix = settings.format.extension
-        val target = if (settings.preset == com.greenezone.gzphotoeditor.editor.SocialPreset.ORIGINAL)
-            "GZEditorPro_Edit" else "GZEditorPro_" + settings.preset.name
-        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = settings.format.mime
-            putExtra(Intent.EXTRA_TITLE, target + "." + suffix)
-        }
-        exporter.launch(intent)
     }
     fun openPicker() {
         if (!busy && !exporting) {
@@ -623,12 +667,16 @@ fun PhotoEditorScreen(
         showSaveLook = true
     }
     fun saveProject() {
+        projectSaveError = null
         closeAfterProjectSave = false
+        replacementAfterSave = false
         draftName = ""
         showSaveProject = true
     }
     fun saveProjectAndClose() {
-        closeAfterProjectSave = true
+        projectSaveError = null
+        replacementAfterSave = replacement != null
+        closeAfterProjectSave = !replacementAfterSave
         draftName = ""
         showSaveProject = true
     }
@@ -769,114 +817,25 @@ fun PhotoEditorScreen(
         }
     }
 
-    LaunchedEffect(original) {
-        val input = original ?: run { quickSource = null; return@LaunchedEffect }
-        val small = withContext(Dispatchers.Default) {
-            val scale = minOf(1f, 660f / maxOf(input.width, input.height))
-            if (scale >= 1f) input
-            else Bitmap.createScaledBitmap(input,
-                (input.width * scale).roundToInt().coerceAtLeast(1),
-                (input.height * scale).roundToInt().coerceAtLeast(1), true)
-        }
-        quickSource = small
-    }
-
     val editingBlurBrush = selectedTab == EditTab.PRIVACY &&
         document.privacy.getOrNull(selectedPrivacy)?.kind == PrivacyKind.BLUR_BRUSH
-    LaunchedEffect(quickSource, painting, editingBlurBrush) {
-        val fast = quickSource ?: return@LaunchedEffect
-        if (!painting || !editingBlurBrush) return@LaunchedEffect
-        try {
-            // Complete the current frame, then render the newest pointer position.
-            snapshotFlow { document }.conflate().collect { edits ->
-                processed = withContext(Dispatchers.Default) {
-                    val running = currentCoroutineContext()
-                    ImagePipeline.render(fast, edits) { running.ensureActive() }
-                }
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            notice = "Preview error: " + (error.message ?: "unexpected error")
-        }
-    }
-
     val cropTab = selectedTab == EditTab.CROP
     val previewEdits = if (cropTab) {
-        document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f,
-            cropCenterY = .5f, cropFrameRatioLocked = false)
+        PrivacyMath.retainAuthoringGeometry(document,
+            document.copy(crop = CropRatio.ORIGINAL, cropFrame = null, cropCenterX = .5f,
+                cropCenterY = .5f, cropFrameRatioLocked = false))
     } else document
-    LaunchedEffect(original, if (painting) null else previewEdits, liveGesture, quickSource, painting, cropTab) {
-        if (!cropTab) cropPreview = null
-        val input = original ?: run { processed = null; cropPreview = null; return@LaunchedEffect }
-        if (painting) return@LaunchedEffect
-        delay(if (liveGesture) 20L else 45L)
-        try {
-            val fast = quickSource
-            if (fast != null && fast !== input && (!cropTab || liveGesture)) {
-                val preview = withContext(Dispatchers.Default) {
-                    val running = currentCoroutineContext()
-                    ImagePipeline.render(fast, previewEdits) { running.ensureActive() }
-                }
-                processed = preview
-            }
-            if (!liveGesture || fast == null || fast === input) {
-                if (fast != null && fast !== input && !cropTab) delay(140L)
-                val quality = withContext(Dispatchers.Default) {
-                    val running = currentCoroutineContext()
-                    ImagePipeline.render(input, previewEdits) { running.ensureActive() }
-                }
-                processed = quality
-                if (cropTab) cropPreview = CropPreview(input, previewEdits, quality)
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            notice = "Preview error: " + (error.message ?: "unexpected error")
-        }
-    }
-
-    // Keep before/after geometry identical; compute outside the UI thread.
-    LaunchedEffect(original, previewEdits.quarterTurns, previewEdits.mirrored,
-        previewEdits.flipVertical, previewEdits.crop, previewEdits.cropFrame, previewEdits.cropCenterX,
-        previewEdits.cropCenterY, previewEdits.straightenDegrees, previewEdits.cropFrameRatioLocked) {
-        val input = original ?: run { beforeImage = null; return@LaunchedEffect }
-        try {
-            val result = withContext(Dispatchers.Default) {
-                ImagePipeline.geometry(input, previewEdits)
-            }
-            beforeImage = result
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            beforeImage = input
-        }
-    }
-
-    LaunchedEffect(original) {
-        val input = original ?: run { filterThumbs = emptyList(); return@LaunchedEffect }
-        try {
-            val created = withContext(Dispatchers.Default) {
-                val working = currentCoroutineContext()
-                val longest = maxOf(input.width, input.height)
-                val sizeFactor = 128f / longest.coerceAtLeast(1)
-                val width = (input.width * sizeFactor).roundToInt().coerceAtLeast(1)
-                val height = (input.height * sizeFactor).roundToInt().coerceAtLeast(1)
-                val thumbnail = Bitmap.createScaledBitmap(input, width, height, true)
-                listOf(thumbnail) + Looks.all.map { look ->
-                    working.ensureActive()
-                    ImagePipeline.render(thumbnail, EditDocument(grade = look.grade)) {
-                        working.ensureActive()
-                    }
-                }
-            }
-            filterThumbs = created
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            filterThumbs = emptyList()
-        }
-    }
+    RenderRegularPhotoPreview(
+        state = previewState,
+        original = original,
+        previewEdits = previewEdits,
+        cropTab = cropTab,
+        liveGesture = liveGesture,
+        painting = painting,
+        editingBlurBrush = editingBlurBrush,
+        currentDocument = { document },
+        onError = { notice = it }
+    )
 
     LaunchedEffect(notice) {
         if (notice.isNotEmpty()) {
@@ -921,9 +880,9 @@ fun PhotoEditorScreen(
 
     // The last processed image may be a cropped preview from another tool.
     // Only attach handles when the matching uncropped image is actually shown.
-    val readyCrop = cropPreview?.takeIf { cropTab && it.source === original && it.edits == previewEdits }
-    val selectedImage = if (compare) beforeImage ?: original
-        else readyCrop?.bitmap ?: processed ?: original
+    val readyCrop = previewState.cropPreview?.takeIf { cropTab && it.source === original && it.edits == previewEdits }
+    val selectedImage = if (compare) previewState.beforeImage ?: original
+        else readyCrop?.bitmap ?: previewState.processed ?: original
     val cropEditing = readyCrop != null && !compare && !busy && !exporting && zoom <= 1.001f
     val cropInset = if (cropTab) 16.dp else 0.dp
     val cropImageSize = readyCrop?.bitmap?.let { it.width to it.height } ?: original?.let {
@@ -937,7 +896,7 @@ fun PhotoEditorScreen(
     val drawingActive = selectedTab == EditTab.DRAW && !compare && !busy && !exporting &&
         zoom <= 1.001f
     val activePrivacy = document.privacy.getOrNull(selectedPrivacy)
-    val brushSelected = !compare && !busy && !exporting && zoom <= 1.001f &&
+    val brushSelected = !compare && !busy && !exporting &&
         selectedTab == EditTab.PRIVACY && activePrivacy?.kind?.usesBrush == true
     val privacyRegionSelected = !compare && !busy && !exporting &&
         selectedTab == EditTab.PRIVACY && activePrivacy != null &&
@@ -958,7 +917,7 @@ fun PhotoEditorScreen(
             // Fit the crop image, Before image, and gesture coordinates inside the
             // same viewport so visible handles stay clear of the header and dock.
             Box(Modifier.fillMaxSize().then(viewportInsets)) {
-                val stableCoordinates = beforeImage ?: selectedImage
+                val stableCoordinates = previewState.beforeImage ?: selectedImage
                 Image(
                     bitmap = selectedImage.asImageBitmap(),
                     contentDescription = "Photo editing canvas. Tap to hide or show tools.",
@@ -978,11 +937,7 @@ fun PhotoEditorScreen(
                             detectTransformGestures { _, pan, pinch, _ ->
                                 if (!brushSelected && (!cropTab || compare) && !textEditing &&
                                     !shapeEditing && !drawingActive) {
-                                    zoom = (zoom * pinch).coerceIn(1f, 6f)
-                                    val maxX = size.width * (zoom - 1f) / 2f
-                                    val maxY = size.height * (zoom - 1f) / 2f
-                                    panX = (panX + pan.x).coerceIn(-maxX, maxX)
-                                    panY = (panY + pan.y).coerceIn(-maxY, maxY)
+                                    transformPhoto(pinch, pan, size.width.toFloat(), size.height.toFloat())
                                 }
                             }
                         }
@@ -993,14 +948,24 @@ fun PhotoEditorScreen(
                             translationY = panY
                         }
                 )
+                val privacyProjection = if (brushSelected || privacyRegionSelected) {
+                    val input = original
+                    if (input != null && activePrivacy != null)
+                        PrivacyMath.projection(input.width, input.height, document, activePrivacy)
+                    else null
+                } else null
                 if (brushSelected && activePrivacy != null) {
+                    val guideStrokes = if (privacyProjection == null) activePrivacy.strokes
+                        else activePrivacy.strokes.map { stroke ->
+                            stroke.copy(points = stroke.points.map(privacyProjection::toView))
+                        }
                     BrushOverlay(
                         bitmapWidth = stableCoordinates.width,
                         bitmapHeight = stableCoordinates.height,
                         mask = LocalMask(
                             kind = MaskKind.BRUSH,
-                            strokes = activePrivacy.strokes,
-                            radius = activePrivacy.brushSize,
+                            strokes = guideStrokes,
+                            radius = activePrivacy.brushSize * (privacyProjection?.radiusScale ?: 1f),
                             feather = activePrivacy.feather
                         ),
                         enabled = !busy,
@@ -1008,7 +973,11 @@ fun PhotoEditorScreen(
                         onContinue = ::continuePaint,
                         onFinish = ::finishPaint,
                         onTap = { chromeVisible = !chromeVisible },
-                        showGuides = !editingBlurBrush
+                        showGuides = !editingBlurBrush,
+                        onCancel = ::cancelPaint,
+                        zoom = zoom,
+                        pan = Offset(panX, panY),
+                        onTransform = ::transformPhoto
                     )
                 }
                 if (privacyRegionSelected && activePrivacy != null) {
@@ -1016,6 +985,7 @@ fun PhotoEditorScreen(
                         imageWidth = stableCoordinates.width,
                         imageHeight = stableCoordinates.height,
                         mark = activePrivacy,
+                        projection = privacyProjection,
                         canMove = true,
                         showGuides = true,
                         onMove = ::movePrivacy,
@@ -1150,7 +1120,7 @@ fun PhotoEditorScreen(
                     TextButton(
                         onClick = {
                             if (onDoneCollagePhoto != null) finishCollageTile()
-                            else showExport = true
+                            else photoExport.openDialog()
                         },
                         enabled = !busy && !exporting
                     ) {
@@ -1233,51 +1203,55 @@ fun PhotoEditorScreen(
                         } else Modifier)
                         .navigationBarsPadding()
                 ) {
-                    EditorDock(
-                        tab = selectedTab,
-                        onTab = {
-                            selectedTab = it
-                            if (it == EditTab.PRIVACY || it == EditTab.TEXT || it == EditTab.DRAW ||
-                                it == EditTab.SHAPES || it == EditTab.CROP) {
-                                zoom = 1f; panX = 0f; panY = 0f
-                            }
-                        },
-                        document = document,
-                        original = original,
-                        thumbnails = filterThumbs,
-                        savedLooks = savedLooks,
-                        activeLook = activeLook,
-                        busy = busy || exporting,
-                        selectedPrivacyIndex = selectedPrivacy,
-                        onSelectPrivacy = { selectedPrivacy = it },
-                        onAddPrivacy = ::addPrivacy,
-                        onDeletePrivacy = ::removePrivacy,
-                        onUndoPrivacyStroke = { privacyStrokeEdit(false) },
-                        onClearPrivacy = { privacyStrokeEdit(true) },
-                        onCommit = {
-                            commit(it)
-                            activeLook = "custom"
-                        },
-                        onSlide = ::slide,
-                        onSlideFinished = ::finishSlide,
-                        onSelectLook = ::applyLook,
-                        onAutoTone = ::autoTone,
-                        onAutoWB = ::autoWB,
-                        onSaveLook = ::saveLook,
-                        onSaveProject = ::saveProject,
-                        onProjects = ::openProjects,
-                        onOpen = ::openPicker,
-                        onCollage = { chooseWorkspace(WorkspaceMode.COLLAGE) },
-                        showCollage = onDoneCollagePhoto == null,
-                        creativeTool = creativeTools,
-                        onCreativeTool = { creativeTools = it },
-                        onNewText = { editWords(true) },
-                        onEditText = { editWords(false) },
-                        cropImageWidth = cropImageSize?.first ?: 1,
-                        cropImageHeight = cropImageSize?.second ?: 1,
-                        onHistogram = if (tileEntryBaseline == null && onDoneCollagePhoto == null) {
-                            { showHistogram = true }
-                        } else null
+                    RegularPhotoDock(
+                        state = RegularDockState(
+                            tab = selectedTab,
+                            document = document,
+                            original = original,
+                            thumbnails = previewState.filterThumbs,
+                            savedLooks = savedLooks,
+                            activeLook = activeLook,
+                            busy = busy || exporting,
+                            privacyIndex = selectedPrivacy,
+                            isStandalone = onDoneCollagePhoto == null,
+                            showHistogram = tileEntryBaseline == null && onDoneCollagePhoto == null,
+                            creativeTool = creativeTools,
+                            cropSize = cropImageSize
+                        ),
+                        actions = RegularDockActions(
+                            onTab = {
+                                selectedTab = it
+                                if (it == EditTab.PRIVACY || it == EditTab.TEXT || it == EditTab.DRAW ||
+                                    it == EditTab.SHAPES || it == EditTab.CROP) {
+                                    zoom = 1f
+                                    panX = 0f
+                                    panY = 0f
+                                }
+                            },
+                            onSelectPrivacy = { selectedPrivacy = it },
+                            onAddPrivacy = ::addPrivacy,
+                            onDeletePrivacy = ::removePrivacy,
+                            onUndoPrivacyStroke = { privacyStrokeEdit(false) },
+                            onClearPrivacy = { privacyStrokeEdit(true) },
+                            onCommit = {
+                                commit(it)
+                                activeLook = "custom"
+                            },
+                            onSlide = ::slide,
+                            onSlideFinished = ::finishSlide,
+                            onSelectLook = ::applyLook,
+                            onAutoTone = ::autoTone,
+                            onAutoWB = ::autoWB,
+                            onSaveLook = ::saveLook,
+                            onSaveProject = ::saveProject,
+                            onProjects = ::openProjects,
+                            onOpen = ::openPicker,
+                            onCollage = { chooseWorkspace(WorkspaceMode.COLLAGE) },
+                            onCreativeTool = { creativeTools = it },
+                            onNewText = { editWords(true) },
+                            onEditText = { editWords(false) },
+                            onHistogram = { showHistogram = true }
+                        )
                     )
                 }
             }
@@ -1302,16 +1276,18 @@ fun PhotoEditorScreen(
     }
 
     if (showHistogram && selectedImage != null) {
-        PhotoHistogramDialog(selectedImage, compare) { showHistogram = false }
+        val image = original?.let { input ->
+            if (compare) previewState.beforeImage.takeIf { previewState.beforeStamp == (input to PhotoGeometry.from(previewEdits)) }
+            else selectedImage.takeIf { previewState.processedStamp == PreviewStamp(input, previewEdits) }
+        }
+        PhotoHistogramDialog(
+            image = image,
+            showingBefore = compare,
+            sourceGeneration = loadingToken,
+            exposure = previewEdits.grade.exposure
+        ) { showHistogram = false }
     }
-    if (showExport) {
-        ExportDialog(
-            settings = exportSettings,
-            onSettings = { exportSettings = it },
-            onSave = ::requestExport,
-            onDismiss = { showExport = false }
-        )
-    }
+    PhotoExportDialogs(photoExport, sourceUri, sourceSize, document, busy, notice)
     if (showTextDialog) {
         TextEditDialog(
             content = textDraft,
@@ -1343,24 +1319,34 @@ fun PhotoEditorScreen(
             description = "Stores your edits and a local reference to this photo. " +
                 "Keep the original photo available.",
             name = draftName,
-            onName = { draftName = it },
+            onName = { draftName = it; projectSaveError = null },
+            error = projectSaveError,
             onSave = {
                 val uri = sourceUri
-                if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
+                if (replacementAfterSave && ProjectStore.normalizedName(draftName) == replacement?.projectName) {
+                    projectSaveError = "Choose a different name from the project you are opening."
+                } else if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
                     savedProjects = ProjectStore.load(context)
                     if (tileEntryBaseline == null) {
                         baselineUri = uri.toString()
                         baselineDocument = document
                     }
                     val shouldClose = closeAfterProjectSave
+                    val shouldReplace = replacementAfterSave
                     closeAfterProjectSave = false
+                    replacementAfterSave = false
                     showSaveProject = false
-                    if (shouldClose) closeCurrentPhoto()
-                    else notice = "Project saved on your phone"
-                } else notice = "Could not save project (twelve maximum)."
+                    when {
+                        shouldReplace -> completeReplacement()
+                        shouldClose -> closeCurrentPhoto()
+                        else -> notice = "Project saved on your phone"
+                    }
+                } else projectSaveError = "Could not save project (twelve maximum)."
             },
             onDismiss = {
                 closeAfterProjectSave = false
+                if (replacementAfterSave) replacement = null
+                replacementAfterSave = false
                 showSaveProject = false
             }
         )
@@ -1372,27 +1358,62 @@ fun PhotoEditorScreen(
             onSelect = { selectedProject = it },
             onOpen = {
                 savedProjects.firstOrNull { it.name == selectedProject }?.let {
-                    loadPhoto(it.image, it.document)
+                    requestPhotoReplacement(PhotoReplacement(it.image, it.document, it.name))
                 }
                 showProjects = false
             },
             onDelete = {
-                selectedProject?.let { ProjectStore.delete(context, it) }
-                savedProjects = ProjectStore.load(context)
-                selectedProject = null
-                notice = "Project reference removed. Original photo is untouched."
+                selectedProject?.let {
+                    projectToDelete = it
+                    showProjects = false
+                }
             },
             onDismiss = { showProjects = false }
         )
     }
-    if (showRegularExit) {
+    projectToDelete?.let { name ->
         AlertDialog(
-            onDismissRequest = { showRegularExit = false },
+            onDismissRequest = { projectToDelete = null; showProjects = true },
+            title = { Text("Delete saved project?") },
+            text = { Text("Delete \"$name\" from saved projects. Your original photo stays on your phone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (ProjectStore.delete(context, name)) {
+                        savedProjects = ProjectStore.load(context)
+                        selectedProject = null
+                        notice = "Project reference removed."
+                    } else {
+                        notice = "Could not delete project."
+                    }
+                    projectToDelete = null
+                    showProjects = true
+                }) { Text("Delete project") }
+            },
+            dismissButton = {
+                TextButton(onClick = { projectToDelete = null; showProjects = true }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (showRegularExit) {
+        val keepEditing = {
+            showRegularExit = false
+            replacement = null
+        }
+        AlertDialog(
+            onDismissRequest = keepEditing,
             title = { Text("Keep your photo edits?") },
-            text = { Text("Save an editable project, discard these changes, or keep editing.") },
+            text = {
+                Text(if (replacement == null) {
+                    "Save an editable project, discard these changes, or keep editing."
+                } else {
+                    "Save or discard your current edits before opening the other photo."
+                })
+            },
             confirmButton = {
                 Row {
-                    TextButton(onClick = { showRegularExit = false }) {
+                    TextButton(onClick = keepEditing) {
                         Text("Keep editing")
                     }
                     TextButton(onClick = {
@@ -1404,7 +1425,9 @@ fun PhotoEditorScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { closeCurrentPhoto() }) {
+                TextButton(onClick = {
+                    if (replacement == null) closeCurrentPhoto() else completeReplacement()
+                }) {
                     Text("Discard")
                 }
             }

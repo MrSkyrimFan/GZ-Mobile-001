@@ -1,6 +1,13 @@
 package com.greenezone.gzphotoeditor
 
+import android.app.Activity
 import android.content.ContentValues
+import android.content.Intent
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.core.app.ActivityOptionsCompat
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -28,6 +35,150 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class CollageReopenUiTest {
     @get:Rule val rule = createComposeRule()
+
+    @Test fun duplicateUriSelectionSurvivesMovementAndUndo() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val resolver = target.contentResolver
+        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "gz-tile-selection.png")
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }))
+        val source = Bitmap.createBitmap(12, 12, Bitmap.Config.ARGB_8888)
+        try {
+            source.eraseColor(Color.RED)
+            requireNotNull(resolver.openOutputStream(uri, "wt")).use {
+                assertTrue(source.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            val first = CollagePhoto(uri.toString(), EditDocument(grade = Grade(exposure = -.2f)))
+            val second = CollagePhoto(uri.toString(), EditDocument(grade = Grade(exposure = .2f)))
+            var observed = CollageDocument(listOf(first, second))
+            rule.setContent {
+                var current by remember { mutableStateOf(observed) }
+                CollageWorkspaceScreen(current, { current = it; observed = it }, {})
+            }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("Photos", substring = false).performClick()
+            val actions = rule.onNodeWithTag("collage-tile-actions")
+            actions.performScrollToNode(hasText("Move right"))
+            rule.onNodeWithText("Move right").performClick()
+            rule.runOnIdle { assertEquals(listOf(second, first), observed.photos) }
+            rule.onNodeWithText("↶", substring = false).performClick()
+            rule.runOnIdle { assertEquals(listOf(first, second), observed.photos) }
+
+            actions.performScrollToNode(hasText("Remove"))
+            rule.onNodeWithText("Remove").performClick()
+            rule.runOnIdle { assertEquals(listOf(second), observed.photos) }
+        } finally {
+            source.recycle()
+            resolver.delete(uri, null, null)
+        }
+    }
+
+    @Test fun missingSavedTileClearsPreviousPreviewAndRelinksWithItsEdits() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = Files.createTempDirectory(target.cacheDir.toPath(), "collage-relink-").toFile()
+        val storage = object : ContextWrapper(target) { override fun getFilesDir(): File = folder }
+        val resolver = target.contentResolver
+        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "gz-collage-relink.png")
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }))
+        val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.eraseColor(Color.RED)
+            requireNotNull(resolver.openOutputStream(uri, "wt")).use {
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            val keptEdits = EditDocument(grade = Grade(exposure = -.3f))
+            val valid = CollagePhoto(uri.toString())
+            val missing = CollagePhoto("content://gz.test.unavailable/missing", keptEdits)
+            assertTrue(CollageStore.save(storage, "Intact A", CollageDocument(listOf(valid, valid.copy(
+                id = "second-A"
+            )))))
+            assertTrue(CollageStore.save(storage, "Missing B", CollageDocument(listOf(missing, valid))))
+            val picker = object : ActivityResultRegistryOwner {
+                override val activityResultRegistry = object : ActivityResultRegistry() {
+                    override fun <I, O> onLaunch(
+                        requestCode: Int, contract: ActivityResultContract<I, O>, input: I,
+                        options: ActivityOptionsCompat?
+                    ) {
+                        dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(uri))
+                    }
+                }
+            }
+            var observed = CollageDocument()
+            rule.setContent {
+                val host = LocalContext.current
+                val context = remember(host) {
+                    object : ContextWrapper(host) { override fun getFilesDir(): File = folder }
+                }
+                var current by remember { mutableStateOf(CollageDocument()) }
+                CompositionLocalProvider(
+                    LocalContext provides context, LocalActivityResultRegistryOwner provides picker
+                ) {
+                    CollageWorkspaceScreen(current, { current = it; observed = it }, {})
+                }
+            }
+            rule.waitUntil(10_000) { rule.onAllNodesWithText("Projects").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNode(hasText("Projects") and hasClickAction()).performClick()
+            rule.onNodeWithText("Intact A").performClick()
+            rule.onNodeWithText("Open").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("Photos", substring = false).performClick()
+            val actions = rule.onNodeWithTag("collage-tile-actions")
+            actions.performScrollToNode(hasText("Saved collages"))
+            rule.onNodeWithText("Saved collages").performClick()
+            rule.onNodeWithText("Missing B").performClick()
+            rule.onNodeWithText("Open").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Photo 1 is inaccessible.", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithContentDescription("Photo collage preview").assertDoesNotExist()
+            actions.performScrollToNode(hasText("Relink source"))
+            rule.onNodeWithText("Relink source").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.runOnIdle {
+                assertEquals(missing.copy(uri = uri.toString()), observed.photos.first())
+                assertEquals(valid, observed.photos.last())
+            }
+        } finally {
+            bitmap.recycle()
+            resolver.delete(uri, null, null)
+            folder.deleteRecursively()
+        }
+    }
+
+    @Test fun failedAtomicCollageWritePreservesPublishedProject() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = Files.createTempDirectory(target.cacheDir.toPath(), "collage-atomic-").toFile()
+        val storage = object : ContextWrapper(target) { override fun getFilesDir(): File = folder }
+        val previous = CollageDocument(listOf(CollagePhoto("content://gz.test/first"),
+            CollagePhoto("content://gz.test/second")))
+        try {
+            assertTrue(CollageStore.save(storage, "Retain previous", previous))
+            val published = File(folder, "gz_collages").listFiles()!!.single { it.extension == "gzc" }
+            val before = published.readBytes()
+            val obstacle = File(published.path + ".new")
+            assertTrue(obstacle.mkdir())
+            File(obstacle, "blocker").writeText("test")
+            val replacement = previous.copy(layout = previous.layout.copy(gap = .05f))
+            assertFalse(CollageStore.save(storage, "Retain previous", replacement))
+            assertArrayEquals(before, published.readBytes())
+            assertEquals(previous, CollageStore.load(storage, "Retain previous"))
+        } finally {
+            folder.deleteRecursively()
+        }
+    }
 
     @Test fun emptyWorkspaceReopensSavedTilesInTheExistingExportSlot() {
         val target = InstrumentationRegistry.getInstrumentation().targetContext

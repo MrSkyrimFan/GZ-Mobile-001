@@ -1,6 +1,5 @@
 package com.greenezone.gzphotoeditor.ui
 
-import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -18,12 +17,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -51,21 +48,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.greenezone.gzphotoeditor.editor.ExportWorkspace
 import com.greenezone.gzphotoeditor.editor.GifAspect
 import com.greenezone.gzphotoeditor.editor.GifDocument
-import com.greenezone.gzphotoeditor.editor.writeStagedImage
 import com.greenezone.gzphotoeditor.editor.GifEncoder
 import com.greenezone.gzphotoeditor.editor.GifFit
-import com.greenezone.gzphotoeditor.editor.GifHistory
 import com.greenezone.gzphotoeditor.editor.GifMath
 import com.greenezone.gzphotoeditor.editor.GifSize
 import com.greenezone.gzphotoeditor.editor.GifStore
+import com.greenezone.gzphotoeditor.editor.GifUndoStack
 import com.greenezone.gzphotoeditor.editor.ImagePipeline
+import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -75,15 +71,28 @@ internal enum class GifTool(val label: String) {
 
 internal enum class GifWorkspaceRoute { VIDEO, PHOTOS }
 
+internal data class GifProjectSnapshot(
+    val document: GifDocument,
+    val savedName: String?,
+    val route: GifWorkspaceRoute
+)
+
+internal fun GifUndoStack<GifProjectSnapshot>.withoutSavedProject(name: String): GifUndoStack<GifProjectSnapshot> {
+    fun detach(snapshot: GifProjectSnapshot): GifProjectSnapshot =
+        if (snapshot.savedName == name) snapshot.copy(savedName = null) else snapshot
+
+    return copy(undo = undo.map(::detach), redo = redo.map(::detach))
+}
+
 internal data class GifWorkspaceSession(
     val route: GifWorkspaceRoute? = null,
     val photoTool: GifTool = GifTool.FRAMES,
     val photoIndex: Int = 0,
-    val photoHistory: GifHistory = GifHistory(),
+    val history: GifUndoStack<GifProjectSnapshot> = GifUndoStack(),
+    val savedName: String? = null,
     val videoTab: VideoGifTab = VideoGifTab.TIMELINE,
     val videoSeek: Int = 0,
     val videoPosition: Int = 0,
-    val videoHistory: GifHistory = GifHistory(),
     val videoCollapsed: Boolean = false
 )
 
@@ -114,6 +123,23 @@ internal fun GifMakerScreenContent(
     session: GifWorkspaceSession,
     onSession: (GifWorkspaceSession) -> Unit
 ) {
+    val context = LocalContext.current
+    val recovery = remember(context) {
+        PendingExportJournal(context.filesDir).read(ExportWorkspace.GIF)?.let {
+            PendingGifRecipe.decode(it.recipe)
+        }
+    }
+    var restored by remember { mutableStateOf(recovery == null || session.route != null) }
+    if (!restored && recovery != null) {
+        LaunchedEffect(recovery) {
+            val route = if (recovery.document.video == null) GifWorkspaceRoute.PHOTOS else GifWorkspaceRoute.VIDEO
+            onDocument(recovery.document)
+            onSession(session.copy(route = route, savedName = recovery.savedName))
+            restored = true
+        }
+        return
+    }
+
     var photoSequenceOnly by remember {
         mutableStateOf(when (session.route) {
             GifWorkspaceRoute.PHOTOS -> true
@@ -137,7 +163,6 @@ internal fun GifMakerScreenContent(
         return
     }
 
-    val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
     var tool by remember { mutableStateOf(session.photoTool) }
@@ -148,26 +173,67 @@ internal fun GifMakerScreenContent(
     }
     var playing by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
-    var exporting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
-    var history by remember { mutableStateOf(session.photoHistory) }
-    var timingStart by remember { mutableStateOf<GifDocument?>(null) }
+    val gifExport = rememberGifExport(video = false, onNotice = { notice = it },
+        onSaved = { _, doc ->
+            notice = "GIF exported · " + doc.frames.size + " frames · no watermark"
+        })
+    val exporting = gifExport.active
+    var history by remember { mutableStateOf(session.history) }
+    var savedName by remember { mutableStateOf(session.savedName) }
+    var timingStart by remember { mutableStateOf<GifProjectSnapshot?>(null) }
     var timingLatest by remember { mutableStateOf<GifDocument?>(null) }
-    var pending by remember { mutableStateOf<GifDocument?>(null) }
     var saveOpen by remember { mutableStateOf(false) }
     var helpOpen by remember { mutableStateOf(false) }
     var projectsOpen by remember { mutableStateOf(false) }
     var openingProject by remember { mutableStateOf(false) }
     var newOpen by remember { mutableStateOf(false) }
-    var fileName by remember { mutableStateOf("") }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    fun commit(next: GifDocument) {
-        history = history.checkpoint(document, next)
+    fun snapshot(
+        current: GifDocument = document,
+        name: String? = savedName
+    ) = GifProjectSnapshot(current, name,
+        if (current.video == null) GifWorkspaceRoute.PHOTOS else GifWorkspaceRoute.VIDEO)
+
+    fun persistPhotoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.PHOTOS) {
+        onSession(session.copy(
+            route = route,
+            photoTool = tool,
+            photoIndex = index.coerceIn(0, document.frames.lastIndex.coerceAtLeast(0)),
+            history = history,
+            savedName = savedName
+        ))
+    }
+
+    fun applySnapshot(next: GifProjectSnapshot) {
         timingStart = null
         timingLatest = null
-        onDocument(next)
-        index = index.coerceAtMost(next.frames.lastIndex).coerceAtLeast(0)
+        savedName = next.savedName
+        onDocument(next.document)
+        index = index.coerceAtMost(next.document.frames.lastIndex).coerceAtLeast(0)
+        if (next.route == GifWorkspaceRoute.VIDEO) {
+            playing = false
+            persistPhotoSession(GifWorkspaceRoute.VIDEO)
+            photoSequenceOnly = false
+        }
+    }
+
+    fun commit(next: GifDocument, nextName: String? = savedName) {
+        val updated = snapshot(next, nextName)
+        history = history.checkpoint(snapshot(), updated)
+        applySnapshot(updated)
+    }
+
+    fun restore(entry: Pair<GifProjectSnapshot, GifUndoStack<GifProjectSnapshot>>?) {
+        if (entry == null) return
+        if (entry.first.route == GifWorkspaceRoute.VIDEO && gifExport.request != null) {
+            gifExport.recoveryOpen = true
+            return
+        }
+        playing = false
+        history = entry.second
+        applySnapshot(entry.first)
     }
     fun add(uris: List<Uri>) {
         val remaining = GifMath.MAX_FRAMES - document.frames.size
@@ -187,18 +253,9 @@ internal fun GifMakerScreenContent(
         }
     }
 
-    fun persistPhotoSession(route: GifWorkspaceRoute = GifWorkspaceRoute.PHOTOS) {
-        onSession(session.copy(
-            route = route,
-            photoTool = tool,
-            photoIndex = index.coerceIn(0, document.frames.lastIndex.coerceAtLeast(0)),
-            photoHistory = history
-        ))
-    }
-
     fun finishPhotoTiming() {
         timingStart?.let { start ->
-            history = history.checkpoint(start, timingLatest ?: document)
+            history = history.checkpoint(start, snapshot(timingLatest ?: document))
         }
         timingStart = null
         timingLatest = null
@@ -225,58 +282,13 @@ internal fun GifMakerScreenContent(
         } else picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
-    fun export(uri: Uri, saved: GifDocument) {
-        if (saved.frames.any { it == uri.toString() }) {
-            notice = "Export cannot overwrite any original photo."
-            return
-        }
-        scope.launch {
-            exporting = true
-            playing = false
-            notice = "Encoding GIF on your phone…"
-            try {
-                withContext(Dispatchers.IO) {
-                    val job = currentCoroutineContext()
-                    writeStagedImage(context.cacheDir,
-                        openDestination = { resolver.openOutputStream(uri, "wt") },
-                        checkActive = { job.ensureActive() }) { out ->
-                        GifEncoder.write(out, saved, cancel = { job.ensureActive() }) { i ->
-                            ImagePipeline.decode(resolver, Uri.parse(saved.frames[i]),
-                                saved.size.maxEdge * 2, 1_100_000L)
-                        }
-                        true
-                    }
-                }
-                notice = "GIF exported · " + saved.frames.size + " frames · no watermark"
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: OutOfMemoryError) {
-                notice = "Not enough memory to encode GIF. Choose a smaller size."
-            } catch (failure: Exception) {
-                notice = "GIF export failed: " + (failure.message ?: "source missing")
-            } finally { exporting = false }
-        }
-    }
-    val exporter = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val snapshot = pending
-        pending = null
-        if (result.resultCode == Activity.RESULT_OK && result.data?.data != null && snapshot != null) {
-            export(result.data!!.data!!, snapshot)
-        }
-    }
     fun startExport() {
         if (!GifMath.valid(document)) {
             notice = "Choose at least two photos before exporting."
             return
         }
-        pending = document
-        exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "image/gif"
-            putExtra(Intent.EXTRA_TITLE, "GZEditorPro_Animation.gif")
-        })
+        playing = false
+        gifExport.start(PendingGifRecipe(document, savedName))
     }
 
     LaunchedEffect(document.frames, index, document.fit, document.aspect, document.size) {
@@ -349,10 +361,13 @@ internal fun GifMakerScreenContent(
                     Text("Help", color = EditorMint)
                 }
                 TextButton(enabled = !exporting, onClick = {
-                    playing = false
-                    finishPhotoTiming()
-                    persistPhotoSession(GifWorkspaceRoute.VIDEO)
-                    photoSequenceOnly = false
+                    if (gifExport.request != null) gifExport.recoveryOpen = true
+                    else {
+                        playing = false
+                        finishPhotoTiming()
+                        persistPhotoSession(GifWorkspaceRoute.VIDEO)
+                        photoSequenceOnly = false
+                    }
                 }) {
                     Text("Video → GIF", color = EditorMint, fontSize = 12.sp)
                 }
@@ -365,15 +380,9 @@ internal fun GifMakerScreenContent(
                     Text(if (playing) "Pause" else "▶ Play", color = EditorMint)
                 }
                 TextButton(enabled = history.undo.isNotEmpty() && !exporting,
-                    onClick = { history.undo(document)?.let { (d,h) ->
-                        playing = false; history = h; onDocument(d)
-                        index = index.coerceAtMost(d.frames.lastIndex).coerceAtLeast(0)
-                    } }) { Text("Undo", color = EditorWhite) }
+                    onClick = { restore(history.undo(snapshot())) }) { Text("Undo", color = EditorWhite) }
                 TextButton(enabled = history.redo.isNotEmpty() && !exporting,
-                    onClick = { history.redo(document)?.let { (d,h) ->
-                        playing = false; history = h; onDocument(d)
-                        index = index.coerceAtMost(d.frames.lastIndex).coerceAtLeast(0)
-                    } }) { Text("Redo", color = EditorWhite) }
+                    onClick = { restore(history.redo(snapshot())) }) { Text("Redo", color = EditorWhite) }
                 TextButton(enabled = !exporting && document.frames.size < 20,
                     onClick = ::importPhotos) { Text("+ Photos", color = EditorMint) }
                 TextButton(enabled = !exporting,
@@ -432,7 +441,7 @@ internal fun GifMakerScreenContent(
                         Slider(value = document.delayMs.toFloat(), valueRange = 100f..1500f,
                             enabled = !exporting,
                             onValueChange = { next ->
-                                if (timingStart == null) timingStart = document
+                                if (timingStart == null) timingStart = snapshot()
                                 val changed = document.copy(
                                     delayMs = (next.toInt() / 10) * 10
                                 )
@@ -508,44 +517,49 @@ internal fun GifMakerScreenContent(
         }
     }
 
+    GifExportRecovery(gifExport)
     if (helpOpen) GifHelpDialog { helpOpen = false }
-    if (saveOpen) SaveNameDialog("Save editable GIF project",
+    if (saveOpen) GifProjectSaveDialog("Save editable GIF project",
         "Save photo order, frame speed and canvas options. Keep the original photos.",
-        fileName, { fileName = it }, {
-            if (GifStore.save(context, fileName, document)) {
-                saveOpen = false
-                notice = "GIF project saved"
-            } else notice = "Could not save. Choose a name (12 maximum)."
-        }, { saveOpen = false })
-    if (projectsOpen) AlertDialog(
-        onDismissRequest = { if (!openingProject) projectsOpen = false },
-        title = { Text("Saved GIF projects") },
-        text = {
-            Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
-                if (savedNames.isEmpty()) Text("No saved GIF projects yet.", color = EditorMuted)
-                savedNames.forEach { name ->
-                    TextButton(enabled = !openingProject, onClick = {
-                        openingProject = true
-                        scope.launch {
-                            try {
-                                val restored = withContext(Dispatchers.IO) { GifStore.load(context, name) }
-                                projectsOpen = false
-                                if (restored == null) notice = "Could not read the saved project or its source file."
-                                else {
-                                    playing = false; commit(restored); index = 0
-                                    notice = "GIF project opened"
-                                    if (restored.video != null) {
-                                        persistPhotoSession(GifWorkspaceRoute.VIDEO)
-                                        photoSequenceOnly = false
-                                    }
-                                }
-                            } finally { openingProject = false }
+        document, savedName, onSaved = { name ->
+            savedName = name
+            saveOpen = false
+            notice = "GIF project saved"
+        }, onDismiss = { saveOpen = false })
+    if (projectsOpen) GifSavedProjectsDialog(
+        names = savedNames,
+        enabled = !openingProject,
+        onOpen = { name ->
+            openingProject = true
+            scope.launch {
+                try {
+                    val restored = withContext(Dispatchers.IO) { GifStore.load(context, name) }
+                    projectsOpen = false
+                    if (restored == null) notice = "Could not read the saved project or its source file."
+                    else {
+                        if (restored.video != null && gifExport.request != null) {
+                            gifExport.recoveryOpen = true
+                            return@launch
                         }
-                    }) { Text(name, color = EditorMint) }
+                        playing = false
+                        index = 0
+                        commit(restored, name)
+                        notice = "GIF project opened"
+                    }
+                } finally { openingProject = false }
+            }
+        },
+        onDelete = { name ->
+            GifStore.deleteProject(context, name).also { deleted ->
+                if (deleted) {
+                    finishPhotoTiming()
+                    if (savedName == name) savedName = null
+                    history = history.withoutSavedProject(name)
+                    savedNames = GifStore.names(context)
                 }
             }
         },
-        confirmButton = { TextButton(enabled = !openingProject, onClick = { projectsOpen = false }) { Text("Close") } }
+        onDismiss = { projectsOpen = false }
     )
     if (newOpen) AlertDialog(
         onDismissRequest = { newOpen = false },
@@ -553,7 +567,10 @@ internal fun GifMakerScreenContent(
         text = { Text("Unsaved edits will be cleared. You can Undo after starting over.",
             color = EditorMuted) },
         confirmButton = { TextButton(onClick = {
-            playing = false; commit(GifDocument()); index = 0; newOpen = false
+            playing = false
+            commit(GifDocument(), nextName = null)
+            index = 0
+            newOpen = false
         }) { Text("New GIF", color = EditorMint) } },
         dismissButton = { TextButton(onClick = { newOpen = false }) { Text("Keep current") } }
     )
