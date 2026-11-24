@@ -30,7 +30,8 @@ internal class GifPreviewClock(delaysMs: List<Int>) {
 /** Untouched forward video can use a decoder surface without bypassing any visual edits. */
 internal fun GifDocument.canPlayContinuousVideo(): Boolean {
     val clip = video ?: return false
-    return !clip.isGif && !clip.reverse && clip.startMs == 0L && clip.endMs == clip.durationMs &&
+    return !clip.isGif && !clip.hasCorrectedGeometry && !clip.reverse &&
+        clip.startMs == 0L && clip.endMs == clip.durationMs &&
         clip.speedPercent == 100 && clip.fps == 0 && aspect == GifAspect.SOURCE &&
         size == GifSize.SOURCE && edits == EditDocument() && clip.sourceTimesMs.firstOrNull() == 0L
 }

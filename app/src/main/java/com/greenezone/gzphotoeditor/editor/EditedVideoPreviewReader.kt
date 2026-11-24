@@ -59,9 +59,7 @@ internal class EditedVideoPreviewReader private constructor(
         val shared = reversePreviewWindow?.takeIf { clip.reverse }
         val window = shared ?: localWindow
         window.setEdge(edge)
-        val scale = minOf(1.0, edge.toDouble() / maxOf(clip.width, clip.height))
-        val width = (clip.width * scale).roundToInt().coerceAtLeast(1)
-        val height = (clip.height * scale).roundToInt().coerceAtLeast(1)
+        val (width, height) = clip.frameSize(edge)
         window.picture(target, consume = shared == null)?.let {
             return storage(width, height).render(it, checkActive)
         }

@@ -1,6 +1,7 @@
 package com.greenezone.gzphotoeditor.editor
 
 import android.content.Context
+import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -32,11 +33,15 @@ object CollageStore {
         }
         val photos = JSONArray()
         for (photo in document.photos) {
-            require(photo.uri.startsWith("content://")) { "Only local photos may be stored" }
+            require(photo.uri.startsWith("content://") && photo.uri.length <= 4096) {
+                "Only local photos may be stored"
+            }
+            val edits = EditDocumentCodec.encode(photo.edits)
+            require(edits.length <= EditDocumentCodec.MAX_ENCODED_CHARS) { "Tile recipe is too large" }
             photos.put(JSONObject().apply {
                 put("uri", photo.uri)
                 put("id", photo.id)
-                put("edits", EditDocumentCodec.encode(photo.edits))
+                put("edits", edits)
             })
         }
         obj.put("photos", photos)
@@ -103,42 +108,63 @@ object CollageStore {
         )
     }
 
+    @Synchronized
     fun names(context: Context): List<String> {
         return directory(context).listFiles()?.mapNotNull { file ->
-            if (!file.isFile || !file.name.endsWith(".gzc")) return@mapNotNull null
+            val name = file.name.removeSuffix(".bak")
+            if (!file.isFile || !name.endsWith(".gzc")) return@mapNotNull null
             try {
-                String(Base64.getUrlDecoder().decode(file.name.removeSuffix(".gzc")),
+                String(Base64.getUrlDecoder().decode(name.removeSuffix(".gzc")),
                     StandardCharsets.UTF_8)
             } catch (_: Exception) { null }
-        }?.sortedBy { it.lowercase() } ?: emptyList()
+        }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
     }
 
+    @Synchronized
     fun save(context: Context, name: String, document: CollageDocument): Boolean {
         val id = key(name) ?: return false
         val folder = directory(context)
-        val file = File(folder, id + ".gzc")
-        if (!file.exists() && names(context).size >= MAX_SAVED) return false
+        val file = File(folder, "$id.gzc")
+        if (!hasSavedFile(file) && names(context).size >= MAX_SAVED) return false
         return try {
             val encoded = encode(document)
-            val temp = File(folder, id + ".new")
-            temp.writeText(encoded, Charsets.UTF_8)
-            if (!temp.renameTo(file)) {
-                temp.copyTo(file, overwrite = true)
-                temp.delete()
+            val atomic = AtomicFile(file)
+            val stream = atomic.startWrite()
+            try {
+                stream.write(encoded.toByteArray(StandardCharsets.UTF_8))
+                stream.fd.sync()
+                atomic.finishWrite(stream)
+            } catch (failure: Exception) {
+                atomic.failWrite(stream)
+                throw failure
             }
-            true
+            readRecipe(file) == encoded
         } catch (_: Exception) { false }
     }
 
+    private fun hasSavedFile(file: File): Boolean =
+        file.isFile || File(file.path + ".bak").isFile
+
+    private fun readRecipe(file: File): String? =
+        AtomicFile(file).openRead().use { stream ->
+            if (stream.channel.size() > MAX_BYTES) null
+            else stream.bufferedReader(Charsets.UTF_8).readText()
+        }
+
+    @Synchronized
     fun load(context: Context, name: String): CollageDocument? {
         val id = key(name) ?: return null
-        val file = File(directory(context), id + ".gzc")
-        if (!file.isFile || file.length() > MAX_BYTES) return null
-        return try { decode(file.readText(Charsets.UTF_8)) } catch (_: Exception) { null }
+        val file = File(directory(context), "$id.gzc")
+        if (!hasSavedFile(file)) return null
+        return try { readRecipe(file)?.let(::decode) } catch (_: Exception) { null }
     }
 
+    @Synchronized
     fun delete(context: Context, name: String): Boolean {
         val id = key(name) ?: return false
-        return File(directory(context), id + ".gzc").delete()
+        val file = File(directory(context), "$id.gzc")
+        if (!hasSavedFile(file)) return false
+        AtomicFile(file).delete()
+        return !hasSavedFile(file)
     }
 }

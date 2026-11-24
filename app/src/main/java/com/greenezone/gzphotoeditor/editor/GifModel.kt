@@ -46,8 +46,9 @@ object GifMath {
         else doc.frames.size in 2..MAX_FRAMES && doc.delayMs in 100..1500 &&
             doc.frames.all { it.startsWith("content://") && it.length <= 4096 }
     fun dimensions(doc: GifDocument, maxEdge: Int? = null): Pair<Int, Int> {
-        var width = doc.video?.width ?: 480
-        var height = doc.video?.height ?: 480
+        val source = doc.video
+        var width = source?.displayWidth ?: source?.width ?: 480
+        var height = source?.displayHeight ?: source?.height ?: 480
         if (doc.edits.quarterTurns % 2 != 0) {
             val swapped = width
             width = height

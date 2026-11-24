@@ -36,15 +36,35 @@ data class ProLayer(
     val mask: ProSelection? = null,
     val retouches: List<ProRetouchMark> = emptyList(),
     val effect: ProPixelEffect = ProPixelEffect.NONE,
-    val effectAmount: Float = .5f
+    val effectAmount: Float = .5f,
+    val sourceSize: ProPixelSize? = null
 )
 data class ProDocument(
     val layers: List<ProLayer> = emptyList(),
     val aspect: ProAspect = ProAspect.SQUARE,
     val background: ProBackground = ProBackground.WHITE,
-    val sourceAspectRatio: Float? = null
+    val sourceAspectRatio: Float? = null,
+    val canvasSize: ProPixelSize? = null
 ) {
-    val canvasAspectRatio: Float get() = sourceAspectRatio ?: aspect.ratio
+    val canvasAspectRatio: Float get() = canvasSize?.aspect ?: sourceAspectRatio ?: aspect.ratio
+}
+
+data class ProPixelSize(val width: Int, val height: Int) {
+    init { require(width > 0 && height > 0) }
+
+    val aspect: Float get() = width.toFloat() / height
+    val edge: Int get() = maxOf(width, height)
+    val pixelCount: Long get() = width.toLong() * height
+
+    fun within(maxEdge: Int, maxPixels: Long): ProPixelSize {
+        require(maxEdge > 0 && maxPixels > 0)
+        val scale = minOf(1.0, maxEdge.toDouble() / edge, maxPixels.toDouble() / edge,
+            kotlin.math.sqrt(maxPixels.toDouble() / pixelCount))
+        return if (scale == 1.0) this else ProPixelSize(
+            (width * scale).toInt().coerceAtLeast(1),
+            (height * scale).toInt().coerceAtLeast(1)
+        )
+    }
 }
 internal fun ProLayer.withBrushStroke(stroke: InkStroke): ProLayer =
     copy(edits = edits.copy(creative = edits.creative.copy(strokes = edits.creative.strokes + stroke)))
@@ -118,6 +138,7 @@ object ProMath {
     fun valid(document: ProDocument): Boolean =
         (document.sourceAspectRatio == null ||
             validSourceAspect(document.sourceAspectRatio)) &&
+            (document.canvasSize == null || validSourceAspect(document.canvasSize.aspect)) &&
             document.layers.size in 1..MAX_LAYERS &&
             document.layers.all { item ->
                 val sourceValid = when (item.kind) {
@@ -131,7 +152,8 @@ object ProMath {
                         item.edits.creative.strokes.all { it.points.size <= ProStrokeSampling.MAX_POINTS }
                     ProLayerKind.ADJUSTMENT -> item.uri.isEmpty()
                 }
-                sourceValid && item.name.isNotBlank() && item.name.length <= 42 &&
+                sourceValid && (item.sourceSize == null || item.kind == ProLayerKind.IMAGE) &&
+                    item.name.isNotBlank() && item.name.length <= 42 &&
                     item.x.isFinite() && item.y.isFinite() && item.x in 0f..1f &&
                     item.y in 0f..1f && item.scale.isFinite() &&
                     item.scale in .1f..2f && item.opacity.isFinite() && item.opacity in 0f..1f &&
@@ -148,6 +170,23 @@ object ProMath {
                         item.kind == ProLayerKind.ADJUSTMENT)
             }
 
+    // Projects saved before canvas dimensions were recorded keep a stable aspect-derived size.
+    private const val DEFAULT_CANVAS_EDGE = 4096
+    const val MAX_EXPORT_EDGE = 4096
+
+    fun intendedCanvasSize(document: ProDocument): ProPixelSize =
+        document.canvasSize ?: sizeAtAspect(document.canvasAspectRatio, DEFAULT_CANVAS_EDGE)
+
+    fun withAspect(document: ProDocument, aspect: ProAspect): ProDocument = document.copy(
+        aspect = aspect,
+        sourceAspectRatio = null,
+        canvasSize = sizeAtAspect(aspect.ratio, intendedCanvasSize(document).edge)
+    )
+
+    private fun sizeAtAspect(ratio: Float, edge: Int): ProPixelSize =
+        if (ratio >= 1f) ProPixelSize(edge, (edge / ratio).toInt().coerceAtLeast(1))
+        else ProPixelSize((edge * ratio).toInt().coerceAtLeast(1), edge)
+
     fun dimensions(aspect: ProAspect, maxEdge: Int, maxPixels: Long): Pair<Int, Int> =
         dimensions(aspect.ratio, maxEdge, maxPixels)
 
@@ -157,10 +196,8 @@ object ProMath {
     private fun dimensions(ratio: Float, maxEdge: Int, maxPixels: Long): Pair<Int, Int> {
         require(maxEdge in 64..5600 && maxPixels in 1024L..24_000_000L)
         require(validSourceAspect(ratio))
-        val w = if (ratio >= 1f) maxEdge else (maxEdge * ratio).toInt().coerceAtLeast(1)
-        val h = if (ratio >= 1f) (maxEdge / ratio).toInt().coerceAtLeast(1) else maxEdge
-        val k = kotlin.math.min(1.0, kotlin.math.sqrt(maxPixels.toDouble() / (w.toLong() * h)))
-        return ((w * k).toInt().coerceAtLeast(1)) to ((h * k).toInt().coerceAtLeast(1))
+        val size = sizeAtAspect(ratio, maxEdge).within(maxEdge, maxPixels)
+        return size.width to size.height
     }
 
     fun bounds(layer: ProLayer, canvasW: Int, canvasH: Int, imageW: Int, imageH: Int): ProRect {

@@ -24,7 +24,7 @@ object GifStore {
     fun encode(doc: GifDocument): String {
         require(GifMath.valid(doc))
         return JSONObject().apply {
-            put("version", 4)
+            put("version", 5)
             put("delayMs", doc.delayMs)
             put("size", doc.size.name)
             put("fit", doc.fit.name)
@@ -40,6 +40,8 @@ object GifStore {
                     put("fps", clip.fps); put("speed", clip.speedPercent)
                     put("reverse", clip.reverse)
                     put("width", clip.width); put("height", clip.height)
+                    clip.displayWidth?.let { put("displayWidth", it) }
+                    clip.displayHeight?.let { put("displayHeight", it) }
                     put("isGif", clip.isGif); put("loopCount", clip.loopCount)
                     put("times", JSONArray(clip.sourceTimesMs))
                 })
@@ -53,7 +55,7 @@ object GifStore {
         return try {
             val obj = JSONObject(data)
             val version = obj.optInt("version", 0)
-            if (version !in 1..4) return null
+            if (version !in 1..5) return null
             val array = obj.optJSONArray("frames") ?: return null
             if (array.length() > GifMath.MAX_FRAMES) return null
             val list = (0 until array.length()).map { array.optString(it, "") }
@@ -74,7 +76,9 @@ object GifStore {
                     reverse = v.optBoolean("reverse", false),
                     width = v.optInt("width", 480), height = v.optInt("height", 480),
                     sourceTimesMs = stamps, isGif = v.optBoolean("isGif"),
-                    loopCount = v.optInt("loopCount", -1)
+                    loopCount = v.optInt("loopCount", -1),
+                    displayWidth = if (version >= 5 && v.has("displayWidth")) v.getInt("displayWidth") else null,
+                    displayHeight = if (version >= 5 && v.has("displayHeight")) v.getInt("displayHeight") else null
                 )
             } else null
             fun <T : Enum<T>> find(items: Array<T>, key: String, fallback: T): T =
@@ -116,7 +120,8 @@ object GifStore {
             minOf(clip.endMs, source.durationMs) else clip.endMs
         val restored = source.copy(durationMs = maxOf(source.durationMs, end),
             startMs = clip.startMs, endMs = end, fps = clip.fps,
-            speedPercent = clip.speedPercent, reverse = clip.reverse)
+            speedPercent = clip.speedPercent, reverse = clip.reverse,
+            displayWidth = clip.displayWidth, displayHeight = clip.displayHeight)
         return document.copy(video = restored).takeIf(GifMath::valid)
     }
 

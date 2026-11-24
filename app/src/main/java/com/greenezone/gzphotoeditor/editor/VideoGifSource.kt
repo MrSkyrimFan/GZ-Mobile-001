@@ -26,9 +26,20 @@ data class GifVideoClip(
     val height: Int = 480,
     val sourceTimesMs: List<Long> = emptyList(),
     val isGif: Boolean = false,
-    val loopCount: Int = -1
+    val loopCount: Int = -1,
+    val displayWidth: Int? = null,
+    val displayHeight: Int? = null
 ) {
     internal val schedule by lazy { GifVideoMath.schedule(this) }
+    internal val hasCorrectedGeometry get() = displayWidth != null && displayHeight != null
+
+    internal fun frameSize(edge: Int): Pair<Int, Int> {
+        val rasterWidth = displayWidth ?: width
+        val rasterHeight = displayHeight ?: height
+        val scale = minOf(1.0, edge.toDouble() / maxOf(rasterWidth, rasterHeight))
+        return (rasterWidth * scale).roundToInt().coerceAtLeast(1) to
+            (rasterHeight * scale).roundToInt().coerceAtLeast(1)
+    }
 }
 
 /** Timestamps and delays are kept together so reversing variable-rate footage also
@@ -74,6 +85,9 @@ object GifVideoMath {
         clip.durationMs in 1..MAX_CLIP_MS && clip.startMs in 0 until clip.endMs &&
         clip.endMs <= clip.durationMs && clip.fps in FRAME_RATES && clip.speedPercent in SPEEDS &&
         clip.width in 1..65535 && clip.height in 1..65535 &&
+        ((clip.displayWidth == null && clip.displayHeight == null) ||
+            (clip.displayWidth != null && clip.displayWidth in 1..65535 &&
+                clip.displayHeight != null && clip.displayHeight in 1..65535)) &&
         clip.sourceTimesMs.size <= MAX_OUTPUT_FRAMES && clip.loopCount in -1..65535 &&
         fitsFrameBudget(clip)
 
@@ -158,17 +172,53 @@ object VideoGifSource {
             val w = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH).toInt()
             val h = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT).toInt()
             require(w > 0 && h > 0) { "This file has no readable video track" }
-            val sideways = meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION) % 180 != 0L
-            val (duration, times) = withVideoTrack(context, uri) { extractor, format ->
+            val clip = withVideoTrack(context, uri) { extractor, format ->
                 val duration = durationMs(format) ?: containerDuration
                 require(duration > 0) { "This video has no readable duration" }
-                duration to sampleTimes(extractor, duration)
+                val rotation = format.integer(MediaFormat.KEY_ROTATION)
+                    ?: meta(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION).toInt()
+                val sideways = rotation.mod(180) != 0
+                val trackWidth = format.integer(MediaFormat.KEY_WIDTH)?.takeIf { it > 0 } ?: w
+                val trackHeight = format.integer(MediaFormat.KEY_HEIGHT)?.takeIf { it > 0 } ?: h
+                val coded = if (sideways) trackHeight to trackWidth else trackWidth to trackHeight
+                val display = displaySize(context, uri, format, trackWidth, trackHeight, sideways)
+                    ?.takeUnless { it == coded }
+                GifVideoClip(uri.toString(), duration, width = coded.first, height = coded.second,
+                    sourceTimesMs = sampleTimes(extractor, duration),
+                    displayWidth = display?.first, displayHeight = display?.second)
             }
-            val clip = GifVideoClip(uri.toString(), duration, width = if (sideways) h else w,
-                height = if (sideways) w else h, sourceTimesMs = times)
             require(GifVideoMath.valid(clip)) { "Video dimensions or duration are unsupported" }
             return clip
         } finally { reader.release() }
+    }
+
+    private fun MediaFormat.integer(key: String): Int? =
+        if (containsKey(key)) getInteger(key) else null
+
+    private fun croppedSize(start: Int?, end: Int?, fullSize: Int): Int =
+        if (start != null && end != null && start in 0 until fullSize && end in start until fullSize)
+            end - start + 1 else fullSize
+
+    private fun displaySize(
+        context: Context,
+        uri: Uri,
+        format: MediaFormat,
+        width: Int,
+        height: Int,
+        sideways: Boolean
+    ): Pair<Int, Int>? {
+        // Read the string keys on API 29, where the Java MediaFormat constants are unavailable.
+        val sarWidth = format.integer("sar-width")
+        val sarHeight = format.integer("sar-height")
+        val aspect = if (sarWidth != null && sarWidth > 0 && sarHeight != null && sarHeight > 0)
+            sarWidth.toDouble() to sarHeight.toDouble() else Mp4VideoAspect.read(context, uri)
+        val cropWidth = croppedSize(format.integer("crop-left"), format.integer("crop-right"), width)
+        val cropHeight = croppedSize(format.integer("crop-top"), format.integer("crop-bottom"), height)
+        val displayWidth = if (aspect == null) cropWidth.toDouble()
+            else cropWidth * aspect.first / aspect.second
+        if (displayWidth > 65535 || cropHeight > 65535) return null
+        val rasterWidth = displayWidth.roundToInt().coerceAtLeast(1)
+        return if (sideways) cropHeight to rasterWidth else rasterWidth to cropHeight
     }
 
     // MediaMetadataRetriever reports the longest track in the container, including audio.
@@ -269,7 +319,8 @@ object VideoGifSource {
             private val originalBytes = 4L * clip.width * clip.height
             private var cachedWidth = 0
             private var cachedHeight = 0
-            private var batching = batchFrames && clip.fps == 0 && clip.sourceTimesMs.isNotEmpty() &&
+            private var batching = batchFrames && !clip.hasCorrectedGeometry &&
+                clip.fps == 0 && clip.sourceTimesMs.isNotEmpty() &&
                 reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull() ==
                     clip.sourceTimesMs.size
 
@@ -277,7 +328,17 @@ object VideoGifSource {
                 val bitmap = if (android.os.Build.VERSION.SDK_INT >= 30)
                     reader.getScaledFrameAtTime(sample * 1000, MediaMetadataRetriever.OPTION_CLOSEST, width, height, params)
                     else reader.getScaledFrameAtTime(sample * 1000, MediaMetadataRetriever.OPTION_CLOSEST, width, height)
-                return bitmap ?: throw IOException("Cannot decode video frame at ${sample}ms")
+                val decoded = bitmap ?: throw IOException("Cannot decode video frame at ${sample}ms")
+                if (!clip.hasCorrectedGeometry || (decoded.width == width && decoded.height == height)) {
+                    return decoded
+                }
+                // The retriever may already apply SAR. Resizing its complete picture to the
+                // target raster handles either backend without multiplying SAR a second time.
+                return try {
+                    Bitmap.createScaledBitmap(decoded, width, height, true)
+                } finally {
+                    decoded.recycle()
+                }
             }
 
             private fun clearCache() {
@@ -333,12 +394,11 @@ object VideoGifSource {
                 val times = clip.sourceTimesMs
                 val index = if (times.isEmpty()) -1 else times.binarySearch(t)
                 val floor = if (index >= 0) index else (-index - 2).coerceAtLeast(0)
-                val scale = minOf(1.0, edge.toDouble() / maxOf(clip.width, clip.height))
-                val w = (clip.width * scale).roundToInt().coerceAtLeast(1)
-                val h = (clip.height * scale).roundToInt().coerceAtLeast(1)
-                if (batching && (scale == 1.0 || allowScaledBatches)) {
+                val (w, h) = clip.frameSize(edge)
+                val originalSize = edge >= maxOf(clip.width, clip.height)
+                if (batching && (originalSize || allowScaledBatches)) {
                     // Full decoded buffers and one scaled buffer coexist during reduction.
-                    val reserve = if (scale < 1.0) 4L * w * h else 0L
+                    val reserve = if (originalSize) 0L else 4L * w * h
                     val count = ((budget - reserve) / originalBytes).coerceAtMost(12).toInt()
                     if (count > 1) readBatch(floor, w, h, count)?.let { return it }
                 }

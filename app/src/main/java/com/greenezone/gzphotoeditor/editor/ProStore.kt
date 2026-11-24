@@ -9,7 +9,7 @@ import java.util.Base64
 
 /** Versioned private JSON holding photo URIs and editable layer settings, never source image bytes. */
 object ProStore {
-    private const val VERSION = 6
+    private const val VERSION = 7
     private const val LEGACY_ASPECT_MIN = .1f
     private const val LEGACY_ASPECT_MAX = 10f
     private const val MAX_BYTES = 3_000_000
@@ -24,6 +24,12 @@ object ProStore {
     private fun projectReadLimit(): Long =
         (Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(MAX_PROJECT_BYTES.toLong())
 
+    private fun ProPixelSize.toJson(): JSONObject = JSONObject().put("width", width).put("height", height)
+
+    private fun JSONObject.pixelSize(key: String): ProPixelSize? = optJSONObject(key)?.let {
+        ProPixelSize(it.getInt("width"), it.getInt("height"))
+    }
+
     fun encode(document: ProDocument): String {
         require(ProMath.valid(document))
         val layers = JSONArray()
@@ -34,6 +40,7 @@ object ProStore {
                 put("scale", layer.scale.toDouble()); put("opacity", layer.opacity.toDouble())
                 put("visible", layer.visible); put("blend", layer.blend.name)
                 put("kind", layer.kind.name); put("aspect", layer.aspect.toDouble())
+                layer.sourceSize?.let { put("sourceSize", it.toJson()) }
                 put("rotate", layer.rotationDegrees.toDouble())
                 put("effect", layer.effect.name); put("effectAmount", layer.effectAmount.toDouble())
                 layer.mask?.let { mask ->
@@ -84,10 +91,16 @@ object ProStore {
                 (anchor != null && (anchor.canvasAspect !in legacyAspectRange ||
                     anchor.imageAspect !in legacyAspectRange))
         }
+        val pixelGeometry = document.canvasSize != null || document.layers.any { it.sourceSize != null }
         return JSONObject().apply {
-            put("version", if (extendedAspect) VERSION else 5)
+            put("version", when {
+                pixelGeometry -> VERSION
+                extendedAspect -> 6
+                else -> 5
+            })
             put("aspect", document.aspect.name)
             document.sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
+            document.canvasSize?.let { put("canvasSize", it.toJson()) }
             put("background", document.background.name)
             put("layers", layers)
         }.toString().also {
@@ -179,7 +192,8 @@ object ProStore {
                     rotationDegrees = unit(o, "rotate", 0.0, -180f, 180f),
                     mask = mask, retouches = retouches,
                     effect = value(o.optString("effect", ""), ProPixelEffect.NONE),
-                    effectAmount = unit(o, "effectAmount", .5, 0f, 1f)
+                    effectAmount = unit(o, "effectAmount", .5, 0f, 1f),
+                    sourceSize = if (version >= 7) o.pixelSize("sourceSize") else null
                 )
             }
             val sourceAspectRatio = if (version >= 6 && obj.has("sourceAspectRatio")) {
@@ -188,7 +202,8 @@ object ProStore {
             ProDocument(layers,
                 value(obj.optString("aspect", ""), ProAspect.SQUARE),
                 value(obj.optString("background", ""), ProBackground.WHITE),
-                sourceAspectRatio)
+                sourceAspectRatio,
+                if (version >= 7) obj.pixelSize("canvasSize") else null)
                 .takeIf { ProMath.valid(it) }
         } catch (_: Exception) { null }
     }
@@ -204,6 +219,7 @@ object ProStore {
                 put("aspect", resetDocument.aspect.name)
                 put("background", resetDocument.background.name)
                 resetDocument.sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
+                resetDocument.canvasSize?.let { put("canvasSize", it.toJson()) }
             }
         } else JSONObject(encode(resetDocument))
         // The optional field leaves the existing root document and codec version intact.
@@ -222,7 +238,8 @@ object ProStore {
                     aspect = value(it.optString("aspect"), ProAspect.SQUARE),
                     background = value(it.optString("background"), ProBackground.WHITE),
                     sourceAspectRatio = it.optDouble("sourceAspectRatio").toFloat()
-                        .takeIf(ProMath::validSourceAspect)
+                        .takeIf(ProMath::validSourceAspect),
+                    canvasSize = it.pixelSize("canvasSize")
                 )
             } else decode(it.toString(), recoverLegacyRecipe = true)
         }

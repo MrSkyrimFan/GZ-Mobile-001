@@ -84,6 +84,13 @@ private data class ProSaveRequest(
     val target: ProSaveTarget
 )
 
+private data class ProExportRequest(
+    val document: ProDocument,
+    val reset: ProDocument?,
+    val settings: ExportSettings,
+    val size: ProPixelSize
+)
+
 internal data class ProWorkspaceSession(
     val documentEstablished: Boolean = false,
     val selectedLayer: Int = 0,
@@ -195,7 +202,7 @@ internal fun ProWorkspaceScreenContent(
     var notice by remember { mutableStateOf("") }
     var showExport by remember { mutableStateOf(false) }
     var exportSettings by remember { mutableStateOf(ExportSettings()) }
-    var pendingExport by remember { mutableStateOf<Pair<ProDocument, ExportSettings>?>(null) }
+    var pendingExport by remember { mutableStateOf<ProExportRequest?>(null) }
     var showSave by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
     var pendingSavedDelete by remember { mutableStateOf<String?>(null) }
@@ -458,7 +465,9 @@ internal fun ProWorkspaceScreenContent(
         openError = null
         scope.launch {
             try {
-                val restored = withContext(Dispatchers.IO) { ProStore.loadProject(context, name) }
+                val restored = withContext(Dispatchers.IO) {
+                    ProStore.loadProject(context, name)?.let { ProImageGeometry.recover(resolver, it) }
+                }
                 if (restored == null) {
                     openError = "Project unreadable or invalid."
                 } else {
@@ -491,12 +500,9 @@ internal fun ProWorkspaceScreenContent(
                                 resolver.takePersistableUriPermission(
                                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             } catch (_: SecurityException) {}
-                            val small = ImagePipeline.decode(resolver, uri, 200, 50_000L)
-                            val aspect = try { small.width.toFloat() / small.height }
-                                finally { if (!small.isRecycled) small.recycle() }
-                            ProLayer(uri = uri.toString(),
-                                name = "Image " + (document.layers.size + index + 1),
-                                aspect = aspect.coerceIn(.1f, 10f))
+                            ProImageGeometry.bind(ProLayer(
+                                uri = uri.toString(), name = "Image " + (document.layers.size + index + 1)
+                            ), ProImageGeometry.sourceSize(resolver, uri))
                         }
                     }
                     if (layers.isNotEmpty()) {
@@ -534,24 +540,18 @@ internal fun ProWorkspaceScreenContent(
         busy = true
         scope.launch {
             try {
-                val aspect = withContext(Dispatchers.IO) {
+                val nextLayer = withContext(Dispatchers.IO) {
                     try {
                         resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     } catch (_: SecurityException) {}
-                    val sample = ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L)
-                    try {
-                        val image = ImagePipeline.geometry(sample, layer.edits)
-                        try { image.width.toFloat() / image.height }
-                        finally { if (image !== sample) image.recycle() }
-                    } finally { sample.recycle() }
+                    ProImageGeometry.bind(layer.copy(uri = uri.toString()), ProImageGeometry.sourceSize(resolver, uri))
                 }
                 if (latestDocument !== requestedDocument) {
                     notice = "The layer changed. Select it and try Replace image again."
                     return@launch
                 }
-                check(ProMath.validSourceAspect(aspect))
                 commit(requestedDocument.copy(layers = requestedDocument.layers.toMutableList().also {
-                    it[index] = layer.copy(uri = uri.toString(), aspect = aspect)
+                    it[index] = nextLayer
                 }))
                 clearToolDrafts()
                 selected = index
@@ -568,14 +568,19 @@ internal fun ProWorkspaceScreenContent(
         }
     }
 
-    fun export(destination: Uri, request: Pair<ProDocument, ExportSettings>) {
-        val protectedLayers = request.first.layers + resetDocument?.layers.orEmpty()
+    val exportPixelBudget = remember(context) {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        GeometryMath.safeExportPixels(manager.memoryClass)
+    }
+    val intendedExportSize = ProMath.intendedCanvasSize(document)
+    val safeExportSize = intendedExportSize.within(ProMath.MAX_EXPORT_EDGE, exportPixelBudget)
+
+    fun export(destination: Uri, request: ProExportRequest) {
+        val protectedLayers = request.document.layers + request.reset?.layers.orEmpty()
         if (protectedLayers.any { it.uri.isNotEmpty() && it.uri == destination.toString() }) {
             notice = "Export cannot overwrite an original image."
             return
         }
-        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        val budget = GeometryMath.safeExportPixels(manager.memoryClass)
         scope.launch {
             exporting = true
             notice = "Exporting editable composition…"
@@ -584,17 +589,16 @@ internal fun ProWorkspaceScreenContent(
                     var image: Bitmap? = null
                     var sized: Bitmap? = null
                     try {
-                        val (w, h) = ProMath.dimensions(request.first, 4096, budget)
                         val coroutine = currentCoroutineContext()
-                        image = ProRaster.render(resolver, request.first, w, h, false) {
+                        image = ProRaster.render(resolver, request.document, request.size.width, request.size.height, false) {
                             coroutine.ensureActive()
                         }
-                        sized = ExportSizing.layout(image, request.second)
+                        sized = ExportSizing.layout(image, request.settings)
                         withContext(Dispatchers.IO) {
                             writeStagedImage(context.cacheDir,
                                 openDestination = { resolver.openOutputStream(destination, "wt") },
                                 checkActive = { ensureActive() }) { out ->
-                                ImageExportWriter.write(sized, request.second, out)
+                                ImageExportWriter.write(sized, request.settings, out)
                             }
                         }
                         sized.width.toString() + " × " + sized.height
@@ -625,7 +629,7 @@ internal fun ProWorkspaceScreenContent(
     }
     fun startExport() {
         if (!ProMath.valid(document)) return
-        pendingExport = document to exportSettings
+        pendingExport = ProExportRequest(document, resetDocument, exportSettings, safeExportSize)
         showExport = false
         exporter.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -1324,7 +1328,7 @@ internal fun ProWorkspaceScreenContent(
                                     ProAspect.entries.forEach { aspect ->
                                         DockChip(aspect.label,
                                             document.sourceAspectRatio == null && document.aspect == aspect) {
-                                            commit(document.copy(aspect = aspect, sourceAspectRatio = null))
+                                            commit(ProMath.withAspect(document, aspect))
                                         }
                                     }
                                 }
@@ -1402,7 +1406,13 @@ internal fun ProWorkspaceScreenContent(
     )
     if (showExport) ExportDialog(
         settings = exportSettings, onSettings = { exportSettings = it },
-        onSave = ::startExport, onDismiss = { showExport = false }
+        onSave = ::startExport, onDismiss = { showExport = false },
+        originalOutput = if (safeExportSize == intendedExportSize) {
+            "${safeExportSize.width} × ${safeExportSize.height} pixels"
+        } else {
+            "${safeExportSize.width} × ${safeExportSize.height} pixels on this device. " +
+                "Project canvas: ${intendedExportSize.width} × ${intendedExportSize.height} pixels."
+        }
     )
     if (showSave && pendingReplace == null) SaveNameDialog(
         title = "Save Pro project",

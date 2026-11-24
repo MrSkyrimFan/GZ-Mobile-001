@@ -73,6 +73,7 @@ import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
 import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProDocument
+import com.greenezone.gzphotoeditor.editor.ProImageGeometry
 import com.greenezone.gzphotoeditor.editor.ProLayer
 import com.greenezone.gzphotoeditor.editor.GifDocument
 import com.greenezone.gzphotoeditor.editor.CropMath
@@ -124,6 +125,8 @@ private data class ExportRequest(
     val settings: ExportSettings,
     val edits: EditDocument
 )
+private data class PreviewStamp(val source: Bitmap, val edits: EditDocument)
+
 private data class CropPreview(val source: Bitmap, val edits: EditDocument, val bitmap: Bitmap)
 
 /**
@@ -160,6 +163,8 @@ fun PhotoEditorScreen(
     var original by remember { mutableStateOf<Bitmap?>(null) }
     var sourceSize by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var processed by remember { mutableStateOf<Bitmap?>(null) }
+    var processedStamp by remember { mutableStateOf<PreviewStamp?>(null) }
+    var beforeStamp by remember { mutableStateOf<Pair<Bitmap, PhotoGeometry>?>(null) }
     var cropPreview by remember { mutableStateOf<CropPreview?>(null) }
     var beforeImage by remember { mutableStateOf<Bitmap?>(null) }
     var filterThumbs by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
@@ -279,7 +284,11 @@ fun PhotoEditorScreen(
                 original = bitmap
                 sourceSize = dimensions
                 processed = initialPreview
+                processedStamp = PreviewStamp(
+                    bitmap, restored?.takeIf { it.privacy.isNotEmpty() } ?: EditDocument()
+                )
                 beforeImage = bitmap
+                beforeStamp = bitmap to PhotoGeometry.from(EditDocument())
                 filterThumbs = emptyList()
                 quickSource = null
                 painting = false
@@ -388,34 +397,27 @@ fun PhotoEditorScreen(
 
     fun openProWithRegularEdits() {
         val uri = sourceUri ?: return
-        val input = original ?: return
-        if (busy || exporting) return
+        if (original == null || busy || exporting) return
         showProHandoff = false
         finishSlide()
         val edits = document
         busy = true
         scope.launch {
             try {
-                val editedRatio = withContext(Dispatchers.Default) {
-                    // The current preview may still show the previous frame or the
-                    // uncropped Crop view. Use the committed edit geometry instead.
-                    val frame = ImagePipeline.geometry(input, edits)
-                    try {
-                        frame.width.toFloat() / frame.height
-                    } finally {
-                        if (frame !== input) frame.recycle()
-                    }
-                }
-                val originalRatio = input.width.toFloat() / input.height
-                val source = ProLayer(uri = uri.toString(), name = "Original photo", aspect = originalRatio)
+                val sourcePixels = sourceSize?.let { (width, height) -> ProPixelSize(width, height) }
+                    ?: withContext(Dispatchers.IO) { ProImageGeometry.sourceSize(resolver, uri) }
+                val editedSize = ProImageGeometry.editedSize(sourcePixels, edits)
+                val source = ProImageGeometry.bind(ProLayer(uri = uri.toString(), name = "Original photo"), sourcePixels)
                 val resetDocument = ProDocument(
                     layers = listOf(source),
                     background = ProBackground.TRANSPARENT,
-                    sourceAspectRatio = originalRatio
+                    sourceAspectRatio = sourcePixels.aspect,
+                    canvasSize = sourcePixels
                 )
                 proDocument = resetDocument.copy(
-                    layers = listOf(source.copy(edits = edits, aspect = editedRatio)),
-                    sourceAspectRatio = editedRatio
+                    layers = listOf(ProImageGeometry.bind(source.copy(edits = edits), sourcePixels)),
+                    sourceAspectRatio = editedSize.aspect,
+                    canvasSize = editedSize
                 )
                 proSession = ProWorkspaceSession(documentEstablished = true, resetDocument = resetDocument)
                 workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
@@ -475,7 +477,9 @@ fun PhotoEditorScreen(
         original = null
         sourceSize = null
         processed = null
+        processedStamp = null
         beforeImage = null
+        beforeStamp = null
         filterThumbs = emptyList()
         quickSource = null
         document = EditDocument()
@@ -889,6 +893,7 @@ fun PhotoEditorScreen(
                     val running = currentCoroutineContext()
                     ImagePipeline.render(fast, edits) { running.ensureActive() }
                 }
+                processedStamp = original?.let { PreviewStamp(it, edits) }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -916,6 +921,7 @@ fun PhotoEditorScreen(
                     ImagePipeline.render(fast, previewEdits) { running.ensureActive() }
                 }
                 processed = preview
+                processedStamp = PreviewStamp(input, previewEdits)
             }
             if (!liveGesture || fast == null || fast === input) {
                 if (fast != null && fast !== input && !cropTab) delay(140L)
@@ -924,6 +930,7 @@ fun PhotoEditorScreen(
                     ImagePipeline.render(input, previewEdits) { running.ensureActive() }
                 }
                 processed = quality
+                processedStamp = PreviewStamp(input, previewEdits)
                 if (cropTab) cropPreview = CropPreview(input, previewEdits, quality)
             }
         } catch (cancelled: CancellationException) {
@@ -943,10 +950,12 @@ fun PhotoEditorScreen(
                 ImagePipeline.geometry(input, previewEdits)
             }
             beforeImage = result
+            beforeStamp = input to PhotoGeometry.from(previewEdits)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             beforeImage = input
+            beforeStamp = null
         }
     }
 
@@ -1410,7 +1419,16 @@ fun PhotoEditorScreen(
     }
 
     if (showHistogram && selectedImage != null) {
-        PhotoHistogramDialog(selectedImage, compare) { showHistogram = false }
+        val image = original?.let { input ->
+            if (compare) beforeImage.takeIf { beforeStamp == (input to PhotoGeometry.from(previewEdits)) }
+            else selectedImage.takeIf { processedStamp == PreviewStamp(input, previewEdits) }
+        }
+        PhotoHistogramDialog(
+            image = image,
+            showingBefore = compare,
+            sourceGeneration = loadingToken,
+            exposure = previewEdits.grade.exposure
+        ) { showHistogram = false }
     }
     if (showExport) {
         val originalOutput = sourceSize?.let { (width, height) ->

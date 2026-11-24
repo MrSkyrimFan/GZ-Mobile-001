@@ -1,6 +1,7 @@
 package com.greenezone.gzphotoeditor.ui
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -36,17 +37,24 @@ import java.util.Locale
 
 @Composable
 internal fun PhotoHistogramDialog(
-    image: Bitmap,
+    image: Bitmap?,
     showingBefore: Boolean,
+    sourceGeneration: Int,
+    exposure: Float,
     onDismiss: () -> Unit
 ) {
     var rgb by remember { mutableStateOf(true) }
     var histogram by remember(image) { mutableStateOf<PhotoHistogram?>(null) }
-    LaunchedEffect(image) {
-        histogram = withContext(Dispatchers.Default) {
+    LaunchedEffect(image, showingBefore, sourceGeneration, exposure) {
+        val preview = image ?: return@LaunchedEffect
+        val measured = withContext(Dispatchers.Default) {
             val job = currentCoroutineContext()
-            PhotoHistogram.fromPreview(image) { job.ensureActive() }
+            PhotoHistogram.fromPreview(preview) { job.ensureActive() }
         }
+        histogram = measured
+        Log.d("GzPhotoHistogram", "source=$sourceGeneration exposure=$exposure before=$showingBefore " +
+            "preview=${preview.width}x${preview.height} id=${System.identityHashCode(preview)} " +
+            "visible=${measured.visiblePixels} black=${measured.blackPixels} white=${measured.whitePixels}")
     }
 
     AlertDialog(
@@ -64,6 +72,7 @@ internal fun PhotoHistogramDialog(
                 }
                 val current = histogram
                 when {
+                    image == null -> Text("Updating photo preview…")
                     current == null -> Text("Measuring photo…")
                     current.visiblePixels == 0 -> Text("No visible pixels")
                     else -> HistogramReadout(current, rgb)
