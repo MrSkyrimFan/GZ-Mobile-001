@@ -2,7 +2,7 @@
 
 ## Completed task A1 — ChatGPT / Codex alignment
 
-**Phase: Alignment complete — ready for owner to relay Codex resume prompt.** Stage 3 has answered all 50 questions and reconciled the canonical requirements. Codex starts application engineering only after Lance relays the final prompt and Codex reads the full [Stage 3 answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) and published [engineering-resume instruction](coordination/ENGINEERING_RESUME_2026-11-24.md). No additional arbitrary question cycle or repeated permission is required. Until that activation, this remains documentation-only.
+**Phase: B1 activated — reproduction and implementation underway (November 25, 2026, America/Denver).** Lance relayed the completed Stage 3 prompt. Codex read every CQ01–CQ50, the complete resume instruction and all reconciled canonical documents before source changes. Main exactly matched `6f7c574f223e5349a74e622e97433736a07f4a44`; its app/test/build/CI inputs still match qualified PR #31. The alignment gate is satisfied; routine agreed engineering proceeds without another authorization cycle.
 
 | Stage | Owner | Result / exact evidence | State |
 | --- | --- | --- | --- |
@@ -14,7 +14,7 @@ Stage 3 read the entire 298,465-character response including both historical app
 
 The final response supplies the actual merged Stage 3 commit/PR. The resume instruction pins the completed answers/canonical content commit created before it, and the owner activation identifies the final combined documentation ref. Check live main at resume once, preserve newer authorized deltas, and do not branch from an obsolete repair checkpoint. The qualified app is still PR #31; this documentation exchange does not create a binary.
 
-## Selected on activation — B1 common UI and safe editing departures
+## Active B1 — common UI and safe editing departures
 
 **Observable result:** the four current workspaces feel like one app: one accessible top-right Options home for major commands, common header/history arrows, no duplicate major actions or Regular More/Create collage/Histogram UI; one-tap Collage chrome; every relevant dirty departure protects the correct document/child and preserves failed/canceled work.
 
@@ -30,7 +30,13 @@ The final response supplies the actual merged Stage 3 commit/PR. The resume inst
 | Minimal saved identity/baseline/storage adapters | Persistence owner: ProjectStore.kt, CollageStore.kt, ProStore.kt, GifStore.kt and only necessary shared model/session files; integration assigns every touched file exactly once before editing. No wholesale store/schema rewrite in B1. |
 | Verification and integration review | Separate reviewer checks actual callback/state/output behavior and retained assertions. Test-file ownership is assigned once; do not merge parallel rewrites. |
 
-Actual agent names are assigned at Codex activation; these are role boundaries, not claims that a particular agent is already running. Disjoint work may run in parallel after the shared interface is agreed from the recorded contract; limited concurrency can sequence the roles.
+**Exact engineering baseline:** `6f7c574f223e5349a74e622e97433736a07f4a44`, tree `99239d1fd9efc25a4324aa39bb6ebe44a02395ff`. Branch: `codex/b1-workspace-contract-20261125`. No open PR or newer main delta existed at activation. Qualified application/193-case evidence remains PR #31 until a changed candidate is qualified.
+
+**Assigned writers:** /root owns integration, all listed Regular/Collage/shared UI paths, docs, build-version identity and all existing test-file migrations. /root/align_pro_scope owns ProWorkspaceScreen.kt and new AndroidProDepartureContractTest.kt. /root/align_gif owns the four listed GIF UI files, necessary evidence-led B2 processing files and new AndroidGifDepartureContractTest.kt. /root/align_regular_collage owns the four stores, proposed editor/SavedProjectIdentity.kt and new AndroidProjectIdentityContractTest.kt; any other model/session file is assigned explicitly before editing. /root owns new AndroidWorkspaceContractTest.kt and any shared pure-state tests. No two writers edit the same path. /root/regular_gestures is the independent integration/contract review role, sequenced after a writer completes if concurrency is full; each implementation also receives cross-owner review.
+
+**Next decisive check:** add actual UI/state reproductions on unchanged production for parent tap, command duplication and missing departure guards, with existing protected routes as controls. Run that test-only reproduction once, retain failures, then qualify changed implementation against the same outcomes. Source-only inspection is not reported as runtime reproduction. Existing tests using removed UI receive a traceable assertion mapping; numerical/output/history coverage and GIF timing gates remain. No baseline rebuild simply for onboarding.
+
+**B2:** request the minimum phone/workload/timing facts asynchronously; inspect disjoint missing stage measurements and foreground cancellation ownership while B1 proceeds. Missing owner data holds F03 closure only. No unmeasured encoder change or fidelity shortcut.
 
 **Decisive reproductions/controls:** parent single tap versus existing double-tap dependency; separate selected-tile tap path; Regular Back with prior workspace and mode change; Pro Back/Open; Collage Back/New; child Done/Back/mode and standalone-save baselines; duplicate/late Save/Back/picker results. Existing protected replacements/child routes and PR #29/#31 pixels/history are controls. Confirm source-supported gaps through these paths; do not restart an all-app audit.
 
@@ -131,9 +137,9 @@ Inventory the current state/source ownership once, pin the current main and comp
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next action — Codex activates B1 from the final prompt
+## Next action — execute the active B1 batch
 
-Read the committed Stage 3 answers and engineering-resume instruction in full after Lance relays the final prompt. Pin live main, check any later delta once, assign the named file roles, reproduce the specific B1 gaps and implement the agreed contract. Start independent B2 measurement where feasible. Preserve the qualified 0.12.10 artifact and all receipts. Do not restart Q01–Q25/CQ01–CQ50, replay completed audits, or rebuild a documentation-only baseline. R1.1/R1.2 and the full roadmap follow the ordered work above.
+The owner activation and required reads are complete at the exact baseline above. Reproduce the specific B1 gaps, implement the agreed contract under the assigned file ownership, independently review and qualify one coherent candidate. Start independent B2 measurement where feasible. Preserve the qualified 0.12.10 artifact and all receipts. Do not restart Q01–Q25/CQ01–CQ50, replay completed audits, or rebuild a documentation-only baseline. R1.1/R1.2 and the full roadmap follow the ordered work above.
 
 ## Pending owner/device decisions
 
