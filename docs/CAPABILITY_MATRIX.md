@@ -1,6 +1,6 @@
 # GZ Editor Pro — capability and evidence inventory
 
-> **Current work — November 25, 2026:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. R1.1 begins with the saved-project baseline in the [work ledger](WORK_LEDGER.md). B2/F03 and wider acceptance remain open. See the [B1 qualification](B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
+> **Current work — November 25, 2026.** [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43) qualifies **0.12.13 Test / code 25 / phonetest.v25**. Candidate and merge passed JVM, build, signing, and **279/279 on API29 and API35**. R1.2 is next. Handset, B2/F03, RV5, workspace and release gates remain open. See the [exact R1.1 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
 
 ## Latest owner evidence and current execution
 

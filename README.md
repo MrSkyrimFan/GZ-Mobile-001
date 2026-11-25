@@ -1,6 +1,6 @@
 # GZ Editor Pro
 
-> **Current work — November 25, 2026:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. R1.1 begins with the saved-project baseline in the [work ledger](docs/WORK_LEDGER.md). B2/F03 and wider acceptance remain open. See the [B1 qualification](docs/B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
+> **Current work — November 25, 2026.** [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43) qualifies **0.12.13 Test / code 25 / phonetest.v25**. Candidate and merge passed JVM, build, signing, and **279/279 on API29 and API35**. R1.2 is next. Handset, B2/F03, RV5, workspace and release gates remain open. See the [exact R1.1 receipt](docs/WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
@@ -8,7 +8,7 @@
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next planned engineering package after current review reconciliation: R1.1 bounded saved-project listing/loading, then R1.2 recoverable working drafts.** The readiness note identifies the exact sources, migration boundary and decisive measurements. All 77 families and remaining R1–R11 children remain in the one roadmap. Video still waits for four explicit workspace locks; final bilingual/customer onboarding waits for all five completed/accepted workspaces. Play Console setup remains last, after the working app and Greenezone website.
+**Next engineering package is R1.2 recoverable Regular working drafts.** R1.1 saved-project durability and Pro RV4 are engineering-qualified in [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43). All 77 capability families and remaining R1–R11 children retain their agreed scope. Four explicit workspace locks precede Video. Final bilingual and customer onboarding follow acceptance of all five workspaces. Play Console setup follows the working app and Greenezone website.
 
 Lance's 0.12.10 phone report credited unmentioned supplied checks and identified the interaction/GIF exceptions corrected or retained above. [Owner report](docs/CODEX_ALIGNMENT_HANDOFF_2026-11-24.md). PR #29/#31 correction evidence remains credited; their APKs are historical and superseded for this focused phone pass.
 
@@ -80,7 +80,7 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 - All creative layers are composited in preview/export after privacy redaction; no branding, timestamp or watermark added to the exported photo.
 
 ## Limits and safeguards
-- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36. The production application ID is `com.greenezone.gzphotoeditor`; versioned phone-test builds use a separate suffix, currently `com.greenezone.gzphotoeditor.phonetest.v24`. Their local project storage is separate.
+- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36. The production application ID is `com.greenezone.gzphotoeditor`; versioned phone-test builds use a separate suffix, currently `com.greenezone.gzphotoeditor.phonetest.v25`. Their local project storage is separate.
 - Renderer uses 8-bit sRGB, not a RAW/16-bit managed photo pipeline. New TIFF is uncompressed 8-bit RGB, not 16-bit.
 - Social dimensions are practical composition presets, **not guarantees of platform acceptance**, safe-area rules or uploaded file size. Platforms may change their policies.
 - Export presets may upscale lower-resolution source photos; this cannot recover missing detail. Fit can add margins; Fill can crop. The user selects explicitly.
@@ -92,7 +92,7 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 
 The [qualified application commit `9a58c72c`](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/9a58c72cdcf379885150b55b498a2f0ef326dee1) matches the reviewed candidate tree. [Merged verification](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45706255531) passed JVM/build/signing and 265/265 on both Android API29 and API35.
 
-[Download the merged API35 phone APK artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45706255531/artifacts/15065588960). Extract `app-debug.apk` for **GZ Editor Pro 0.12.12 Test**, code 24, `com.greenezone.gzphotoeditor.phonetest.v24`, Android 10+. This test build installs separately from earlier versions. [APK identity and Android qualification](docs/B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
+[Download the merged API35 phone APK ZIP](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45720375226/artifacts/15073420431). Extract `app-debug.apk` for **GZ Editor Pro 0.12.13 Test**, code 25, `com.greenezone.gzphotoeditor.phonetest.v25`, Android 10+. Each package has separate project storage. See the [exact R1.1 receipt](docs/WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
 
 See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`.
 
