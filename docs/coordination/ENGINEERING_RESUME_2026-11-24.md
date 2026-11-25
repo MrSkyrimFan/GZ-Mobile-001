@@ -1,3 +1,5 @@
+> **Historical checkpoint — current route updated November 25, 2026.** Follow the [GPT-6.2 Sol Ultra successor handoff](../NEW_CHAT_HANDOFF_2026-11-25.md), [current ledger](../WORK_LEDGER.md) and [PR #37 / 0.12.11 Test evidence and focused phone script](../B1_WORKSPACE_VERIFICATION.md). Current task: read-only successor onboarding, then wait for Lance's ongoing GPT-6 Pro review. Original text below retains its dated evidence; its “current”, “next”, delivery, engineering and test commands are historical, not fresh instructions. All 25 answers and 50 questions/answers are complete; Stage 3 relay/full reads were consumed before PR #37. Their design contracts remain relevant; their old activation/first-batch commands do not dispatch work. Do not replay completed intake, question exchanges, builds or phone scripts. The [current review brief](GPT_6_PRO_REVIEW_BRIEF_2026-11-25.md) supersedes older review prompts.
+
 # GZ Editor Pro — engineering resume instruction
 
 Owner: Lance / Greenezone Software LLC. Coordination date: **November 24, 2026, America/Denver**. GitHub may record November 25 UTC.

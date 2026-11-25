@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "date_local": "2026-11-25",
+  "timezone": "America/Denver",
+  "purpose": "Loss-preserving source route for the GPT-6.2 Sol Ultra successor. Existing private originals remain unchanged; no new local export or public raw conversation.",
+  "source_route": "Exact original paths and source chat identifier are supplied privately in the successor bootstrap.",
+  "current_chat": {
+    "kind": "fixed_complete_line_prefix_of_still_growing_original",
+    "prefix_bytes": 34283512,
+    "jsonl_lines": 6832,
+    "sha256": "ec0f036c4c8072e2e2452fc49351227c18be52bb97b8265190b99bb8d5f9baf0",
+    "first_timestamp_utc": "2026-11-24T07:05:05.078Z",
+    "last_prefix_timestamp_utc": "2026-11-25T20:30:26.530Z",
+    "last_visible_source_line": 6784,
+    "last_visible_timestamp_utc": "2026-11-25T20:29:11.156Z",
+    "visible_context": {
+      "entries": 145,
+      "user": 10,
+      "assistant_commentary": 126,
+      "assistant_final": 6,
+      "async_question_cards": 2,
+      "initial_delegated_handoff": 1,
+      "text_characters": 80379,
+      "largest_entry_characters": 9949,
+      "canonical_utf8_bytes": 104999,
+      "canonical_sha256": "17f00fb5b01d08c78267256ee4a64b52f5d1be435362f6a8951773054ddc3c3f",
+      "serialization": "JSON.stringify in reader property order; UTF-8; no trailing newline"
+    },
+    "ui_reconciliation": {
+      "user_text_matches": 10,
+      "assistant_exact_text_matches": 129,
+      "assistant_renderer_memory_citation_suffix_differences": 3,
+      "question_card_source_lines": [
+        220,
+        2130
+      ],
+      "initial_handoff_source_line": 13,
+      "excluded_injected_environment_messages": 3
+    },
+    "reader": "SUCCESSOR_VISIBLE_CONTEXT_READER_2026-11-25.mjs",
+    "coverage": "All visible user/assistant text in the pinned source, plus two question cards and initial delegation. Hidden reasoning/system/developer/general tool data is excluded. This is not a final seal of the live source file. Later setup is preserved in the original chat tail and merged handoff; read the finite visible tail through the dispatch cutoff."
+  },
+  "inputs": [
+    {
+      "label": "Historical START_HERE.md",
+      "bytes": 15230,
+      "lines": 86,
+      "sha256": "30684abf5cbb46857a42894829cc8d8f6b7bbc2b739e328f9c4bb35472dde490"
+    },
+    {
+      "label": "Historical FULL_CHAT_TRANSCRIPT.txt",
+      "bytes": 157615,
+      "lines": 2084,
+      "sha256": "0ac69b97f5eb7c0a30455ec240e84f9f64842d4e8fea672d500485a8085d6566",
+      "visible_messages": 201,
+      "breakdown": {
+        "user": 20,
+        "assistant_progress": 168,
+        "assistant_final": 13
+      },
+      "last_visible_timestamp_utc": "2026-11-24T06:57:55.842Z"
+    },
+    {
+      "label": "Historical TRANSCRIPT_VERIFICATION.json",
+      "bytes": 1622,
+      "lines": 35,
+      "sha256": "7aaa621f638638b6ceb1d3591243b0d58d8c86d40bed8ffff3321185c190b8b5"
+    },
+    {
+      "label": "Subject and Background attachment",
+      "bytes": 5017,
+      "lines": 77,
+      "sha256": "d9f15333707f9542ae27a289b8adef960df26fe8bca0fed509452207d2bdae5f"
+    },
+    {
+      "label": "Initial CHANGES REQUIRED review",
+      "bytes": 24304,
+      "lines": 315,
+      "sha256": "ec019ac8ef48e4367ce981e1ba49bb8680d1359c2d129ed1373d8b049250dd58"
+    },
+    {
+      "label": "Stage 1/2 conversation and prompt",
+      "bytes": 9776,
+      "lines": 95,
+      "sha256": "e3eaeb1ae8a1622c141ff4e4d5b5ea4d5bed5983fbe3b108e3375744c198ee4b"
+    },
+    {
+      "label": "Stage 3 conversation and prompt",
+      "bytes": 10422,
+      "lines": 98,
+      "sha256": "3c03d5dfd13ba1a4389a166559c4cf4899a47c6b3164ba028100b83cfd1c0252"
+    }
+  ],
+  "older_public_transcript": {
+    "path": "docs/review-handoff-2026-11-23/",
+    "visible_messages": 176,
+    "breakdown": {
+      "user": 17,
+      "assistant_progress": 148,
+      "assistant_final": 11
+    },
+    "cutoff": "2026-11-23 08:46:02 MST",
+    "redactions": "Local roots, private attachment folder and four conversation image URLs.",
+    "scope": "Different earlier cutoff; not the full 201-message private intake or current 145-entry source."
+  },
+  "historical_source_receipt_claims": {
+    "older_source_prefix_bytes": 76726251,
+    "older_source_cutoff_line": 18777,
+    "older_source_prefix_sha256": "6c19c025f1340baab598f810515fce7a415daee3ee996769567191a994f2e1fd",
+    "older_canonical_tuple_sha256": "3367b489c63e5abb926fafa782f6023de500240d70e928c50fb1b29cde9a95a6",
+    "verification_boundary": "Historical transcript/input files were independently hashed during this handoff; the older 76 MB source-prefix claim is retained from its receipt and was not independently rehashed in this handoff."
+  },
+  "no_new_acceptance_credit": true
+}

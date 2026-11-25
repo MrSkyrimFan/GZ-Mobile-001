@@ -1,5 +1,7 @@
 # B1 workspace correction verification
 
+> **Current custody — November 25, 2026:** [GPT-6.2 Sol Ultra successor handoff](NEW_CHAT_HANDOFF_2026-11-25.md). Complete read-only onboarding, then remain idle for Lance to relay the ongoing GPT-6 Pro review and his directions. This is the current handoff/review gate; the older Audit 2 hold and Stage 3 activation were already consumed. PR #37 remains the qualified 0.12.11 Test application; PR #38/#39 and this handoff change documentation only. R1.1 remains the next planned engineering package after review reconciliation, subject to any substantiated correction that takes precedence. [Full independent-review brief](coordination/GPT_6_PRO_REVIEW_BRIEF_2026-11-25.md).
+
 Status: B1 engineering-qualified for focused handset confirmation; B2 target completion and F03 remain open. Updated November 25, 2026.
 
 ## Authority and exact baseline
@@ -54,7 +56,7 @@ The **10,000 ms absolute AND 50% picker-reduction targets remain unmet on both A
 Each completed original-size profile reports 32,768 bytes of exact-color cache payload, 4,320 bytes of sample-row arrays, 165,885,502 exact-cache hits and 2,498 misses. The reverse cap and full-frame buffers are unchanged. Source-reader/bitmap/encoder counters overlap and must not be summed as disjoint stages. Actual owner-media/phone measurements and the required matched sample study remain open.
 
 
-The fixed targets are retained. The two bounded optimization experiments were evaluated with representative gains and unmet exits; do not recast the separate-host observations as a matched cold/warm study. B2 target completion and F03 remain open, including the 13.698-second/257-ms API35 sample below. The next performance decision requires matched measurements on the declared workload and an evidence-backed cause; no third speculative optimization is a prerequisite for delivering this regression-qualified B1 candidate. Independent R1.1 work follows the ledger.
+The fixed targets are retained. The two bounded optimization experiments were evaluated with representative gains and unmet exits; do not recast the separate-host observations as a matched cold/warm study. B2 target completion and F03 remain open, including the 13.698-second/257-ms API35 sample below. The next performance decision requires matched measurements on the declared workload and an evidence-backed cause; no third speculative optimization is a prerequisite for delivering this regression-qualified B1 candidate. Independent R1.1 work follows the current ledger and successor/review gate; this documentation handoff adds no application qualification.
 
 ## Reproductions and diagnosed failures
 
