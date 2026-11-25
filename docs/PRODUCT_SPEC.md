@@ -1,6 +1,6 @@
 # GZ Editor Pro product requirements
 
-> **Current custody — November 25, 2026:** [GPT-6.2 Sol Ultra successor handoff](NEW_CHAT_HANDOFF_2026-11-25.md). Complete read-only onboarding, then remain idle for Lance to relay the ongoing GPT-6 Pro review and his directions. This is the current handoff/review gate; the older Audit 2 hold and Stage 3 activation were already consumed. PR #37 remains the qualified 0.12.11 Test application; PR #38/#39 and this handoff change documentation only. R1.1 remains the next planned engineering package after review reconciliation, subject to any substantiated correction that takes precedence. [Full independent-review brief](coordination/GPT_6_PRO_REVIEW_BRIEF_2026-11-25.md).
+> **Current work — November 25, 2026:** Lance relayed the completed [GPT-6 Pro review](coordination/GPT_6_PRO_INDEPENDENT_REVIEW_2026-11-25.md). The [work ledger](WORK_LEDGER.md) selects a bounded B1 follow-up for Pro layer actions, Collage header/taps, and nested departure evidence. PR #37 supplies the qualified 0.12.11 Test APK for focused diagnostic handset checks. R1.1 follows the correction wave. B2/F03 and the separate acceptance gates stay open.
 
 ## Latest owner requirements — shared UI and safe departure
 

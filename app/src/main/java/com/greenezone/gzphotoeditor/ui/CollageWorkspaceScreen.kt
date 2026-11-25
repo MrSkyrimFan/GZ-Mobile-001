@@ -13,23 +13,29 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -981,22 +987,40 @@ internal fun CollageWorkspaceScreenContent(
                         }
                     }
                     .pointerInput(Unit) {
-                        detectTapGestures(onTap = { point ->
-                            val current = latestDocument
-                            val bitmap = latestPreview
-                            if (bitmap != null) {
-                                val factor = min(size.width.toFloat() / bitmap.width,
-                                    size.height.toFloat() / bitmap.height)
-                                val width = bitmap.width * factor
-                                val height = bitmap.height * factor
-                                val left = (size.width - width) / 2f
-                                val top = (size.height - height) / 2f
-                                val hit = CollageMath.select((point.x - left) / width,
-                                    (point.y - top) / height, current.photos.size, current.layout)
-                                if (hit >= 0) selected = hit
-                            }
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            if (currentEvent.changes.size != 1) return@awaitEachGesture
+
+                            val startSize = size
+                            val startDocument = latestDocument
+                            val startOwner = documentId
+                            val bitmap = latestPreview ?: return@awaitEachGesture
+                            val factor = min(startSize.width.toFloat() / bitmap.width,
+                                startSize.height.toFloat() / bitmap.height)
+                            val width = bitmap.width * factor
+                            val height = bitmap.height * factor
+                            val left = (startSize.width - width) / 2f
+                            val top = (startSize.height - height) / 2f
+                            val hit = CollageMath.select((down.position.x - left) / width,
+                                (down.position.y - top) / height, startDocument.photos.size, startDocument.layout)
+                            down.consume()
+
+                            do {
+                                val pointer = awaitPointerEvent().changes.singleOrNull()
+                                    ?: return@awaitEachGesture
+                                if (pointer.id != down.id || pointer.isConsumed ||
+                                    size != startSize || documentId != startOwner ||
+                                    latestDocument != startDocument || latestPreview !== bitmap ||
+                                    pointer.position.x !in 0f..startSize.width.toFloat() ||
+                                    pointer.position.y !in 0f..startSize.height.toFloat() ||
+                                    (pointer.position - down.position).getDistance() > viewConfiguration.touchSlop
+                                ) return@awaitEachGesture
+                                pointer.consume()
+                            } while (pointer.pressed)
+
+                            if (hit >= 0) selected = hit
                             toolsVisible = !toolsVisible
-                        })
+                        }
                     }) {
                     if (selected in document.photos.indices) {
                         val factor = min(size.width / shown.width, size.height / shown.height)
@@ -1035,7 +1059,9 @@ internal fun CollageWorkspaceScreenContent(
                     },
                     WorkspaceCommand(WorkspaceCommandId.HELP, "Help", !busy()) { showHelp = true }
                 )
-                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+                )) {
                     EditorWorkspaceHeader(
                         workspace = WorkspaceMode.COLLAGE, commands = commands,
                         canUndo = history.undo.isNotEmpty() && !busy(),

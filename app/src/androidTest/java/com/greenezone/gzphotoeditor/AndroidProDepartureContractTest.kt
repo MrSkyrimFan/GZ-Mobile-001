@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
@@ -27,8 +29,10 @@ import com.greenezone.gzphotoeditor.editor.ProLayerKind
 import com.greenezone.gzphotoeditor.ui.ProWorkspaceScreenContent
 import com.greenezone.gzphotoeditor.ui.ProWorkspaceSession
 import com.greenezone.gzphotoeditor.ui.WorkspaceMode
+import com.greenezone.gzphotoeditor.ui.saved
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,10 +50,13 @@ class AndroidProDepartureContractTest {
     private var backCalls = 0
     private val switches = mutableListOf<WorkspaceMode>()
 
-    private fun mount(start: ProDocument = initial) {
+    private fun mount(
+        start: ProDocument = initial,
+        startSession: ProWorkspaceSession = ProWorkspaceSession(resetDocument = start)
+    ) {
         rule.setContent {
             var document by remember { mutableStateOf(start) }
-            var session by remember { mutableStateOf(ProWorkspaceSession(resetDocument = start)) }
+            var session by remember { mutableStateOf(startSession) }
             current = document
             currentSession = session
             MaterialTheme {
@@ -204,6 +211,84 @@ class AndroidProDepartureContractTest {
                 assertEquals(saved, ProStore.load(context, name))
             }
         } finally { ProStore.delete(context, name) }
+    }
+
+    @Test fun layerCommandsPreserveOwnerAndHistoryWhileNamedSaveIsInFlight() {
+        val name = "Pro blocked edit " + System.nanoTime().toString().takeLast(10)
+        val bottom = ProLayer("", name = "Bottom", kind = ProLayerKind.ADJUSTMENT)
+        val middle = ProLayer("", name = "Middle", kind = ProLayerKind.ADJUSTMENT)
+        val top = ProLayer("", name = "Top", kind = ProLayerKind.ADJUSTMENT)
+        val clean = ProDocument(layers = listOf(bottom, middle, top))
+        val edited = middle.copy(visible = false)
+        val dirty = clean.copy(layers = listOf(bottom, edited, top))
+        val outcomes = listOf(
+            Triple("↓ Behind", listOf(edited, bottom, top), 0),
+            Triple("↑ Above", listOf(bottom, top, edited), 2),
+            Triple("Duplicate", listOf(bottom, edited, edited.copy(name = "Middle copy"), top), 2),
+            Triple("Delete layer", listOf(bottom, top), 1)
+        )
+        try {
+            check(ProStore.save(context, name, clean))
+            val ref = requireNotNull(ProStore.loadNamed(context, name)).project
+            mount(clean, ProWorkspaceSession(resetDocument = clean, selectedLayer = 1).saved(clean, ref))
+            rule.onNodeWithText("Hide").performScrollTo().performClick()
+            val busyBaseline = rule.runOnIdle {
+                assertEquals(dirty, current)
+                Triple(current, currentSession.selectedLayer, currentSession.history)
+            }
+            val queuedClicks = outcomes.associate { (label, _, _) ->
+                val node = rule.onNodeWithText(label).performScrollTo().fetchSemanticsNode()
+                label to requireNotNull(node.config[SemanticsActions.OnClick].action)
+            }
+
+            // Hold the store's synchronized publication so the real named Save stays in flight.
+            val (blockedStates, disabledWhileSaving) = synchronized(ProStore) {
+                rule.onNodeWithText("Options").performClick()
+                rule.onNodeWithText("Save project").performClick()
+                rule.onNodeWithText("Opening images…").assertIsDisplayed()
+                val states = queuedClicks.mapValues { (_, click) ->
+                    rule.runOnIdle { click() }
+                    rule.runOnIdle { Triple(current, currentSession.selectedLayer, currentSession.history) }
+                }
+                states to queuedClicks.keys.all { label ->
+                    SemanticsProperties.Disabled in rule.onNodeWithText(label).fetchSemanticsNode().config
+                }
+            }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Editable Pro project saved").fetchSemanticsNodes().isNotEmpty()
+            }
+            blockedStates.forEach { (label, state) ->
+                assertEquals("$label must preserve document, selection and history during Save",
+                    busyBaseline, state)
+            }
+            assertTrue("Layer actions must be unavailable while Save owns the document", disabledWhileSaving)
+            assertEquals(dirty, ProStore.load(context, name))
+
+            for ((label, expectedLayers, selectedLayer) in outcomes) {
+                rule.onNodeWithText("Stack (3)").performClick()
+                rule.onNodeWithText(middle.name).performClick()
+                val historySize = rule.runOnIdle { currentSession.history.undo.size }
+                rule.onNodeWithText(label).performScrollTo().performClick()
+                rule.runOnIdle {
+                    assertEquals(expectedLayers, current.layers)
+                    assertEquals(selectedLayer, currentSession.selectedLayer)
+                    assertEquals(historySize + 1, currentSession.history.undo.size)
+                }
+                rule.onNodeWithContentDescription("Undo").performClick()
+                rule.runOnIdle {
+                    assertEquals(dirty, current)
+                    assertEquals(historySize, currentSession.history.undo.size)
+                }
+                rule.onNodeWithContentDescription("Redo").performClick()
+                rule.runOnIdle {
+                    assertEquals(expectedLayers, current.layers)
+                    assertEquals(historySize + 1, currentSession.history.undo.size)
+                }
+                rule.onNodeWithContentDescription("Undo").performClick()
+            }
+        } finally {
+            ProStore.delete(context, name)
+        }
     }
 
 }
