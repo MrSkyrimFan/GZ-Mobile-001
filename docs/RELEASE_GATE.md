@@ -1,6 +1,6 @@
 # GZ Editor Pro engineering and release gates
 
-> **Current work — November 25, 2026:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. R1.1 begins with the saved-project baseline in the [work ledger](WORK_LEDGER.md). B2/F03 and wider acceptance remain open. See the [B1 qualification](B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
+> **Current work — November 25, 2026.** [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43) qualifies **0.12.13 Test / code 25 / phonetest.v25**. Candidate and merge passed JVM, build, signing, and **279/279 on API29 and API35**. R1.2 is next. Handset, B2/F03, RV5, workspace and release gates remain open. See the [exact R1.1 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
 
 ## Current owner report and alignment gate
 
@@ -41,13 +41,17 @@ Historical tests using removed File/More/Histogram UI routes must migrate to the
 A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. After the current successor/review gate, engineering may continue independent agreed work. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
 
 
-## Current engineering qualification — PR #37 / 0.12.11 Test
+## Current engineering qualification — PR #43 / 0.12.13 Test
+
+Regular saved-project migration, metadata listing, selected Open and Pro unreadable deletion have bounded engineering qualification. The prior B1 handset script, physical migration coverage, B2/F03 and formal workspace and release gates each retain their own verification. See the [exact R1.1 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
+
+## Retained B1 engineering qualification — PR #37 / 0.12.11 Test
 
 **B1 interaction corrections are engineering-qualified for handset confirmation in [PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37).** The final candidate `044e93321292a3678b92394b5efda50aae2e07b9` and application merge `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30` pass JVM/build/signing and **258/258 cases on each of Android 10/API29 and Android 15/API35**, zero failures/errors/skips. All 193 inherited Android identities remain. The original B1 checkpoint supplied **0.12.11 Test / code 23 / phonetest.v23**. [Exact runs, raw failures, APK identity and focused phone script](B1_WORKSPACE_VERIFICATION.md).
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next planned engineering package after current review reconciliation: R1.1 bounded saved-project listing/loading, then R1.2 recoverable working drafts.** The readiness note identifies the exact sources, migration boundary and decisive measurements. All 77 families and remaining R1–R11 children remain in the one roadmap. Video still waits for four explicit workspace locks; final bilingual/customer onboarding waits for all five completed/accepted workspaces. Play Console setup remains last, after the working app and Greenezone website.
+**Next engineering package is R1.2 recoverable Regular working drafts.** R1.1 saved-project durability and Pro RV4 are engineering-qualified in [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43). All 77 capability families and remaining R1–R11 children retain their agreed scope. Four explicit workspace locks precede Video. Final bilingual and customer onboarding follow acceptance of all five workspaces. Play Console setup follows the working app and Greenezone website.
 
 The detailed B1 checklist above retains its complete product/owner scope. Executed fixture results support the bounded engineering claims in the receipt. In particular, 320dp/200% font and touch tests do not replace real TalkBack/keyboard or broader device acceptance. B2 numerical misses are not waived by B1 delivery.
 
@@ -67,7 +71,7 @@ The named R29-01/R29-02 Eraser correction and observed GIF Save performance fail
 - [x] The merged API35 emulator-exercised APK is independently identified as 0.12.10 / code 22 / phonetest.v22; Android v2 signature and SHA-256 are recorded in the execution receipt.
 - [x] Owner has reported the focused 0.12.10 phone pass: unmentioned supplied checks worked. The named exceptions and requested changes are open in the current gate above; broader device/process-loss and workspace acceptance remain separate.
 
-Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. A1 activation is consumed. The current PR #37 summary above supersedes this historical application pointer; R1.1/R1.2 follow B1 engineering, with B2/phone exits retained.
+Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. A1 activation is consumed. The current qualified application is identified at the start of this document. B2 and handset exits remain tracked.
 
 ### Retained PR #29 checkpoint — historical, not the current download
 
