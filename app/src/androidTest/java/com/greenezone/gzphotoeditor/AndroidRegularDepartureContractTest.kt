@@ -350,7 +350,7 @@ class AndroidRegularDepartureContractTest {
             assertTrue(native.content.document.mirrored)
             workspace("Photo editing")
             rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-            rule.onNodeWithText("Cancel", substring = false).performClick()
+            rule.onNode(hasText("Cancel", substring = false) and hasAnyAncestor(isDialog())).performClick()
             assertTrue(requests.isEmpty())
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             workspace("Photo editing")

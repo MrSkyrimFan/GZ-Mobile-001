@@ -1,7 +1,7 @@
 package com.greenezone.gzphotoeditor.editor
 
 import android.content.Context
-import android.util.AtomicFile
+import androidx.core.util.AtomicFile
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -144,9 +144,18 @@ internal object NamedProjectIdentity {
     private fun <T> readRawPayload(base: File, maxBytes: Long,
         parse: (InputStream, Long) -> T?): ReadPayload<T>? {
         val backup = File(base.path + ".bak")
+        val staging = File(base.path + ".new")
+        if ((base.exists() && !base.isFile) || (backup.exists() && !backup.isFile)) return null
         val authoritative = if (backup.exists()) backup else base
         if (!authoritative.isFile || authoritative.length() !in 1L..maxBytes) return null
-        return AtomicFile(base).openRead().use { input ->
+        val source = if (staging.exists() && !staging.isFile) {
+            // AtomicFile.openRead may delete an empty staging directory. Keep an
+            // intact published base readable without mutating that obstruction;
+            // an accompanying backup is ambiguous and must remain untouched.
+            if (backup.exists()) return null
+            base.inputStream()
+        } else AtomicFile(base).openRead()
+        return source.use { input ->
             val length = input.channel.size()
             if (length !in 1L..maxBytes) return null
             val digest = MessageDigest.getInstance("SHA-256")
@@ -291,7 +300,10 @@ internal object NamedProjectIdentity {
         if (!hasPendingPublication(base)) writeMarker(base, publication)
         if (publication.previous == null) {
             removeAtomic(base)
-        } else {
+        } else if (rawFileVersion(base, maxBytes) != publication.previous) {
+            // A rejected startWrite may leave the verified old payload untouched.
+            // Do not rewrite it through the same blocked staging path: only a
+            // payload that actually changed needs restoration from the old copy.
             if (rawFileVersion(previous, maxBytes) != publication.previous)
                 throw IOException("The previous healthy project is not available for recovery")
             val restored = copyVerified(previous, base, maxBytes)
@@ -315,6 +327,12 @@ internal object NamedProjectIdentity {
         verifyPublished: (File, ByteArray, Long) -> Unit = ::verify): String {
         if (bytes.isEmpty() || bytes.size.toLong() > maxBytes)
             throw IOException("Project exceeds its publication bound")
+        // Validate before recovery or hash/copy reads: AtomicFile can otherwise
+        // remove an empty non-file staging path while merely opening the base.
+        for (path in listOf(base, File(base.path + ".bak"), File(base.path + ".new"))) {
+            if (path.exists() && !path.isFile)
+                throw IOException("Project publication path is not a regular file")
+        }
         recoverPublication(base, maxBytes)
         val previous = File(base.path + PREVIOUS_SUFFIX)
         val exists = base.exists() || File(base.path + ".bak").exists()

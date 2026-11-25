@@ -529,11 +529,11 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithText("Text 1").assertIsDisplayed()
 
                 openLibrary()
-                rule.onNodeWithText("Delete", substring = false).performClick()
+                rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog())).performClick()
                 rule.onNodeWithText("Delete saved project?").assertIsDisplayed()
                 rule.onNodeWithText("Cancel").performClick()
                 assertEquals(original, ProjectStore.load(context).single { it.name == name }.document)
-                rule.onNodeWithText("Delete", substring = false).performClick()
+                rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog())).performClick()
                 rule.onNodeWithText("Delete project").performClick()
                 rule.waitUntil(15_000) { ProjectStore.load(context).none { it.name == name } }
                 assertTrue(ProjectStore.load(context).none { it.name == name })

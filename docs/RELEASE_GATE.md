@@ -11,13 +11,13 @@ Lance has reported the 0.12.10 phone results: unmentioned supplied checks worked
 - [ ] F04–F06: common top-right Options, deduplicated major commands, shared header and Undo/Redo arrows; Regular More/Create collage/Histogram UI removed as requested.
 - [x] Codex answered all 25, supplied full two-checkpoint roadmap/child snapshots and all 77 mappings, and asked exactly 50 questions — [PR #35](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/35), df0faa23c4908bfd847410c84798a8c3402b27af.
 - [x] ChatGPT answered all 50 and reconciled canonical documents — [answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) and [resume instruction](coordination/ENGINEERING_RESUME_2026-11-24.md).
-- [ ] Owner relays the final prompt; Codex reads both committed documents before application engineering starts. Record activation in the ledger; this is the existing exchange handoff, not another approval/question cycle.
+- [x] Owner relayed the final prompt; Codex read all 50 answers, the resume instruction and canonical records before engineering (November 25). Activation is recorded in the ledger.
 
-No new app build or CI rerun is required for the current documentation-only exchange. Existing receipts remain immutable evidence; later app corrections need normal candidate/merge qualification.
+The documentation-only exchange needed no app rebuild. Application changes are now in [draft PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37), with [candidate verification underway](B1_WORKSPACE_VERIFICATION.md). Existing receipts remain immutable; the new application requires complete candidate/merge qualification. Lance clarified F03 as a pre-picker wait on a 2–3 second clip with otherwise default options; exact source/phone and physical closure remain open.
 
 ## Agreed B1/B2 qualification exits
 
-The [canonical interaction contract](PRODUCT_SPEC.md#agreed-interaction-contract--stage-3) and [Stage 3 answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) define expected behavior; these unchecked exits are future engineering work.
+The [canonical interaction contract](PRODUCT_SPEC.md#agreed-interaction-contract--stage-3) and [Stage 3 answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) define expected behavior; these unchecked exits remain open until their stated evidence is recorded.
 
 - [ ] Common header/Options and history arrows work in every current workspace and both GIF routes, empty/loaded/busy; one major-command location; no Regular More/Create collage/Histogram entry.
 - [ ] New/Open/project Save/Save as/Export/Help dispatch the right native owner. Save identity/collisions and clean/dirty states are correct; Export never falsely saves native edits.
@@ -50,7 +50,7 @@ The named R29-01/R29-02 Eraser correction and observed GIF Save performance fail
 - [x] The merged API35 emulator-exercised APK is independently identified as 0.12.10 / code 22 / phonetest.v22; Android v2 signature and SHA-256 are recorded in the execution receipt.
 - [x] Owner has reported the focused 0.12.10 phone pass: unmentioned supplied checks worked. The named exceptions and requested changes are open in the current gate above; broader device/process-loss and workspace acceptance remain separate.
 
-Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. A1 decisions are complete; B1 is selected on owner-relayed activation, independent measured B2 may overlap, and R1.1/R1.2 remain queued.
+Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. A1 decisions are complete; B1 is active following completed owner-relayed activation/full reads, independent measured B2 is underway, and R1.1/R1.2 remain queued.
 
 ### Retained PR #29 checkpoint — historical, not the current download
 

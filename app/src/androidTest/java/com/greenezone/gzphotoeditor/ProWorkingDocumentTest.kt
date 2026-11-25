@@ -96,6 +96,11 @@ class ProWorkingDocumentTest {
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             openReset()
             rule.onNodeWithText("Delete work").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
+                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                        .fetchSemanticsNodes().isNotEmpty()
+            }
             rule.runOnIdle { assertEquals(original, current) }
             rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
             rule.onNodeWithContentDescription("Redo").assertIsNotEnabled()
@@ -148,6 +153,11 @@ class ProWorkingDocumentTest {
             rule.runOnIdle { assertEquals(editedPhoto, current) }
             openReset()
             rule.onNodeWithText("Delete work").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
+                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                        .fetchSemanticsNodes().isNotEmpty()
+            }
             rule.runOnIdle { assertEquals(photo, current) }
             assertEquals(saved, ProStore.load(context, name))
         } finally {
@@ -160,7 +170,8 @@ class ProWorkingDocumentTest {
         val edited = baseline.copy(layers = listOf(baseline.layers.single().copy(opacity = .6f)))
         val hidden = edited.copy(layers = listOf(edited.layers.single().copy(visible = false)))
         val name = "Reopen baseline " + System.nanoTime().toString().takeLast(12)
-        val hiddenName = "$name hidden"
+        // Keep this distinct inside SaveNameDialog's 28-character input limit.
+        val hiddenName = "Hidden " + name.takeLast(12)
         try {
             open(edited, reset = baseline)
             rule.onNodeWithText("Options").performClick()
@@ -192,6 +203,11 @@ class ProWorkingDocumentTest {
             rule.runOnIdle { assertEquals(edited, current) }
             openReset()
             rule.onNodeWithText("Delete work").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
+                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                        .fetchSemanticsNodes().isNotEmpty()
+            }
             rule.runOnIdle { assertEquals(baseline, current) }
             assertEquals(edited, ProStore.load(context, name))
             assertEquals(hidden, ProStore.load(context, hiddenName))
@@ -212,6 +228,11 @@ class ProWorkingDocumentTest {
             rule.runOnIdle { assertFalse(current.layers.single().visible) }
             openReset()
             rule.onNodeWithText("Delete work").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
+                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                        .fetchSemanticsNodes().isNotEmpty()
+            }
             rule.runOnIdle { assertEquals(saved, current) }
         } finally {
             ProStore.delete(context, name)

@@ -210,6 +210,13 @@ class AndroidGifWorkspacePlaybackTest {
             rule.waitUntil(15_000) { rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty() }
             waitFrame(times.size)
 
+            // The common header can wrap on a small API29 window, leaving a
+            // landscape-shaped ContentScale.Fit container around portrait content.
+            // Use the actual free-canvas tap to inspect the stable frame full-screen;
+            // retain the portrait, pixel, schedule and export assertions below.
+            rule.onNodeWithTag(bitmapTag).performClick()
+            rule.onNodeWithText("Options").assertDoesNotExist()
+            waitFrame(times.size)
             // These patches remain cyan and blue through the moving test pattern.
             // Their positions come from independently decoding the rotated MP4 fixture.
             val visible = rule.onNodeWithTag(bitmapTag).captureToImage().asAndroidBitmap()

@@ -86,7 +86,9 @@ class AndroidGifProjectIdentityTest {
         rule.onNodeWithText("Save").performClick()
         rule.onNodeWithText("Replace GIF project?").assertIsDisplayed()
         rule.onNodeWithText("Cancel").performClick()
-        rule.onNodeWithText("Cancel").performClick()
+        // Collision Cancel ends the entire captured save/departure attempt.
+        rule.onNodeWithText("Replace GIF project?").assertDoesNotExist()
+        rule.onNode(hasSetTextAction()).assertDoesNotExist()
         assertEquals(first, GifStore.load(storage, "Alpha video"))
         assertEquals(editedSecond, GifStore.load(storage, "Beta video"))
 

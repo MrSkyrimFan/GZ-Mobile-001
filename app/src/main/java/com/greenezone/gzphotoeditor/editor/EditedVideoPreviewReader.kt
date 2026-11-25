@@ -38,6 +38,7 @@ internal class EditedVideoPreviewReader private constructor(
     private val rotation: Int,
     private val prefetchReverseFrames: Boolean,
     private val filterDownscaling: Boolean,
+    private val bulkSampleRows: Boolean,
     private val reversePreviewWindow: ReversePreviewWindow?,
     private val checkActive: () -> Unit
 ) : GifFrameReader {
@@ -52,6 +53,7 @@ internal class EditedVideoPreviewReader private constructor(
     private var inputEnded = false
     private var lastIndex = -1
     private var started = false
+    internal val sampleRowStorageBytes: Int get() = sampleAxes?.rowStorageBytes ?: 0
 
     override fun frame(atMs: Long, edge: Int): Bitmap {
         checkActive()
@@ -180,7 +182,7 @@ internal class EditedVideoPreviewReader private constructor(
         val hd = standard == MediaFormat.COLOR_STANDARD_BT709 ||
             (standard == null && maxOf(clip.width, clip.height) >= 1280)
         val axes = sampleAxes?.takeIf { it.width == width && it.height == height && it.crop == crop }
-            ?: SampleAxes(width, height, crop, rotation, filterDownscaling).also { sampleAxes = it }
+            ?: SampleAxes(width, height, crop, rotation, filterDownscaling, bulkSampleRows).also { sampleAxes = it }
         return SamplePicture(Plane(planes[0], axes.lumaRows), Plane(planes[1], axes.uRows),
             Plane(planes[2], axes.vRows), axes, PreviewColor(hd, fullRange))
     }
@@ -190,7 +192,8 @@ internal class EditedVideoPreviewReader private constructor(
         val height: Int,
         val crop: Rect,
         rotation: Int,
-        filterDownscaling: Boolean
+        filterDownscaling: Boolean,
+        private val bulkSampleRows: Boolean
     ) {
         private val transposed = rotation == 90 || rotation == 270
         private val sourceXs = sampleCoordinates(
@@ -207,9 +210,11 @@ internal class EditedVideoPreviewReader private constructor(
         private val sourceColumns = if (transposed) height else width
         private val sourceRows = if (transposed) width else height
         private val filtered = filterDownscaling && (sourceColumns < crop.width() || sourceRows < crop.height())
-        val lumaRows = if (filtered) FilterRows() else null
-        val uRows = if (filtered) FilterRows() else null
-        val vRows = if (filtered) FilterRows() else null
+        val lumaRows = if (filtered || bulkSampleRows) FilterRows() else null
+        val uRows = if (filtered || bulkSampleRows) FilterRows() else null
+        val vRows = if (filtered || bulkSampleRows) FilterRows() else null
+        val rowStorageBytes: Int get() = listOfNotNull(lumaRows, uRows, vRows)
+            .sumOf { it.upper.size + it.lower.size }
         private val xWeights = if (filtered) filterCoordinates(sourceColumns, crop.left, crop.width(),
             rotation == 180 || rotation == 270) else emptyArray()
         private val yWeights = if (filtered) filterCoordinates(sourceRows, crop.top, crop.height(),
@@ -232,9 +237,10 @@ internal class EditedVideoPreviewReader private constructor(
             checkActive: () -> Unit,
             consume: (Int, Int) -> Unit
         ) {
-            // Scan along decoded rows for filtered output so each YUV row pair is bulk-read once.
-            // A sideways picture visits destination columns first but keeps the same pixel indexes.
-            val byColumn = filtered && transposed
+            // Scan along decoded rows. Original-size sampling also bulk-reads each YUV row,
+            // avoiding three direct-buffer calls per output pixel with identical coordinates.
+            // A sideways picture visits destination columns first and keeps the same output indexes.
+            val byColumn = (filtered || bulkSampleRows) && transposed
             val rows = if (byColumn) width else height
             val columns = if (byColumn) height else width
             for (outer in 0 until rows) {
@@ -244,6 +250,11 @@ internal class EditedVideoPreviewReader private constructor(
                     y.cacheRows(taps, crop, 0)
                     u.cacheRows(taps, crop, 1)
                     v.cacheRows(taps, crop, 1)
+                } else if (bulkSampleRows) {
+                    val sourceRow = sourceYs[outer]
+                    y.cacheRow(sourceRow, crop, 0)
+                    u.cacheRow(sourceRow, crop, 1)
+                    v.cacheRow(sourceRow, crop, 1)
                 }
                 for (inner in 0 until columns) {
                     val row = if (byColumn) inner else outer
@@ -264,6 +275,10 @@ internal class EditedVideoPreviewReader private constructor(
             }
             val x = sourceXs[xIndex]
             val yy = sourceYs[yIndex]
+            if (bulkSampleRows) {
+                return y.readCached(x) or (u.readCached(x / 2) shl 8) or
+                    (v.readCached(x / 2) shl 16)
+            }
             return y.read(x, yy) or (u.read(x / 2, yy / 2) shl 8) or
                 (v.read(x / 2, yy / 2) shl 16)
         }
@@ -422,6 +437,23 @@ internal class EditedVideoPreviewReader private constructor(
 
         fun read(x: Int, y: Int) = buffer.get(origin + y * rowStride + x * pixelStride).toInt() and 255
 
+        fun cacheRow(sourceY: Int, crop: Rect, subsampleShift: Int) {
+            val rows = requireNotNull(filtered)
+            val view = requireNotNull(rowBuffer)
+            val start = crop.left shr subsampleShift
+            val end = (crop.right - 1) shr subsampleShift
+            val byteCount = (end - start) * pixelStride + 1
+            rows.start = start
+            rows.reserve(byteCount)
+            view.position(origin + (sourceY shr subsampleShift) * rowStride + start * pixelStride)
+            view.get(rows.upper, 0, byteCount)
+        }
+
+        fun readCached(x: Int): Int {
+            val rows = requireNotNull(filtered)
+            return rows.upper[(x - rows.start) * pixelStride].toInt() and 255
+        }
+
         fun cacheRows(y: FilterTaps, crop: Rect, subsampleShift: Int) {
             val rows = requireNotNull(filtered)
             val view = requireNotNull(rowBuffer)
@@ -496,6 +528,8 @@ internal class EditedVideoPreviewReader private constructor(
             clip: GifVideoClip,
             prefetchReverseFrames: Boolean = false,
             filterDownscaling: Boolean = false,
+            // Scalar access remains a test oracle for exact bulk-row pixel equivalence.
+            bulkSampleRows: Boolean = true,
             reversePreviewWindow: ReversePreviewWindow? = null,
             checkActive: () -> Unit
         ): EditedVideoPreviewReader {
@@ -523,7 +557,7 @@ internal class EditedVideoPreviewReader private constructor(
                     decoder.configure(format, null, null, 0)
                     decoder.start()
                     return EditedVideoPreviewReader(clip, extractor, decoder, format, rotation,
-                        prefetchReverseFrames, filterDownscaling, reversePreviewWindow, checkActive)
+                        prefetchReverseFrames, filterDownscaling, bulkSampleRows, reversePreviewWindow, checkActive)
                 } catch (error: Throwable) {
                     decoder.release()
                     throw error

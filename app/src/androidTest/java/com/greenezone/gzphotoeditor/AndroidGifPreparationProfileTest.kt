@@ -78,25 +78,7 @@ class AndroidGifPreparationProfileTest {
             }
         }
         try {
-            rule.setContent {
-                val base = LocalContext.current
-                val isolated = remember(base) {
-                    object : ContextWrapper(base) {
-                        override fun getFilesDir() = File(folder, "files").also { it.mkdirs() }
-                        override fun getCacheDir() = File(folder, "cache").also { it.mkdirs() }
-                    }
-                }
-                CompositionLocalProvider(LocalContext provides isolated, LocalActivityResultRegistryOwner provides picker) {
-                    MaterialTheme(colorScheme = darkColorScheme()) {
-                        var document by remember { mutableStateOf(opened) }
-                        current = document
-                        GifMakerScreen(document, { document = it; current = it }, {}, {})
-                    }
-                }
-            }
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithContentDescription("GIF preview, frame 1").fetchSemanticsNodes().isNotEmpty()
-            }
+            mount(folder, opened, picker)
             rule.onNodeWithContentDescription("Trim start and end").performScrollTo().performTouchInput {
                 swipe(Offset(width * .96f, center.y), Offset(width * .50f, center.y), 450)
             }
@@ -180,6 +162,75 @@ class AndroidGifPreparationProfileTest {
             rule.runOnIdle { rule.activity.setContentView(android.widget.FrameLayout(rule.activity)) }
             media.forEach { resolver.delete(it, null, null) }
             folder.deleteRecursively()
+        }
+    }
+
+    @Test fun cancellationDuringOriginalSizePreparationStopsBeforeThePickerAndKeepsEdits() {
+        val folder = Files.createTempDirectory(context.cacheDir.toPath(), "gz-gif-cancel-profile-").toFile()
+        val source = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            "gz-cancel-profile.mp4", "video/mp4") { output ->
+            instrument.context.assets.open("gif_portrait_motion_fixture.mp4").use { it.copyTo(output) }
+        }
+        val sourceHash = hash(source)
+        val opened = VideoGifSource.document(context, source)
+        val recipe = opened.copy(video = requireNotNull(opened.video).copy(endMs = 2665L))
+        val pickerCount = AtomicLong(0)
+        val picker = object : ActivityResultRegistryOwner {
+            override val activityResultRegistry = object : ActivityResultRegistry() {
+                override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>,
+                    input: I, options: ActivityOptionsCompat?) {
+                    pickerCount.incrementAndGet()
+                    dispatchResult(requestCode, Activity.RESULT_CANCELED, null)
+                }
+            }
+        }
+        try {
+            mount(folder, recipe, picker)
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Export GIF…").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Writing frame ", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            val requested = SystemClock.elapsedRealtimeNanos()
+            rule.onNodeWithText("Cancel export").performClick()
+            rule.waitUntil(5_000) {
+                rule.onAllNodesWithText("GIF export cancelled", substring = false).fetchSemanticsNodes().isNotEmpty()
+            }
+            val observedStopMs = (SystemClock.elapsedRealtimeNanos() - requested) / 1_000_000
+            Log.i("GzGifCancellationProfile", "api=" + Build.VERSION.SDK_INT +
+                " canvas=1080x1920 trimEndMs=2665 observedStopMs=" + observedStopMs)
+            assertTrue("Local preparation cancellation exceeded 1000 ms: " + observedStopMs, observedStopMs <= 1000)
+            assertEquals(0L, pickerCount.get())
+            rule.runOnIdle { assertEquals(recipe, current) }
+            assertNull(PendingExportJournal(File(folder, "files")).read(ExportWorkspace.GIF))
+            rule.onNodeWithText("Options").assertIsEnabled()
+            assertArrayEquals(sourceHash, hash(source))
+        } finally {
+            rule.runOnIdle { rule.activity.setContentView(android.widget.FrameLayout(rule.activity)) }
+            media.forEach { resolver.delete(it, null, null) }
+            folder.deleteRecursively()
+        }
+    }
+
+    private fun mount(folder: File, opened: GifDocument, picker: ActivityResultRegistryOwner) {
+        rule.setContent {
+            val base = LocalContext.current
+            val isolated = remember(base) {
+                object : ContextWrapper(base) {
+                    override fun getFilesDir() = File(folder, "files").also { it.mkdirs() }
+                    override fun getCacheDir() = File(folder, "cache").also { it.mkdirs() }
+                }
+            }
+            CompositionLocalProvider(LocalContext provides isolated, LocalActivityResultRegistryOwner provides picker) {
+                MaterialTheme(colorScheme = darkColorScheme()) {
+                    var document by remember { mutableStateOf(opened) }
+                    current = document
+                    GifMakerScreen(document, { document = it; current = it }, {}, {})
+                }
+            }
+        }
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithContentDescription("GIF preview, frame 1").fetchSemanticsNodes().isNotEmpty()
         }
     }
 

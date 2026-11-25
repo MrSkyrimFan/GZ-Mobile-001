@@ -38,7 +38,7 @@ Finite independent reviews found and corrected stale native-export restoration, 
 
 ## Existing assertion migration
 
-All **193 original Android method identities** are retained. The integrated source currently has **250 cases**; this is a source count, not executed passes. Required candidate and merged-main JVM/API29/API35/signing receipts remain pending.
+All **193 original Android method identities** are retained. The first integrated run executed **250 cases**; its failures are preserved above. The follow-up adds exact saved-GIF recovery, bulk/scalar ARGB equivalence and actual preparation cancellation regressions; the next combined source contains **258 cases**, all 193 inherited identities retained with zero duplicates, pending runtime qualification. Required candidate and merged-main JVM/API29/API35/signing receipts remain pending.
 
 | Existing files / scope | Authorized route changes | Retained checks |
 | --- | --- | --- |
@@ -78,6 +78,16 @@ The integration owner exclusively owns EditedVideoPreviewReader.kt and its focus
 The added row cache must scale with source row width, not retained frame count; at the 1080-wide fixture it must stay below 16 KiB additional row storage. Existing 16 MiB reverse-picture cap and full-frame working buffers remain unchanged. Start/cancel visible acknowledgement target is 250 ms; cancellation of this local fixture should release the worker within 1,000 ms. Record actual measurements and explicitly retain any unmet target instead of changing it after the run. These are bounded CI-workload targets, not handset or universal supported-media guarantees.
 
 F03 remains open until the applicable measured and owner handset evidence exists.
+
+### Post-review changes awaiting execution
+
+The bulk-row source reviewer found no production correctness issue and requested two stronger test details: include a neighboring reverse timestamp so the test consumes an actually retained packed picture, and use the strict less-than row-cache bound. Both were applied. The exact-pixel comparison covers selected native-size, rotated, reverse-cache, anamorphic and filtered frames; it does not claim every frame of every supported source.
+
+The empty staging-directory regression additionally verifies both legacy/named Save and load paths, old bytes/identity, retained obstruction and cleared pending metadata. The shared reader preserves the healthy base without invoking destructive AtomicFile cleanup in that specific state; publication rejects non-file transaction occupants before changing bytes.
+
+The first-run fixes retain the original method identities and non-UI assertions. Collision cancellation now asserts the entire canceled dialog is gone; held-pointer toolbar commands use the actual semantic click without introducing an invalid second DOWN; dialog actions are scoped to their modal; crop/relink and Pro completion wait for their actual state. The Pro hidden-save fixture now uses a distinct name inside the existing 28-character input limit. These changes do not alter content, quality or timing acceptance checks.
+
+A separate source review checked the new actual-UI cancellation profile and its timing report. The canceled notice follows worker join and journal clearance; the test observes completion including dispatch/polling overhead, while worker-stop and visible-frame acknowledgement are logged separately. It cancels during frame preparation, not necessarily at an exact frame number. Execution is still required.
 
 ## Delivery gate
 

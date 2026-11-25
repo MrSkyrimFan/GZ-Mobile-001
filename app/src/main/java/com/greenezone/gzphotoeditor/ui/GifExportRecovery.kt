@@ -23,6 +23,8 @@ import com.greenezone.gzphotoeditor.editor.GifStore
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.ImagePipeline
 import com.greenezone.gzphotoeditor.editor.PendingExport
+import com.greenezone.gzphotoeditor.editor.NamedProjectRef
+import com.greenezone.gzphotoeditor.editor.ProjectKind
 import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.editor.PendingExportPhase
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
@@ -44,17 +46,41 @@ import java.io.OutputStream
 import android.util.Log
 import com.greenezone.gzphotoeditor.editor.GifMath
 
-internal data class PendingGifRecipe(val document: GifDocument, val savedName: String?) {
+internal data class PendingGifRecipe(
+    val document: GifDocument,
+    val savedName: String?,
+    val savedProject: NamedProjectRef? = null
+) {
     fun encode(): String = JSONObject().apply {
         put("document", GifStore.encode(document))
         if (savedName != null) put("savedName", savedName)
+        savedProject?.let { project ->
+            put("savedProject", JSONObject().apply {
+                put("kind", project.kind.name)
+                put("id", project.id)
+                put("name", project.name)
+                put("version", project.version)
+            })
+        }
     }.toString()
 
     companion object {
         fun decode(value: String): PendingGifRecipe? = try {
             val json = JSONObject(value)
             GifStore.decode(json.getString("document"))?.let { document ->
-                PendingGifRecipe(document, json.optString("savedName").takeIf { it.isNotBlank() })
+                val name = json.optString("savedName").takeIf { it.isNotBlank() }
+                // The optional target must never make an otherwise usable captured
+                // export unreadable. Name-only and malformed metadata stay detached.
+                val project = runCatching {
+                    json.optJSONObject("savedProject")?.let { target ->
+                        NamedProjectRef(ProjectKind.valueOf(target.getString("kind")),
+                            target.getString("id"), target.getString("name"), target.getString("version"))
+                            .takeIf { it.kind == ProjectKind.GIF && it.name == name &&
+                                java.util.UUID.fromString(it.id).toString() == it.id &&
+                                Regex("[0-9a-f]{64}").matches(it.version) }
+                    }
+                }.getOrNull()
+                PendingGifRecipe(document, name, project)
             }
         } catch (_: Exception) { null }
     }
@@ -135,7 +161,7 @@ internal class GifExportOperation(
 
     fun suppressNativeRestore(ownerId: String): Boolean {
         val pending = request ?: return true
-        if ((pending.nativeOwnerId ?: pending.id) != ownerId || !pending.restoreNativeDraft) return true
+        if ((pending.nativeOwnerId ?: pending.id) != ownerId) return true
         if (active || cancellationRequested) return false
         return try {
             val suppressed = journal.suppressNativeRestore(pending, ownerId)
@@ -430,6 +456,7 @@ internal class GifExportOperation(
         timing?.let { item ->
             val start = item.cancelRequested ?: item.started
             item.add(if (item.cancelRequested == null) "startUiAcknowledgement" else "cancelUiAcknowledgement", System.nanoTime() - start)
+            if (item.cancelRequested != null) item.report("cancel-visible")
         }
     }
 

@@ -25,6 +25,10 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 /** Regressions for the bounded post-integration native departure review. */
 @RunWith(AndroidJUnit4::class)
@@ -99,12 +103,24 @@ class AndroidNativeDepartureReviewTest {
         rule.onNodeWithText("Delete work").performClick()
     }
 
+    private fun waitForProDelete() {
+        // The document callback can precede the SideEffect that publishes session
+        // ownership. Observe the completed UI operation before reading retainedPro.
+        rule.waitUntil(15_000) {
+            currentPro == originalPro &&
+                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
+                rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                    .fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.waitForIdle()
+    }
+
     @Test fun deleteCurrentProRevokesFreshOwnedRecoveryAndKeepsItsExportRecipe() = isolated { context, _ ->
         mountPro(context)
         val owner = retainedPro.nativeOwnerKey()
         val pending = pendingPro(context, owner)
         deleteCurrentPro()
-        rule.waitUntil(15_000) { currentPro == originalPro }
+        waitForProDelete()
         val retained = requireNotNull(PendingExportJournal(context.filesDir).read(ExportWorkspace.PRO))
         assertEquals(pending.id, retained.id)
         assertEquals(pending.recipe, retained.recipe)
@@ -130,7 +146,7 @@ class AndroidNativeDepartureReviewTest {
         mountPro(context)
         val pending = pendingPro(context, "different-native-work-owner")
         deleteCurrentPro()
-        rule.waitUntil(15_000) { currentPro == originalPro }
+        waitForProDelete()
         val retained = requireNotNull(PendingExportJournal(context.filesDir).read(ExportWorkspace.PRO))
         assertEquals(pending, retained)
         assertTrue(retained.restoreNativeDraft)
@@ -152,7 +168,7 @@ class AndroidNativeDepartureReviewTest {
         assertTrue(blocked.deleteRecursively())
         assertTrue(requireNotNull(PendingExportJournal(context.filesDir).read(ExportWorkspace.PRO)).restoreNativeDraft)
         rule.onNodeWithText("Delete work").performClick()
-        rule.waitUntil(15_000) { currentPro == originalPro }
+        waitForProDelete()
         val retained = requireNotNull(PendingExportJournal(context.filesDir).read(ExportWorkspace.PRO))
         assertEquals(pending.id, retained.id)
         assertFalse(retained.restoreNativeDraft)
@@ -297,4 +313,94 @@ class AndroidNativeDepartureReviewTest {
         assertFalse(custody.dirty)
         assertEquals(updated, GifStore.loadNamed(context, first.name)!!.project)
     }
+    private fun mountRecoveredGif(context: Context, check: (GifDocument, GifWorkspaceSession) -> Unit) {
+        var current = GifDocument()
+        var retained = GifWorkspaceSession()
+        rule.setContent {
+            var document by remember { mutableStateOf(GifDocument()) }
+            var session by remember { mutableStateOf(GifWorkspaceSession()) }
+            CompositionLocalProvider(LocalContext provides context) {
+                MaterialTheme {
+                    GifMakerScreenContent(document, { document = it; current = it }, {}, {},
+                        session, { session = it; retained = it })
+                }
+            }
+        }
+        rule.waitUntil(15_000) { retained.identity != null }
+        rule.runOnIdle { check(current, retained) }
+    }
+
+    @Test fun currentGifSaveReferenceRoundTripsAndRestoresItsExactNamedBaseline() = isolated { context, _ ->
+        val baseline = gif()
+        val project = saved(GifStore.saveNamed(context, ProjectSaveIntent.Create("Current target"), baseline))
+        val edited = gif(250)
+        val recipe = PendingGifRecipe(edited, project.name, project)
+        val decoded = requireNotNull(PendingGifRecipe.decode(recipe.encode()))
+        assertEquals(recipe, decoded)
+        assertEquals(project, decoded.savedProject)
+        val journal = PendingExportJournal(context.filesDir)
+        val pending = journal.begin(ExportWorkspace.GIF, "image/gif", "current.gif",
+            recipe.encode(), nativeOwnerId = "current-native-owner")
+        mountRecoveredGif(context) { current, retained ->
+            assertEquals(edited, current)
+            assertEquals(project, retained.identity!!.project)
+            assertEquals(project.name, retained.savedName)
+            assertEquals(baseline, retained.identity!!.savedDocument)
+            assertEquals(baseline, retained.identity!!.entryDocument)
+            assertEquals(pending.nativeOwnerId, retained.identity!!.ownerId)
+            assertNotEquals("Unsaved recovered edits must remain distinct from the named baseline",
+                current, retained.identity!!.baseline)
+            val nextExport = PendingGifRecipe(current, retained.savedName, retained.identity!!.project)
+            assertEquals(project, PendingGifRecipe.decode(nextExport.encode())!!.savedProject)
+            assertEquals(project.name, PendingGifRecipe.decode(nextExport.encode())!!.savedName)
+        }
+        assertEquals(project, GifStore.loadNamed(context, project.name)!!.project)
+        assertEquals(baseline, GifStore.loadNamed(context, project.name)!!.content)
+        assertEquals(pending.recipe, journal.read(ExportWorkspace.GIF)!!.recipe)
+    }
+
+    @Test fun staleGifSaveVersionKeepsRecoveryUnnamedWithoutChangingTheNewerProject() = isolated { context, _ ->
+        val old = saved(GifStore.saveNamed(context, ProjectSaveIntent.Create("Changed target"), gif()))
+        val recovered = gif(250)
+        val recipe = PendingGifRecipe(recovered, old.name, old)
+        val journal = PendingExportJournal(context.filesDir)
+        val pending = journal.begin(ExportWorkspace.GIF, "image/gif", "stale.gif",
+            recipe.encode(), nativeOwnerId = "stale-native-owner")
+        val updated = saved(GifStore.saveNamed(context, ProjectSaveIntent.Update(old), gif(350)))
+        assertEquals(old.id, updated.id)
+        assertNotEquals(old.version, updated.version)
+        mountRecoveredGif(context) { current, retained ->
+            assertEquals(recovered, current)
+            assertNull(retained.identity!!.project)
+            assertNull(retained.identity!!.savedDocument)
+            assertNull(retained.savedName)
+            assertEquals(GifDocument(), retained.identity!!.entryDocument)
+            assertEquals(pending.nativeOwnerId, retained.identity!!.ownerId)
+        }
+        assertEquals(updated, GifStore.loadNamed(context, old.name)!!.project)
+        assertEquals(gif(350), GifStore.loadNamed(context, old.name)!!.content)
+        assertEquals(pending.recipe, journal.read(ExportWorkspace.GIF)!!.recipe)
+    }
+
+    @Test fun cachedSuppressedGifRequestStillRejectsUnreadableLiveDisposition() = isolated { context, _ ->
+        val journal = PendingExportJournal(context.filesDir)
+        val owner = "resolved-native-owner"
+        val pending = journal.begin(ExportWorkspace.GIF, "image/gif", "retained.gif",
+            PendingGifRecipe(gif(), null).encode(), nativeOwnerId = owner)
+        assertNotNull(journal.suppressNativeRestore(pending, owner))
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        try {
+            val operation = GifExportOperation(context, scope, false, null, {}, { _, _ -> })
+            assertFalse(requireNotNull(operation.request).restoreNativeDraft)
+            val resolution = File(context.filesDir, "pending-exports/native-resolutions.json")
+            assertTrue(resolution.delete())
+            assertTrue(resolution.mkdir())
+            File(resolution, "obstruction").writeText("test-only")
+            assertFalse("A cached suppressed flag cannot approve an unreadable live disposition",
+                operation.suppressNativeRestore(owner))
+            assertEquals(pending.id, operation.request!!.id)
+            assertEquals(pending.recipe, operation.request!!.recipe)
+        } finally { scope.cancel() }
+    }
+
 }

@@ -276,13 +276,18 @@ internal fun GifMakerScreenContent(
         LaunchedEffect(recovery) {
             val route = if (recovery.document.video == null) GifWorkspaceRoute.PHOTOS else GifWorkspaceRoute.VIDEO
             val pending = requireNotNull(recoveredExport)
-            // This compatible export recipe records only a display name, not a
-            // saved project's stable identity/version. Recover the draft unnamed:
-            // a deleted/recreated same-name project must never become its Update target.
+            // A display name cannot identify a saved target. Only the exact
+            // captured kind/UUID/name/version may restore its Update association.
+            val named = recovery.savedProject?.let { expected ->
+                withContext(Dispatchers.IO) {
+                    GifStore.loadNamed(context, expected.name)?.takeIf { it.project == expected }
+                }
+            }
             val identity = GifDocumentIdentity(ownerId = pending.nativeOwnerId ?: pending.id,
-                entryDocument = GifDocument())
+                entryDocument = named?.content ?: GifDocument(),
+                project = named?.project, savedDocument = named?.content)
             onDocument(recovery.document)
-            onSession(session.copy(route = route, savedName = null,
+            onSession(session.copy(route = route, savedName = named?.project?.name,
                 identity = identity, identities = mapOf(identity.ownerId to identity)))
             restored = true
         }
@@ -502,7 +507,8 @@ internal fun GifMakerScreenContent(
             return
         }
         playing = false
-        gifExport.start(PendingGifRecipe(document, savedName), nativeOwnerId = custody.identity.ownerId)
+        gifExport.start(PendingGifRecipe(document, savedName, custody.identity.project),
+            nativeOwnerId = custody.identity.ownerId)
     }
 
     LaunchedEffect(document.frames, index, document.fit, document.aspect, document.size) {

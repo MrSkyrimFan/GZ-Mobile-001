@@ -304,7 +304,8 @@ internal fun VideoGifScreenContent(
     fun startExport() {
         if (!enabled || !GifMath.valid(document)) return
         pauseAt(position)
-        gifExport.start(PendingGifRecipe(document, savedName), diagnosticOperation, custody.identity.ownerId)
+        gifExport.start(PendingGifRecipe(document, savedName, custody.identity.project),
+            diagnosticOperation, custody.identity.ownerId)
     }
 
     fun finishVideoRouteExit() {

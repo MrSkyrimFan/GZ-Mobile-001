@@ -190,6 +190,14 @@ class AndroidRegularObjectGestureContractTest {
     private fun canceledByBack(document: EditDocument, tool: String, crop: Boolean = false) {
         withPhoto(document) { fixture ->
             tab(tool)
+            if (crop) {
+                // Crop handles are published only after the matching uncropped
+                // preview finishes. Do not measure a node that does not exist yet.
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithTag("crop-frame").fetchSemanticsNodes().isNotEmpty()
+                }
+                rule.waitForIdle()
+            }
             val node = when {
                 crop -> rule.onNodeWithTag("crop-frame")
                 tool == "Blur & cover" -> canvas()
@@ -236,7 +244,8 @@ class AndroidRegularObjectGestureContractTest {
             val frame = fitted(node)
             node.performTouchInput { down(frame.at(.5f, .5f)); moveTo(frame.at(.65f, .55f)) }
             rule.waitForIdle()
-            rule.onNodeWithText("Classic", substring = false).performClick()
+            rule.onNodeWithText("Classic", substring = false)
+                .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
             node.performTouchInput { moveTo(frame.at(.75f, .6f)); up() }
             rule.waitForIdle()
             assertCanceled(fixture, document)
@@ -273,7 +282,8 @@ class AndroidRegularObjectGestureContractTest {
             node.performTouchInput { down(frame.at(.5f, .5f)); moveTo(frame.at(.65f, .55f)) }
             rule.waitForIdle()
             // Activate the real toolbar command while the original pointer is still held.
-            rule.onNodeWithText("Duplicate", substring = false).performClick()
+            rule.onNodeWithText("Duplicate", substring = false)
+                .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
             rule.waitForIdle()
             // There is exactly one original object. Its overlay existing proves that
             // cancellation did not select a nonexistent duplicate index.

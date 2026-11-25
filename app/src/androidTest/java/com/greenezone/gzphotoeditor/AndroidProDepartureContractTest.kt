@@ -84,6 +84,7 @@ class AndroidProDepartureContractTest {
         }
         rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
         rule.onNodeWithText("Discard").performClick()
+        rule.waitUntil(15_000) { backCalls == 1 }
         rule.runOnIdle {
             assertEquals(1, backCalls)
             assertEquals(initial, current)
@@ -102,6 +103,7 @@ class AndroidProDepartureContractTest {
         rule.onNodeWithContentDescription("Choose editing workspace").performClick()
         rule.onNodeWithText("Collage maker").performClick()
         rule.onNodeWithText("Discard").performClick()
+        rule.waitUntil(15_000) { switches.size == 1 }
         rule.runOnIdle {
             assertEquals(listOf(WorkspaceMode.COLLAGE), switches)
             assertEquals(initial, current)
@@ -163,6 +165,7 @@ class AndroidProDepartureContractTest {
             rule.activity.onBackPressedDispatcher.onBackPressed()
         }
         rule.onNodeWithText("Discard setup").performClick()
+        rule.waitUntil(15_000) { backCalls == 1 }
         rule.runOnIdle {
             assertEquals(1, backCalls)
             assertEquals(ProDocument(), current)
@@ -184,6 +187,7 @@ class AndroidProDepartureContractTest {
             rule.onNodeWithText("Show").performScrollTo().performClick()
             rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
             rule.onNodeWithText("Discard").performClick()
+            rule.waitUntil(15_000) { backCalls == 1 }
             rule.runOnIdle {
                 assertEquals(1, backCalls)
                 assertEquals(saved, current)

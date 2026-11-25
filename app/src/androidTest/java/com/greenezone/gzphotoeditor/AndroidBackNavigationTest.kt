@@ -1168,7 +1168,7 @@ class AndroidBackNavigationTest {
             ) {
                 pressBackThroughDispatcher()
                 rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-                rule.onNodeWithText("Cancel").performClick()
+                rule.onNode(hasText("Cancel", substring = false) and hasAnyAncestor(isDialog())).performClick()
                 rule.onNodeWithTag("photo-tools").assertIsDisplayed()
 
                 pressBackThroughDispatcher()

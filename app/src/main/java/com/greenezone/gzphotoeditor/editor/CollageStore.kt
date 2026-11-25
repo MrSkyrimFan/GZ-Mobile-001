@@ -190,19 +190,14 @@ object CollageStore {
     private fun hasSavedFile(file: File): Boolean =
         file.isFile || File(file.path + ".bak").isFile
 
-    private fun readRecipe(file: File): String? =
-        AtomicFile(file).openRead().use { stream ->
-            if (stream.channel.size() > MAX_BYTES) null
-            else stream.bufferedReader(Charsets.UTF_8).readText()
-        }
-
     @Synchronized
     fun load(context: Context, name: String): CollageDocument? {
         val id = key(storedName(context, name)) ?: return null
         val file = File(directory(context), "$id.gzc")
         return try {
-            NamedProjectIdentity.recoverPublication(file, MAX_BYTES.toLong())
-            if (!hasSavedFile(file)) null else readRecipe(file)?.let(::decode)
+            NamedProjectIdentity.readPayload(file, MAX_BYTES.toLong()) { stream, _ ->
+                decode(stream.bufferedReader(Charsets.UTF_8).readText())
+            }?.content
         } catch (_: Exception) { null }
     }
 

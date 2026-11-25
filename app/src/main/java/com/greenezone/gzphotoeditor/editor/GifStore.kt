@@ -197,7 +197,11 @@ object GifStore {
         val key = name?.let(::id)
         if (name == null || key == null) null else {
             val file = File(folder(context), "$key.gzgif")
-            NamedProjectIdentity.readPayload(file, MAX_BYTES.toLong()) { stream, _ ->
+            // Identification for a named delete must not recover/rename a backup
+            // or remove an unexpected staging directory before deletion can refuse it.
+            val blocked = listOf(file, File(file.path + ".bak"), File(file.path + ".new"))
+                .any { it.exists() && !it.isFile }
+            if (blocked) null else NamedProjectIdentity.readPayload(file, MAX_BYTES.toLong()) { stream, _ ->
                 readProject(stream.bufferedReader(Charsets.UTF_8).readText(), context)
             }?.let { loaded ->
                 NamedProject(NamedProjectIdentity.reference(context, ProjectKind.GIF,
