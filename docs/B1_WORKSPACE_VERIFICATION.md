@@ -26,6 +26,30 @@ Candidate `c819db57bc7fb33d0c46d83019cb5d9e7c428caa`, [run 45577786262](https://
 
 Diagnosed repairs are bounded to those failures: exact saved GIF identity recovery; AtomicFile obstruction/rollback and saved GIF read preflight; actual asynchronous Pro completion; dialog-scoped selectors and held-pointer semantic actions; loaded crop readiness; Collage relink readiness; and the API29 portrait capture viewport. Original method identities, content/source/history/fidelity assertions and existing budgets remain protected. Subsequent execution must verify the corrections; a diagnosis is not a pass.
 
+### Second integrated execution and bounded follow-up
+
+Candidate `713ed1917804b74f1cf4d93b46889c17dbd1f875`, [run 45583464308](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45583464308), passed build/JVM/signature checks. API29 passed **258/258**, zero failures/errors/skips. API35 passed **257/258**, with one test observation race and zero errors/skips. Full XML ZIP identities: API29 artifact `15008911956`, SHA-256 `6e743c79875da1920069fe20035e1bc46f83c4879c424b6f200c6f3637aedf45`; API35 artifact `15007774538`, SHA-256 `60f3a48640298fc7cdc1be87dd054841e511d5b1100007ffee349ef8549f4fa2`. Both archives were read completely and matched their published digests.
+
+The sole API35 failure is ordinaryProDiscardReadsFreshRecoveryBeforeItNavigates. Source diagnosis confirms durable revoke → original baseline publication → session publication → departure callback. The fixture's departure counter updates synchronously but its external document mirror updates on the next composition. The corrected test retains the departure wait, then asserts exact count/document on Compose idle; all journal assertions remain. This is not a production ordering change.
+
+The first bulk-row experiment passed all exact selected-frame ARGB, reverse-cache, output fidelity/schedule, source-protection and inherited timing tests on both APIs. Its measured row arrays are 4,320 bytes for the portrait fixture and 5,120 for the rotated fixture. However, it **did not meet the prospective preparation/source-reader speed targets**:
+
+| Post-bulk-row metric | API29 | API35 |
+| --- | ---: | ---: |
+| Preparation to picker | 17,929 ms | 16,110 ms |
+| Source reader wall / calling-thread CPU | 12,008 /11,407 ms | 13,640 /13,204 ms |
+| Pipeline | 16,037 ms | 15,182 ms |
+| Start UI acknowledgement | 122 ms | 88 ms |
+| Cancel UI acknowledgement / worker stop | 59 /38 ms | 53 /16 ms |
+| Observed cancel-command to completed notice | 103 ms | 104 ms |
+| Output bytes / frames / duration | 995,576 /80 /2670 ms | 995,576 /80 /2670 ms |
+
+Sampled independent decoded-color errors are identical to the corresponding baseline API. All three cache-equivalence cases and both preparation/cancellation cases pass. These observations do not close handset F03.
+
+**Second bounded B2 experiment, recorded before its production patch:** source-reader CPU remains dominant. Test exact memoization of repeated packed YUV samples inside that reader, without changing PreviewColor.pixel arithmetic. Use one reader-owned direct-mapped cache of at most 4,096 keys plus 4,096 ARGB values (32 KiB array payload), with the color-matrix identity in each key; collisions recompute the original result. Do not attach this cache to retained reverse pictures or share mutable global caches. Retain the uncached scalar oracle, bounded reverse storage, existing row-memory bounds and all prior absolute/relative/fidelity/response targets unchanged. Add replacement/matrix-identity tests and aggregate conversion/cache counters. This experiment has one explicit causal hypothesis: repeated exact sample colors can avoid repeated floating-point conversion while preserving every pixel.
+
+The integration owner transfers only EditedVideoPreviewReader.kt and the new focused cache tests to the GIF implementation owner for this experiment; other current production files remain frozen. Evaluate the resulting run against the original 10,000 ms /50% targets and record any unmet condition explicitly.
+
 ## Implemented contract and finite review
 
 The common header places the wrapping brand and Options at opposite edges on its first row, with workspace/Back and history on the second. Major actions have one Options location. Regular More/Create collage/Histogram entries are removed; processing/legacy compatibility remain. Collage free-canvas single taps select a hit tile and toggle chrome once; canceled/multi-pointer/moved gestures do neither.
