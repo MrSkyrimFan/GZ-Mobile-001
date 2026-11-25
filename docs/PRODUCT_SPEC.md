@@ -1,6 +1,6 @@
 # GZ Editor Pro product requirements
 
-> **Current work — November 25, 2026:** Lance relayed the completed [GPT-6 Pro review](coordination/GPT_6_PRO_INDEPENDENT_REVIEW_2026-11-25.md). The [work ledger](WORK_LEDGER.md) selects a bounded B1 follow-up for Pro layer actions, Collage header/taps, and nested departure evidence. PR #37 supplies the qualified 0.12.11 Test APK for focused diagnostic handset checks. R1.1 follows the correction wave. B2/F03 and the separate acceptance gates stay open.
+> **Current work — November 25, 2026:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. R1.1 begins with the saved-project baseline in the [work ledger](WORK_LEDGER.md). B2/F03 and wider acceptance remain open. See the [B1 qualification](B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
 
 ## Latest owner requirements — shared UI and safe departure
 
@@ -85,7 +85,7 @@ Measure the actual 120–300-second workload with disjoint stage times and a dec
 
 ## Current scope
 
-**Current engineering result:** [PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37), application merge `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30`, supplies qualified **0.12.11 Test / code 23**, with final candidate and merge 258/258 on each API29/API35 plus JVM/build/signing. Common UI, safe departures, save/child/async ownership and the tested GIF optimizations have bounded evidence; handset confirmation, B2's unmet numerical/matched-sample exits, F03 and full product/release acceptance remain open. [Current evidence and APK](B1_WORKSPACE_VERIFICATION.md). PR #38/#39 and this handoff are documentation-only developments.
+**Current engineering result:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. The qualified merge is `9a58c72cdcf379885150b55b498a2f0ef326dee1`. B2/F03 and physical, workspace and release gates continue separately. [Exact evidence and APK](B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
 
 **Retained PR #31 result (historical):** PR #31 corrected the independent PR #29 Eraser findings and the earlier observed GIF Save failure. Its app merge `3ad65c533f7667a136d4fa1838afcc06d3f484da`, 0.12.10 Test/code22, passed 193/193 per API29/API35 at candidate and merge. Lance subsequently supplied scoped phone passes and named exceptions. [Retained evidence](ERASER_REPAIR_VERIFICATION.md).
 

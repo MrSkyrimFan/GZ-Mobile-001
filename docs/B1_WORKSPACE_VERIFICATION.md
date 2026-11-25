@@ -1,8 +1,25 @@
 # B1 workspace correction verification
 
-> **Current work — November 25, 2026:** Lance relayed the completed [GPT-6 Pro review](coordination/GPT_6_PRO_INDEPENDENT_REVIEW_2026-11-25.md). The [work ledger](WORK_LEDGER.md) selects a bounded B1 follow-up for Pro layer actions, Collage header/taps, and nested departure evidence. PR #37 supplies the qualified 0.12.11 Test APK for focused diagnostic handset checks. R1.1 follows the correction wave. B2/F03 and the separate acceptance gates stay open.
+> **Current work — November 25, 2026:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. R1.1 begins with the saved-project baseline in the [work ledger](WORK_LEDGER.md). B2/F03 and wider acceptance remain open. See the exact evidence below.
 
-Status: B1 engineering-qualified for focused handset confirmation; B2 target completion and F03 remain open. Updated November 25, 2026.
+## PR 41 follow-up — 0.12.12 Test
+
+Candidate `59b117b0277d3f55c74d3864e2468cd79c8bec70` ([run 45703112963](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45703112963)) and merge `9a58c72cdcf379885150b55b498a2f0ef326dee1` ([run 45706255531](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45706255531)) share tree `2880c62d0ee69c2ac44ef61e44abcd3bc73fec60`. Each passed JVM/build/signing and 265/265 on both API29/API35, with zero failures, errors, skips or duplicates. Both preserve all 258 inherited identities and add seven. The sorted `class#test` lines joined by LF have SHA-256 `81239ac3268d6488012aad837fde48854fb3074d933759e1b78cdb9e7b0bfcf8`.
+
+[Test-only baseline 45700173405](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45700173405) at `c6eccf3dee2ff2ea34e387191d1c95a6534b088f` produced three intended failures per API: Pro changed selection during a held named Save, the Collage header overlapped the 66 px top inset, and a drag hid Collage chrome. All inherited cases, the cross-boundary tap fixture, and the three nested departure workflows passed on that baseline. The corrected tests cover Pro's blocked layer actions, Collage Options in the actual activity across portrait and landscape, free tap and invalid streams, and child/parent Cancel, failed Save, and Save-before-departure.
+
+- [gz-editor-pro-emulator-receipts 15064391565](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45700173405/artifacts/15064391565) · `sha256:3dbaaeb9d1a6cb2fdaa8f3d038680612ddc83217d870fe39c4e9582999a22af5`
+- [gz-editor-pro-emulator-api29-receipts 15064296673](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45700173405/artifacts/15064296673) · `sha256:589719777432a93c4bd3dd68199f0cc87297ae13cfe9b3a900f8b04039b17f94`
+- [gz-editor-pro-emulator-api29-receipts 15064513878](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45703112963/artifacts/15064513878) · `sha256:a1fafca494e9ba169395c322b6ad84515c36ecc931d6bf5292bbf91a75214759`
+- [gz-editor-pro-emulator-receipts 15063429798](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45703112963/artifacts/15063429798) · `sha256:030770982e55fc4eaa9bf47f3eeb57f84747b5ab37f1cf973f757f6fb6569b78`
+- [gz-editor-pro-emulator-receipts 15067295124](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45706255531/artifacts/15067295124) · `sha256:22c6c7b85848663d336d433e56067b6f46b4bfd77aa2d301a2db70f588c41bfd`
+- [gz-editor-pro-emulator-api29-receipts 15064624747](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45706255531/artifacts/15064624747) · `sha256:88e1819c9493d54f4cfc11dbabd9f9e47704681d2614d3b6bcac3daf57f39ba3`
+
+[Exact merged API35 APK ZIP](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45706255531/artifacts/15065588960) · code 24 · `com.greenezone.gzphotoeditor.phonetest.v24` · min29 / target36 · 33783857 APK bytes. APK SHA-256 `75a8a2f5f9a1caf16641b15625a9f9fb135bfcf7fff32070d731bc1f907b5943`; ZIP SHA-256 `edd754087395af66884afe2a6f622155cb84d44e2022ae812ced5eeef8459637`; verified Android v2 signer certificate SHA-256 `560a72d91aa9a7fc73b53d29d8146011d142e75cbbffe38a839d425fb3cfaa54`. It installs beside older test packages. For v24, follow the applicable [focused review handset checks](coordination/GPT_6_PRO_INDEPENDENT_REVIEW_2026-11-25.md#e-focused-phone-script-and-separate-engineering-plan). B2 targets and F03 remain open.
+
+## Retained PR 37 qualification — 0.12.11 Test
+
+The original PR #37 qualification and performance evidence follows.
 
 ## Authority and exact baseline
 

@@ -1,10 +1,10 @@
 # GZ Editor Pro
 
-> **Current work — November 25, 2026:** Lance relayed the completed [GPT-6 Pro review](docs/coordination/GPT_6_PRO_INDEPENDENT_REVIEW_2026-11-25.md). The [work ledger](docs/WORK_LEDGER.md) selects a bounded B1 follow-up for Pro layer actions, Collage header/taps, and nested departure evidence. PR #37 supplies the qualified 0.12.11 Test APK for focused diagnostic handset checks. R1.1 follows the correction wave. B2/F03 and the separate acceptance gates stay open.
+> **Current work — November 25, 2026:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. R1.1 begins with the saved-project baseline in the [work ledger](docs/WORK_LEDGER.md). B2/F03 and wider acceptance remain open. See the [B1 qualification](docs/B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-**B1 interaction corrections are engineering-qualified for handset confirmation in [PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37).** The final candidate `044e93321292a3678b92394b5efda50aae2e07b9` and application merge `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30` pass JVM/build/signing and **258/258 cases on each of Android 10/API29 and Android 15/API35**, zero failures/errors/skips. All 193 inherited Android identities remain. The current phone build is **0.12.11 Test / code 23 / phonetest.v23**. [Exact runs, raw failures, APK identity and focused phone script](docs/B1_WORKSPACE_VERIFICATION.md).
+**B1 interaction corrections are engineering-qualified for handset confirmation in [PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37).** The final candidate `044e93321292a3678b92394b5efda50aae2e07b9` and application merge `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30` pass JVM/build/signing and **258/258 cases on each of Android 10/API29 and Android 15/API35**, zero failures/errors/skips. All 193 inherited Android identities remain. The original B1 checkpoint supplied **0.12.11 Test / code 23 / phonetest.v23**. [Exact runs, raw failures, APK identity and focused phone script](docs/B1_WORKSPACE_VERIFICATION.md).
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
@@ -80,7 +80,7 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 - All creative layers are composited in preview/export after privacy redaction; no branding, timestamp or watermark added to the exported photo.
 
 ## Limits and safeguards
-- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36. The production application ID is `com.greenezone.gzphotoeditor`; versioned phone-test builds use a separate suffix, currently `com.greenezone.gzphotoeditor.phonetest.v23`. Their local project storage is separate.
+- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36. The production application ID is `com.greenezone.gzphotoeditor`; versioned phone-test builds use a separate suffix, currently `com.greenezone.gzphotoeditor.phonetest.v24`. Their local project storage is separate.
 - Renderer uses 8-bit sRGB, not a RAW/16-bit managed photo pipeline. New TIFF is uncompressed 8-bit RGB, not 16-bit.
 - Social dimensions are practical composition presets, **not guarantees of platform acceptance**, safe-area rules or uploaded file size. Platforms may change their policies.
 - Export presets may upscale lower-resolution source photos; this cannot recover missing detail. Fit can add margins; Fill can crop. The user selects explicitly.
@@ -90,9 +90,9 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 
 ## Build and test
 
-The qualified application commit is [`46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30`](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30), with the same tree as candidate `044e93321292a3678b92394b5efda50aae2e07b9`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45596352650) and [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45600142592) pass JVM/assembly/signing and **258/258 on each Android API29/API35**. Later documentation-only commits record these results without creating a replacement application build.
+The [qualified application commit `9a58c72c`](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/9a58c72cdcf379885150b55b498a2f0ef326dee1) matches the reviewed candidate tree. [Merged verification](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45706255531) passed JVM/build/signing and 265/265 on both Android API29 and API35.
 
-[Download the merged API35 phone APK artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45600142592/artifacts/15017086053). Extract `app-debug.apk`: launcher **GZ Editor Pro 0.12.11 Test**, version `0.12.11`, code `23`, package `com.greenezone.gzphotoeditor.phonetest.v23`, Android10+. It installs separately from older test packages, whose projects remain in those apps. It does not test same-ID upgrades or automatically migrate their projects. [APK hash/signature, full receipts, limitations and focused phone script](docs/B1_WORKSPACE_VERIFICATION.md). The [PR #31 receipt](docs/ERASER_REPAIR_VERIFICATION.md) preserves the historical 0.12.10 artifact and passes.
+[Download the merged API35 phone APK artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45706255531/artifacts/15065588960). Extract `app-debug.apk` for **GZ Editor Pro 0.12.12 Test**, code 24, `com.greenezone.gzphotoeditor.phonetest.v24`, Android 10+. This test build installs separately from earlier versions. [APK identity and Android qualification](docs/B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
 
 See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`.
 
