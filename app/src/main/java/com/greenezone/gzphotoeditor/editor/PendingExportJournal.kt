@@ -200,11 +200,14 @@ internal class PendingExportJournal(
     fun suppressNativeRestores(
         owners: List<Pair<ExportWorkspace, String>>
     ): List<PendingExport> = synchronized(lock) {
+        if (owners.isEmpty()) return@synchronized emptyList()
+        // Fail closed for restoration, but never report an unknown permission
+        // state as a successfully recorded live disposition.
+        val ids = resolvedIds().toMutableMap()
         val records = owners.mapNotNull { (workspace, ownerId) ->
             read(workspace)?.takeIf { (it.nativeOwnerId ?: it.id) == ownerId && it.restoreNativeDraft }
         }
         if (records.isEmpty()) return@synchronized emptyList()
-        val ids = resolvedIds().toMutableMap()
         records.forEach { ids[it.workspace] = it.id }
         val resolved = records.map { it.copy(restoreNativeDraft = false) }
         writeResolvedIds(ids)
@@ -214,6 +217,7 @@ internal class PendingExportJournal(
     fun suppressNativeRestore(expected: PendingExport, ownerId: String): PendingExport? = synchronized(lock) {
         val current = matching(expected) ?: return@synchronized null
         if ((current.nativeOwnerId ?: current.id) != ownerId) return@synchronized null
+        resolvedIds() // Unknown storage state must reject the live departure.
         if (!current.restoreNativeDraft) return@synchronized current
         suppressNativeRestores(listOf(current.workspace to ownerId))
             .firstOrNull { it.id == current.id }

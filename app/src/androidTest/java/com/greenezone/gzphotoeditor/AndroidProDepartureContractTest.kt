@@ -194,6 +194,7 @@ class AndroidProDepartureContractTest {
             rule.onNodeWithText("Options").performClick()
             rule.onNodeWithText("Delete current work…").performClick()
             rule.onNodeWithText("Delete work").performClick()
+            rule.waitUntil(15_000) { current == initial }
             rule.runOnIdle {
                 assertEquals(initial, current)
                 assertEquals(saved, ProStore.load(context, name))

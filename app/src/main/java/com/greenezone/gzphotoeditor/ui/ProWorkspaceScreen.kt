@@ -533,38 +533,67 @@ internal fun ProWorkspaceScreenContent(
         if (mode != WorkspaceMode.PRO) requestDeparture(ProDestination.Switch(mode))
     }
 
+    suspend fun revokeNativeRestoration(nativeOwner: String): Boolean {
+        return try {
+            val changed = withContext(Dispatchers.IO) {
+                // Read and resolve the current durable record under the journal lock;
+                // the startup UI read may still be pending or have become stale.
+                exportJournal.suppressNativeRestores(listOf(ExportWorkspace.PRO to nativeOwner))
+            }
+            changed.firstOrNull()?.let { pendingExport = it }
+            true
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) {
+            notice = "Could not record Discard. Your Pro work remains open."
+            false
+        }
+    }
+
     fun deleteCurrentWork() {
         if (busy || exporting || pendingDeparture != null) return
-        val clean = resetDocument ?: ProDocument()
-        resetDocument = clean
-        clearToolDrafts()
-        sliderStart = null
-        lastSliderValue = null
-        dragStart = null
-        lastDragValue = null
-        history = ProHistory()
-        saveTarget = ProSaveTarget(nextWorkId++)
-        entryDocument = clean
-        baselines = mapOf(saveTarget.workId to ProWorkBaseline(clean))
-        selected = 0
-        section = ProSection.LAYERS
-        transform = ProTransform.SIZE
-        val defaults = ProWorkspaceSession()
-        selectionKind = defaults.selectionKind
-        retouchKind = defaults.retouchKind
-        brushColor = defaults.brushColor
-        brushSize = defaults.brushSize
-        brushOpacity = defaults.brushOpacity
-        eraserMode = defaults.eraserMode
-        retouchRadius = defaults.retouchRadius
-        retouchStrength = defaults.retouchStrength
-        chrome = true
-        expanded = true
-        preview = null
-        resetGeneration++
-        confirmReset = false
-        publishDocument(clean)
-        notice = "Current Pro work discarded."
+        val token = operationToken()
+        val before = latestDocument
+        val beforeSession = workspaceSnapshot()
+        busy = true
+        scope.launch {
+            try {
+                if (!revokeNativeRestoration(beforeSession.nativeOwnerKey())) return@launch
+                if (!owns(token) || latestDocument != before) {
+                    notice = "The work changed. Choose Delete current work again."
+                    return@launch
+                }
+                val clean = beforeSession.resetDocument ?: ProDocument()
+                resetDocument = clean
+                clearToolDrafts()
+                sliderStart = null
+                lastSliderValue = null
+                dragStart = null
+                lastDragValue = null
+                history = ProHistory()
+                saveTarget = ProSaveTarget(nextWorkId++)
+                entryDocument = clean
+                baselines = mapOf(saveTarget.workId to ProWorkBaseline(clean))
+                selected = 0
+                section = ProSection.LAYERS
+                transform = ProTransform.SIZE
+                val defaults = ProWorkspaceSession()
+                selectionKind = defaults.selectionKind
+                retouchKind = defaults.retouchKind
+                brushColor = defaults.brushColor
+                brushSize = defaults.brushSize
+                brushOpacity = defaults.brushOpacity
+                eraserMode = defaults.eraserMode
+                retouchRadius = defaults.retouchRadius
+                retouchStrength = defaults.retouchStrength
+                chrome = true
+                expanded = true
+                preview = null
+                resetGeneration++
+                confirmReset = false
+                publishDocument(clean)
+                notice = "Current Pro work discarded."
+            } finally { busy = false }
+        }
     }
 
     fun saveFailure(reason: ProjectSaveFailure): String = when (reason) {
@@ -682,7 +711,7 @@ internal fun ProWorkspaceScreenContent(
         if (request.discard) request.session.discarded(request.document)
         else request.document to request.session
 
-    fun finishDeparture(
+    suspend fun finishDeparture(
         request: ProDepartureRequest,
         prepared: ProDocument? = null,
         preparedReset: ProDocument? = null,
@@ -697,14 +726,18 @@ internal fun ProWorkspaceScreenContent(
             return
         }
         if (request.discard) {
-            try {
-                pendingExport?.let { record ->
-                    exportJournal.suppressNativeRestore(record, request.session.nativeOwnerKey())
-                        ?.let { pendingExport = it }
-                }
-            } catch (_: Exception) {
-                notice = "Could not record Discard. Your Pro work remains open."
+            val wasBusy = busy
+            busy = true
+            val recorded = try { revokeNativeRestoration(request.session.nativeOwnerKey()) }
+                finally { busy = wasBusy }
+            if (!recorded) {
                 departureStage = ProDepartureStage.PROMPT
+                return
+            }
+            if (pendingDeparture?.token?.operationId != request.token.operationId ||
+                !owns(request.token) || latestDocument != request.document) {
+                cancelDeparture()
+                notice = "The work changed. The pending action was canceled."
                 return
             }
         }
@@ -763,10 +796,12 @@ internal fun ProWorkspaceScreenContent(
     DisposableEffect(ownerId) { onDispose { cancelGesture() } }
     BackHandler { requestBack() }
 
-    val picker = key(addPickerOwner?.first?.operationId) { rememberLauncherForActivityResult(
+    val launchedAddOwner = addPickerOwner
+    val picker = key(launchedAddOwner?.first?.operationId) { rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(ProMath.MAX_LAYERS)
     ) addResult@{ uris ->
-        val owner = addPickerOwner ?: return@addResult
+        val owner = launchedAddOwner ?: return@addResult
+        if (addPickerOwner?.first?.operationId != owner.first.operationId) return@addResult
         addPickerOwner = null
         if (!owns(owner.first) || latestDocument != owner.second || pendingDeparture != null) {
             notice = "The document changed. Images were not added."
@@ -823,11 +858,13 @@ internal fun ProWorkspaceScreenContent(
             }
         }
     }
-    val departurePhotoPicker = key(pendingDeparture?.token?.operationId) { rememberLauncherForActivityResult(
+    val launchedDeparture = pendingDeparture
+    val departurePhotoPicker = key(launchedDeparture?.token?.operationId) { rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        val request = pendingDeparture
-        if (request != null && departureStage == ProDepartureStage.PICKER) {
+        val request = launchedDeparture
+        if (request != null && pendingDeparture?.token?.operationId == request.token.operationId &&
+            departureStage == ProDepartureStage.PICKER) {
             if (uri == null) {
                 cancelDeparture()
                 notice = "Photo opening canceled. Current work kept."
@@ -2061,7 +2098,7 @@ internal fun ProWorkspaceScreenContent(
         )
     }
     if (confirmReset) AlertDialog(
-        onDismissRequest = { confirmReset = false },
+        onDismissRequest = { if (!busy) confirmReset = false },
         title = { Text("Delete current Pro work?") },
         text = { Text(
             (if (resetDocument?.layers?.isNotEmpty() == true)
@@ -2071,9 +2108,9 @@ internal fun ProWorkspaceScreenContent(
             color = EditorMuted
         ) },
         confirmButton = {
-            TextButton(onClick = ::deleteCurrentWork) { Text("Delete work", color = Color(0xFFFF9D9D)) }
+            TextButton(enabled = !busy, onClick = ::deleteCurrentWork) { Text("Delete work", color = Color(0xFFFF9D9D)) }
         },
-        dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel") } }
+        dismissButton = { TextButton(enabled = !busy, onClick = { confirmReset = false }) { Text("Cancel") } }
     )
     if (showHelp) ProHelpDialog(onDismiss = { showHelp = false })
 }

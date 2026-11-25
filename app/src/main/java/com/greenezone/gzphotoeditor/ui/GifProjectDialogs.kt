@@ -28,6 +28,7 @@ import com.greenezone.gzphotoeditor.editor.NamedProjectRef
 import com.greenezone.gzphotoeditor.editor.ProjectSaveIntent
 import com.greenezone.gzphotoeditor.editor.ProjectSaveResult
 import com.greenezone.gzphotoeditor.editor.ProjectSaveFailure
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,26 +52,34 @@ internal fun GifProjectSaveDialog(
     var conflict by remember(capture) { mutableStateOf<NamedProjectRef?>(null) }
     var error by remember(capture) { mutableStateOf("") }
     var saving by remember(capture) { mutableStateOf(false) }
+    var retryIntent by remember(capture) { mutableStateOf<ProjectSaveIntent?>(null) }
 
     fun save(intent: ProjectSaveIntent) {
         if (saving) return
         saving = true
         error = ""
+        retryIntent = intent
         scope.launch {
-            val result = withContext(Dispatchers.IO) { GifStore.saveNamed(context, intent, capture.document) }
-            saving = false
-            when (result) {
-                is ProjectSaveResult.Saved -> onSaved(result.project)
-                is ProjectSaveResult.Exists -> conflict = result.project
-                is ProjectSaveResult.Rejected -> error = when (result.reason) {
-                    ProjectSaveFailure.FULL -> "The saved GIF project list is full (12 projects). Delete a saved project to free a slot."
-                    ProjectSaveFailure.TARGET_CHANGED -> "This saved project changed. Cancel and reopen it, or save the current edits as a new project."
-                    ProjectSaveFailure.TOO_LARGE -> "This GIF project exceeds the supported saved-project size."
-                    ProjectSaveFailure.INVALID_DOCUMENT -> "This GIF project cannot be saved with its current sources or timing."
-                    ProjectSaveFailure.INVALID_NAME -> "Enter a name for this GIF project."
-                    ProjectSaveFailure.STORAGE_FAILURE -> "Could not save this GIF project. Retry or cancel; your edits remain here."
+            try {
+                val result = withContext(Dispatchers.IO) { GifStore.saveNamed(context, intent, capture.document) }
+                when (result) {
+                    is ProjectSaveResult.Saved -> onSaved(result.project)
+                    is ProjectSaveResult.Exists -> { retryIntent = null; conflict = result.project }
+                    is ProjectSaveResult.Rejected -> {
+                        if (result.reason == ProjectSaveFailure.INVALID_NAME) retryIntent = null
+                        error = when (result.reason) {
+                            ProjectSaveFailure.FULL -> "The saved GIF project list is full (12 projects). Delete a saved project to free a slot."
+                            ProjectSaveFailure.TARGET_CHANGED -> "This saved project changed. Cancel and reopen it, or save the current edits as a new project."
+                            ProjectSaveFailure.TOO_LARGE -> "This GIF project exceeds the supported saved-project size."
+                            ProjectSaveFailure.INVALID_DOCUMENT -> "This GIF project cannot be saved with its current sources or timing."
+                            ProjectSaveFailure.INVALID_NAME -> "Enter a name for this GIF project."
+                            ProjectSaveFailure.STORAGE_FAILURE -> "Could not save this GIF project. Retry or cancel; your edits remain here."
+                        }
+                    }
                 }
-            }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { error = "Could not save this GIF project. Retry or cancel; your edits remain here." }
+            finally { saving = false }
         }
     }
     val current = capture.project
@@ -86,7 +95,7 @@ internal fun GifProjectSaveDialog(
             confirmButton = {}
         )
         existing != null -> AlertDialog(
-            onDismissRequest = { conflict = null },
+            onDismissRequest = onDismiss,
             title = { Text("Replace GIF project?") },
             text = { Text("Replace the saved project “" + existing.name + "” with the captured GIF edits?") },
             confirmButton = {
@@ -94,7 +103,21 @@ internal fun GifProjectSaveDialog(
                     Text("Replace", color = EditorMint)
                 }
             },
-            dismissButton = { TextButton(onClick = { conflict = null }) { Text("Cancel", color = EditorMuted) } }
+            dismissButton = { Row {
+                TextButton(onClick = onDismiss) { Text("Cancel", color = EditorMuted) }
+                TextButton(onClick = { conflict = null; retryIntent = null; error = "" }) {
+                    Text("Choose another name", color = EditorMint)
+                }
+            } }
+        )
+        retryIntent != null && error.isNotBlank() -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("GIF project not saved") },
+            text = { Text(error) },
+            confirmButton = {
+                TextButton(onClick = { retryIntent?.let(::save) }) { Text("Retry", color = EditorMint) }
+            },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = EditorMuted) } }
         )
         current != null && !capture.saveAs -> AlertDialog(
             onDismissRequest = onDismiss,

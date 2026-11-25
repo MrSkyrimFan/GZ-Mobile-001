@@ -478,7 +478,7 @@ fun PhotoEditorScreen(
     }
 
     fun closeCurrentPhoto() {
-        if (!recoveryResolved && !photoExport.resolveNativeDraft(photoOwnerId)) {
+        if (!photoExport.resolveNativeDraft(photoOwnerId)) {
             showRegularExit = true
             return
         }
@@ -901,7 +901,7 @@ fun PhotoEditorScreen(
 
     fun commitDiscard(pending: PhotoDeparture, recoveryResolved: Boolean = false): Boolean {
         if (!pending.discard) return true
-        if (!photoExport.resolveNativeDraft(photoOwnerId)) {
+        if (!recoveryResolved && !photoExport.resolveNativeDraft(photoOwnerId)) {
             showRegularExit = true
             return false
         }

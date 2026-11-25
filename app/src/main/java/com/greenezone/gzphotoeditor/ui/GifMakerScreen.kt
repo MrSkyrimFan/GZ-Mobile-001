@@ -148,8 +148,17 @@ internal class GifDocumentCustody(initial: GifDocument, session: GifWorkspaceSes
     fun saved(token: WorkspaceOperationToken, project: NamedProjectRef, document: GifDocument): Boolean {
         val prior = identities[token.ownerId] ?: return false
         val updated = prior.copy(project = project, savedDocument = document)
-        identities = identities + (updated.ownerId to updated)
-        if (identity.ownerId == updated.ownerId) identity = updated
+        // Several native work owners may have opened the same named project.
+        // Publication advances that project's baseline/version for all of them,
+        // while preserving each owner's entry state and current editable content.
+        identities = identities.mapValues { (owner, item) ->
+            when {
+                owner == updated.ownerId -> updated
+                item.project?.id == project.id -> item.copy(project = project, savedDocument = document)
+                else -> item
+            }
+        }
+        identity = identities.getValue(identity.ownerId)
         return matches(token)
     }
     fun detach(name: String) {
@@ -266,15 +275,14 @@ internal fun GifMakerScreenContent(
     if (!restored && recovery != null) {
         LaunchedEffect(recovery) {
             val route = if (recovery.document.video == null) GifWorkspaceRoute.PHOTOS else GifWorkspaceRoute.VIDEO
-            val named = recovery.savedName?.let { name ->
-                withContext(Dispatchers.IO) { GifStore.loadNamed(context, name) }
-            }
             val pending = requireNotNull(recoveredExport)
+            // This compatible export recipe records only a display name, not a
+            // saved project's stable identity/version. Recover the draft unnamed:
+            // a deleted/recreated same-name project must never become its Update target.
             val identity = GifDocumentIdentity(ownerId = pending.nativeOwnerId ?: pending.id,
-                entryDocument = named?.content ?: GifDocument(),
-                project = named?.project, savedDocument = named?.content)
+                entryDocument = GifDocument())
             onDocument(recovery.document)
-            onSession(session.copy(route = route, savedName = named?.project?.name,
+            onSession(session.copy(route = route, savedName = null,
                 identity = identity, identities = mapOf(identity.ownerId to identity)))
             restored = true
         }
