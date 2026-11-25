@@ -37,6 +37,7 @@ class AndroidCollageHeaderInsetsTest {
                 assertHeaderInsideInsets(requireTopInset = true)
                 rule.onNodeWithTag("workspace-options").performTouchInput { click() }
                 rule.onNodeWithText("Open project…").performClick()
+                waitForSavedCollages(name)
                 rule.onNodeWithText(name, substring = false).performScrollTo().performClick()
                 rule.onNodeWithText("Open", substring = false).performClick()
                 rule.waitUntil(15_000) {
@@ -51,6 +52,7 @@ class AndroidCollageHeaderInsetsTest {
                 rule.onNodeWithTag("workspace-options").performTouchInput { click() }
                 rule.onNodeWithText("Open project…").assertIsDisplayed()
                 rule.onNodeWithText("Open project…").performClick()
+                waitForSavedCollages()
                 rule.onNodeWithText("Cancel", substring = false).performClick()
             } finally {
                 CollageStore.delete(activity, name)
@@ -63,10 +65,31 @@ class AndroidCollageHeaderInsetsTest {
 
     private fun rotate(request: Int, expected: Int) {
         rule.runOnIdle { rule.activity.requestedOrientation = request }
-        rule.waitUntil(15_000) { rule.activity.resources.configuration.orientation == expected }
+        rule.waitUntil(15_000) {
+            rule.runOnIdle {
+                val activity = rule.activity
+                val decor = activity.window.decorView
+                val layoutMatches = if (expected == Configuration.ORIENTATION_LANDSCAPE) {
+                    decor.width > decor.height
+                } else {
+                    decor.height >= decor.width
+                }
+                activity.resources.configuration.orientation == expected &&
+                    decor.isLaidOut && !decor.isLayoutRequested && layoutMatches &&
+                    ViewCompat.getRootWindowInsets(decor) != null
+            }
+        }
         rule.runOnIdle {
             val window = rule.activity.window
             WindowCompat.getInsetsController(window, window.decorView).show(WindowInsetsCompat.Type.statusBars())
+        }
+    }
+
+    private fun waitForSavedCollages(name: String? = null) {
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Saved collages", substring = false).fetchSemanticsNodes().isNotEmpty() &&
+                (name == null || rule.onAllNodesWithText(name, substring = false)
+                    .fetchSemanticsNodes().isNotEmpty())
         }
     }
 

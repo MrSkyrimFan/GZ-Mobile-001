@@ -327,22 +327,63 @@ internal fun ProWorkspaceScreenContent(
     fun historyEntry(current: ProDocument = document) =
         ProHistoryEntry(current, resetDocument, selected, saveTarget)
 
+    fun canEditDocument() = !busy && !exporting && pendingDeparture == null
+
     fun commit(
         next: ProDocument,
         nextReset: ProDocument? = resetDocument,
         nextTarget: ProSaveTarget = saveTarget,
         allowBusy: Boolean = false
-    ) {
-        if (!allowBusy && (busy || exporting || pendingDeparture != null)) return
+    ): Boolean {
+        if (!allowBusy && !canEditDocument()) return false
         history = history.checkpoint(historyEntry(), ProHistoryEntry(next, nextReset, selected, nextTarget))
         resetDocument = nextReset
         saveTarget = nextTarget
         sliderStart = null
         lastSliderValue = null
         publishDocument(next)
+        return true
     }
+
+    fun moveSelectedLayer(offset: Int) {
+        val index = selected
+        val destination = index + offset
+        if (index !in document.layers.indices || destination !in document.layers.indices) return
+        val layers = ProMath.move(document.layers, index, destination)
+        if (commit(document.copy(layers = layers))) selected = destination
+    }
+
+    fun duplicateSelectedLayer() {
+        val index = selected
+        val layer = document.layers.getOrNull(index) ?: return
+        if (layer.kind == ProLayerKind.TEXT || document.layers.size >= ProMath.MAX_LAYERS) return
+        val copy = layer.copy(name = layer.name.take(32) + " copy")
+        val layers = document.layers.toMutableList().also { it.add(index + 1, copy) }
+        if (commit(document.copy(layers = layers))) selectLayer(index + 1)
+    }
+
+    fun deleteSelectedLayer() {
+        val index = selected
+        if (index !in document.layers.indices) return
+        val layers = document.layers.filterIndexed { layerIndex, _ -> layerIndex != index }
+        if (commit(document.copy(layers = layers))) {
+            clearToolDrafts()
+            selected = index.coerceAtMost(layers.lastIndex).coerceAtLeast(0)
+        }
+    }
+
+    fun toggleLayerVisibility(index: Int) {
+        val layer = document.layers.getOrNull(index) ?: return
+        val layers = document.layers.toMutableList().also {
+            it[index] = layer.copy(visible = !layer.visible)
+        }
+        if (commit(document.copy(layers = layers)) && index == selected && layer.visible) {
+            clearToolDrafts()
+        }
+    }
+
     fun changeLayer(transformer: (ProLayer) -> ProLayer, sliding: Boolean = false) {
-        if (busy || exporting || pendingDeparture != null || selected !in document.layers.indices) return
+        if (!canEditDocument() || selected !in document.layers.indices) return
         val next = document.copy(layers = document.layers.toMutableList().also {
             it[selected] = transformer(it[selected])
         })
@@ -362,7 +403,7 @@ internal fun ProWorkspaceScreenContent(
         sliderStart = null
     }
     fun addLayer(layer: ProLayer) {
-        if (busy || exporting || pendingDeparture != null) return
+        if (!canEditDocument()) return
         val next = ProMath.insert(document, layer)
         if (next == null) { notice = "A project supports up to 12 layers."; return }
         commit(next, resetDocument ?: ProDocument())
@@ -1285,7 +1326,7 @@ internal fun ProWorkspaceScreenContent(
         }
     }
 
-    val available = !busy && !exporting && pendingDeparture == null
+    val available = canEditDocument()
     // The original BoxWithConstraints used a SubcomposeLayout for the entire
     // Pro workspace. Its disposable nested slot table could fail during Android
     // activity teardown after rapid layer/brush changes. The workspace needs
@@ -1552,40 +1593,25 @@ internal fun ProWorkspaceScreenContent(
                                             requestDeparture(ProDestination.ReplaceImage(selected, active))
                                         }) { Text("Replace image", color = EditorWhite) }
                                     }
-                                    TextButton(onClick = {
-                                        if (active.visible) clearToolDrafts()
-                                        changeLayer { it.copy(visible = !it.visible) }
-                                    }) {
+                                    TextButton(enabled = available, onClick = { toggleLayerVisibility(selected) }) {
                                         Text(if (active.visible) "Hide" else "Show", color = EditorWhite)
                                     }
-                                    TextButton(enabled = selected > 0,
-                                        onClick = {
-                                            commit(document.copy(layers =
-                                                ProMath.move(document.layers, selected, selected - 1)))
-                                            selected--
-                                        }) { Text("↓ Behind", color = EditorWhite) }
-                                    TextButton(enabled = selected < document.layers.lastIndex,
-                                        onClick = {
-                                            commit(document.copy(layers =
-                                                ProMath.move(document.layers, selected, selected + 1)))
-                                            selected++
-                                        }) { Text("↑ Above", color = EditorWhite) }
+                                    TextButton(enabled = available && selected > 0,
+                                        onClick = { moveSelectedLayer(-1) }) {
+                                        Text("↓ Behind", color = EditorWhite)
+                                    }
+                                    TextButton(enabled = available && selected < document.layers.lastIndex,
+                                        onClick = { moveSelectedLayer(1) }) {
+                                        Text("↑ Above", color = EditorWhite)
+                                    }
                                     if (active.kind != ProLayerKind.TEXT) TextButton(
-                                        enabled = document.layers.size < ProMath.MAX_LAYERS,
-                                        onClick = {
-                                            val copy = active.copy(name = (active.name.take(32) + " copy"))
-                                            val next = document.layers.toMutableList().also {
-                                                it.add(selected + 1, copy)
-                                            }
-                                            commit(document.copy(layers = next))
-                                            selectLayer(selected + 1)
-                                        }) { Text("Duplicate", color = EditorWhite) }
-                                    TextButton(onClick = {
-                                        commit(document.copy(layers =
-                                            document.layers.filterIndexed { index, _ -> index != selected }))
-                                        clearToolDrafts()
-                                        selected = selected.coerceAtMost(document.layers.size - 2).coerceAtLeast(0)
-                                    }) { Text("Delete layer", color = Color(0xFFFF9D9D)) }
+                                        enabled = available && document.layers.size < ProMath.MAX_LAYERS,
+                                        onClick = ::duplicateSelectedLayer) {
+                                        Text("Duplicate", color = EditorWhite)
+                                    }
+                                    TextButton(enabled = available, onClick = ::deleteSelectedLayer) {
+                                        Text("Delete layer", color = Color(0xFFFF9D9D))
+                                    }
                                 }
                             }
                             ProSection.MOVE -> {
@@ -1905,13 +1931,8 @@ internal fun ProWorkspaceScreenContent(
     if (showTools) ProToolChooser(section, ::selectTool) { showTools = false }
     if (showStack) ProLayerStack(document, selected, onSelect = {
         selectLayer(it); showStack = false; selectTool(ProSection.LAYERS)
-    }, onVisibility = { index ->
-        val layers = document.layers.toMutableList()
-        val layer = layers[index]
-        if (index == selected && layer.visible) clearToolDrafts()
-        layers[index] = layer.copy(visible = !layer.visible)
-        commit(document.copy(layers = layers))
-    }, onAdd = { showStack = false; showAdd = true }, onDismiss = { showStack = false })
+    }, onVisibility = ::toggleLayerVisibility,
+        onAdd = { showStack = false; showAdd = true }, onDismiss = { showStack = false })
     rename?.let { name ->
         SaveNameDialog("Rename layer", "Choose a name for this layer.", name,
             onName = { rename = it }, onSave = {
