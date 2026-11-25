@@ -9,6 +9,12 @@ if [[ -n "${GZ_CI_HEAP_MIB:-}" ]]; then
   }
   adb_ci() { timeout 15s adb -s emulator-5554 "$@"; }
   guest_prop() { adb_ci shell getprop "$1" | tr -d '\r'; }
+  # pidof can include other processes temporarily sharing the zygote64 name.
+  # The framework VM owner is the single zygote64 whose parent is init (PID 1).
+  zygote_owner() {
+    adb_ci shell ps -A -o PID,PPID,NAME | tr -d '\r' |
+      awk '$2 == 1 && $3 == "zygote64" { print $1 }'
+  }
   [[ "$(guest_prop ro.kernel.qemu)" == "1" ]] || {
     echo "Heap setup requires the CI emulator." >&2
     exit 1
@@ -20,7 +26,7 @@ if [[ -n "${GZ_CI_HEAP_MIB:-}" ]]; then
   echo "Android 10 heap before setup:"
   echo "dalvik.vm.heapsize=$(guest_prop dalvik.vm.heapsize)"
   echo "dalvik.vm.heapgrowthlimit=$(guest_prop dalvik.vm.heapgrowthlimit)"
-  old_zygote=$(adb_ci shell pidof zygote64 | tr -d '\r')
+  old_zygote=$(zygote_owner)
   [[ "$old_zygote" =~ ^[0-9]+$ ]] || {
     echo "Expected one running Android 10 zygote64." >&2
     exit 1
@@ -61,14 +67,15 @@ if [[ -n "${GZ_CI_HEAP_MIB:-}" ]]; then
     echo "Android framework did not restart within 120 seconds." >&2
     exit 1
   }
-  new_zygote=$(adb_ci shell pidof zygote64 | tr -d '\r')
+  new_zygote=$(zygote_owner)
+  zygote_state=$(guest_prop init.svc.zygote)
   heap=$(guest_prop dalvik.vm.heapsize)
   growth=$(guest_prop dalvik.vm.heapgrowthlimit)
   echo "Android 10 heap after framework restart:"
-  echo "zygote64=$old_zygote -> $new_zygote"
+  echo "init-owned zygote64=$old_zygote -> $new_zygote; state=$zygote_state"
   echo "dalvik.vm.heapsize=$heap"
   echo "dalvik.vm.heapgrowthlimit=$growth"
-  [[ "$new_zygote" =~ ^[0-9]+$ && "$new_zygote" != "$old_zygote" ]] || {
+  [[ "$new_zygote" =~ ^[0-9]+$ && "$new_zygote" != "$old_zygote" && "$zygote_state" == "running" ]] || {
     echo "A fresh zygote64 was not verified." >&2
     exit 1
   }

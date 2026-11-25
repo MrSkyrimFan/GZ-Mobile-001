@@ -68,6 +68,12 @@ The correction explicitly sets API29 AVD `vm.heapSize=256` and `-memory 2048`, t
 
 The GIF profile now fails immediately when the actual UI reports `GIF export failed.`, preserving its explanation instead of waiting six minutes for impossible success. Expected cancellation remains success; every existing timeout/assertion/workload/fidelity check is unchanged. Both profile paths record `Runtime.maxMemory()` to expose the actual app budget. Root readback review retained all 25 assertion lines byte-for-byte. The script received source review; a local bash syntax check was unavailable because bash is not installed, so execution of this changed CI setup is still required.
 
+### CI preflight refinement, before Android instrumentation
+
+Candidate `f4802bb807e3f0a96fc20b4335b3e17c06453377`, [run 45595436544](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45595436544), passes build/JVM/signing. API29 job `139140147036` stops in preflight with **zero Android tests executed**. The old guest values are maximum `512m` and empty growth limit; after framework restart both are exactly `256m`. The guard rejects `pidof zygote64` returning `3180 4097` instead of a single PID (old PID `1664`). This is a process-identification assumption in the new CI guard, not an application regression or proof of an Android suite pass.
+
+The bounded correction selects the single `zygote64` with parent PID1 from Android's process table and requires a changed owner PID, `init.svc.zygote=running` and both exact heap properties. This checks the init-owned VM rather than counting same-named children. All budgets, full-suite selection and application code are unchanged. The next push supersedes the unqualified run; preserve its preflight failure instead of retrying it unchanged.
+
 ## Implemented contract and finite review
 
 The common header places the wrapping brand and Options at opposite edges on its first row, with workspace/Back and history on the second. Major actions have one Options location. Regular More/Create collage/Histogram entries are removed; processing/legacy compatibility remain. Collage free-canvas single taps select a hit tile and toggle chrome once; canceled/multi-pointer/moved gestures do neither.
