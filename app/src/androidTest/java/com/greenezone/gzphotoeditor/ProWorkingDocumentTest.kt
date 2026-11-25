@@ -34,6 +34,8 @@ import org.junit.runner.RunWith
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.RandomAccessFile
+import java.security.MessageDigest
 import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
@@ -359,5 +361,201 @@ class ProWorkingDocumentTest {
             ProStore.delete(context, resavedName)
             ProStore.delete(context, name)
         }
+    }
+
+    @Test fun malformedLegacySaveCanBeCanceledAndDeleted() {
+        withUnreadableSave("Malformed", { it.writeText("{\"version\":1,\"layers\":[") }, ::cancelThenDelete)
+    }
+
+    @Test fun futureVersionSaveCanBeCanceledAndDeleted() {
+        withUnreadableSave("Future", { file ->
+            val future = JSONObject(ProStore.encode(adjustment("Future version work")))
+            file.writeText(future.put("version", 999).toString())
+        }, ::cancelThenDelete)
+    }
+
+    @Test fun oversizedSaveCanBeCanceledAndDeleted() {
+        withUnreadableSave("Oversize", { file ->
+            // One byte above ProStore's fixed maximum for both documents and the wrapper.
+            RandomAccessFile(file, "rw").use { it.setLength(6_000_513L) }
+        }, ::cancelThenDelete)
+    }
+
+    @Test fun emptyLegacySaveCanBeCanceledAndDeleted() {
+        withUnreadableSave("Empty", { assertTrue(it.createNewFile()) }, ::cancelThenDelete)
+    }
+
+    @Test fun backupOnlyUnreadableSaveCannotReappearAfterDeletion() {
+        withUnreadableSave("Backup", { it.writeText("{brokenBackup") }) { name, file ->
+            val original = projectFingerprint(file)
+            val backup = File(file.path + ".bak")
+            assertTrue(file.renameTo(backup))
+            rule.onNodeWithText("Close", substring = false).performClick()
+            openSavedList()
+
+            prepareSavedDelete(name)
+            rule.onNodeWithText("Cancel", substring = false).performClick()
+            assertEquals(original, projectFingerprint(file))
+            prepareSavedDelete(name)
+            confirmSavedDelete(name, removed = true)
+            assertFalse(file.exists())
+            assertFalse(backup.exists())
+            assertFalse(ProStore.names(context).contains(name))
+        }
+    }
+
+    @Test fun staleDeleteRejectsChangedBytesOfTheSameLength() {
+        withUnreadableSave("Changed", { it.writeText("{brokenA") }) { name, file ->
+            prepareSavedDelete(name)
+            val previousLength = file.length()
+            file.writeText("{brokenB")
+            assertEquals(previousLength, file.length())
+            val replacement = projectFingerprint(file)
+            confirmSavedDelete(name, removed = false)
+            assertEquals(replacement, projectFingerprint(file))
+
+            prepareSavedDelete(name)
+            confirmSavedDelete(name, removed = true)
+            assertFalse(file.exists())
+        }
+    }
+
+    @Test fun staleDeleteRejectsRecreatedSaveWithIdenticalBytes() {
+        val bytes = "{brokenA".toByteArray(Charsets.UTF_8)
+        withUnreadableSave("Recreated", { it.writeBytes(bytes) }) { name, file ->
+            prepareSavedDelete(name)
+            assertTrue(ProStore.delete(context, name))
+            file.writeBytes(bytes)
+            confirmSavedDelete(name, removed = false)
+            assertArrayEquals(bytes, file.readBytes())
+
+            prepareSavedDelete(name)
+            confirmSavedDelete(name, removed = true)
+            assertFalse(file.exists())
+        }
+    }
+
+    @Test fun blockedDeletePreservesBytesAndRecoversThroughFreshConfirmation() {
+        withUnreadableSave("Obstructed", { it.writeText("{brokenA") }) { name, file ->
+            val original = projectFingerprint(file)
+            prepareSavedDelete(name)
+            val obstruction = File(file.path + ".new")
+            assertTrue(obstruction.mkdir())
+            val sentinel = File(obstruction, "keep")
+            sentinel.writeText("unrelated fixture bytes")
+            try {
+                confirmSavedDelete(name, removed = false)
+                assertEquals(original, projectFingerprint(file))
+                assertEquals("unrelated fixture bytes", sentinel.readText())
+            } finally {
+                sentinel.delete()
+                obstruction.delete()
+            }
+
+            prepareSavedDelete(name)
+            confirmSavedDelete(name, removed = true)
+            assertFalse(file.exists())
+            assertFalse(ProStore.names(context).contains(name))
+        }
+    }
+
+    private fun withUnreadableSave(
+        prefix: String,
+        seed: (File) -> Unit,
+        checkDelete: (String, File) -> Unit
+    ) {
+        val suffix = System.nanoTime().toString().takeLast(10)
+        val targetName = "RV4 " + prefix + " " + suffix
+        val keepName = "RV4 healthy " + suffix
+        val targetFile = proProjectFile(targetName)
+        val keepFile = proProjectFile(keepName)
+        val keep = adjustment("Healthy saved neighbor")
+        val working = adjustment("Open working document")
+        try {
+            seed(targetFile)
+            assertNull("The fixture must be unreadable by the current project reader", ProStore.load(context, targetName))
+            assertTrue(ProStore.save(context, keepName, keep))
+            val keepFingerprint = projectFingerprint(keepFile)
+            open(working)
+            rule.onNodeWithText("Hide").performScrollTo().performClick()
+            val edited = working.copy(layers = listOf(working.layers.single().copy(visible = false)))
+            rule.runOnIdle { assertEquals(edited, current) }
+            openSavedList()
+            checkDelete(targetName, targetFile)
+            rule.onNodeWithText(keepName, substring = false).assertExists()
+            rule.onNodeWithText("Close", substring = false).performClick()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+            rule.runOnIdle { assertEquals(edited, current) }
+            assertEquals(keepFingerprint, projectFingerprint(keepFile))
+            assertEquals(keep, ProStore.load(context, keepName))
+        } finally {
+            ProStore.delete(context, targetName)
+            ProStore.delete(context, keepName)
+        }
+    }
+
+    private fun cancelThenDelete(name: String, file: File) {
+        val original = projectFingerprint(file)
+        val count = ProStore.names(context).size
+        prepareSavedDelete(name)
+        rule.onNodeWithText("Cancel", substring = false).performClick()
+        rule.onNodeWithText(name, substring = false).assertExists()
+        assertEquals(original, projectFingerprint(file))
+        assertEquals(count, ProStore.names(context).size)
+
+        prepareSavedDelete(name)
+        confirmSavedDelete(name, removed = true)
+        assertFalse(file.exists())
+        assertEquals(count - 1, ProStore.names(context).size)
+        assertFalse(ProStore.names(context).contains(name))
+    }
+
+    private fun prepareSavedDelete(name: String) {
+        val command = "Delete saved project " + name
+        val confirmation = "Delete saved Pro project?"
+        rule.waitUntil(10_000) {
+            rule.onAllNodesWithContentDescription(command).fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithContentDescription(command).performScrollTo().performClick()
+        rule.waitUntil(10_000) {
+            rule.onAllNodesWithText(confirmation, substring = false).fetchSemanticsNodes().isNotEmpty() ||
+                rule.onAllNodesWithText("Saved project changed or is unreadable.", substring = false)
+                    .fetchSemanticsNodes().isNotEmpty() ||
+                rule.onAllNodesWithText("Saved project changed or could not be checked for deletion.",
+                    substring = false).fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithText(confirmation, substring = false).assertIsDisplayed()
+    }
+
+    private fun confirmSavedDelete(name: String, removed: Boolean) {
+        rule.onNodeWithText("Delete saved project", substring = false).performClick()
+        rule.waitUntil(10_000) {
+            val confirmationGone = rule.onAllNodesWithText("Delete saved Pro project?", substring = false)
+                .fetchSemanticsNodes().isEmpty()
+            val stillListed = rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+            confirmationGone && (if (removed) !stillListed else stillListed &&
+                rule.onAllNodesWithText("Saved project changed or could not be deleted.", substring = false)
+                    .fetchSemanticsNodes().isNotEmpty())
+        }
+    }
+
+    private fun proProjectFile(name: String): File {
+        val directory = File(context.filesDir, "gz_pro_projects").apply { mkdirs() }
+        val key = Base64.getUrlEncoder().withoutPadding().encodeToString(name.toByteArray(Charsets.UTF_8))
+        return File(directory, key + ".gzpro")
+    }
+
+    private fun projectFingerprint(file: File): Pair<Long, List<Byte>> {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val length = file.length()
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return length to digest.digest().toList()
     }
 }

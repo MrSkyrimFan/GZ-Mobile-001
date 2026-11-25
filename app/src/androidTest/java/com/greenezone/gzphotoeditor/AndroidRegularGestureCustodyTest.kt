@@ -152,6 +152,9 @@ class AndroidRegularGestureCustodyTest {
 
     private fun reopen(name: String) {
         command("Open project…")
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+        }
         rule.onNodeWithText(name, substring = false).performClick()
         rule.onNodeWithText("Open project").performClick()
         rule.waitUntil(15_000) {

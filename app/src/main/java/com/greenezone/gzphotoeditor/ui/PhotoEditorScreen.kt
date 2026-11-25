@@ -1,5 +1,6 @@
 package com.greenezone.gzphotoeditor.ui
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -112,6 +113,7 @@ import com.greenezone.gzphotoeditor.editor.PendingProExportRecipe
 import com.greenezone.gzphotoeditor.editor.PrivacyMath
 import com.greenezone.gzphotoeditor.editor.PrivacyRaster
 import com.greenezone.gzphotoeditor.editor.SavedLooks
+import com.greenezone.gzphotoeditor.editor.SavedPhotoProjectMetadata
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -151,7 +153,8 @@ fun PhotoEditorScreen(
     initialCollagePhoto: CollagePhoto? = null,
     onDoneCollagePhoto: ((CollagePhoto) -> Unit)? = null,
     onCancelCollagePhoto: (() -> Unit)? = null,
-    onRequestCollageWorkspace: ((WorkspaceMode, CollagePhoto?) -> Unit)? = null
+    onRequestCollageWorkspace: ((WorkspaceMode, CollagePhoto?) -> Unit)? = null,
+    savePhotoProject: (Context, ProjectSaveIntent, Uri, EditDocument) -> ProjectSaveResult = ProjectStore::saveNamed
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -242,7 +245,6 @@ fun PhotoEditorScreen(
     var showRegularExit by remember { mutableStateOf(false) }
     var replacement by remember { mutableStateOf<PhotoReplacement?>(null) }
     var replacementAfterSave by remember { mutableStateOf(false) }
-    var projectToDelete by remember { mutableStateOf<String?>(null) }
     var projectDeleteRef by remember { mutableStateOf<NamedProjectRef?>(null) }
     var showProHandoff by remember { mutableStateOf(false) }
     var showTileExit by remember { mutableStateOf(false) }
@@ -284,9 +286,9 @@ fun PhotoEditorScreen(
     var projectSaveError by remember { mutableStateOf<String?>(null) }
     var showProjects by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf("") }
-    var selectedProject by remember { mutableStateOf<String?>(null) }
+    var selectedProject by remember { mutableStateOf<NamedProjectRef?>(null) }
     var savedLooks by remember { mutableStateOf(SavedLooks.load(context)) }
-    var savedProjects by remember { mutableStateOf(ProjectStore.load(context)) }
+    var savedProjects by remember { mutableStateOf(emptyList<SavedPhotoProjectMetadata>()) }
 
     fun cancelDraft(): Boolean {
         val start = gestureStart ?: return false
@@ -1058,9 +1060,23 @@ fun PhotoEditorScreen(
             }
             PhotoDepartureKind.PICK_PHOTO -> photoPickerToken = pending.token
             PhotoDepartureKind.OPEN_PROJECT -> {
-                savedProjects = ProjectStore.load(context)
-                selectedProject = null
-                showProjects = true
+                val loadingNotice = "Reading saved projects…"
+                notice = loadingNotice
+                busy = true
+                scope.launch {
+                    val projects = withContext(Dispatchers.IO) { ProjectStore.listMetadata(context) }
+                    busy = false
+                    if (notice == loadingNotice) notice = ""
+                    if (pendingDeparture != pending || !departureOwned(pending)) return@launch
+                    if (projects == null) {
+                        cancelDeparture()
+                        notice = "Could not read saved projects. Your photo is unchanged."
+                    } else {
+                        savedProjects = projects
+                        selectedProject = null
+                        showProjects = true
+                    }
+                }
             }
             PhotoDepartureKind.REPLACE_PHOTO -> pending.replacement?.let(::openPreparedPhoto)
             PhotoDepartureKind.PRO -> {
@@ -1116,7 +1132,7 @@ fun PhotoEditorScreen(
         busy = true
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                ProjectStore.saveNamed(context, intent, uri, capturedDocument)
+                savePhotoProject(context, intent, uri, capturedDocument)
             }
             busy = false
             if (photoOwnerId != capturedOwner) return@launch
@@ -1127,7 +1143,6 @@ fun PhotoEditorScreen(
                     // tileEntryBaseline: standalone Save does not Apply a tile.
                     baselineUri = uri.toString()
                     baselineDocument = capturedDocument
-                    savedProjects = ProjectStore.load(context)
                     if (photoUiEpoch != capturedUiEpoch) return@launch
                     showSaveProject = false
                     photoCollision = null
@@ -1712,15 +1727,17 @@ fun PhotoEditorScreen(
     if (showProjects) {
         ProjectsDialog(
             projects = savedProjects,
-            selectedName = selectedProject,
-            onSelect = { selectedProject = it },
+            selectedProject = selectedProject,
+            enabled = !busy,
+            onSelect = { if (!busy) selectedProject = it },
             onOpen = {
-                val name = selectedProject
+                val expected = selectedProject
                 val captured = pendingDeparture
-                if (name != null && captured != null && departureOwned(captured) && !busy) {
+                val readable = savedProjects.any { it.project == expected && it.readable }
+                if (expected != null && readable && captured != null && departureOwned(captured) && !busy) {
                     busy = true
                     scope.launch {
-                        val loaded = withContext(Dispatchers.IO) { ProjectStore.loadNamed(context, name) }
+                        val loaded = withContext(Dispatchers.IO) { ProjectStore.loadNamed(context, expected) }
                         busy = false
                         if (pendingDeparture != captured || !departureOwned(captured)) return@launch
                         if (loaded == null) {
@@ -1735,59 +1752,60 @@ fun PhotoEditorScreen(
                 }
             },
             onDelete = {
-                val name = selectedProject
-                if (name != null && !busy) {
-                    val lookupEpoch = photoUiEpoch
-                    val lookupDeparture = pendingDeparture
-                    busy = true
-                    scope.launch {
-                        val loaded = withContext(Dispatchers.IO) { ProjectStore.loadNamed(context, name) }
-                        busy = false
-                        if (photoUiEpoch != lookupEpoch || pendingDeparture != lookupDeparture) return@launch
-                        if (loaded != null) {
-                            projectDeleteRef = loaded.project
-                            projectToDelete = loaded.project.name
-                            showProjects = false
-                        } else notice = "That saved project is no longer available."
-                    }
+                val expected = selectedProject
+                val captured = pendingDeparture
+                if (expected != null && captured != null && departureOwned(captured) && !busy) {
+                    projectDeleteRef = expected
+                    showProjects = false
                 }
             },
             onDismiss = ::cancelDeparture
         )
     }
-    projectToDelete?.let { name ->
+    projectDeleteRef?.let { expected ->
+        val closeConfirmation = {
+            if (!busy) {
+                projectDeleteRef = null
+                showProjects = true
+            }
+        }
         AlertDialog(
-            onDismissRequest = { projectToDelete = null; projectDeleteRef = null; showProjects = true },
+            onDismissRequest = closeConfirmation,
             title = { Text("Delete saved project?") },
-            text = { Text("Delete “" + name + "” from saved projects. Your original photo stays on your phone.") },
+            text = { Text("Delete “" + expected.name + "” from saved projects. Your original photo stays on your phone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    val expected = projectDeleteRef
-                    if (expected != null && !busy) {
+                    val pending = pendingDeparture
+                    if (!busy && projectDeleteRef == expected && pending != null && departureOwned(pending)) {
                         val deleteEpoch = photoUiEpoch
                         busy = true
                         scope.launch {
-                            val deleted = withContext(Dispatchers.IO) { ProjectStore.deleteNamed(context, expected) }
+                            val (deleted, refreshed) = withContext(Dispatchers.IO) {
+                                val result = ProjectStore.deleteNamed(context, expected)
+                                result to ProjectStore.listMetadata(context)
+                            }
                             busy = false
-                            if (deleted) {
-                                savedProjects = ProjectStore.load(context)
-                                if (activePhotoProject?.id == expected.id) activePhotoProject = null
+                            if (deleted && activePhotoProject?.id == expected.id) activePhotoProject = null
+                            if (photoUiEpoch != deleteEpoch || pendingDeparture != pending ||
+                                !departureOwned(pending)) return@launch
+                            projectDeleteRef = null
+                            if (refreshed == null) {
+                                cancelDeparture()
+                                notice = if (deleted) "Project reference removed. Could not refresh saved projects."
+                                    else "Could not read saved projects. Your photo is unchanged."
+                            } else {
+                                savedProjects = refreshed
                                 selectedProject = null
-                                notice = "Project reference removed."
-                            } else notice = "The saved project changed or could not be deleted."
-                            if (photoUiEpoch == deleteEpoch) {
-                                projectToDelete = null
-                                projectDeleteRef = null
                                 showProjects = true
+                                notice = if (deleted) "Project reference removed."
+                                    else "The saved project changed or could not be deleted."
                             }
                         }
                     }
                 }, enabled = !busy) { Text("Delete project") }
             },
             dismissButton = {
-                TextButton(onClick = { projectToDelete = null; projectDeleteRef = null; showProjects = true }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = closeConfirmation, enabled = !busy) { Text("Cancel") }
             }
         )
     }

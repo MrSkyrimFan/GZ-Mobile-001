@@ -20,6 +20,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -50,7 +51,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.util.Base64
 import java.util.Locale
 
 @RunWith(AndroidJUnit4::class)
@@ -81,6 +81,7 @@ class AndroidRegularToolsTest {
         tileEdits: EditDocument? = null,
         onTileDone: ((CollagePhoto) -> Unit)? = null,
         sourceBitmap: (() -> Bitmap)? = null,
+        storageContext: Context? = null,
         test: (Uri) -> Unit
     ) {
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
@@ -114,7 +115,11 @@ class AndroidRegularToolsTest {
                 }
             }
             rule.setContent {
-                CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
+                val editorContext = storageContext ?: LocalContext.current
+                CompositionLocalProvider(
+                    LocalActivityResultRegistryOwner provides picker,
+                    LocalContext provides editorContext
+                ) {
                     MaterialTheme(colorScheme = darkColorScheme()) {
                         PhotoEditorScreen(
                             initialCollagePhoto = tileEdits?.let {
@@ -165,7 +170,7 @@ class AndroidRegularToolsTest {
             radius = .2f, feather = .3f, exposure = -1f)
     ))
 
-    private fun seedLegacyRegularProject(context: Context, name: String, uri: Uri) {
+    private fun seedLegacyRegularProject(fixture: RegularProjectTestFixture, name: String, uri: Uri) {
         val recipe = """
             mask.0.exposure=-1.0
             mask.0.feather=0.3
@@ -176,11 +181,10 @@ class AndroidRegularToolsTest {
             mask.count=1
             version=1
         """.trimIndent()
-        val encoder = Base64.getUrlEncoder().withoutPadding()
-        val key = encoder.encodeToString(name.toByteArray())
-        val source = encoder.encodeToString(uri.toString().toByteArray())
-        val store = context.getSharedPreferences("gzphotoeditor.projects.v1", Context.MODE_PRIVATE)
-        assertTrue(store.edit().putString(key, source + "\n" + recipe).commit())
+        writeRegularLegacyXml(fixture.legacyXml) { emit ->
+            emit(name, regularLegacyValue(uri, recipe))
+        }
+        assertTrue(fixture.legacyXml.isFile && fixture.legacyXml.length() > 0)
     }
 
     @Test fun photoHistogramCountsVisibleChannelsAndLuminance() {
@@ -314,52 +318,56 @@ class AndroidRegularToolsTest {
         closeHistogram()
     }
 
-    @Test fun regularOmitsMaskAuthoringAndPreservesOldProjectAppearanceAndRecipe() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val oldName = "Old mask " + System.nanoTime()
-        val copyName = "Mask copy " + System.nanoTime()
-        val historical = historicalMaskedPhoto()
-        try {
-            withRegularPhoto { uri ->
-                val tools = rule.onNodeWithTag("photo-tools")
-                val canvas = rule.onNodeWithContentDescription(
-                    "Photo editing canvas. Tap to hide or show tools."
-                )
-                fun sampleRightOfCenter(): Int {
-                    val capture = canvas.captureToImage().asAndroidBitmap()
-                    return try {
-                        val side = minOf(capture.width, capture.height)
-                        val x = (capture.width - side) / 2 + side * 68 / 100
-                        Color.red(capture.getPixel(x, capture.height / 2))
-                    } finally {
-                        capture.recycle()
+    @Test fun regularOmitsMaskAuthoringAndPreservesOldProjectAppearanceAndRecipe() =
+        withRegularProjectFixture { fixture ->
+            val context = fixture.context()
+            val oldName = "Old mask " + System.nanoTime()
+            val copyName = "Mask copy " + System.nanoTime()
+            val historical = historicalMaskedPhoto()
+            try {
+                withRegularPhoto(storageContext = context) { uri ->
+                    val tools = rule.onNodeWithTag("photo-tools")
+                    val canvas = rule.onNodeWithContentDescription(
+                        "Photo editing canvas. Tap to hide or show tools."
+                    )
+                    fun sampleRightOfCenter(): Int {
+                        val capture = canvas.captureToImage().asAndroidBitmap()
+                        return try {
+                            val side = minOf(capture.width, capture.height)
+                            val x = (capture.width - side) / 2 + side * 68 / 100
+                            Color.red(capture.getPixel(x, capture.height / 2))
+                        } finally {
+                            capture.recycle()
+                        }
                     }
-                }
 
-                assertTrue(sampleRightOfCenter() > 240)
-                seedLegacyRegularProject(context, oldName, uri)
-                val legacy = ProjectStore.load(context).single { it.name == oldName }
-                assertEquals(historical.masks, legacy.document.masks)
-                command("Open project…")
-                rule.onNodeWithText(oldName).performClick()
-                rule.onNodeWithText("Open project").performClick()
-                rule.waitUntil(15_000) {
-                    rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty()
+                    assertTrue(sampleRightOfCenter() > 240)
+                    seedLegacyRegularProject(fixture, oldName, uri)
+                    val legacy = ProjectStore.load(context).single { it.name == oldName }
+                    assertEquals(historical.masks, legacy.document.masks)
+                    command("Open project…")
+                    rule.waitUntil(15_000) {
+                        rule.onAllNodesWithText(oldName, substring = false).fetchSemanticsNodes().isNotEmpty()
+                    }
+                    rule.onNodeWithText(oldName).performClick()
+                    rule.onNodeWithText("Open project").performClick()
+                    rule.waitUntil(15_000) {
+                        rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty()
+                    }
+                    rule.waitUntil(15_000) { sampleRightOfCenter() in 100..160 }
+                    assertNoMasksInPhotoTools()
+                    command("Save project as…")
+                    rule.onNode(hasSetTextAction()).performTextInput(copyName)
+                    rule.onNodeWithText("Save").performClick()
+                    waitForNativeSave()
+                    rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
+                    assertEquals(legacy.document, ProjectStore.load(context).single { it.name == copyName }.document)
                 }
-                rule.waitUntil(15_000) { sampleRightOfCenter() in 100..160 }
-                assertNoMasksInPhotoTools()
-                command("Save project as…")
-                rule.onNode(hasSetTextAction()).performTextInput(copyName)
-                rule.onNodeWithText("Save").performClick()
-                waitForNativeSave()
-                rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
-                assertEquals(legacy.document, ProjectStore.load(context).single { it.name == copyName }.document)
+            } finally {
+                ProjectStore.delete(context, oldName)
+                ProjectStore.delete(context, copyName)
             }
-        } finally {
-            ProjectStore.delete(context, oldName)
-            ProjectStore.delete(context, copyName)
         }
-    }
 
     @Test fun selectedCollageTileOmitsMaskAuthoringAndKeepsHistoricalRecipe() {
         val historical = historicalMaskedPhoto()
@@ -397,6 +405,9 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithText("Save").performClick()
                 waitForNativeSave()
                 command("Open project…")
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+                }
                 rule.onNodeWithText(name).performClick()
                 rule.onNodeWithText("Open project").performClick()
                 rule.waitUntil(15_000) { rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty() }
@@ -467,6 +478,9 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithText("Save").performClick()
                 waitForNativeSave()
                 command("Open project…")
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+                }
                 rule.onNodeWithText(name).performClick()
                 rule.onNodeWithText("Open project").performClick()
                 rule.waitUntil(15_000) {
@@ -515,6 +529,9 @@ class AndroidRegularToolsTest {
                     // Discard is provisional until Open succeeds; deleting a saved
                     // entry and canceling this library must retain the dirty draft.
                     rule.onNodeWithText("Discard", substring = false).performClick()
+                    rule.waitUntil(15_000) {
+                        rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+                    }
                     rule.onNodeWithText(name).performClick()
                 }
                 command("Open project…")
@@ -538,6 +555,10 @@ class AndroidRegularToolsTest {
                 rule.waitUntil(15_000) { ProjectStore.load(context).none { it.name == name } }
                 assertTrue(ProjectStore.load(context).none { it.name == name })
                 assertNotNull(context.contentResolver.openInputStream(source)?.use { it.read() })
+                rule.waitUntil(15_000) {
+                    rule.onAllNodes(hasText("Close", substring = false) and hasAnyAncestor(isDialog()))
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
                 rule.onNodeWithText("Close").performClick()
                 rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Text"))
                 rule.onNodeWithText("Text").performClick()

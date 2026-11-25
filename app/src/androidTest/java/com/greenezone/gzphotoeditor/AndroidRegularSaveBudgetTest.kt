@@ -37,7 +37,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.nio.file.Files
-import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
 class AndroidRegularSaveBudgetTest {
@@ -65,12 +64,8 @@ class AndroidRegularSaveBudgetTest {
         ))
     }
 
-    private fun key(name: String): String = Base64.getUrlEncoder().withoutPadding()
-        .encodeToString(ProjectStore.normalizedName(name).toByteArray(Charsets.UTF_8))
-
     private fun stored(name: String): String? =
-        context.getSharedPreferences("gzphotoeditor.projects.v1", Context.MODE_PRIVATE)
-            .getString(key(name), null)
+        regularProjectPayloadFile(context, name)?.readText(Charsets.UTF_8)
 
     private fun assertReachableDenseInput(document: EditDocument) {
         val stroke = document.creative.strokes.first()
@@ -97,13 +92,13 @@ class AndroidRegularSaveBudgetTest {
             assertFalse("Unreadable replacement was reported saved",
                 ProjectStore.save(context, name, uri, dense))
             assertEquals("Rejected replacement changed the existing bytes", before, stored(name))
-            val reopened = ProjectStore.load(context).single { it.name == name }
+            val reopened = requireNotNull(ProjectStore.loadNamed(context, name)).content
             assertEquals(uri, reopened.image)
             assertEquals(healthy, reopened.document)
 
             val readable = drawing(20)
             assertTrue(ProjectStore.save(context, name, uri, readable))
-            assertEquals(readable, ProjectStore.load(context).single { it.name == name }.document)
+            assertEquals(readable, requireNotNull(ProjectStore.loadNamed(context, name)).content.document)
         } finally {
             ProjectStore.delete(context, name)
         }
@@ -202,6 +197,7 @@ class AndroidRegularSaveBudgetTest {
             command("New photo…")
             waitForPhoto()
             command("Open project…")
+            rule.waitUntil(20_000) { rule.onAllNodesWithText(name).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText(name).performClick()
             rule.onNodeWithText("Open project").performClick()
             rule.waitUntil(20_000) {
@@ -247,7 +243,7 @@ class AndroidRegularSaveBudgetTest {
             // independently reopening the retained project on the small API 29 heap.
             rule.runOnIdle { mounted.value = false }
             rule.waitForIdle()
-            assertEquals(original, ProjectStore.load(context).single { it.name == name }.document)
+            assertEquals(original, requireNotNull(ProjectStore.loadNamed(context, name)).content.document)
         } finally {
             rule.runOnIdle { mounted.value = false }
             rule.waitForIdle()

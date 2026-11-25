@@ -277,14 +277,13 @@ internal fun ProWorkspaceScreenContent(
     var exportRecoveryUnavailable by remember { mutableStateOf<String?>(null) }
     var showSave by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
-    var pendingSavedDelete by remember { mutableStateOf<String?>(null) }
+    var pendingSavedDelete by remember { mutableStateOf<NamedProjectRef?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
     var draftName by remember { mutableStateOf("") }
     var pendingReplace by remember { mutableStateOf<ProSaveRequest?>(null) }
     var saveError by remember { mutableStateOf<String?>(null) }
     var openError by remember { mutableStateOf<String?>(null) }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
-    var pendingDeleteRef by remember { mutableStateOf<NamedProjectRef?>(null) }
     var addPickerOwner by remember { mutableStateOf<Pair<WorkspaceOperationToken, ProDocument>?>(null) }
 
     val active = document.layers.getOrNull(selected)
@@ -2056,15 +2055,21 @@ internal fun ProWorkspaceScreenContent(
                         }
                         Spacer(Modifier.weight(1f))
                         TextButton(
-                            onClick = {
+                            onClick = prepareDelete@{
+                                if (busy || !showProjects || pendingSavedDelete != null) return@prepareDelete
                                 busy = true
+                                openError = null
                                 scope.launch {
                                     try {
-                                        pendingDeleteRef = withContext(Dispatchers.IO) {
-                                            ProStore.loadNamed(context, name)?.project
+                                        val target = withContext(Dispatchers.IO) {
+                                            ProStore.deletionTarget(context, name)
                                         }
-                                        if (pendingDeleteRef != null) pendingSavedDelete = name
-                                        else openError = "Saved project changed or is unreadable."
+                                        if (showProjects) {
+                                            pendingSavedDelete = target
+                                            if (target == null) {
+                                                openError = "Saved project changed or could not be checked for deletion."
+                                            }
+                                        }
                                     } finally { busy = false }
                                 }
                             },
@@ -2079,14 +2084,14 @@ internal fun ProWorkspaceScreenContent(
             Text("Close")
         } }
     )
-    pendingSavedDelete?.let { name ->
+    pendingSavedDelete?.let { ref ->
         AlertDialog(
-            onDismissRequest = { pendingSavedDelete = null },
+            onDismissRequest = { if (!busy) pendingSavedDelete = null },
             title = { Text("Delete saved Pro project?") },
-            text = { Text("Delete the saved project “$name” permanently? Your open work and source photos will be kept.") },
+            text = { Text("Delete the saved project “${ref.name}” permanently? Your open work and source photos will be kept.") },
             confirmButton = {
-                TextButton(onClick = {
-                    val ref = pendingDeleteRef ?: return@TextButton
+                TextButton(enabled = !busy, onClick = confirmSavedDelete@{
+                    if (busy || pendingSavedDelete != ref) return@confirmSavedDelete
                     busy = true
                     scope.launch {
                         try {
@@ -2108,14 +2113,15 @@ internal fun ProWorkspaceScreenContent(
                             }
                             savedNames = withContext(Dispatchers.IO) { ProStore.names(context) }
                             pendingSavedDelete = null
-                            pendingDeleteRef = null
-                            notice = if (deleted) "Saved Pro project deleted."
-                                else "Saved project changed or could not be deleted."
+                            if (deleted) notice = "Saved Pro project deleted."
+                            else openError = "Saved project changed or could not be deleted."
                         } finally { busy = false }
                     }
                 }) { Text("Delete saved project", color = Color(0xFFFF9D9D)) }
             },
-            dismissButton = { TextButton(onClick = { pendingSavedDelete = null }) { Text("Cancel") } }
+            dismissButton = {
+                TextButton(enabled = !busy, onClick = { if (!busy) pendingSavedDelete = null }) { Text("Cancel") }
+            }
         )
     }
     if (confirmReset) AlertDialog(

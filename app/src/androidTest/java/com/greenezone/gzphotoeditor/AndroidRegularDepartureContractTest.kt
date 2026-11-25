@@ -33,6 +33,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -48,11 +49,11 @@ class AndroidRegularDepartureContractTest {
         val started = CountDownLatch(1)
         val release = CountDownLatch(1)
         fun failNextCommit() { armed.set(true) }
-        fun commit(delegate: SharedPreferences.Editor): Boolean {
-            if (!armed.compareAndSet(true, false)) return delegate.commit()
+        fun verifyPublication() {
+            if (!armed.compareAndSet(true, false)) return
             started.countDown()
             check(release.await(10, TimeUnit.SECONDS)) { "Test did not release the intercepted save" }
-            return false
+            throw IOException("Test refused the project index before acknowledging Save")
         }
     }
 
@@ -60,31 +61,11 @@ class AndroidRegularDepartureContractTest {
         private val suffix = ".b1-departure-" + System.nanoTime()
         private val directory = Files.createTempDirectory(base.cacheDir.toPath(), "b1-departure-").toFile()
         private val preferences = mutableSetOf<String>()
+        override fun getDataDir(): File = directory
         override fun getFilesDir(): File = directory
         override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
             preferences += name + suffix
-            val real = baseContext.getSharedPreferences(name + suffix, mode)
-            if (name != "gzphotoeditor.projects.v1") return real
-            return object : SharedPreferences by real {
-                override fun edit(): SharedPreferences.Editor {
-                    val editor = real.edit()
-                    return object : SharedPreferences.Editor by editor {
-                        override fun putString(key: String, value: String?): SharedPreferences.Editor {
-                            editor.putString(key, value)
-                            return this
-                        }
-                        override fun remove(key: String): SharedPreferences.Editor {
-                            editor.remove(key)
-                            return this
-                        }
-                        override fun clear(): SharedPreferences.Editor {
-                            editor.clear()
-                            return this
-                        }
-                        override fun commit(): Boolean = gate.commit(editor)
-                    }
-                }
-            }
+            return baseContext.getSharedPreferences(name + suffix, mode)
         }
         fun close() {
             preferences.forEach { baseContext.deleteSharedPreferences(it) }
@@ -165,7 +146,13 @@ class AndroidRegularDepartureContractTest {
                                 sources[0].toString(), id = "b1-child-mode"
                             ) else null,
                             onDoneCollagePhoto = if (tile) ({ error("Use the parent workspace callback") }) else null,
-                            onRequestCollageWorkspace = if (tile) onChildWorkspace else null
+                            onRequestCollageWorkspace = if (tile) onChildWorkspace else null,
+                            savePhotoProject = { saveContext, intent, source, document ->
+                                ProjectStore.saveNamed(saveContext, intent, source, document) { file, bytes, maxBytes ->
+                                    NamedProjectIdentity.verify(file, bytes, maxBytes)
+                                    gate.verifyPublication()
+                                }
+                            }
                         )
                     }
                 }
@@ -436,6 +423,36 @@ class AndroidRegularDepartureContractTest {
             back()
             rule.onAllNodesWithText("Unsaved changes").assertCountEquals(0)
             rule.onAllNodesWithTag("photo-tools").assertCountEquals(0)
+        }
+    }
+
+    @Test fun staleProjectChooserCannotOpenARecreatedNameOrDiscardTheCurrentPhoto() {
+        withEditor { fixture ->
+            openPhoto(fixture)
+            val name = "Scanned project"
+            val previous = saveAs(fixture, name)
+            flip()
+            options("Open project…")
+            rule.onNodeWithText("Discard", substring = false).performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+            }
+            assertTrue(ProjectStore.deleteNamed(fixture.context, previous.project))
+            assertTrue(ProjectStore.save(fixture.context, name, fixture.sources[1], EditDocument()))
+            val recreated = requireNotNull(ProjectStore.loadNamed(fixture.context, name))
+            assertNotEquals(previous.project.id, recreated.project.id)
+
+            rule.onNodeWithText(name, substring = false).performClick()
+            rule.onNodeWithText("Open project", substring = false).performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Could not open that project. Your photo is unchanged.", substring = false)
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+            val retained = saveAs(fixture, "Retained after stale Open")
+            assertEquals(fixture.sources[0], retained.content.image)
+            assertTrue(retained.content.document.mirrored)
+            assertEquals(recreated, ProjectStore.loadNamed(fixture.context, name))
         }
     }
 }

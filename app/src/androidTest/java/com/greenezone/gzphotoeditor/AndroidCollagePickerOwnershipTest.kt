@@ -5,7 +5,6 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
-import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -32,6 +31,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.CollageDocument
 import com.greenezone.gzphotoeditor.editor.CollagePhoto
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.NamedProjectIdentity
+import com.greenezone.gzphotoeditor.editor.PhotoProjectFiles
 import com.greenezone.gzphotoeditor.editor.ProjectSaveIntent
 import com.greenezone.gzphotoeditor.editor.ProjectSaveResult
 import com.greenezone.gzphotoeditor.editor.ProjectStore
@@ -43,8 +44,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.io.IOException
-import java.nio.file.Files
-import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 /** Actual picker routes plus the named publication boundary used by nested photo saves. */
@@ -129,15 +128,23 @@ class AndroidCollagePickerOwnershipTest {
         val original = EditDocument()
         val saved = ProjectStore.saveNamed(storage, ProjectSaveIntent.Create("Publication"),
             source, original) as ProjectSaveResult.Saved
-        val prefs = storage.preferences
-        val previousPayload = prefs.delegate.all
-        prefs.failAfterNextCommit(blockRollback = false)
+        val index = PhotoProjectFiles.indexFile(storage)
+        val previousIndex = index.readBytes()
+        val previousPayload = requireNotNull(regularProjectPayloadFile(storage, "Publication")).readBytes()
+        var rejectedAfterReadback = false
 
         val rejected = ProjectStore.saveNamed(storage, ProjectSaveIntent.Update(saved.project),
-            source, original.copy(mirrored = true))
+            source, original.copy(mirrored = true), verifyIndex = { published, expected, limit ->
+                NamedProjectIdentity.verify(published, expected, limit)
+                rejectedAfterReadback = true
+                throw IOException("Injected readback failure after successful publication")
+            })
+        assertTrue("The fault must run after the new index is published", rejectedAfterReadback)
         assertTrue("Post-publication readback failure must be reported", rejected is ProjectSaveResult.Rejected)
-        assertEquals(previousPayload, prefs.delegate.all)
-        val reloaded = requireNotNull(ProjectStore.loadNamed(storage.freshContext(), "Publication"))
+        val fresh = ContextWrapper(storage)
+        assertArrayEquals(previousIndex, index.readBytes())
+        assertArrayEquals(previousPayload, requireNotNull(regularProjectPayloadFile(fresh, "Publication")).readBytes())
+        val reloaded = requireNotNull(ProjectStore.loadNamed(fresh, "Publication"))
         assertEquals(original, reloaded.content.document)
         assertEquals(saved.project, reloaded.project)
         val retry = ProjectStore.saveNamed(storage, ProjectSaveIntent.Update(saved.project),
@@ -152,79 +159,36 @@ class AndroidCollagePickerOwnershipTest {
         val original = EditDocument(quarterTurns = 1)
         val saved = ProjectStore.saveNamed(storage, ProjectSaveIntent.Create("Recoverable"),
             source, original) as ProjectSaveResult.Saved
-        val prefs = storage.preferences
-        val previousPayload = prefs.delegate.all
-        prefs.failAfterNextCommit(blockRollback = true)
+        val index = PhotoProjectFiles.indexFile(storage)
+        val previousIndex = index.readBytes()
+        val previousGeneration = requireNotNull(regularProjectPayloadFile(storage, "Recoverable"))
+        val previousPayload = previousGeneration.readBytes()
+        val previous = File(index.path + ".save-previous")
+        val unavailable = File(index.path + ".test-preserved")
 
         val rejected = ProjectStore.saveNamed(storage, ProjectSaveIntent.Update(saved.project),
-            source, original.copy(mirrored = true))
+            source, original.copy(mirrored = true), verifyIndex = { published, expected, limit ->
+                NamedProjectIdentity.verify(published, expected, limit)
+                assertTrue(previous.renameTo(unavailable))
+                throw IOException("Injected readback failure with the previous index unavailable")
+            })
         assertTrue(rejected is ProjectSaveResult.Rejected)
-        assertNotEquals("The injected failure leaves the rejected bytes in the backing preferences",
-            previousPayload, prefs.delegate.all)
+        assertTrue(NamedProjectIdentity.hasPendingPublication(index))
+        assertFalse("The injected failure leaves the rejected index published", previousIndex.contentEquals(index.readBytes()))
+        val attempted = requireNotNull(regularProjectPayloadFile(storage, "Recoverable"))
+        assertFalse("The rejected index points to the attempted recipe", previousPayload.contentEquals(attempted.readBytes()))
+        assertArrayEquals(previousPayload, previousGeneration.readBytes())
         assertNull("A blocked rollback must not expose rejected content", ProjectStore.loadNamed(storage, "Recoverable"))
         assertTrue(ProjectStore.load(storage).isEmpty())
 
-        val fresh = storage.freshContext()
+        assertTrue(unavailable.renameTo(previous))
+        val fresh = ContextWrapper(storage)
         val recovered = requireNotNull(ProjectStore.loadNamed(fresh, "Recoverable"))
         assertEquals(original, recovered.content.document)
         assertEquals(saved.project, recovered.project)
-        assertEquals(previousPayload, prefs.delegate.all)
+        assertArrayEquals(previousIndex, index.readBytes())
+        assertArrayEquals(previousPayload, requireNotNull(regularProjectPayloadFile(fresh, "Recoverable")).readBytes())
         assertEquals(listOf(recovered.content), ProjectStore.load(fresh))
-    }
-
-    private class FaultPreferences(val delegate: SharedPreferences) : SharedPreferences by delegate {
-        private var armed = false
-        private var fired = false
-        private var blockRollback = false
-        private var failRead = false
-        fun failAfterNextCommit(blockRollback: Boolean) {
-            armed = true
-            fired = false
-            this.blockRollback = blockRollback
-        }
-        override fun getString(key: String?, defValue: String?): String? {
-            if (failRead) {
-                failRead = false
-                throw IOException("Injected readback failure after successful publication")
-            }
-            return delegate.getString(key, defValue)
-        }
-        override fun edit(): SharedPreferences.Editor {
-            val raw = delegate.edit()
-            return object : SharedPreferences.Editor by raw {
-                override fun putString(key: String?, value: String?): SharedPreferences.Editor {
-                    raw.putString(key, value)
-                    return this
-                }
-                override fun remove(key: String?): SharedPreferences.Editor {
-                    raw.remove(key)
-                    return this
-                }
-                override fun commit(): Boolean {
-                    if (fired && blockRollback) return false
-                    val result = raw.commit()
-                    if (armed) {
-                        check(result)
-                        armed = false
-                        fired = true
-                        failRead = true
-                    }
-                    return result
-                }
-            }
-        }
-    }
-
-    private class Storage(
-        private val base: Context, private val folder: File,
-        val preferences: FaultPreferences
-    ) : ContextWrapper(base) {
-        override fun getFilesDir(): File = folder
-        override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences = preferences
-        fun freshContext(): Context = object : ContextWrapper(base) {
-            override fun getFilesDir(): File = folder
-            override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences = preferences.delegate
-        }
     }
 
     private class DelayedPicker : ActivityResultRegistryOwner {
@@ -301,16 +265,12 @@ class AndroidCollagePickerOwnershipTest {
     }
     private fun bytes(uri: Uri) = requireNotNull(resolver.openInputStream(uri)).use { it.readBytes() }
 
-    private fun isolated(test: (Storage) -> Unit) {
-        val folder = Files.createTempDirectory(target.cacheDir.toPath(), "gz-collage-picker-").toFile()
-        val preferenceName = "gz-collage-picker-" + UUID.randomUUID().toString()
-        val storage = Storage(target, folder,
-            FaultPreferences(target.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)))
-        try { test(storage) } finally {
+    private fun isolated(test: (Context) -> Unit) = withRegularProjectFixture { fixture ->
+        try {
+            test(fixture.context())
+        } finally {
             rule.runOnIdle { rule.activity.setContentView(android.widget.FrameLayout(rule.activity)) }
             media.forEach { resolver.delete(it, null, null) }
-            target.deleteSharedPreferences(preferenceName)
-            folder.deleteRecursively()
         }
     }
 }
