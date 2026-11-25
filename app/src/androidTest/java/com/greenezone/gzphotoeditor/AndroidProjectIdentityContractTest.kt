@@ -2,7 +2,6 @@ package com.greenezone.gzphotoeditor
 
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.SharedPreferences
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -30,11 +29,10 @@ class AndroidProjectIdentityContractTest {
     private fun withStores(block: (Context, File, List<Store>) -> Unit) {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
         val root = Files.createTempDirectory(base.cacheDir.toPath(), "project-identity-").toFile()
-        val prefix = "identity-" + root.name + "-"
+        val data = File(root, "data").apply { check(mkdir()) }
         val context = object : ContextWrapper(base) {
             override fun getFilesDir(): File = root
-            override fun getSharedPreferences(name: String, mode: Int) =
-                base.getSharedPreferences(prefix + name, mode)
+            override fun getDataDir(): File = data
         }
         val uri = Uri.parse("content://gz-identity/source")
         fun photo(n: Int) = EditDocument(grade = Grade(exposure = n / 10f))
@@ -72,10 +70,7 @@ class AndroidProjectIdentityContractTest {
                 { intent -> GifStore.saveNamed(context, intent, GifDocument()) })
         )
         try { block(context, root, stores) }
-        finally {
-            context.getSharedPreferences("gzphotoeditor.projects.v1", Context.MODE_PRIVATE).edit().clear().commit()
-            root.deleteRecursively()
-        }
+        finally { root.deleteRecursively() }
     }
 
     private fun saved(result: ProjectSaveResult): NamedProjectRef {
@@ -97,7 +92,7 @@ class AndroidProjectIdentityContractTest {
         ProjectKind.COLLAGE -> File(root, "gz_collages/" + key(name) + ".gzc")
         ProjectKind.PRO -> File(root, "gz_pro_projects/" + key(name) + ".gzpro")
         ProjectKind.GIF -> File(root, "gz_gif_projects/" + key(name) + ".gzgif")
-        ProjectKind.PHOTO -> error("Regular still uses its compatible preferences payload")
+        ProjectKind.PHOTO -> error("Regular generations are selected through the index")
     }
 
     @Test fun saveAsCollisionAndReopenKeepTheIntendedIdentityAndContent() = withStores { _, _, stores ->
@@ -215,38 +210,29 @@ class AndroidProjectIdentityContractTest {
         }
     }
 
+    // Retain the inherited case identity and failure assertions while exercising
+    // the current Regular publication boundary, the authoritative index.
     @Test fun failedPreferencePublicationNeverReportsSavedOrChangesHealthyBaseline() = withStores { context, _, _ ->
-        val uri = Uri.parse("content://gz-identity/failed-preferences")
+        val uri = Uri.parse("content://gz-identity/failed-index")
         val document = EditDocument(grade = Grade(exposure = .1f))
         val original = saved(ProjectStore.saveNamed(context, ProjectSaveIntent.Create("Healthy"), uri, document))
-        val failing = object : ContextWrapper(context) {
-            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
-                val preferences = context.getSharedPreferences(name, mode)
-                return object : SharedPreferences by preferences {
-                    override fun edit(): SharedPreferences.Editor {
-                        val editor = preferences.edit()
-                        return object : SharedPreferences.Editor by editor {
-                            override fun putString(key: String, value: String?): SharedPreferences.Editor {
-                                editor.putString(key, value)
-                                return this
-                            }
-                            override fun remove(key: String): SharedPreferences.Editor {
-                                editor.remove(key)
-                                return this
-                            }
-                            override fun commit(): Boolean = false
-                        }
-                    }
-                }
-            }
+        val healthy = requireNotNull(regularProjectPayloadFile(context, original.name))
+        val healthyBytes = healthy.readBytes()
+        var verifiedPublications = 0
+        val rejectIndex: (File, ByteArray, Long) -> Unit = { index, expected, limit ->
+            NamedProjectIdentity.verify(index, expected, limit)
+            verifiedPublications++
+            throw IOException("Injected rejection after index publication")
         }
-        rejected(ProjectStore.saveNamed(failing, ProjectSaveIntent.Update(original), uri,
-            document.copy(grade = Grade(exposure = .4f))), ProjectSaveFailure.STORAGE_FAILURE)
+        rejected(ProjectStore.saveNamed(context, ProjectSaveIntent.Update(original), uri,
+            document.copy(grade = Grade(exposure = .4f)), verifyIndex = rejectIndex), ProjectSaveFailure.STORAGE_FAILURE)
         assertEquals(original, ProjectStore.loadNamed(context, original.name)!!.project)
         assertEquals(document, ProjectStore.loadNamed(context, original.name)!!.content.document)
-        rejected(ProjectStore.saveNamed(failing, ProjectSaveIntent.Create("Never saved"), uri, document),
-            ProjectSaveFailure.STORAGE_FAILURE)
+        assertArrayEquals(healthyBytes, healthy.readBytes())
+        rejected(ProjectStore.saveNamed(context, ProjectSaveIntent.Create("Never saved"), uri, document,
+            verifyIndex = rejectIndex), ProjectSaveFailure.STORAGE_FAILURE)
         assertNull(ProjectStore.loadNamed(context, "Never saved"))
+        assertEquals(2, verifiedPublications)
     }
 
     @Test fun proLegacyTrailingSpaceAndResetBaselineSurviveIdentityAdoption() = withStores { context, root, stores ->

@@ -24,7 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.greenezone.gzphotoeditor.editor.SavedProject
+import com.greenezone.gzphotoeditor.editor.NamedProjectRef
+import com.greenezone.gzphotoeditor.editor.SavedPhotoProjectMetadata
 import com.greenezone.gzphotoeditor.editor.ExportSettings
 import com.greenezone.gzphotoeditor.editor.ImageExportFormat
 import com.greenezone.gzphotoeditor.editor.SocialPreset
@@ -216,10 +217,11 @@ fun SaveNameDialog(
 }
 
 @Composable
-fun ProjectsDialog(
-    projects: List<SavedProject>,
-    selectedName: String?,
-    onSelect: (String) -> Unit,
+internal fun ProjectsDialog(
+    projects: List<SavedPhotoProjectMetadata>,
+    selectedProject: NamedProjectRef?,
+    enabled: Boolean,
+    onSelect: (NamedProjectRef) -> Unit,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit
@@ -242,23 +244,26 @@ fun ProjectsDialog(
                     Text("No saved projects yet.", color = EditorWhite)
                 }
                 projects.forEach { item ->
-                    DockChip(
-                        item.name,
-                        selected = selectedName == item.name
-                    ) { onSelect(item.name) }
+                    Column {
+                        DockChip(
+                            item.project.name,
+                            selected = selectedProject == item.project
+                        ) { onSelect(item.project) }
+                        if (!item.readable) Text("Saved project unavailable", color = EditorMuted, fontSize = 12.sp)
+                    }
                 }
             }
         },
         confirmButton = {
             TextButton(
-                enabled = projects.any { it.name == selectedName },
+                enabled = enabled && projects.any { it.project == selectedProject && it.readable },
                 onClick = onOpen
             ) { Text("Open project", color = EditorMint) }
         },
         dismissButton = {
             Row {
                 TextButton(
-                    enabled = projects.any { it.name == selectedName },
+                    enabled = enabled && projects.any { it.project == selectedProject },
                     onClick = onDelete
                 ) { Text("Delete", color = EditorMuted) }
                 TextButton(onClick = onDismiss) { Text("Close", color = EditorMuted) }

@@ -4,10 +4,14 @@ import android.content.Context
 import android.util.AtomicFile
 import android.util.JsonReader
 import android.util.JsonToken
+import androidx.core.util.AtomicFile as ProjectAtomicFile
 import java.io.FilterInputStream
 import java.io.FilterReader
 import java.io.IOException
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.security.MessageDigest
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -388,10 +392,70 @@ object ProStore {
         }
     } catch (_: OutOfMemoryError) { null } catch (_: Exception) { null }
 
+    /** Resolve only the selected row without decoding its editable recipe. */
+    @Synchronized fun deletionTarget(context: Context, name: String): NamedProjectRef? {
+        return try {
+            val target = projectPath(context, name) ?: return null
+            readDeletionTarget(context, target)
+        } catch (_: Exception) { null }
+    }
+
+    private fun readDeletionTarget(context: Context, target: ProjectPath): NamedProjectRef? {
+        val base = target.base
+        val stage = File(base.path + ".new")
+        // Recovery can remove transaction files. A non-regular occupant is an
+        // obstruction, even when it is an empty directory or a symlink.
+        val transactionBases = listOf(base, File(base.path + ".save-pending"),
+            File(base.path + ".save-previous"))
+        for (file in transactionBases) {
+            for (path in listOf(file, File(file.path + ".bak"), File(file.path + ".new"))) {
+                val nio = path.toPath()
+                if (!Files.notExists(nio, NOFOLLOW_LINKS) && !Files.isRegularFile(nio, NOFOLLOW_LINKS))
+                    return null
+            }
+        }
+        NamedProjectIdentity.recoverPublication(base, MAX_PROJECT_BYTES.toLong())
+        if (!base.isFile && !target.backup.isFile) return null
+
+        val version = ProjectAtomicFile(base).openRead().use { source ->
+            // A failed legacy backup promotion must not leave two possible
+            // versions, or a backup which could resurrect a deleted record.
+            if (!Files.isRegularFile(base.toPath(), NOFOLLOW_LINKS) ||
+                !Files.notExists(target.backup.toPath(), NOFOLLOW_LINKS) ||
+                !Files.notExists(stage.toPath(), NOFOLLOW_LINKS) ||
+                NamedProjectIdentity.hasPendingPublication(base)
+            ) return null
+
+            val length = source.channel.size()
+            var remaining = length
+            val digest = MessageDigest.getInstance("SHA-256")
+            val buffer = ByteArray(8192)
+            // The selected on-disk length bounds IO. Empty and oversized files
+            // still get exact versions without allocating for the full file.
+            while (remaining > 0) {
+                val count = source.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                if (count <= 0) return null
+                digest.update(buffer, 0, count)
+                remaining -= count
+            }
+            if (source.read() != -1 || source.channel.size() != length) return null
+            digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+        }
+        return NamedProjectIdentity.reference(context, ProjectKind.PRO, target.name, version)
+    }
+
     @Synchronized fun deleteNamed(context: Context, expected: NamedProjectRef): Boolean {
         if (expected.kind != ProjectKind.PRO) return false
-        val current = loadNamed(context, expected.name)?.project ?: return false
-        return current == expected && delete(context, current.name)
+        return try {
+            val target = projectPath(context, expected.name) ?: return false
+            if (readDeletionTarget(context, target) != expected) return false
+            // Recovery above left one authoritative file. One unlink commits
+            // deletion without removing only part of a recoverable transaction.
+            Files.delete(target.base.toPath())
+            if (!Files.notExists(target.base.toPath(), NOFOLLOW_LINKS) || target.exists()) return false
+            NamedProjectIdentity.forget(context, ProjectKind.PRO, target.name)
+            true
+        } catch (_: Exception) { false }
     }
 
     fun load(context: Context, name: String): ProDocument? = loadProject(context, name)?.document

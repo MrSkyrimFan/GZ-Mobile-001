@@ -217,6 +217,9 @@ class AndroidRegularEraseInteractionTest {
     private fun reopenPhoto(name: String) {
         ensureToolsVisible()
         command("Open project…")
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+        }
         rule.onNodeWithText(name, substring = false).performClick()
         rule.onNodeWithText("Open project", substring = false).performClick()
         rule.waitUntil(15_000) {

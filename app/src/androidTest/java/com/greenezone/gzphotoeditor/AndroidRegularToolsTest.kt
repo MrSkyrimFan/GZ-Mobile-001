@@ -341,6 +341,9 @@ class AndroidRegularToolsTest {
                 val legacy = ProjectStore.load(context).single { it.name == oldName }
                 assertEquals(historical.masks, legacy.document.masks)
                 command("Open project…")
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText(oldName, substring = false).fetchSemanticsNodes().isNotEmpty()
+                }
                 rule.onNodeWithText(oldName).performClick()
                 rule.onNodeWithText("Open project").performClick()
                 rule.waitUntil(15_000) {
@@ -397,6 +400,9 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithText("Save").performClick()
                 waitForNativeSave()
                 command("Open project…")
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+                }
                 rule.onNodeWithText(name).performClick()
                 rule.onNodeWithText("Open project").performClick()
                 rule.waitUntil(15_000) { rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty() }
@@ -467,6 +473,9 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithText("Save").performClick()
                 waitForNativeSave()
                 command("Open project…")
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+                }
                 rule.onNodeWithText(name).performClick()
                 rule.onNodeWithText("Open project").performClick()
                 rule.waitUntil(15_000) {
@@ -515,6 +524,9 @@ class AndroidRegularToolsTest {
                     // Discard is provisional until Open succeeds; deleting a saved
                     // entry and canceling this library must retain the dirty draft.
                     rule.onNodeWithText("Discard", substring = false).performClick()
+                    rule.waitUntil(15_000) {
+                        rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty()
+                    }
                     rule.onNodeWithText(name).performClick()
                 }
                 command("Open project…")

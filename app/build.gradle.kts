@@ -3,8 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val appVersionCode = 24
-val appVersionName = "0.12.12"
+val appVersionCode = 25
+val appVersionName = "0.12.13"
 
 android {
     namespace = "com.greenezone.gzphotoeditor"
