@@ -17,6 +17,8 @@ internal class GifStageTiming {
     private var wallNanos = 0L
     private var cpuNanos = 0L
     private var cpuAvailable = true
+    val wallNs get() = wallNanos
+    val cpuNs get() = if (cpuAvailable) cpuNanos else -1L
     val wallMs get() = wallNanos / 1_000_000
     val cpuMs get() = if (cpuAvailable) cpuNanos / 1_000_000 else -1L
 
@@ -175,9 +177,18 @@ object GifEncoder {
         val renderTiming = GifStageTiming()
         val paletteTiming = GifStageTiming()
         val encodeTiming = GifStageTiming()
+        val sinkTiming = GifStageTiming()
         val colors = totalTiming.measure {
             val colors = ImagePipeline.GifColors.forGrade(doc.edits.grade)
-            val stream = BufferedOutputStream(output, 64 * 1024)
+            // Separate the encoder's work from calls into its buffered/staged sink.
+            // The caller still owns close and measures physical file flush/close separately.
+            val measuredSink = object : OutputStream() {
+                override fun write(value: Int) = sinkTiming.measure { output.write(value) }
+                override fun write(bytes: ByteArray, offset: Int, length: Int) =
+                    sinkTiming.measure { output.write(bytes, offset, length) }
+                override fun flush() = sinkTiming.measure { output.flush() }
+            }
+            val stream = BufferedOutputStream(measuredSink, 64 * 1024)
             val writer = LzwWriter(stream, cancel)
             val palette = GifPalette(w, cancel, reserveTransparency = doc.video?.isGif == true)
             val pixels = ByteArray(w * h)
@@ -246,6 +257,10 @@ object GifEncoder {
                 "renderMs=${renderTiming.wallMs} renderCpuMs=${renderTiming.cpuMs} " +
                 "paletteMs=${paletteTiming.wallMs} paletteCpuMs=${paletteTiming.cpuMs} " +
                 "lzwOutputMs=${encodeTiming.wallMs} lzwOutputCpuMs=${encodeTiming.cpuMs} " +
+                "sinkCallMs=${sinkTiming.wallMs} sinkCallCpuMs=${sinkTiming.cpuMs} " +
+                "lzwExclusiveMs=${(encodeTiming.wallNs - sinkTiming.wallNs).coerceAtLeast(0) / 1_000_000} " +
+                "lzwExclusiveCpuMs=${if (encodeTiming.cpuNs < 0 || sinkTiming.cpuNs < 0) -1 else
+                    (encodeTiming.cpuNs - sinkTiming.cpuNs).coerceAtLeast(0) / 1_000_000} " +
                 "colorCacheHits=${colors?.hits ?: 0} colorCacheMisses=${colors?.misses ?: 0} " +
                 "totalMs=${totalTiming.wallMs} totalCpuMs=${totalTiming.cpuMs}")
     }

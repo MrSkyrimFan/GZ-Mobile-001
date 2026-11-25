@@ -27,7 +27,7 @@ private val proTopics = listOf(
     HelpTopic("Edit with the canvas clear",
         "Choose your tool and its settings. Tap the canvas once to hide the panels. Your active tool stays ready.",
         "Drag with one finger to paint, move an object or draw a selection. Pinch with two fingers to zoom and pan around details.",
-        "Tap the canvas again to restore the panels. Open File and choose Fit canvas to return to the whole composition."),
+        "Tap the canvas again to restore the panels. Choose Fit canvas to return to the whole composition."),
     HelpTopic("Build and arrange a layer stack",
         "Add a photo as the first layer, or start with a blank canvas for drawing. Add a separate layer for each object you want to change independently.",
         "Select the layer you want to work on. In Layers, hold an object on the canvas to select it. If objects overlap, select the one you need in the stack.",
@@ -54,17 +54,17 @@ private val proTopics = listOf(
         "Place a texture photo above your image and open Blend. The panel names the layer or canvas below. Modes affect the pixels where the layers overlap. Screen and Overlay can turn a layer white over an opaque white canvas.",
         "Use Restore Normal to return to the selected layer's regular colors. Opacity controls how much of the layer shows. A separate Layer effects adjustment affects the layers below it."),
     HelpTopic("Save a project and export a copy",
-        "Save the Pro project to keep layers, masks and adjustments editable. Keep the original photos accessible on the device. Use Open to resume.",
+        "Use Options → Save project to keep layers, masks and adjustments editable. Save project as… creates a separate named project. Keep the original photos accessible. Use Options → Open project… to resume.",
         "Export writes a flattened image. Choose PNG for a transparent canvas. For an exact platform size choose its preset, then choose Fit for the whole composition or Fill to crop its edges.",
         "If an image source becomes unavailable, select the affected layer and use Replace image to reconnect it."),
     HelpTopic("Leave Pro or delete current work",
-        "Use Back to return to the previous workspace. Your Pro edits stay available when you return. Back first restores hidden controls or clears an unapplied selection or clone source.",
-        "Use File, then Delete current work, to start over. Confirm to return to the original first photo or to the empty workspace you started from. Your source photos and separately saved projects are kept.")
+        "Use Back to return to the previous workspace. Unsaved work offers Save, Discard or Cancel. Discard restores the last saved project or this document’s entry state. Back first restores hidden controls or clears an unapplied selection or clone source.",
+        "Use Options, then Delete current work…, to start over. Confirm to return to the original first photo or to the empty workspace you started from. Your source photos and separately saved projects are kept.")
 )
 
 private val gifTopics = listOf(
     HelpTopic("Convert a video as it was shot",
-        "Choose a video in GIF maker. Leave its original framing, timing and neutral adjustments in place to convert it directly. Press Play to review it, then Save GIF and pick a destination.",
+        "Choose a video in GIF maker. Leave its original framing, timing and neutral adjustments in place to convert it directly. Press Play to review it, then choose Options → Export GIF… and pick a destination.",
         "GIF holds up to 256 colors per frame, stores delays in hundredths of a second, and has no audio. A smooth sky or subtle skin tones can look different from the source video."),
     HelpTopic("Trim, reverse and preview",
         "Use the trim controls to choose the part you want. Scrub through the result to check the first and last visible frames.",
@@ -84,8 +84,8 @@ private val gifTopics = listOf(
         "Keep the original aspect and size to preserve the source framing. To make a square or portrait GIF, choose that aspect in Canvas.",
         "Fit keeps the whole image inside the frame. Fill crops the edges to cover it. Check faces and captions near the borders. Use rotation or mirroring only when you want to change orientation."),
     HelpTopic("Edit a GIF you already have",
-        "Choose the option to edit an existing GIF and select the animated file. Preview its frames, then change timing, direction, color or caption as needed.",
-        "Save GIF writes an animated copy. Save a project as well if you want to revisit your adjustments later. Keep the source file available."),
+        "Choose Options → Open GIF… and select the animated file. Preview its frames, then change timing, direction, color or caption as needed.",
+        "Options → Export GIF… writes an animated copy. Save a project as well if you want to revisit your adjustments later. Keep the source file available."),
     HelpTopic("Reopen a photo sequence",
         "Open a saved GIF project and choose the photo sequence. In Photos, select a frame and use Earlier or Later to change its place.",
         "Timing sets the duration of each photo. Use Play to check the order, then save the project to keep it editable or export an animated GIF."),
@@ -104,8 +104,8 @@ private val photoTopics = listOf(
     HelpTopic("Blur or cover a private detail",
         "Open Blur & cover to obscure a face or detail. Position a region or paint with a brush. Inspect the entire area before exporting."),
     HelpTopic("Save a look, project or finished image",
-        "More → Save my look stores the grade for another photo. Save project keeps this photo’s editable settings. Keep the original photo on your device.",
-        "Export creates a new image. For an exact platform size choose its preset. Fit preserves the whole photo and Fill crops the edges to cover the frame.")
+        "Looks → Save my look stores the grade for another photo. Options → Save project keeps this photo’s editable settings. Save project as… creates a separate named project. Keep the original photo on your device.",
+        "Options → Export image… creates a new image. For an exact platform size choose its preset. Fit preserves the whole photo and Fill crops the edges to cover the frame.")
 )
 
 @Composable

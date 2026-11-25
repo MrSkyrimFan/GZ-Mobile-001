@@ -51,7 +51,7 @@ jobs:
           reject_matches 'ChromaVale|Focavera|com[.]greenezone[.](chromavale|focavera)' app/src/main app/build.gradle.kts settings.gradle.kts
           reject_matches 'android[.]permission[.](INTERNET|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE)' app/src/main
       - name: Test and assemble
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Verify testing package
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk

@@ -69,7 +69,20 @@ data class ProPixelSize(val width: Int, val height: Int) {
 internal fun ProLayer.withBrushStroke(stroke: InkStroke): ProLayer =
     copy(edits = edits.copy(creative = edits.creative.copy(strokes = edits.creative.strokes + stroke)))
 
-data class ProSaveTarget(val workId: Long = 0, val name: String? = null)
+data class ProSaveTarget(
+    val workId: Long = 0,
+    val name: String? = null,
+    val savedRef: NamedProjectRef? = null,
+    val nativeOwnerId: String? = null
+)
+
+/** Content baselines are separate from the original/reset image and UI selection. */
+data class ProWorkBaseline(
+    val entryDocument: ProDocument,
+    val savedDocument: ProDocument? = null
+) {
+    val cleanDocument: ProDocument get() = savedDocument ?: entryDocument
+}
 
 /** Captures the working document and the workspace state needed to restore it safely. */
 data class ProHistoryEntry(
@@ -104,7 +117,20 @@ data class ProHistory(
     }
 
     fun forgetSavedName(name: String): ProHistory = mapTargets { entry ->
-        if (entry.name == name) entry.copy(name = null) else entry
+        if (entry.name == name) entry.copy(name = null, savedRef = null) else entry
+    }
+
+    fun bindSavedProject(target: ProSaveTarget): ProHistory = mapTargets { entry ->
+        when {
+            entry.workId == target.workId -> target
+            entry.savedRef?.id != null && entry.savedRef.id == target.savedRef?.id ->
+                entry.copy(name = target.name, savedRef = target.savedRef)
+            else -> entry
+        }
+    }
+
+    fun forgetSavedProject(id: String): ProHistory = mapTargets { entry ->
+        if (entry.savedRef?.id == id) entry.copy(name = null, savedRef = null) else entry
     }
 
     private fun mapTargets(change: (ProSaveTarget) -> ProSaveTarget): ProHistory = copy(

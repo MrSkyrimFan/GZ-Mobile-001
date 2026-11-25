@@ -47,6 +47,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +60,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,6 +98,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.min
 
+import com.greenezone.gzphotoeditor.editor.NamedProject
+import com.greenezone.gzphotoeditor.editor.NamedProjectRef
+import com.greenezone.gzphotoeditor.editor.ProjectSaveIntent
+import com.greenezone.gzphotoeditor.editor.ProjectSaveResult
+import com.greenezone.gzphotoeditor.editor.ProjectSaveFailure
+import com.greenezone.gzphotoeditor.editor.ImagePipeline
+import java.util.UUID
+
 internal enum class CollageSection(val label: String) {
     TEMPLATES("Layouts"), ASPECT("Aspect"), FRAME("Spacing"),
     BACKGROUND("Style"), TILES("Photos"), QUALITY("Quality")
@@ -113,12 +124,44 @@ internal data class CollageWorkspaceSession(
     val section: CollageSection = CollageSection.TEMPLATES,
     val control: FrameControl = FrameControl.GAP,
     val toolsVisible: Boolean = true,
-    val savedDocument: CollageDocument = CollageDocument()
+    val savedDocument: CollageDocument = CollageDocument(),
+    val documentId: String = UUID.randomUUID().toString(),
+    val entryDocument: CollageDocument? = null,
+    val savedProject: NamedProjectRef? = null,
+    val savedHistory: CollageHistory = CollageHistory(),
+    val entryHistory: CollageHistory = CollageHistory(),
+    val contentRevision: Long = 0,
+    val tileRevisions: Map<String, Long> = emptyMap()
 )
 
-private data class SavedCollageChoice(val name: String, val document: CollageDocument)
+private data class CollageTileEntry(
+    val parentId: String, val tile: CollagePhoto, val sourceRevision: Long
+)
+private data class TileSourceChoice(val entry: CollageTileEntry, val keepEdits: Boolean)
+private data class PreparedTileSource(val choice: TileSourceChoice, val photo: CollagePhoto)
 
-private data class TileSourceChoice(val id: String, val keepEdits: Boolean)
+private sealed interface CollageDestination {
+    data object Back : CollageDestination
+    data object New : CollageDestination
+    data class Switch(val mode: WorkspaceMode) : CollageDestination
+    data class Open(val project: NamedProject<CollageDocument>) : CollageDestination
+}
+private data class CollageDeparture(
+    val token: WorkspaceOperationToken,
+    val original: CollageDocument,
+    val candidate: CollageDocument,
+    val candidateHistory: CollageHistory,
+    val destination: CollageDestination,
+    val child: CollageTileEntry? = null
+)
+private data class CollageSaveAttempt(
+    val ownerId: String,
+    val content: CollageDocument,
+    val history: CollageHistory,
+    val target: NamedProjectRef?,
+    val asCopy: Boolean,
+    val departureToken: String?
+)
 
 private data class CollageExport(
     val collage: CollageDocument,
@@ -142,14 +185,8 @@ fun CollageWorkspaceScreen(
     onSwitch: (WorkspaceMode) -> Unit = {}
 ) {
     var session by remember { mutableStateOf(CollageWorkspaceSession()) }
-    CollageWorkspaceScreenContent(
-        document = document,
-        onDocument = onDocument,
-        onBack = onBack,
-        onSwitch = onSwitch,
-        session = session,
-        onSession = { session = it }
-    )
+    CollageWorkspaceScreenContent(document, onDocument, onBack, onSwitch,
+        session, { session = it })
 }
 
 @Composable
@@ -159,30 +196,61 @@ internal fun CollageWorkspaceScreenContent(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit,
     session: CollageWorkspaceSession,
-    onSession: (CollageWorkspaceSession) -> Unit
+    onSession: (CollageWorkspaceSession) -> Unit,
+    onTrySwitch: ((WorkspaceMode, () -> Boolean) -> Boolean)? = null
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val scope = rememberCoroutineScope()
-    var selected by remember {
-        mutableIntStateOf(session.selectedPhoto.coerceIn(
-            0, document.photos.lastIndex.coerceAtLeast(0)
-        ))
-    }
+    val latestDocument by rememberUpdatedState(document)
+    var documentId by remember { mutableStateOf(session.documentId) }
+    var contentRevision by remember { mutableStateOf(session.contentRevision) }
+    var tileRevisions by remember { mutableStateOf(session.tileRevisions) }
+    var selected by remember { mutableIntStateOf(session.selectedPhoto.coerceIn(
+        0, document.photos.lastIndex.coerceAtLeast(0))) }
     var history by remember { mutableStateOf(session.history) }
+    var entryDocument by remember { mutableStateOf(session.entryDocument
+        ?: session.savedDocument.takeIf { it.photos.isNotEmpty() } ?: document) }
+    var entryHistory by remember { mutableStateOf(session.entryHistory) }
+    var savedProject by remember { mutableStateOf(session.savedProject) }
+    var savedDocument by remember { mutableStateOf(session.savedDocument) }
+    var savedHistory by remember { mutableStateOf(session.savedHistory) }
     var layoutGestureStart by remember { mutableStateOf<CollageDocument?>(null) }
     var layoutGestureLatest by remember { mutableStateOf<CollageDocument?>(null) }
     var section by remember { mutableStateOf(session.section) }
     var control by remember { mutableStateOf(session.control) }
     var toolsVisible by remember { mutableStateOf(session.toolsVisible) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
+    val latestPreview by rememberUpdatedState(preview)
     var missingTileId by remember { mutableStateOf<String?>(null) }
     var tileSourceChoice by remember { mutableStateOf<TileSourceChoice?>(null) }
+    var replaceConfirmation by remember { mutableStateOf<TileSourceChoice?>(null) }
+    var preparedRelink by remember { mutableStateOf<PreparedTileSource?>(null) }
     var notice by remember { mutableStateOf("") }
+    var conflictNotice by remember { mutableStateOf<String?>(null) }
     var rendering by remember { mutableStateOf(false) }
     var renderGeneration by remember { mutableIntStateOf(0) }
     var exporting by remember { mutableStateOf(false) }
-    var editingTile by remember { mutableIntStateOf(-1) }
+    var loadingProject by remember { mutableStateOf(false) }
+    var preparingSources by remember { mutableStateOf(false) }
+    var writingProject by remember { mutableStateOf(false) }
+    var editingTile by remember { mutableStateOf<CollageTileEntry?>(null) }
+    var pendingDeparture by remember { mutableStateOf<CollageDeparture?>(null) }
+    var showDeparture by remember { mutableStateOf(false) }
+    var saveAttempt by remember { mutableStateOf<CollageSaveAttempt?>(null) }
+    var saveIntent by remember { mutableStateOf<ProjectSaveIntent?>(null) }
+    var saveConfirmation by remember { mutableStateOf(false) }
+    var saveCollision by remember { mutableStateOf<NamedProjectRef?>(null) }
+    var naming by remember { mutableStateOf("") }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var savedList by remember { mutableStateOf(false) }
+    var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    var savedChoice by remember { mutableStateOf<String?>(null) }
+    var projectOpenError by remember { mutableStateOf<String?>(null) }
+    var deleteChoice by remember { mutableStateOf<NamedProjectRef?>(null) }
+    var mediaToken by remember { mutableStateOf<WorkspaceOperationToken?>(null) }
     var showExport by remember { mutableStateOf(false) }
     val exportJournal = remember(context) { PendingExportJournal(context.filesDir) }
     val recoveredExport = remember { exportJournal.read(ExportWorkspace.COLLAGE) }
@@ -193,197 +261,493 @@ internal fun CollageWorkspaceScreenContent(
     var exportLaunchId by remember { mutableStateOf<String?>(null) }
     var showExportRecovery by remember { mutableStateOf(recoveredExport != null) }
     var exportRecoveryError by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    var confirmNew by remember { mutableStateOf(false) }
-    var naming by remember { mutableStateOf("") }
-    var savedList by remember { mutableStateOf(false) }
-    var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
-    var savedChoice by remember { mutableStateOf<String?>(null) }
-    var savedDocument by remember { mutableStateOf(session.savedDocument) }
-    var openAfterDecision by remember { mutableStateOf<SavedCollageChoice?>(null) }
-    var saveError by remember { mutableStateOf<String?>(null) }
-    var openingAfterSave by remember { mutableStateOf(false) }
-    var deleteChoice by remember { mutableStateOf<String?>(null) }
 
-    fun commit(next: CollageDocument) {
-        history = history.checkpoint(document, next)
+    fun busy() = exporting || loadingProject || preparingSources || writingProject
+    fun baseline() = if (savedProject != null) savedDocument else entryDocument
+    fun baselineHistory() = (if (savedProject != null) savedHistory else entryHistory).copy(redo = emptyList())
+    fun dirty(value: CollageDocument = latestDocument) = value != baseline()
+
+    fun persistSession(value: CollageDocument = latestDocument) {
+        onSession(CollageWorkspaceSession(
+            selectedPhoto = selected.coerceIn(0, value.photos.lastIndex.coerceAtLeast(0)),
+            history = history, section = section, control = control, toolsVisible = toolsVisible,
+            savedDocument = savedDocument, documentId = documentId, entryDocument = entryDocument,
+            savedProject = savedProject, savedHistory = savedHistory, entryHistory = entryHistory,
+            contentRevision = contentRevision, tileRevisions = tileRevisions
+        ))
+    }
+
+    fun recordTileChanges(before: CollageDocument, after: CollageDocument, forceId: String? = null) {
+        val beforeById = before.photos.associateBy { it.id }
+        val afterById = after.photos.associateBy { it.id }
+        val changed = (beforeById.keys + afterById.keys).filter {
+            beforeById[it] != afterById[it] || it == forceId
+        }
+        if (changed.isNotEmpty()) {
+            val next = tileRevisions.toMutableMap()
+            changed.forEach { next[it] = (next[it] ?: 0L) + 1L }
+            tileRevisions = next
+        }
+    }
+
+    fun commit(next: CollageDocument, forceSourceId: String? = null) {
+        if (busy()) return
+        val before = latestDocument
+        history = history.checkpoint(before, next)
+        if (before != next || forceSourceId != null) contentRevision++
+        recordTileChanges(before, next, forceSourceId)
         onDocument(next)
         layoutGestureStart = null
         layoutGestureLatest = null
     }
 
-    fun changeLayout(layout: CollageLayout) {
-        commit(document.copy(layout = layout))
-    }
-
+    fun changeLayout(layout: CollageLayout) { commit(latestDocument.copy(layout = layout)) }
     fun slideLayout(layout: CollageLayout) {
-        if (layoutGestureStart == null) layoutGestureStart = document
-        val next = document.copy(layout = layout)
+        if (busy()) return
+        if (layoutGestureStart == null) layoutGestureStart = latestDocument
+        val next = latestDocument.copy(layout = layout)
         layoutGestureLatest = next
         onDocument(next)
     }
-
     fun finishLayout() {
         layoutGestureStart?.let { start ->
-            history = history.checkpoint(start, layoutGestureLatest ?: document)
+            val next = layoutGestureLatest ?: latestDocument
+            history = history.checkpoint(start, next)
+            if (start != next) contentRevision++
         }
         layoutGestureStart = null
         layoutGestureLatest = null
+    }
+    fun cancelLayout(): Boolean {
+        val start = layoutGestureStart ?: return false
+        onDocument(start)
+        layoutGestureStart = null
+        layoutGestureLatest = null
+        notice = "Unfinished adjustment canceled."
+        return true
     }
 
     fun moveSelectionTo(next: CollageDocument) {
-        val selectedId = document.photos.getOrNull(selected)?.id
-        val sameTile = next.photos.indexOfFirst { it.id == selectedId }
-        selected = if (sameTile >= 0) sameTile else {
-            selected.coerceIn(0, next.photos.lastIndex.coerceAtLeast(0))
-        }
+        val selectedId = latestDocument.photos.getOrNull(selected)?.id
+        val index = next.photos.indexOfFirst { it.id == selectedId }
+        selected = if (index >= 0) index else selected.coerceIn(0, next.photos.lastIndex.coerceAtLeast(0))
     }
-
-    fun openSaved(next: CollageDocument) {
-        preview = null
-        missingTileId = null
-        history = CollageHistory()
-        layoutGestureStart = null
-        layoutGestureLatest = null
-        savedDocument = next
-        selected = 0
-        openAfterDecision = null
-        savedList = false
-        onDocument(next)
-        notice = "Saved collage opened"
-    }
-
     fun undoCollage() {
-        history.undo(document)?.let { (previous, next) ->
-            history = next
+        if (busy() || cancelLayout()) return
+        history.undo(latestDocument)?.let { (previous, nextHistory) ->
+            recordTileChanges(latestDocument, previous)
+            contentRevision++
+            history = nextHistory
             moveSelectionTo(previous)
             onDocument(previous)
         }
     }
-
     fun redoCollage() {
-        history.redo(document)?.let { (nextDoc, next) ->
-            history = next
-            moveSelectionTo(nextDoc)
-            onDocument(nextDoc)
+        if (busy() || cancelLayout()) return
+        history.redo(latestDocument)?.let { (next, nextHistory) ->
+            recordTileChanges(latestDocument, next)
+            contentRevision++
+            history = nextHistory
+            moveSelectionTo(next)
+            onDocument(next)
         }
     }
 
-    fun persistSession() {
-        onSession(CollageWorkspaceSession(
-            selectedPhoto = selected.coerceIn(0, document.photos.lastIndex.coerceAtLeast(0)),
-            history = history,
-            section = section,
-            control = control,
-            toolsVisible = toolsVisible,
-            savedDocument = savedDocument
-        ))
+    fun tileEntry(): CollageTileEntry? = latestDocument.photos.getOrNull(selected)?.let {
+        CollageTileEntry(documentId, it, tileRevisions[it.id] ?: 0L)
+    }
+    fun resolveTile(entry: CollageTileEntry, edited: CollagePhoto?): CollageDocument? {
+        val current = latestDocument
+        val index = current.photos.indexOfFirst { it.id == entry.tile.id }
+        if (entry.parentId != documentId || index < 0 || current.photos[index] != entry.tile ||
+            (tileRevisions[entry.tile.id] ?: 0L) != entry.sourceRevision) return null
+        if (edited == null) return current
+        return current.copy(photos = current.photos.toMutableList().apply {
+            this[index] = edited.copy(id = entry.tile.id)
+        })
+    }
+
+    fun valid(departure: CollageDeparture): Boolean =
+        departure.token.ownerId == documentId &&
+            departure.token.contentRevision == contentRevision &&
+            departure.original == latestDocument &&
+            (departure.child == null || departure.child == editingTile)
+
+    fun clearDeparture() {
+        pendingDeparture = null
+        showDeparture = false
+    }
+
+    fun adoptProject(next: CollageDocument, reference: NamedProjectRef? = null) {
+        recordTileChanges(latestDocument, next)
+        documentId = UUID.randomUUID().toString()
+        contentRevision = 0
+        tileRevisions = emptyMap()
+        entryDocument = next
+        entryHistory = CollageHistory()
+        savedProject = reference
+        savedDocument = if (reference != null) next else CollageDocument()
+        savedHistory = CollageHistory()
+        history = CollageHistory()
+        selected = 0
+        editingTile = null
+        layoutGestureStart = null
+        layoutGestureLatest = null
+        preview = null
+        missingTileId = null
+        savedList = false
+        toolsVisible = true
+        onDocument(next)
+        persistSession(next)
+    }
+
+    fun completeDeparture(departure: CollageDeparture, resolved: CollageDocument,
+        resolvedHistory: CollageHistory, discard: Boolean = false) {
+        val destination = departure.destination
+        var failureMessage: String? = null
+        val commitPrepared: () -> Boolean = commitPrepared@ {
+            if (pendingDeparture?.token != departure.token || !valid(departure)) {
+                failureMessage = "The collage changed while this action was pending. Your current work is still open."
+                return@commitPrepared false
+            }
+            if (discard || destination == CollageDestination.New || destination is CollageDestination.Open) {
+                try {
+                    // Export retry owns its immutable recipe independently. Only
+                    // suppress native restoration of this departing document.
+                    val pending = exportJournal.read(ExportWorkspace.COLLAGE)
+                    if (pending != null && (pending.nativeOwnerId ?: pending.id) == documentId) {
+                        val retained = exportJournal.suppressNativeRestore(pending, documentId)
+                        if (retained == null) {
+                            failureMessage = "The recovery request changed. Your collage and unapplied tile edits are still open."
+                            return@commitPrepared false
+                        }
+                        pendingExport = retained
+                    }
+                } catch (_: Exception) {
+                    failureMessage = "Could not update local recovery. Your collage and unapplied tile edits are still open."
+                    return@commitPrepared false
+                }
+            }
+            clearDeparture()
+            when (destination) {
+                CollageDestination.New -> { adoptProject(CollageDocument()); notice = "New collage" }
+                is CollageDestination.Open -> {
+                    adoptProject(destination.project.content, destination.project.project)
+                    notice = "Saved collage opened"
+                }
+                CollageDestination.Back, is CollageDestination.Switch -> {
+                    recordTileChanges(latestDocument, resolved)
+                    if (latestDocument != resolved) contentRevision++
+                    history = resolvedHistory
+                    moveSelectionTo(resolved)
+                    onDocument(resolved)
+                    editingTile = null
+                    persistSession(resolved)
+                }
+            }
+            true
+        }
+        val accepted = if (destination is CollageDestination.Switch) {
+            try {
+                onTrySwitch?.invoke(destination.mode, commitPrepared) ?: run {
+                    if (commitPrepared()) { onSwitch(destination.mode); true } else false
+                }
+            } catch (_: Exception) { false }
+        } else commitPrepared()
+        if (!accepted) {
+            clearDeparture()
+            conflictNotice = failureMessage ?:
+                "The workspace could not be opened. Your collage and unapplied tile edits are still open."
+        } else if (destination == CollageDestination.Back) onBack()
+    }
+
+    fun requestDeparture(destination: CollageDestination, candidate: CollageDocument = latestDocument,
+        child: CollageTileEntry? = null) {
+        if (busy() || pendingDeparture != null || saveAttempt != null) return
+        if (cancelLayout()) return
+        val departure = CollageDeparture(WorkspaceOperationToken(documentId, contentRevision),
+            latestDocument, candidate, history.checkpoint(latestDocument, candidate), destination, child)
+        pendingDeparture = departure
+        menuExpanded = false
+        if (dirty(candidate)) showDeparture = true
+        else completeDeparture(departure, candidate, departure.candidateHistory)
     }
 
     fun requestBack() {
-        if (rendering || exporting) {
-            notice = if (exporting) "Finish the collage export before leaving."
-                else "Wait for the collage preview to finish."
-            return
-        }
-        finishLayout()
-        persistSession()
-        onBack()
+        if (menuExpanded) { menuExpanded = false; return }
+        if (cancelLayout()) return
+        if (!toolsVisible && latestDocument.photos.isNotEmpty()) { toolsVisible = true; return }
+        if (busy()) { notice = "Finish the current operation before leaving."; return }
+        requestDeparture(CollageDestination.Back)
     }
-
     fun requestSwitch(mode: WorkspaceMode) {
-        if (rendering || exporting) {
-            notice = if (exporting) "Finish the collage export before switching workspaces."
-                else "Wait for the collage preview to finish."
+        if (mode != WorkspaceMode.COLLAGE) requestDeparture(CollageDestination.Switch(mode))
+    }
+
+    fun cancelSave() {
+        if (writingProject) return
+        saveAttempt = null
+        saveIntent = null
+        saveConfirmation = false
+        saveCollision = null
+        saveError = null
+        clearDeparture()
+    }
+
+    fun performSave(intent: ProjectSaveIntent) {
+        val attempt = saveAttempt ?: return
+        if (writingProject || attempt.ownerId != documentId) return
+        val targetToOpen = (pendingDeparture?.destination as? CollageDestination.Open)?.project?.project
+        if (intent is ProjectSaveIntent.Replace && targetToOpen != null &&
+            intent.expected.id == targetToOpen.id && attempt.target?.id != targetToOpen.id) {
+            saveCollision = null
+            saveIntent = null
+            saveError = "Choose a different name from the collage you are opening."
             return
         }
-        finishLayout()
-        persistSession()
-        onSwitch(mode)
-    }
-
-    fun retainReadPermission(uri: Uri) {
-        try {
-            resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (_: SecurityException) {
-            // Source permissions may be temporary on third-party photo pickers.
-        }
-    }
-
-    fun addPhotos(uris: List<Uri>) {
-        if (uris.isEmpty()) return
-        val remaining = CollageMath.MAX_PHOTOS - document.photos.size
-        if (remaining <= 0) {
-            notice = "A collage supports up to twenty photos."
-            return
-        }
-        val added = uris.take(remaining).map {
-            retainReadPermission(it)
-            CollagePhoto(it.toString())
-        }
-        if (added.isNotEmpty()) {
-            commit(document.copy(photos = document.photos + added))
-            selected = document.photos.size
-            notice = document.photos.size.plus(added.size).toString() + " photos in collage"
-        }
-        if (uris.size > remaining) notice = "Only the first twenty photos were added."
-    }
-
-    if (editingTile in document.photos.indices) {
-        val index = editingTile
-        PhotoEditorScreen(
-            initialCollagePhoto = document.photos[index],
-            onDoneCollagePhoto = { item ->
-                val copy = document.photos.toMutableList()
-                if (index in copy.indices) {
-                    copy[index] = item.copy(id = copy[index].id)
-                    commit(document.copy(photos = copy))
+        saveIntent = intent
+        saveConfirmation = false
+        saveCollision = null
+        saveError = null
+        writingProject = true
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    CollageStore.saveNamed(context, intent, attempt.content)
                 }
-                editingTile = -1
-            },
-            onCancelCollagePhoto = { editingTile = -1 }
-        )
-        return
+                if (attempt.ownerId != documentId || saveAttempt !== attempt) return@launch
+                when (result) {
+                    is ProjectSaveResult.Saved -> {
+                        savedProject = result.project
+                        savedDocument = attempt.content
+                        savedHistory = attempt.history
+                        saveAttempt = null
+                        saveIntent = null
+                        notice = "Collage project saved"
+                        persistSession()
+                        val pending = pendingDeparture
+                        if (pending != null && pending.token.operationId == attempt.departureToken) {
+                            val target = pending.destination as? CollageDestination.Open
+                            val refreshed = if (target?.project?.project?.id == result.project.id)
+                                pending.copy(destination = CollageDestination.Open(
+                                    NamedProject(result.project, attempt.content))) else pending
+                            if (refreshed !== pending) pendingDeparture = refreshed
+                            completeDeparture(refreshed, attempt.content, attempt.history)
+                        }
+                    }
+                    is ProjectSaveResult.Exists -> {
+                        if (attempt.asCopy && result.project.id == attempt.target?.id) {
+                            saveIntent = null
+                            saveError = "Save as needs a different name from this project's current name."
+                        } else saveCollision = result.project
+                    }
+                    is ProjectSaveResult.Rejected -> {
+                        if (result.reason == ProjectSaveFailure.INVALID_NAME) saveIntent = null
+                        saveError = when (result.reason) {
+                        ProjectSaveFailure.FULL -> "Twelve collages are already saved. Delete a saved project or replace one explicitly."
+                        ProjectSaveFailure.TOO_LARGE -> "This collage has too many saved edit details. Your current work is still open."
+                        ProjectSaveFailure.TARGET_CHANGED -> "That saved project changed. Cancel and reopen it, or use Save project as."
+                        ProjectSaveFailure.INVALID_NAME -> "Enter a project name."
+                        ProjectSaveFailure.INVALID_DOCUMENT -> "Add at least one photo before saving this collage."
+                        ProjectSaveFailure.STORAGE_FAILURE -> "Could not save the collage. Your edits are still open. Check local storage and retry."
+                        }
+                    }
+                }
+            } catch (canceled: CancellationException) {
+                throw canceled
+            } catch (_: Exception) {
+                if (attempt.ownerId == documentId) saveError = "Could not save the collage. Your edits are still open."
+            } finally { writingProject = false }
+        }
     }
 
-    BackHandler { requestBack() }
+    fun beginSave(asCopy: Boolean = false, departure: CollageDeparture? = null) {
+        if (busy() || saveAttempt != null || cancelLayout()) return
+        val content = departure?.candidate ?: latestDocument
+        if (!CollageMath.validCount(content.photos.size)) {
+            notice = "Add at least one photo before saving this collage."
+            return
+        }
+        showDeparture = false
+        naming = if (asCopy) "" else savedProject?.name.orEmpty()
+        saveError = null
+        val attempt = CollageSaveAttempt(documentId, content,
+            departure?.candidateHistory ?: history, savedProject, asCopy, departure?.token?.operationId)
+        saveAttempt = attempt
+        saveIntent = if (!asCopy && attempt.target != null) ProjectSaveIntent.Update(attempt.target) else null
+        if (saveIntent != null) {
+            if (departure != null) performSave(saveIntent!!) else saveConfirmation = true
+        }
+    }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(CollageMath.MAX_PHOTOS)
-    ) { uris -> addPhotos(uris) }
-    val replacePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        val choice = tileSourceChoice
-        tileSourceChoice = null
-        if (uri != null && choice != null) {
-            val index = document.photos.indexOfFirst { it.id == choice.id }
-            if (index >= 0) {
-                retainReadPermission(uri)
-                val copy = document.photos.toMutableList()
-                val tile = copy[index]
-                copy[index] = tile.copy(
-                    uri = uri.toString(),
-                    edits = if (choice.keepEdits) tile.edits else EditDocument()
-                )
-                commit(document.copy(photos = copy))
-                notice = if (choice.keepEdits) "Source relinked with its adjustments."
-                    else "Photo replaced; its old adjustments were cleared."
+    fun requestProjects() {
+        if (busy()) return
+        loadingProject = true
+        val owner = documentId
+        scope.launch {
+            try {
+                val names = withContext(Dispatchers.IO) { CollageStore.names(context) }
+                if (owner == documentId) {
+                    savedNames = names
+                    savedChoice = null
+                    projectOpenError = null
+                    savedList = true
+                }
+            } catch (canceled: CancellationException) { throw canceled }
+            catch (_: Exception) { notice = "Saved collages could not be listed. Your work is unchanged." }
+            finally { loadingProject = false }
+        }
+    }
+    fun requestOpen(name: String) {
+        if (busy()) return
+        val token = WorkspaceOperationToken(documentId, contentRevision)
+        loadingProject = true
+        scope.launch {
+            val candidate = try {
+                withContext(Dispatchers.IO) { CollageStore.loadNamed(context, name) }
+            } catch (canceled: CancellationException) { throw canceled }
+            catch (_: Exception) { null }
+            loadingProject = false
+            if (token.ownerId != documentId || token.contentRevision != contentRevision) return@launch
+            if (candidate == null) projectOpenError = "This saved collage could not be opened. Your current work is unchanged."
+            else {
+                savedList = false
+                requestDeparture(CollageDestination.Open(candidate))
             }
         }
     }
-    fun chooseTileSource(keepEdits: Boolean) {
-        val tile = document.photos.getOrNull(selected) ?: return
-        tileSourceChoice = TileSourceChoice(tile.id, keepEdits)
-        replacePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    fun requestDelete(name: String) {
+        if (busy()) return
+        loadingProject = true
+        val owner = documentId
+        scope.launch {
+            try {
+                val target = withContext(Dispatchers.IO) { CollageStore.loadNamed(context, name)?.project }
+                if (owner != documentId) return@launch
+                if (target == null) projectOpenError = "The saved collage could not be identified safely."
+                else { savedList = false; deleteChoice = target }
+            } catch (canceled: CancellationException) { throw canceled }
+            catch (_: Exception) { projectOpenError = "The saved collage could not be identified safely." }
+            finally { loadingProject = false }
+        }
     }
 
-    fun openMulti() {
-        val slots = CollageMath.MAX_PHOTOS - document.photos.size
-        if (slots > 0) picker.launch(
-            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-        ) else notice = "Maximum of twenty photos reached."
+    fun retainReadPermission(uri: Uri) {
+        try { resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        catch (_: SecurityException) { }
     }
+
+    fun addPhotos(uris: List<Uri>, token: WorkspaceOperationToken) {
+        if (uris.isEmpty() || token.ownerId != documentId || token.contentRevision != contentRevision) return
+        val remaining = CollageMath.MAX_PHOTOS - latestDocument.photos.size
+        if (remaining <= 0) { notice = "A collage supports up to twenty photos."; return }
+        preparingSources = true
+        scope.launch {
+            try {
+                val chosen = uris.take(remaining)
+                chosen.forEach { retainReadPermission(it) }
+                withContext(Dispatchers.IO) {
+                    chosen.forEach { uri ->
+                        ImagePipeline.decode(resolver, uri, 256, 65_536L).recycle()
+                    }
+                }
+                preparingSources = false
+                if (token.ownerId != documentId || token.contentRevision != contentRevision) return@launch
+                val before = latestDocument
+                val added = chosen.map { CollagePhoto(it.toString()) }
+                commit(before.copy(photos = before.photos + added))
+                selected = before.photos.size
+                notice = if (uris.size > remaining) "Only the first twenty photos were added."
+                    else (before.photos.size + added.size).toString() + " photos in collage"
+            } catch (canceled: CancellationException) { throw canceled }
+            catch (_: OutOfMemoryError) { notice = "Not enough memory to open these photos. Your collage is unchanged." }
+            catch (_: Exception) { notice = "A selected photo could not be opened. Your collage is unchanged." }
+            finally { preparingSources = false }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(CollageMath.MAX_PHOTOS)
+    ) { uris ->
+        val token = mediaToken
+        mediaToken = null
+        if (token != null) addPhotos(uris, token)
+    }
+    val replacePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val choice = tileSourceChoice
+        tileSourceChoice = null
+        if (uri != null && choice != null && resolveTile(choice.entry, null) != null) {
+            preparingSources = true
+            scope.launch {
+                try {
+                    retainReadPermission(uri)
+                    withContext(Dispatchers.IO) { ImagePipeline.decode(resolver, uri, 256, 65_536L).recycle() }
+                    preparingSources = false
+                    if (resolveTile(choice.entry, null) == null) {
+                        conflictNotice = "The selected tile changed. Its current source and edits were preserved."
+                        return@launch
+                    }
+                    val next = choice.entry.tile.copy(uri = uri.toString(),
+                        edits = if (choice.keepEdits) choice.entry.tile.edits else EditDocument())
+                    if (choice.keepEdits) preparedRelink = PreparedTileSource(choice, next)
+                    else resolveTile(choice.entry, next)?.let {
+                        commit(it, forceSourceId = next.id)
+                        notice = "Photo replaced; its old adjustments were cleared."
+                    }
+                } catch (canceled: CancellationException) { throw canceled }
+                catch (_: OutOfMemoryError) { notice = "Not enough memory to open that photo. The tile is unchanged." }
+                catch (_: Exception) { notice = "That photo could not be opened. The original tile and edits are unchanged." }
+                finally { preparingSources = false }
+            }
+        }
+    }
+    fun launchTileSource(choice: TileSourceChoice) {
+        if (busy() || resolveTile(choice.entry, null) == null) return
+        tileSourceChoice = choice
+        replacePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+    fun chooseTileSource(keepEdits: Boolean) {
+        val entry = tileEntry() ?: return
+        if (busy()) return
+        val choice = TileSourceChoice(entry, keepEdits)
+        if (keepEdits) launchTileSource(choice) else replaceConfirmation = choice
+    }
+    fun openMulti() {
+        if (busy() || cancelLayout()) return
+        if (latestDocument.photos.size >= CollageMath.MAX_PHOTOS) {
+            notice = "Maximum of twenty photos reached."
+            return
+        }
+        mediaToken = WorkspaceOperationToken(documentId, contentRevision)
+        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
+    editingTile?.let { entry ->
+        PhotoEditorScreen(
+            initialCollagePhoto = entry.tile,
+            onDoneCollagePhoto = { edited ->
+                if (editingTile == entry && !busy() && pendingDeparture == null) {
+                    val next = resolveTile(entry, edited)
+                    if (next == null) conflictNotice = "This tile changed elsewhere. Your unapplied photo edits remain open; no other tile was changed."
+                    else {
+                        commit(next)
+                        selected = next.photos.indexOfFirst { it.id == entry.tile.id }.coerceAtLeast(0)
+                        editingTile = null
+                    }
+                }
+            },
+            onCancelCollagePhoto = { if (!busy() && pendingDeparture == null) editingTile = null },
+            onRequestCollageWorkspace = { mode, edited ->
+                if (editingTile == entry && !busy() && pendingDeparture == null) {
+                    val next = resolveTile(entry, edited)
+                    if (next == null) conflictNotice = "This tile changed elsewhere. Your unapplied photo edits remain open."
+                    else if (mode == WorkspaceMode.COLLAGE) { commit(next); editingTile = null }
+                    else requestDeparture(CollageDestination.Switch(mode), next, entry)
+                }
+            }
+        )
+    }
+    BackHandler(enabled = editingTile == null) { requestBack() }
 
     fun retainExportForRetry(pending: PendingExport, message: String) {
         notice = message
@@ -491,7 +855,9 @@ internal fun CollageWorkspaceScreenContent(
         }
     )
     fun askToSave() {
-        if (!CollageMath.validCount(document.photos.size)) return
+        if (busy() || cancelLayout()) return
+        val snapshot = latestDocument
+        if (!CollageMath.validCount(snapshot.photos.size)) return
         showExport = false
         if (pendingExport != null) {
             showExportRecovery = true
@@ -500,7 +866,8 @@ internal fun CollageWorkspaceScreenContent(
         val settings = exportSettings
         try {
             val pending = exportJournal.begin(ExportWorkspace.COLLAGE, settings.format.mime,
-                "GZEditorPro_Collage." + settings.format.extension, CollageExport(document, settings).encode())
+                "GZEditorPro_Collage." + settings.format.extension, CollageExport(snapshot, settings).encode(),
+                nativeOwnerId = documentId)
             pendingExport = pending
             exportLaunchId = pending.id
         } catch (error: Exception) {
@@ -550,209 +917,306 @@ internal fun CollageWorkspaceScreenContent(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF080B10)), contentAlignment = Alignment.Center) {
-        val shown = preview
-        if (document.photos.isEmpty()) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(15.dp)) {
-                Text("Collage", color = EditorWhite, fontSize = 27.sp,
-                    fontWeight = FontWeight.SemiBold)
-                Text("Combine 2–20 photos and edit each one.",
-                    color = EditorMuted, fontSize = 13.sp)
-                Button(
-                    onClick = ::openMulti,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = EditorMint, contentColor = Color(0xFF111E19)
-                    )
-                ) { Text("Add photos") }
-            }
-        } else if (shown != null) {
-            Image(
-                bitmap = shown.asImageBitmap(),
-                contentDescription = "Photo collage preview",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-            Canvas(Modifier.fillMaxSize().pointerInput(document, shown) {
-                detectTapGestures(
-                    onDoubleTap = { toolsVisible = !toolsVisible },
-                    onTap = { point ->
-                        val factor = min(size.width.toFloat() / shown.width,
-                            size.height.toFloat() / shown.height)
-                        val w = shown.width * factor
-                        val h = shown.height * factor
-                        val left = (size.width - w) / 2f
-                        val top = (size.height - h) / 2f
-                        val nx = (point.x - left) / w
-                        val ny = (point.y - top) / h
-                        val choice = CollageMath.select(nx, ny, document.photos.size, document.layout)
-                        if (choice >= 0) selected = choice
+    if (editingTile == null) {
+        Box(Modifier.fillMaxSize().background(Color(0xFF080B10)), contentAlignment = Alignment.Center) {
+            val shown = preview
+            if (document.photos.isEmpty()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(15.dp),
+                    modifier = Modifier.padding(horizontal = 28.dp)) {
+                    Text("Collage", color = EditorWhite, fontSize = 27.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Combine 1–20 photos and edit each one.", color = EditorMuted, fontSize = 13.sp)
+                    Text("Use Options to add photos or open a saved project.", color = EditorMuted, fontSize = 13.sp)
+                }
+                Text("© 2026 Greenezone Software LLC", color = EditorMuted, fontSize = 10.sp,
+                    modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding()
+                        .padding(start = 16.dp, bottom = 12.dp))
+            } else if (shown != null) {
+                Image(bitmap = shown.asImageBitmap(), contentDescription = "Photo collage preview",
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                Canvas(Modifier.fillMaxSize()
+                    .semantics {
+                        contentDescription = "Collage canvas. Tap to hide or show tools."
+                        onClick(label = "Hide or show editing controls") {
+                            toolsVisible = !toolsVisible
+                            true
+                        }
                     }
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { point ->
+                            val current = latestDocument
+                            val bitmap = latestPreview
+                            if (bitmap != null) {
+                                val factor = min(size.width.toFloat() / bitmap.width,
+                                    size.height.toFloat() / bitmap.height)
+                                val width = bitmap.width * factor
+                                val height = bitmap.height * factor
+                                val left = (size.width - width) / 2f
+                                val top = (size.height - height) / 2f
+                                val hit = CollageMath.select((point.x - left) / width,
+                                    (point.y - top) / height, current.photos.size, current.layout)
+                                if (hit >= 0) selected = hit
+                            }
+                            toolsVisible = !toolsVisible
+                        })
+                    }) {
+                    if (selected in document.photos.indices) {
+                        val factor = min(size.width / shown.width, size.height / shown.height)
+                        val width = shown.width * factor
+                        val height = shown.height * factor
+                        val left = (size.width - width) / 2f
+                        val top = (size.height - height) / 2f
+                        val cell = CollageMath.innerFrames(document.photos.size, document.layout)[selected]
+                        drawRect(EditorMint, Offset(left + cell.left * width, top + cell.top * height),
+                            Size(cell.width * width, cell.height * height), style = Stroke(3f))
+                    }
+                }
+            }
+            val chrome = toolsVisible || document.photos.isEmpty()
+            if (chrome) {
+                val canSave = CollageMath.validCount(document.photos.size)
+                val commands = listOf(
+                    WorkspaceCommand(WorkspaceCommandId.NEW, "New collage…", !busy()) {
+                        requestDeparture(CollageDestination.New)
+                    },
+                    WorkspaceCommand(WorkspaceCommandId.ADD_PHOTOS, "Add photos…",
+                        !busy() && document.photos.size < CollageMath.MAX_PHOTOS,
+                        if (document.photos.size >= CollageMath.MAX_PHOTOS) "Maximum of twenty photos reached." else null,
+                        ::openMulti),
+                    WorkspaceCommand(WorkspaceCommandId.OPEN_PROJECT, "Open project…", !busy(),
+                        onInvoke = ::requestProjects),
+                    WorkspaceCommand(WorkspaceCommandId.SAVE, "Save project",
+                        !busy() && canSave && (savedProject == null || dirty()),
+                        if (!canSave) "Add at least one photo before saving." else if (savedProject != null && !dirty())
+                            "Already saved." else null) { beginSave() },
+                    WorkspaceCommand(WorkspaceCommandId.SAVE_AS, "Save project as…", !busy() && canSave,
+                        if (!canSave) "Add at least one photo before saving." else null) { beginSave(asCopy = true) },
+                    WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export image…", !busy() && canSave,
+                        if (!canSave) "Add at least one photo before exporting." else null) {
+                        if (!cancelLayout()) showExport = true
+                    },
+                    WorkspaceCommand(WorkspaceCommandId.HELP, "Help", !busy()) { showHelp = true }
                 )
-            }) {
-                if (selected in document.photos.indices) {
-                    val factor = min(size.width / shown.width, size.height / shown.height)
-                    val w = shown.width * factor
-                    val h = shown.height * factor
-                    val left = (size.width - w) / 2f
-                    val top = (size.height - h) / 2f
-                    val cell = CollageMath.innerFrames(document.photos.size, document.layout)[selected]
-                    drawRect(
-                        EditorMint,
-                        topLeft = Offset(left + cell.left * w, top + cell.top * h),
-                        size = Size(cell.width * w, cell.height * h),
-                        style = Stroke(3f)
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
+                    EditorWorkspaceHeader(
+                        workspace = WorkspaceMode.COLLAGE, commands = commands,
+                        canUndo = history.undo.isNotEmpty() && !busy(),
+                        canRedo = history.redo.isNotEmpty() && !busy(),
+                        onUndo = ::undoCollage, onRedo = ::redoCollage,
+                        onChooseWorkspace = ::requestSwitch,
+                        menuExpanded = menuExpanded, onMenuExpandedChange = { menuExpanded = it },
+                        enabled = !busy(), onBack = ::requestBack
                     )
+                    if (notice.isNotBlank()) Text(notice, color = EditorMuted, fontSize = 11.sp,
+                        modifier = Modifier.fillMaxWidth().background(EditorSurface).padding(horizontal = 12.dp))
+                }
+                if (document.photos.isNotEmpty()) {
+                    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .navigationBarsPadding().background(EditorSurface).padding(top = 9.dp, bottom = 5.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        CollageControls(
+                            document = document, selected = selected, section = section, control = control,
+                            enabled = !busy(),
+                            onLayout = ::changeLayout, onSlideLayout = ::slideLayout,
+                            onLayoutFinished = ::finishLayout,
+                            onSection = { section = it }, onControl = { control = it },
+                            onSelect = { selected = it },
+                            onReplace = { chooseTileSource(keepEdits = false) },
+                            onRelink = if (missingTileId != null &&
+                                document.photos.getOrNull(selected)?.id == missingTileId)
+                                ({ chooseTileSource(keepEdits = true) }) else null,
+                            onEdit = { if (!busy() && !cancelLayout()) editingTile = tileEntry() },
+                            onLeft = {
+                                val id = latestDocument.photos.getOrNull(selected)?.id
+                                val next = latestDocument.copy(photos =
+                                    CollageMath.move(latestDocument.photos, selected, selected - 1))
+                                commit(next)
+                                selected = next.photos.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                            },
+                            onRight = {
+                                val id = latestDocument.photos.getOrNull(selected)?.id
+                                val next = latestDocument.copy(photos =
+                                    CollageMath.move(latestDocument.photos, selected, selected + 1))
+                                commit(next)
+                                selected = next.photos.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                            },
+                            onRemove = {
+                                val next = latestDocument.copy(photos = latestDocument.photos.filterIndexed { index, _ ->
+                                    index != selected
+                                })
+                                commit(next)
+                                selected = selected.coerceIn(0, next.photos.lastIndex.coerceAtLeast(0))
+                            }
+                        )
+                    }
+                }
+            } else {
+                TextButton(onClick = { toolsVisible = true },
+                    modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding()) {
+                    Text("Show tools", color = EditorMint)
                 }
             }
-        }
-        if (toolsVisible) {
-            Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                .background(Color(0xF010141C)).statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 7.dp)) {
-                Row(Modifier.fillMaxWidth().height(39.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold)
-                    WorkspaceModeMenu(
-                        WorkspaceMode.COLLAGE,
-                        !rendering && !exporting,
-                        ::requestSwitch
-                    )
-                    val openProjects = document.photos.isEmpty() && savedNames.isNotEmpty()
-                    TextButton(onClick = {
-                        if (openProjects) {
-                            savedChoice = null
-                            savedList = true
-                        } else showExport = true
-                    }, enabled = (openProjects || document.photos.isNotEmpty()) && !exporting) {
-                        // Measure the original label in both states so the mode menu and hit target stay put.
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("Export", fontWeight = FontWeight.Bold,
-                                color = if (openProjects) Color.Transparent else EditorMint,
-                                modifier = if (openProjects) Modifier.clearAndSetSemantics {} else Modifier)
-                            if (openProjects) Text("Projects", color = EditorMint, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.matchParentSize().wrapContentSize(unbounded = true))
-                        }
-                    }
+            if (rendering || busy()) {
+                Row(Modifier.align(Alignment.Center).background(Color(0xDB19222B), RoundedCornerShape(14.dp))
+                    .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(21.dp), color = EditorMint, strokeWidth = 2.dp)
+                    Text(if (exporting) " Exporting…" else if (writingProject) " Saving project…"
+                        else if (preparingSources || loadingProject) " Opening…" else " Updating…",
+                        color = EditorWhite, fontSize = 12.sp)
                 }
-                Row(Modifier.fillMaxWidth().height(42.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = ::requestBack) {
-                        Text("Back", color = EditorWhite)
-                    }
-                    TextButton(onClick = ::undoCollage,
-                        enabled = history.undo.isNotEmpty()) {
-                        Text("↶", color = EditorWhite, fontSize = 24.sp)
-                    }
-                    TextButton(onClick = ::redoCollage,
-                        enabled = history.redo.isNotEmpty()) {
-                        Text("↷", color = EditorWhite, fontSize = 24.sp)
-                    }
-                    if (document.photos.isNotEmpty()) {
-                        TextButton(onClick = ::openMulti,
-                            enabled = document.photos.size < CollageMath.MAX_PHOTOS) {
-                            Text("+ Add", color = EditorMint, fontSize = 13.sp)
-                        }
-                    }
-                }
-                if (notice.isNotBlank()) {
-                    Text(notice, color = EditorMuted, fontSize = 11.sp)
-                }
-            }
-
-            if (document.photos.isNotEmpty()) {
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .navigationBarsPadding().background(EditorSurface)
-                    .padding(top = 9.dp, bottom = 5.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CollageControls(
-                        document, selected, section, control,
-                        onLayout = ::changeLayout,
-                        onSlideLayout = ::slideLayout,
-                        onLayoutFinished = ::finishLayout,
-                        onSection = { section = it },
-                        onControl = { control = it },
-                        onSelect = { selected = it },
-                        onAdd = ::openMulti,
-                        onReplace = { chooseTileSource(keepEdits = false) },
-                        onRelink = if (missingTileId != null &&
-                            document.photos.getOrNull(selected)?.id == missingTileId
-                        ) ({ chooseTileSource(keepEdits = true) }) else null,
-                        onEdit = { if (selected in document.photos.indices) editingTile = selected },
-                        onLeft = {
-                            commit(document.copy(photos =
-                                CollageMath.move(document.photos, selected, selected - 1)))
-                            selected = (selected - 1).coerceAtLeast(0)
-                        },
-                        onRight = {
-                            commit(document.copy(photos =
-                                CollageMath.move(document.photos, selected, selected + 1)))
-                            selected = (selected + 1).coerceAtMost(document.photos.lastIndex)
-                        },
-                        onRemove = {
-                            commit(document.copy(photos =
-                                document.photos.filterIndexed { index, _ -> index != selected }))
-                            selected = selected.coerceAtMost(document.photos.lastIndex - 1)
-                                .coerceAtLeast(0)
-                        },
-                        onSave = { naming = ""; saveError = null; saving = true },
-                        onOpen = {
-                            savedNames = CollageStore.names(context)
-                            savedChoice = null
-                            savedList = true
-                        },
-                        onNew = { confirmNew = true }
-                    )
-                }
-            }
-        } else {
-            TextButton(
-                onClick = { toolsVisible = true },
-                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding()
-            ) { Text("Show tools", color = EditorMint) }
-        }
-
-        if (rendering || exporting) {
-            Row(Modifier.align(Alignment.Center)
-                .background(Color(0xDB19222B), RoundedCornerShape(14.dp))
-                .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(21.dp), color = EditorMint, strokeWidth = 2.dp)
-                Text(if (exporting) " Exporting…" else " Updating…",
-                    color = EditorWhite, fontSize = 12.sp)
             }
         }
     }
 
-    if (confirmNew) {
-        AlertDialog(
-            onDismissRequest = { confirmNew = false },
-            title = { Text("Start another collage?", color = EditorWhite) },
-            text = {
-                Text("Save your current collage first if you want to reopen it. " +
-                    "You can also undo this change.",
-                    color = EditorMuted)
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    commit(CollageDocument())
-                    selected = 0
-                    section = CollageSection.TEMPLATES
-                    confirmNew = false
-                    notice = "New collage"
-                }) { Text("Start new", color = EditorMint) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmNew = false }) {
-                    Text("Cancel", color = EditorMuted)
-                }
-            }
+    val departure = pendingDeparture
+    if (showDeparture && departure != null && saveAttempt == null) {
+        WorkspaceDepartureDialog(
+            title = "Keep your collage edits?",
+            message = if (savedProject != null)
+                "Save changes to “${savedProject!!.name}”, discard only the unsaved changes, or cancel."
+                else "Save an editable collage, discard the unsaved changes, or cancel.",
+            saveEnabled = CollageMath.validCount(departure.candidate.photos.size),
+            saveDisabledReason = if (!CollageMath.validCount(departure.candidate.photos.size))
+                "Add at least one photo before saving this collage." else null,
+            onSave = { beginSave(departure = departure) },
+            onDiscard = { completeDeparture(departure, baseline(), baselineHistory(), discard = true) },
+            onCancel = ::clearDeparture
         )
     }
+
+    val attempt = saveAttempt
+    val collision = saveCollision
+    if (writingProject && attempt != null) {
+        AlertDialog(onDismissRequest = {}, title = { Text("Saving collage…") },
+            text = { Text("Publishing the editable project. Your current work stays open until saving finishes.") },
+            confirmButton = {})
+    } else if (attempt != null && collision != null) {
+        AlertDialog(onDismissRequest = ::cancelSave,
+            title = { Text("Replace saved collage?") },
+            text = { Text("Replace “${collision.name}” with this collage? Other saved projects and source photos stay unchanged.") },
+            confirmButton = { TextButton(onClick = { performSave(ProjectSaveIntent.Replace(collision)) }) { Text("Replace") } },
+            dismissButton = { Row {
+                TextButton(onClick = ::cancelSave) { Text("Cancel") }
+                TextButton(onClick = {
+                    saveCollision = null; saveIntent = null; saveError = null
+                }) { Text("Choose another name") }
+            } })
+    } else if (attempt != null && saveConfirmation) {
+        AlertDialog(onDismissRequest = ::cancelSave,
+            title = { Text("Save collage changes?") },
+            text = { Text("Update the editable project “${attempt.target?.name.orEmpty()}” with the current collage.") },
+            confirmButton = { TextButton(onClick = { saveIntent?.let(::performSave) }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = ::cancelSave) { Text("Cancel") } })
+    } else if (attempt != null && saveIntent != null && saveError != null) {
+        AlertDialog(onDismissRequest = ::cancelSave, title = { Text("Collage not saved") },
+            text = { Text(saveError.orEmpty()) },
+            confirmButton = { TextButton(onClick = { saveIntent?.let(::performSave) }) { Text("Retry") } },
+            dismissButton = { TextButton(onClick = ::cancelSave) { Text("Cancel") } })
+    } else if (attempt != null) {
+        SaveNameDialog(
+            title = if (attempt.asCopy) "Save collage as" else "Save editable collage",
+            description = "All tile edits and photo references stay on this device. Keep the original photos available.",
+            name = naming, onName = { naming = it; saveError = null; saveIntent = null },
+            error = saveError, onSave = { performSave(ProjectSaveIntent.Create(naming)) },
+            onDismiss = ::cancelSave
+        )
+    }
+
+    if (savedList) {
+        AlertDialog(onDismissRequest = { if (!loadingProject) savedList = false },
+            title = { Text("Saved collages", color = EditorWhite) },
+            text = {
+                Column(Modifier.heightIn(max = 350.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    projectOpenError?.let { Text(it, color = EditorWhite) }
+                    if (savedNames.isEmpty()) Text("No collages saved yet.", color = EditorMuted)
+                    savedNames.forEach { name ->
+                        DockChip(name, savedChoice == name, !loadingProject) { savedChoice = name }
+                    }
+                }
+            },
+            confirmButton = { TextButton(enabled = savedChoice != null && !loadingProject,
+                onClick = { savedChoice?.let(::requestOpen) }) { Text("Open", color = EditorMint) } },
+            dismissButton = { Row {
+                TextButton(enabled = savedChoice != null && !loadingProject,
+                    onClick = { savedChoice?.let(::requestDelete) }) { Text("Delete", color = EditorMuted) }
+                TextButton(enabled = !loadingProject, onClick = { savedList = false }) { Text("Cancel", color = EditorMuted) }
+            } })
+    }
+
+    deleteChoice?.let { target ->
+        fun returnToProjects() { deleteChoice = null; savedList = true }
+        AlertDialog(onDismissRequest = { if (!writingProject) returnToProjects() },
+            title = { Text("Delete saved collage?") },
+            text = { Text("Delete “${target.name}” from saved collages. Your open collage and original photos stay on your phone.") },
+            confirmButton = { TextButton(enabled = !writingProject, onClick = {
+                if (!writingProject) {
+                    writingProject = true
+                    scope.launch {
+                        try {
+                            val removed = withContext(Dispatchers.IO) { CollageStore.deleteNamed(context, target) }
+                            if (removed) {
+                                if (savedProject?.id == target.id) savedProject = null
+                                savedNames = withContext(Dispatchers.IO) { CollageStore.names(context) }
+                                savedChoice = null
+                                notice = "Saved collage deleted."
+                            } else projectOpenError = "The saved collage changed or could not be deleted."
+                            returnToProjects()
+                        } catch (canceled: CancellationException) { throw canceled }
+                        catch (_: Exception) {
+                            projectOpenError = "The saved collage could not be deleted."
+                            returnToProjects()
+                        } finally { writingProject = false }
+                    }
+                }
+            }) { Text("Delete collage") } },
+            dismissButton = { TextButton(enabled = !writingProject, onClick = ::returnToProjects) { Text("Cancel") } })
+    }
+
+    replaceConfirmation?.let { choice ->
+        AlertDialog(onDismissRequest = { replaceConfirmation = null },
+            title = { Text("Replace selected photo?") },
+            text = { Text("Choose a new source for this tile. Its current photo edits will reset; Undo can restore the complete old tile.") },
+            confirmButton = { TextButton(onClick = {
+                replaceConfirmation = null
+                launchTileSource(choice)
+            }) { Text("Choose photo") } },
+            dismissButton = { TextButton(onClick = { replaceConfirmation = null }) { Text("Cancel") } })
+    }
+    preparedRelink?.let { prepared ->
+        AlertDialog(onDismissRequest = { preparedRelink = null },
+            title = { Text("Confirm original source") },
+            text = { Text("The selected file is readable. Confirm it is the same original photo with matching framing; existing tile edits will be kept. If the original is unavailable, its content cannot be independently compared.") },
+            confirmButton = { TextButton(onClick = {
+                val next = resolveTile(prepared.choice.entry, prepared.photo)
+                if (next == null) conflictNotice = "The tile changed. Its existing source and edits were preserved."
+                else {
+                    commit(next, forceSourceId = prepared.photo.id)
+                    notice = "Source relinked with its adjustments. Check that the photo and edit alignment match."
+                }
+                preparedRelink = null
+            }) { Text("Use this source") } },
+            dismissButton = { TextButton(onClick = { preparedRelink = null }) { Text("Cancel") } })
+    }
+    conflictNotice?.let { message ->
+        AlertDialog(onDismissRequest = { conflictNotice = null }, title = { Text("Work preserved") },
+            text = { Text(message) }, confirmButton = {
+                TextButton(onClick = { conflictNotice = null }) { Text("Keep editing") }
+            })
+    }
+    if (showHelp) {
+        AlertDialog(onDismissRequest = { showHelp = false }, title = { Text("Collage help") },
+            text = { Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Use Options to create, open, save or export a collage. Save keeps an editable project; Export creates a finished image. Keep source photos available.")
+                Text("A free tap selects the photo under it and hides or shows the controls. Tapping a margin only toggles the controls. Editing guides remain visible.")
+                Text("Choose a photo in Photos, then Edit selected. Done applies only that tile; Cancel keeps the parent's tile unchanged. A separately saved photo project does not apply the tile.")
+                Text("Relink restores a missing original while keeping edits. Replace adopts a new photo and resets that tile's edits. Other tiles stay independent.")
+            } }, confirmButton = { TextButton(onClick = { showHelp = false }) { Text("Close") } })
+    }
+
     val recovery = pendingExport
-    if (showExportRecovery && recovery != null && !exporting) {
+    if (editingTile == null && showExportRecovery && recovery != null && !exporting) {
         val canRecover = remember(recovery.id) { CollageExport.decode(recovery) != null }
         RecoverableExportDialog(
             request = recovery,
@@ -781,132 +1245,12 @@ internal fun CollageWorkspaceScreenContent(
             failure = exportRecoveryError
         )
     }
-    if (showExport) {
+    if (editingTile == null && showExport) {
         ExportDialog(
             settings = exportSettings,
             onSettings = { exportSettings = it },
             onSave = ::askToSave,
             onDismiss = { showExport = false }
-        )
-    }
-    if (saving) {
-        SaveNameDialog(
-            title = "Save editable collage",
-            description = "All tile edits and photo references stay on this device.",
-            name = naming,
-            onName = { naming = it; saveError = null },
-            error = saveError,
-            onSave = {
-                if (openingAfterSave && CollageStore.normalizedName(naming) == openAfterDecision?.name) {
-                    saveError = "Choose a different name from the collage you are opening."
-                } else if (CollageStore.save(context, naming, document)) {
-                    savedDocument = document
-                    saving = false
-                    val next = openAfterDecision.takeIf { openingAfterSave }
-                    openingAfterSave = false
-                    if (next != null) openSaved(next.document) else notice = "Collage project saved"
-                } else saveError = "Could not save collage. Use two to twenty photos and at most twelve projects."
-            },
-            onDismiss = {
-                saving = false
-                openingAfterSave = false
-                openAfterDecision = null
-            }
-        )
-    }
-    if (savedList) {
-        AlertDialog(
-            onDismissRequest = { savedList = false },
-            title = { Text("Saved collages", color = EditorWhite) },
-            text = {
-                Column(
-                    modifier = Modifier.heightIn(max = 350.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (savedNames.isEmpty()) Text("No collages saved yet.", color = EditorMuted)
-                    savedNames.forEach { name ->
-                        DockChip(name, savedChoice == name) { savedChoice = name }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val candidate = savedChoice?.let { name ->
-                        CollageStore.load(context, name)?.let { SavedCollageChoice(name, it) }
-                    }
-                    if (candidate != null) {
-                        finishLayout()
-                        if (document.photos.isNotEmpty() && document != savedDocument) {
-                            openAfterDecision = candidate
-                            savedList = false
-                        } else {
-                            openSaved(candidate.document)
-                        }
-                    } else notice = "Saved collage cannot be opened."
-                }, enabled = savedChoice != null) {
-                    Text("Open", color = EditorMint)
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(enabled = savedChoice != null, onClick = {
-                        deleteChoice = savedChoice
-                        savedList = false
-                    }) { Text("Delete", color = EditorMuted) }
-                    TextButton(onClick = { savedList = false }) {
-                        Text("Cancel", color = EditorMuted)
-                    }
-                }
-            }
-        )
-    }
-    val candidate = openAfterDecision
-    if (candidate != null && !openingAfterSave) {
-        val keepEditing = { openAfterDecision = null }
-        AlertDialog(
-            onDismissRequest = keepEditing,
-            title = { Text("Keep your collage edits?") },
-            text = { Text("Save or discard your current collage edits before opening another project.") },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = keepEditing) { Text("Keep editing") }
-                    TextButton(onClick = {
-                        openingAfterSave = true
-                        naming = ""
-                        saveError = null
-                        saving = true
-                    }) { Text("Save project") }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { openSaved(candidate.document) }) { Text("Discard") }
-            }
-        )
-    }
-    deleteChoice?.let { name ->
-        val returnToProjects = {
-            deleteChoice = null
-            savedList = true
-        }
-        AlertDialog(
-            onDismissRequest = returnToProjects,
-            title = { Text("Delete saved collage?") },
-            text = { Text("Delete \"$name\" from saved collages. Your original photos stay on your phone.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (CollageStore.delete(context, name)) {
-                        savedNames = CollageStore.names(context)
-                        savedChoice = null
-                        notice = "Saved collage deleted."
-                    } else {
-                        notice = "Could not delete saved collage."
-                    }
-                    returnToProjects()
-                }) { Text("Delete collage") }
-            },
-            dismissButton = {
-                TextButton(onClick = returnToProjects) { Text("Cancel") }
-            }
         )
     }
 }
@@ -917,22 +1261,19 @@ private fun CollageControls(
     selected: Int,
     section: CollageSection,
     control: FrameControl,
+    enabled: Boolean,
     onLayout: (CollageLayout) -> Unit,
     onSlideLayout: (CollageLayout) -> Unit,
     onLayoutFinished: () -> Unit,
     onSection: (CollageSection) -> Unit,
     onControl: (FrameControl) -> Unit,
     onSelect: (Int) -> Unit,
-    onAdd: () -> Unit,
     onReplace: () -> Unit,
     onRelink: (() -> Unit)?,
     onEdit: () -> Unit,
     onLeft: () -> Unit,
     onRight: () -> Unit,
-    onRemove: () -> Unit,
-    onSave: () -> Unit,
-    onOpen: () -> Unit,
-    onNew: () -> Unit
+    onRemove: () -> Unit
 ) {
     val layout = document.layout
     when (section) {
@@ -941,12 +1282,12 @@ private fun CollageControls(
                 contentPadding = PaddingValues(horizontal = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(CollageTemplate.entries) { kind ->
-                    DockChip(kind.label, kind == layout.template) {
+                    DockChip(kind.label, kind == layout.template, enabled) {
                         onLayout(layout.copy(template = kind))
                     }
                 }
             }
-            Text("Tap a photo to select it. Double-tap to hide tools.",
+            Text("Tap once to select a photo and hide or show tools.",
                 color = EditorMuted, fontSize = 11.sp,
                 modifier = Modifier.padding(horizontal = 13.dp, vertical = 5.dp))
         }
@@ -955,7 +1296,7 @@ private fun CollageControls(
                 contentPadding = PaddingValues(horizontal = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(CollageAspect.entries) { aspect ->
-                    DockChip(aspect.label, aspect == layout.aspect) {
+                    DockChip(aspect.label, aspect == layout.aspect, enabled) {
                         onLayout(layout.copy(aspect = aspect))
                     }
                 }
@@ -969,7 +1310,7 @@ private fun CollageControls(
                 contentPadding = PaddingValues(horizontal = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(FrameControl.entries) { item ->
-                    DockChip(item.title, control == item) { onControl(item) }
+                    DockChip(item.title, control == item, enabled) { onControl(item) }
                 }
             }
             val value = when (control) {
@@ -989,7 +1330,7 @@ private fun CollageControls(
                 value = value,
                 low = control.low,
                 high = control.high,
-                enabled = true,
+                enabled = enabled,
                 onReset = { onLayout(update(0f)) },
                 onChange = { onSlideLayout(update(it)) },
                 onFinished = onLayoutFinished
@@ -1000,7 +1341,7 @@ private fun CollageControls(
                 contentPadding = PaddingValues(horizontal = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(CollageBackground.entries) { bg ->
-                    DockChip(bg.label, bg == layout.background) {
+                    DockChip(bg.label, bg == layout.background, enabled) {
                         onLayout(layout.copy(background = bg))
                     }
                 }
@@ -1008,7 +1349,7 @@ private fun CollageControls(
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 CollageCellMode.entries.forEach { mode ->
-                    DockChip(mode.label, mode == layout.cellMode) {
+                    DockChip(mode.label, mode == layout.cellMode, enabled) {
                         onLayout(layout.copy(cellMode = mode))
                     }
                 }
@@ -1020,7 +1361,7 @@ private fun CollageControls(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 document.photos.forEachIndexed { index, _ ->
                     item(key = "tile-$index") {
-                        DockChip("Photo " + (index + 1), selected == index) {
+                        DockChip("Photo " + (index + 1), selected == index, enabled) {
                             onSelect(index)
                         }
                     }
@@ -1029,19 +1370,14 @@ private fun CollageControls(
             LazyRow(Modifier.fillMaxWidth().height(46.dp).testTag("collage-tile-actions"),
                 contentPadding = PaddingValues(horizontal = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                item { DockChip("+ Add", false,
-                    document.photos.size < CollageMath.MAX_PHOTOS, onAdd) }
-                item { DockChip("Edit selected", false, true, onEdit) }
+                item { DockChip("Edit selected", false, enabled, onEdit) }
                 if (onRelink != null) {
-                    item { DockChip("Relink source", false, true, onRelink) }
+                    item { DockChip("Relink source", false, enabled, onRelink) }
                 }
-                item { DockChip("Replace", false, true, onReplace) }
-                item { DockChip("Move left", false, selected > 0, onLeft) }
-                item { DockChip("Move right", false, selected < document.photos.lastIndex, onRight) }
-                item { DockChip("Remove", false, true, onRemove) }
-                item { DockChip("Save project", false, true, onSave) }
-                item { DockChip("Saved collages", false, true, onOpen) }
-                item { DockChip("New collage", false, true, onNew) }
+                item { DockChip("Replace", false, enabled, onReplace) }
+                item { DockChip("Move left", false, enabled && selected > 0, onLeft) }
+                item { DockChip("Move right", false, enabled && selected < document.photos.lastIndex, onRight) }
+                item { DockChip("Remove", false, enabled, onRemove) }
             }
         }
         CollageSection.QUALITY -> {
@@ -1049,7 +1385,7 @@ private fun CollageControls(
                 contentPadding = PaddingValues(horizontal = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(CollageQuality.entries) { q ->
-                    DockChip(q.label, q == layout.quality) {
+                    DockChip(q.label, q == layout.quality, enabled) {
                         onLayout(layout.copy(quality = q))
                     }
                 }
@@ -1064,7 +1400,7 @@ private fun CollageControls(
         contentPadding = PaddingValues(horizontal = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         items(CollageSection.entries) { item ->
-            DockChip(item.label, item == section) { onSection(item) }
+            DockChip(item.label, item == section, enabled) { onSection(item) }
         }
     }
 }

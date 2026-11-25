@@ -33,14 +33,15 @@ class AndroidBackRotationTest {
         try {
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
-            rule.onNodeWithText("Or start with a blank canvas").performClick()
+            rule.onNodeWithText("+ Add layer").performClick()
+            rule.onNodeWithText("Draw / Brush").performClick()
             rule.onNodeWithText("+ Add layer").performClick()
             rule.onNodeWithText("Shape").performClick()
             rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
             rule.onNodeWithText("Tools ▾").performClick()
             rule.onNodeWithText("Transform").performClick()
             rule.onNodeWithText("Transform ▴").assertIsDisplayed()
-            rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithContentDescription("Pro editable composition")
                     .fetchSemanticsNodes()
@@ -73,7 +74,7 @@ class AndroidBackRotationTest {
             rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
             rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
             rule.onNodeWithText("Transform ▴").assertIsDisplayed()
-            rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             assertEquals(
                 viewport,
                 rule.onNodeWithTag("pro-canvas").fetchSemanticsNode()

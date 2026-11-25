@@ -84,9 +84,9 @@ class ProCanvasInteractionTest {
         }
         rule.onNodeWithText("Tools ▾").assertDoesNotExist()
         canvas.performTouchInput { click(center) }
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.runOnIdle { assertTrue(result.layers.single().edits.creative.strokes.isEmpty()) }
-        rule.onNodeWithText("Redo").performClick()
+        rule.onNodeWithContentDescription("Redo").performClick()
         rule.runOnIdle { assertEquals(1, result.layers.single().edits.creative.strokes.size) }
     }
 
@@ -147,7 +147,7 @@ class ProCanvasInteractionTest {
                 left.red > .95f && left.green > .95f && left.blue > .95f
             }
             rule.runOnIdle { assertEquals(original, result) }
-            rule.onNodeWithText("Undo").assertIsNotEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
         } finally { resolver.delete(uri, null, null) }
     }
 
@@ -197,9 +197,9 @@ class ProCanvasInteractionTest {
                 assertEquals(Color.BLUE, alpha.getPixel(rasterSize * 18 / 100, middle))
             } finally { alpha.recycle() }
         }
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.runOnIdle { assertEquals(listOf(ink), result.layers.single().edits.creative.strokes) }
-        rule.onNodeWithText("Redo").performClick()
+        rule.onNodeWithContentDescription("Redo").performClick()
         rule.runOnIdle { assertTrue(result.layers.single().edits.creative.strokes.last().erase) }
     }
 
@@ -251,9 +251,9 @@ class ProCanvasInteractionTest {
                 assertEquals(.74f, strokes.last().points.last().y, .02f)
                 result
             }
-            rule.onNodeWithText("Undo").performClick()
+            rule.onNodeWithContentDescription("Undo").performClick()
             rule.runOnIdle { assertEquals(painted, result) }
-            rule.onNodeWithText("Redo").performClick()
+            rule.onNodeWithContentDescription("Redo").performClick()
             rule.runOnIdle { assertEquals(erased, result) }
             assertTrue(ProStore.save(context, name, erased))
             val reopened = requireNotNull(ProStore.load(context, name))
@@ -281,8 +281,8 @@ class ProCanvasInteractionTest {
             assertEquals(.4f, mask.width, .025f)
             assertEquals(.4f, mask.height, .025f)
         }
-        rule.onNodeWithText("File ▾").performClick()
-        rule.onNodeWithText("Pro help").performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Help").performClick()
         rule.onNodeWithText("Photo Pro help").assertIsDisplayed()
     }
 

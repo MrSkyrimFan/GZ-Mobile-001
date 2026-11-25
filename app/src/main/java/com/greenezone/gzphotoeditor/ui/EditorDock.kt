@@ -91,8 +91,7 @@ enum class EditTab(val title: String) {
     TEXT("Text"),
     DRAW("Draw"),
     SHAPES("Shapes"),
-    CROP("Crop"),
-    MORE("More")
+    CROP("Crop")
 }
 
 /**
@@ -147,8 +146,15 @@ fun EditorDock(
                 original, thumbnails, savedLooks, activeLook, !busy,
                 onSelectLook, onSaveLook
             )
-            EditTab.LIGHT, EditTab.COLOR, EditTab.DETAIL, EditTab.EFFECTS, EditTab.GRADE ->
+            EditTab.LIGHT, EditTab.COLOR, EditTab.DETAIL, EditTab.EFFECTS, EditTab.GRADE -> {
+                if (tab == EditTab.LIGHT) TextButton(onClick = onAutoTone, enabled = !busy) {
+                    Text("Auto tone", color = EditorMint)
+                }
+                if (tab == EditTab.COLOR) TextButton(onClick = onAutoWB, enabled = !busy) {
+                    Text("Auto white balance", color = EditorMint)
+                }
                 GlobalDeck(tab, document, !busy, onCommit, onSlide, onSlideFinished)
+            }
             EditTab.MIXER -> MixerDeck(
                 document, !busy, onCommit, onSlide, onSlideFinished
             )
@@ -174,10 +180,6 @@ fun EditorDock(
             EditTab.CROP -> CropDeck(
                 document, !busy, onCommit, onSlide, onSlideFinished,
                 cropImageWidth, cropImageHeight
-            )
-            EditTab.MORE -> MoreDeck(
-                !busy, onAutoTone, onAutoWB, onSaveLook, onSaveProject, onProjects, onOpen,
-                onCollage, showCollage, onCommit, document, onHistogram
             )
         }
 
@@ -574,53 +576,6 @@ private fun CropDeck(
         onFinished = onFinished
     )
 }
-@Composable
-private fun MoreDeck(
-    enabled: Boolean,
-    onAutoTone: () -> Unit,
-    onAutoWB: () -> Unit,
-    onSaveLook: () -> Unit,
-    onSaveProject: () -> Unit,
-    onProjects: () -> Unit,
-    onOpen: () -> Unit,
-    onCollage: () -> Unit,
-    showCollage: Boolean,
-    onCommit: (EditDocument) -> Unit,
-    document: EditDocument,
-    onHistogram: (() -> Unit)?
-) {
-    var helpOpen by remember { mutableStateOf(false) }
-    if (helpOpen) PhotoHelpDialog { helpOpen = false }
-    Text(
-        "QUICK ACTIONS",
-        color = EditorMuted,
-        fontSize = 10.sp,
-        letterSpacing = 1.sp,
-        modifier = Modifier.padding(horizontal = 15.dp, vertical = 4.dp)
-    )
-    LazyRow(
-        modifier = Modifier.fillMaxWidth().height(47.dp).testTag("photo-actions"),
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        item { DockChip("Help", false) { helpOpen = true } }
-        item { DockChip("Auto tone", false, enabled, onAutoTone) }
-        item { DockChip("Auto white balance", false, enabled, onAutoWB) }
-        item { DockChip("Save my look", false, enabled, onSaveLook) }
-        item { DockChip("Save project", false, enabled, onSaveProject) }
-        item { DockChip("Open projects", false, enabled, onProjects) }
-        item { DockChip("New photo", false, enabled, onOpen) }
-        if (showCollage) item { DockChip("Create collage", false, enabled, onCollage) }
-        item { DockChip("Reset all edits", false, enabled) { onCommit(EditDocument()) } }
-        if (onHistogram != null) item { DockChip("Histogram", false, enabled, onHistogram) }
-    }
-    Text(
-        "Edits are non-destructive. Your original photo stays untouched.",
-        color = EditorMuted, fontSize = 11.sp,
-        modifier = Modifier.padding(horizontal = 15.dp, vertical = 4.dp)
-    )
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SingleAdjustment(

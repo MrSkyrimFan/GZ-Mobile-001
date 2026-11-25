@@ -16,8 +16,14 @@ object GifStore {
     internal fun projectName(name: String): String? =
         name.trim().replace(Regex("\\s+"), " ").take(32).takeUnless(String::isBlank)
 
-    private fun id(name: String): String? = projectName(name)?.let {
+    private fun id(name: String): String? = name.takeUnless(String::isBlank)?.let {
         Base64.getUrlEncoder().withoutPadding().encodeToString(it.toByteArray(Charsets.UTF_8))
+    }
+
+    private fun storedName(context: Context, input: String): String? {
+        val exact = id(input)?.let { File(folder(context), "$it.gzgif") }
+        return if (exact != null && (exact.isFile || File(exact.path + ".bak").isFile || NamedProjectIdentity.hasPendingPublication(exact))) input
+            else projectName(input)
     }
 
     internal enum class SaveResult { SAVED, NAME_IN_USE, FULL, FAILED }
@@ -125,46 +131,93 @@ object GifStore {
         return document.copy(video = restored).takeIf(GifMath::valid)
     }
 
-    @Synchronized fun names(context: Context): List<String> = folder(context).listFiles()?.mapNotNull {
-        val projectName = it.name.removeSuffix(".bak")
+    @Synchronized fun names(context: Context): List<String> {
+        NamedProjectIdentity.recoverDirectory(folder(context), ".gzgif", MAX_BYTES.toLong())
+        return folder(context).listFiles()?.mapNotNull {
+        val projectName = it.name.removeSuffix(".bak").removeSuffix(".save-pending")
         if (!it.isFile || !projectName.endsWith(".gzgif")) return@mapNotNull null
         try { String(Base64.getUrlDecoder().decode(projectName.removeSuffix(".gzgif")),
             Charsets.UTF_8) } catch (_: Exception) { null }
     }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
+    }
 
     fun save(context: Context, name: String, doc: GifDocument): Boolean =
         saveProject(context, name, doc, replaceExisting = true) == SaveResult.SAVED
 
-    @Synchronized internal fun saveProject(
-        context: Context,
-        name: String,
-        doc: GifDocument,
-        replaceExisting: Boolean
-    ): SaveResult {
-        val id = id(name) ?: return SaveResult.FAILED
-        val file = File(folder(context), "$id.gzgif")
-        val exists = file.exists() || File(file.path + ".bak").isFile
-        if (exists && !replaceExisting) return SaveResult.NAME_IN_USE
-        if (!exists && names(context).size >= MAX_FILES) return SaveResult.FULL
+    internal fun saveProject(context: Context, name: String, doc: GifDocument,
+        replaceExisting: Boolean): SaveResult =
+        when (val result = write(context, name, doc, null, replaceExisting)) {
+            is ProjectSaveResult.Saved -> SaveResult.SAVED
+            is ProjectSaveResult.Exists -> SaveResult.NAME_IN_USE
+            is ProjectSaveResult.Rejected -> if (result.reason == ProjectSaveFailure.FULL)
+                SaveResult.FULL else SaveResult.FAILED
+        }
+
+    fun saveNamed(context: Context, intent: ProjectSaveIntent,
+        document: GifDocument): ProjectSaveResult =
+        write(context, intent.requestedName, document, intent, replaceExisting = true)
+
+    @Synchronized private fun write(context: Context, input: String, doc: GifDocument,
+        intent: ProjectSaveIntent?, replaceExisting: Boolean): ProjectSaveResult {
+        if (!GifMath.valid(doc)) return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_DOCUMENT)
+        if (intent?.expectedProject?.kind?.let { it != ProjectKind.GIF } == true)
+            return ProjectSaveResult.Rejected(ProjectSaveFailure.TARGET_CHANGED)
         return try {
+            val name = storedName(context, input)
+                ?: return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_NAME)
+            val key = id(name) ?: return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_NAME)
+            val file = File(folder(context), "$key.gzgif")
             val data = encode(doc).toByteArray(Charsets.UTF_8)
-            require(data.size <= MAX_BYTES)
-            val atomic = AtomicFile(file)
-            val stream = atomic.startWrite()
-            try {
-                stream.write(data)
-                atomic.finishWrite(stream)
-            } catch (e: Throwable) {
-                atomic.failWrite(stream)
-                throw e
+            if (data.size > MAX_BYTES) return ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+            NamedProjectIdentity.recoverPublication(file, MAX_BYTES.toLong())
+            val exists = file.exists() || File(file.path + ".bak").isFile
+            val current = if (exists) NamedProjectIdentity.reference(context, ProjectKind.GIF,
+                name, NamedProjectIdentity.fileVersion(file, MAX_BYTES.toLong())
+                    ?: return ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)) else null
+            if (intent != null) NamedProjectIdentity.authorize(ProjectKind.GIF, intent, current)
+                ?.let { return it }
+            else if (current != null && !replaceExisting) return ProjectSaveResult.Exists(current)
+            if (!exists && names(context).size >= MAX_FILES)
+                return ProjectSaveResult.Rejected(ProjectSaveFailure.FULL)
+            val identity = current?.id ?: NamedProjectIdentity.reserve(context, ProjectKind.GIF,
+                name, payloadExists = false)
+            val version = NamedProjectIdentity.publish(file, data, MAX_BYTES.toLong())
+            ProjectSaveResult.Saved(NamedProjectRef(ProjectKind.GIF, identity, name, version))
+        } catch (_: OutOfMemoryError) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+        } catch (_: IllegalArgumentException) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+        } catch (_: Exception) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)
+        }
+    }
+
+    @Synchronized fun loadNamed(context: Context, input: String): NamedProject<GifDocument>? = try {
+        val name = storedName(context, input)
+        val key = name?.let(::id)
+        if (name == null || key == null) null else {
+            val file = File(folder(context), "$key.gzgif")
+            NamedProjectIdentity.readPayload(file, MAX_BYTES.toLong()) { stream, _ ->
+                readProject(stream.bufferedReader(Charsets.UTF_8).readText(), context)
+            }?.let { loaded ->
+                NamedProject(NamedProjectIdentity.reference(context, ProjectKind.GIF,
+                    name, loaded.version), loaded.content)
             }
-            SaveResult.SAVED
-        } catch (_: Exception) { SaveResult.FAILED }
+        }
+    } catch (_: OutOfMemoryError) { null } catch (_: Exception) { null }
+
+    @Synchronized fun deleteNamed(context: Context, expected: NamedProjectRef): Boolean {
+        if (expected.kind != ProjectKind.GIF) return false
+        val current = loadNamed(context, expected.name)?.project ?: return false
+        return current == expected && deleteProject(context, current.name)
     }
 
     @Synchronized internal fun deleteProject(context: Context, name: String): Boolean {
-        val id = id(name) ?: return false
+        val canonical = storedName(context, name) ?: return false
+        val id = id(canonical) ?: return false
         val file = File(folder(context), "$id.gzgif")
+        try { NamedProjectIdentity.recoverPublication(file, MAX_BYTES.toLong()) }
+        catch (_: Exception) { return false }
         val backup = File(file.path + ".bak")
         val staged = File(file.path + ".new")
         if (!file.isFile && !backup.isFile) return false
@@ -172,13 +225,17 @@ object GifStore {
         if (files.any { it.exists() && !it.isFile }) return false
         // A legacy backup is authoritative until recovery. Remove it last.
         return try {
-            files.all { !it.exists() || it.delete() }
+            val deleted = files.all { !it.exists() || it.delete() }
+            if (deleted) NamedProjectIdentity.forget(context, ProjectKind.GIF, canonical)
+            deleted
         } catch (_: SecurityException) { false }
     }
 
     @Synchronized fun load(context: Context, name: String): GifDocument? {
-        val id = id(name) ?: return null
+        val id = storedName(context, name)?.let(::id) ?: return null
         val file = File(folder(context), "$id.gzgif")
+        try { NamedProjectIdentity.recoverPublication(file, MAX_BYTES.toLong()) }
+        catch (_: Exception) { return null }
         // Legacy AtomicFile restores the backup first, including when there is no base file.
         val backup = File(file.path + ".bak")
         val recoverable = if (backup.exists()) backup else file

@@ -135,20 +135,21 @@ class ProImportedGeometryTest {
             } finally { widePixels.recycle() }
 
             rule.onNodeWithText("Replace image").performScrollTo().performClick()
+            rule.onNodeWithText("Unsaved Pro changes").assertIsDisplayed()
+            rule.onNodeWithText("Save").performClick()
+            rule.onNode(hasSetTextAction()).performTextInput(name)
+            rule.onNodeWithText("Save").performClick()
             rule.waitUntil(15_000) { current.layers.last().uri == tall.toString() }
+            assertEquals(imported, ProStore.load(context, name))
             val replaced = current
             assertEquals(.025f, replaced.layers.last().aspect, .0001f)
             assertEquals(1, ProHitMath.pick(replaced, .5f, .5f, 400, 400))
             assertEquals(0, ProHitMath.pick(replaced, .55f, .5f, 400, 400))
 
-            rule.onNodeWithText("File ▾").performClick()
+            rule.onNodeWithText("Options").performClick()
             rule.onNodeWithText("Save project").performClick()
-            rule.onNode(hasSetTextAction()).performTextInput(name)
-            rule.onNodeWithText("Save").performClick()
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithText("Save Pro project").fetchSemanticsNodes().isEmpty() &&
-                    ProStore.names(context).contains(name)
-            }
+            rule.waitUntil(15_000) { ProStore.load(context, name) == replaced }
+            rule.onAllNodesWithText("Save Pro project").assertCountEquals(0)
             val reopened = requireNotNull(ProStore.load(context, name))
             assertEquals(replaced, reopened)
             val tallPixels = ProRaster.render(resolver, reopened, 400, 400, false)

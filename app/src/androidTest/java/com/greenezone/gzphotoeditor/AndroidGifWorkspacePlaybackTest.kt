@@ -57,6 +57,11 @@ class AndroidGifWorkspacePlaybackTest {
         }
     }
 
+    private fun exportGif() {
+        rule.onNodeWithContentDescription("Options").performClick()
+        rule.onNodeWithText("Export GIF…").performClick()
+    }
+
     private fun waitFrame(index: Int) {
         rule.waitUntil(15_000) {
             rule.onAllNodesWithContentDescription("GIF preview, frame $index").fetchSemanticsNodes().isNotEmpty()
@@ -124,9 +129,9 @@ class AndroidGifWorkspacePlaybackTest {
                 rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty()
             }
             assertTrue(Color.red(centerColor()) > 200)
-            rule.onNodeWithText("Undo").performClick()
+            rule.onNodeWithContentDescription("Undo").performClick()
             rule.runOnIdle { assertFalse(latest.video!!.reverse) }
-            rule.onNodeWithText("Redo").performClick()
+            rule.onNodeWithContentDescription("Redo").performClick()
             rule.runOnIdle { assertTrue(latest.video!!.reverse) }
 
             rule.onNodeWithText("Looks").performScrollTo().performClick()
@@ -142,7 +147,7 @@ class AndroidGifWorkspacePlaybackTest {
             rule.onNode(hasSetTextAction()).performTextInput("Backwards")
             rule.onNodeWithText("Apply").performClick()
             rule.runOnIdle { assertEquals("Backwards", latest.edits.creative.text.single().content) }
-            rule.onNodeWithText("Save GIF").performClick()
+            exportGif()
             rule.waitUntil(25_000) {
                 rule.onAllNodesWithText("Edit saved GIF").fetchSemanticsNodes().isNotEmpty()
             }
@@ -158,6 +163,7 @@ class AndroidGifWorkspacePlaybackTest {
                 requireNotNull(VideoGifSource.document(context, destination).video)))
             // Reopen the bytes written by the actual Save GIF action.
             rule.onNodeWithText("Edit saved GIF").performClick()
+            rule.onNodeWithText("Discard", substring = false).performClick()
             rule.waitUntil(15_000) { latest.video?.uri == destination.toString() }
             rule.runOnIdle {
                 assertEquals(EditDocument(), latest.edits)
@@ -547,7 +553,7 @@ class AndroidGifWorkspacePlaybackTest {
             rule.onNodeWithText(GifSize.SMALL.label).performScrollTo().performClick()
             val exportSequence = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0L
             val exportAt = SystemClock.elapsedRealtime()
-            rule.onNodeWithText("Save GIF").performClick()
+            exportGif()
             rule.waitUntil(120_000) {
                 rule.onAllNodesWithText("Edit saved GIF").fetchSemanticsNodes().isNotEmpty()
             }
@@ -579,6 +585,7 @@ class AndroidGifWorkspacePlaybackTest {
                     showsMarker(pixels, early, late))
             } finally { pixels.recycle() }
             rule.onNodeWithText("Edit saved GIF").performClick()
+            rule.onNodeWithText("Discard", substring = false).performClick()
             rule.waitUntil(15_000) { latest.video?.uri == destination.toString() }
             rule.runOnIdle {
                 assertTrue(requireNotNull(latest.video).isGif)

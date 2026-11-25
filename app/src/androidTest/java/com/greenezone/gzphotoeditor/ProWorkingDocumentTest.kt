@@ -56,8 +56,8 @@ class ProWorkingDocumentTest {
     }
 
     private fun openReset() {
-        rule.onNodeWithText("File ▾").performClick()
-        rule.onNodeWithText("Delete current work").performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Delete current work…").performClick()
         rule.onNodeWithText("Delete current Pro work?").assertIsDisplayed()
     }
 
@@ -89,16 +89,16 @@ class ProWorkingDocumentTest {
             open(original, reset = original)
             rule.onNodeWithText("Hide").performScrollTo().performClick()
             rule.runOnIdle { assertFalse(current.layers.single().visible) }
-            rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             openReset()
             rule.onNodeWithText("Cancel").performClick()
             rule.runOnIdle { assertFalse(current.layers.single().visible) }
-            rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             openReset()
             rule.onNodeWithText("Delete work").performClick()
             rule.runOnIdle { assertEquals(original, current) }
-            rule.onNodeWithText("Undo").assertIsNotEnabled()
-            rule.onNodeWithText("Redo").assertIsNotEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+            rule.onNodeWithContentDescription("Redo").assertIsNotEnabled()
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithContentDescription("Pro editable composition")
                     .fetchSemanticsNodes().isNotEmpty()
@@ -118,16 +118,19 @@ class ProWorkingDocumentTest {
         ProDocument(layers = listOf(ProLayer("", name = name, kind = ProLayerKind.ADJUSTMENT)))
 
     private fun openSavedList() {
-        rule.onNodeWithText("File ▾").performClick()
-        rule.onNodeWithText("Open project").performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Open project…").performClick()
         rule.onNodeWithText("Saved Pro projects").assertIsDisplayed()
     }
 
     private fun openSaved(name: String) {
+        val saved = requireNotNull(ProStore.load(context, name))
         openSavedList()
+        rule.waitUntil(10_000) { rule.onAllNodesWithText(name).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(name).performScrollTo().performClick()
         rule.waitUntil(10_000) {
-            rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty()
+            rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty() &&
+                current == saved
         }
     }
 
@@ -141,7 +144,7 @@ class ProWorkingDocumentTest {
             open(editedPhoto, reset = photo)
             openSaved(name)
             rule.runOnIdle { assertEquals(saved, current) }
-            rule.onNodeWithText("Undo").performClick()
+            rule.onNodeWithContentDescription("Undo").performClick()
             rule.runOnIdle { assertEquals(editedPhoto, current) }
             openReset()
             rule.onNodeWithText("Delete work").performClick()
@@ -157,9 +160,10 @@ class ProWorkingDocumentTest {
         val edited = baseline.copy(layers = listOf(baseline.layers.single().copy(opacity = .6f)))
         val hidden = edited.copy(layers = listOf(edited.layers.single().copy(visible = false)))
         val name = "Reopen baseline " + System.nanoTime().toString().takeLast(12)
+        val hiddenName = "$name hidden"
         try {
             open(edited, reset = baseline)
-            rule.onNodeWithText("File ▾").performClick()
+            rule.onNodeWithText("Options").performClick()
             rule.onNodeWithText("Save project").performClick()
             rule.onNode(hasSetTextAction()).performTextInput(name)
             rule.onNodeWithText("Save").performClick()
@@ -170,18 +174,30 @@ class ProWorkingDocumentTest {
 
             rule.onNodeWithText("Hide").performScrollTo().performClick()
             rule.runOnIdle { assertEquals(hidden, current) }
+            // Keep this branch explicitly before Open so Undo can restore it;
+            // choosing Discard would correctly remove its unsaved history.
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Save project as…").performClick()
+            rule.onNode(hasSetTextAction()).performTextReplacement(hiddenName)
+            rule.onNodeWithText("Save").performClick()
+            rule.waitUntil(10_000) {
+                rule.onAllNodesWithText("Save Pro project").fetchSemanticsNodes().isEmpty() &&
+                    ProStore.load(context, hiddenName) == hidden
+            }
             openSaved(name)
             rule.runOnIdle { assertEquals(edited, current) }
-            rule.onNodeWithText("Undo").performClick()
+            rule.onNodeWithContentDescription("Undo").performClick()
             rule.runOnIdle { assertEquals(hidden, current) }
-            rule.onNodeWithText("Redo").performClick()
+            rule.onNodeWithContentDescription("Redo").performClick()
             rule.runOnIdle { assertEquals(edited, current) }
             openReset()
             rule.onNodeWithText("Delete work").performClick()
             rule.runOnIdle { assertEquals(baseline, current) }
             assertEquals(edited, ProStore.load(context, name))
+            assertEquals(hidden, ProStore.load(context, hiddenName))
         } finally {
             ProStore.delete(context, name)
+            ProStore.delete(context, hiddenName)
         }
     }
 
@@ -215,14 +231,27 @@ class ProWorkingDocumentTest {
             open(openWork)
             openSavedList()
             val delete = rule.onNodeWithContentDescription("Delete saved project $targetName")
+            rule.waitUntil(10_000) {
+                rule.onAllNodesWithContentDescription("Delete saved project $targetName").fetchSemanticsNodes().isNotEmpty()
+            }
             delete.performScrollTo().performClick()
+            rule.waitUntil(10_000) {
+                rule.onAllNodesWithText("Delete saved Pro project?").fetchSemanticsNodes().isNotEmpty()
+            }
             rule.onNodeWithText("Delete saved Pro project?").assertIsDisplayed()
             assertEquals(target, ProStore.load(context, targetName))
             rule.onNodeWithText("Cancel").performClick()
             assertEquals(target, ProStore.load(context, targetName))
 
             delete.performScrollTo().performClick()
+            rule.waitUntil(10_000) {
+                rule.onAllNodesWithText("Delete saved Pro project?").fetchSemanticsNodes().isNotEmpty()
+            }
             rule.onNodeWithText("Delete saved project").performClick()
+            rule.waitUntil(10_000) {
+                ProStore.load(context, targetName) == null &&
+                    rule.onAllNodesWithText("Delete saved Pro project?").fetchSemanticsNodes().isEmpty()
+            }
             rule.onNodeWithText(targetName).assertDoesNotExist()
             assertNull(ProStore.load(context, targetName))
             assertEquals(keep, ProStore.load(context, keepName))
@@ -254,7 +283,7 @@ class ProWorkingDocumentTest {
             assertEquals(0, backCount)
             assertNull(current.layers.single().mask)
         }
-        rule.onNodeWithText("‹ Back").performClick()
+        rule.onNodeWithContentDescription("Back").performClick()
         rule.runOnIdle { assertEquals(1, backCount) }
     }
 
@@ -289,8 +318,8 @@ class ProWorkingDocumentTest {
             rule.onNodeWithText("Words / Text").assertDoesNotExist()
             rule.onNodeWithText("Shape").assertIsDisplayed()
             rule.onNodeWithText("Close").performClick()
-            rule.onNodeWithText("File ▾").performClick()
-            rule.onNodeWithText("Save project").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Save project as…").performClick()
             rule.onNode(hasSetTextAction()).performTextReplacement(resavedName)
             rule.onNodeWithText("Save").performClick()
             rule.waitUntil(10_000) {

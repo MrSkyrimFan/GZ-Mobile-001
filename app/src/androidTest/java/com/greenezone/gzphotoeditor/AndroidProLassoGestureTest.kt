@@ -34,12 +34,15 @@ class AndroidProLassoGestureTest {
     }
 
     private fun openProject(name: String) {
-        click("File ▾")
-        click("Open project")
+        rule.onNodeWithText("Options").performClick()
+        click("Open project…")
+        rule.waitUntil(15_000) { rule.onAllNodesWithText(name).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(name).performScrollTo().performClick()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty() &&
-                rule.onAllNodesWithContentDescription("Pro editable composition").fetchSemanticsNodes().isNotEmpty()
+                rule.onAllNodesWithContentDescription("Pro editable composition").fetchSemanticsNodes().isNotEmpty() &&
+                rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                    .fetchSemanticsNodes().isNotEmpty()
         }
     }
 
@@ -49,13 +52,17 @@ class AndroidProLassoGestureTest {
         rule.onNodeWithText("Freehand").performScrollTo().performClick()
     }
 
-    private fun saveProject() {
-        click("File ▾")
+    private fun saveProject(name: String) {
+        val previous = requireNotNull(ProStore.loadNamed(context, name)).project
+        rule.onNodeWithText("Options").performClick()
         click("Save project")
-        click("Save")
         rule.waitUntil(15_000) {
-            rule.onAllNodesWithText("Save Pro project").fetchSemanticsNodes().isEmpty()
+            val saved = ProStore.loadNamed(context, name)?.project
+            saved != null && saved.id == previous.id && saved.version != previous.version &&
+                rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                    .fetchSemanticsNodes().isNotEmpty()
         }
+        rule.onAllNodesWithText("Save Pro project").assertCountEquals(0)
     }
 
     private fun withPhoto(body: (String) -> Unit) {
@@ -143,11 +150,11 @@ class AndroidProLassoGestureTest {
         rule.onNodeWithText("Apply layer mask").performScrollTo().performClick()
         // The old 450-point cutoff closes the polygon before this late quadrant.
         assertPreview(masked = true)
-        click("Undo")
+        rule.onNodeWithContentDescription("Undo").performClick()
         assertPreview(masked = false)
-        click("Redo")
+        rule.onNodeWithContentDescription("Redo").performClick()
         assertPreview(masked = true)
-        saveProject()
+        saveProject(name)
 
         val saved = requireNotNull(ProStore.load(context, name))
         val mask = requireNotNull(saved.layers.single().mask)
@@ -190,11 +197,11 @@ class AndroidProLassoGestureTest {
         // Second-pointer navigation cancels the replacement, not the earlier draft.
         rule.onNodeWithText("Apply layer mask").assertIsEnabled().performScrollTo().performClick()
         assertPreview(masked = true, lateQuadrantBlue = false)
-        click("Undo")
+        rule.onNodeWithContentDescription("Undo").performClick()
         assertPreview(masked = false)
-        click("Redo")
+        rule.onNodeWithContentDescription("Redo").performClick()
         assertPreview(masked = true, lateQuadrantBlue = false)
-        saveProject()
+        saveProject(name)
         val mask = requireNotNull(ProStore.load(context, name)?.layers?.single()?.mask)
         assertTrue(mask.points.all { it.x <= .615f && it.y <= .615f })
     }

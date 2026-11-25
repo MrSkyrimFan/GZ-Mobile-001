@@ -226,7 +226,7 @@ object ProStore {
         } catch (_: Exception) { null }
     }
 
-    internal data class SavedProject(val document: ProDocument, val resetDocument: ProDocument)
+    data class SavedProject(val document: ProDocument, val resetDocument: ProDocument)
 
     internal fun encodeProject(document: ProDocument, resetDocument: ProDocument?): ByteArray {
         val encoded = encode(document)
@@ -277,7 +277,7 @@ object ProStore {
     private fun dir(context: Context): File = File(context.filesDir, DIR).also { it.mkdirs() }
     private data class ProjectPath(val name: String, val base: File) {
         val backup: File get() = File(base.path + ".bak")
-        fun exists(): Boolean = base.exists() || backup.isFile
+        fun exists(): Boolean = base.exists() || backup.isFile || NamedProjectIdentity.hasPendingPublication(base)
     }
 
     private fun projectPath(context: Context, name: String): ProjectPath? {
@@ -299,19 +299,19 @@ object ProStore {
         return if (current.exists() || canonical == legacy) current
             else path(legacy).takeIf { it.exists() } ?: current
     }
-    @Synchronized fun names(context: Context): List<String> =
-        dir(context).listFiles()?.mapNotNull {
+    @Synchronized fun names(context: Context): List<String> {
+        NamedProjectIdentity.recoverDirectory(dir(context), ".gzpro", projectReadLimit())
+        return dir(context).listFiles()?.mapNotNull {
             if (!it.isFile) return@mapNotNull null
-            // AtomicFile can leave the legacy .bak file after an interrupted write.
-            val stem = when {
-                it.name.endsWith(".gzpro") -> it.name.removeSuffix(".gzpro")
-                it.name.endsWith(".gzpro.bak") -> it.name.removeSuffix(".gzpro.bak")
-                else -> return@mapNotNull null
-            }
+            // Both legacy backups and unresolved publication markers retain a slot.
+            val filename = it.name.removeSuffix(".bak").removeSuffix(".save-pending")
+            val stem = filename.takeIf { name -> name.endsWith(".gzpro") }
+                ?.removeSuffix(".gzpro") ?: return@mapNotNull null
             try {
                 String(Base64.getUrlDecoder().decode(stem), Charsets.UTF_8)
             } catch (_: Exception) { null }
         }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
+    }
 
     internal sealed interface SaveResult {
         data class Saved(val name: String) : SaveResult
@@ -325,48 +325,73 @@ object ProStore {
         name: String,
         document: ProDocument,
         resetDocument: ProDocument? = null
-    ): Boolean = writeProject(context, name, document, resetDocument, null, replaceAny = true) is SaveResult.Saved
+    ): Boolean = writeProject(context, name, document, resetDocument, null, true, null) is ProjectSaveResult.Saved
 
-    internal fun saveProject(
-        context: Context,
-        name: String,
-        document: ProDocument,
-        resetDocument: ProDocument?,
-        replaceName: String?
-    ): SaveResult = writeProject(context, name, document, resetDocument, replaceName, replaceAny = false)
-
-    @Synchronized private fun writeProject(
-        context: Context,
-        name: String,
-        document: ProDocument,
-        resetDocument: ProDocument?,
-        replaceName: String?,
-        replaceAny: Boolean
-    ): SaveResult {
-        val target = projectPath(context, name) ?: return SaveResult.Failed
-        if (target.exists()) {
-            if (!replaceAny && replaceName != target.name) return SaveResult.Exists(target.name)
-        } else if (names(context).size >= MAX_SAVED) return SaveResult.Failed
-        return try {
-            val payload = encodeProject(document, resetDocument)
-            if (payload.size.toLong() > projectReadLimit()) return SaveResult.TooLarge
-            val atomic = AtomicFile(target.base)
-            val stream = atomic.startWrite()
-            try {
-                stream.write(payload)
-                atomic.finishWrite(stream)
-            } catch (failed: Throwable) {
-                atomic.failWrite(stream)
-                throw failed
-            }
-            SaveResult.Saved(target.name)
-        } catch (_: ProjectTooLarge) {
-            SaveResult.TooLarge
-        } catch (_: OutOfMemoryError) {
-            SaveResult.TooLarge
-        } catch (_: Exception) {
-            SaveResult.Failed
+    internal fun saveProject(context: Context, name: String, document: ProDocument,
+        resetDocument: ProDocument?, replaceName: String?): SaveResult =
+        when (val result = writeProject(context, name, document, resetDocument, replaceName, false, null)) {
+            is ProjectSaveResult.Saved -> SaveResult.Saved(result.project.name)
+            is ProjectSaveResult.Exists -> SaveResult.Exists(result.project.name)
+            is ProjectSaveResult.Rejected -> if (result.reason == ProjectSaveFailure.TOO_LARGE)
+                SaveResult.TooLarge else SaveResult.Failed
         }
+
+    fun saveNamed(context: Context, intent: ProjectSaveIntent,
+        document: ProDocument, resetDocument: ProDocument? = null): ProjectSaveResult =
+        writeProject(context, intent.requestedName, document, resetDocument, null, true, intent)
+
+    @Synchronized private fun writeProject(context: Context, name: String, document: ProDocument,
+        resetDocument: ProDocument?, replaceName: String?, replaceAny: Boolean,
+        intent: ProjectSaveIntent?): ProjectSaveResult {
+        if (!ProMath.valid(document) ||
+            (resetDocument != null && resetDocument.layers.isNotEmpty() && !ProMath.valid(resetDocument)))
+            return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_DOCUMENT)
+        if (intent?.expectedProject?.kind?.let { it != ProjectKind.PRO } == true)
+            return ProjectSaveResult.Rejected(ProjectSaveFailure.TARGET_CHANGED)
+        return try {
+            val target = projectPath(context, name)
+                ?: return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_NAME)
+            NamedProjectIdentity.recoverPublication(target.base, projectReadLimit())
+            val exists = target.exists()
+            val current = if (exists) NamedProjectIdentity.reference(context, ProjectKind.PRO,
+                target.name, NamedProjectIdentity.fileVersion(target.base, projectReadLimit())
+                    ?: return ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)) else null
+            if (intent != null) NamedProjectIdentity.authorize(ProjectKind.PRO, intent, current)
+                ?.let { return it }
+            else if (current != null && !replaceAny && replaceName != target.name)
+                return ProjectSaveResult.Exists(current)
+            if (!exists && names(context).size >= MAX_SAVED)
+                return ProjectSaveResult.Rejected(ProjectSaveFailure.FULL)
+            val payload = encodeProject(document, resetDocument)
+            if (payload.size.toLong() > projectReadLimit())
+                return ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+            val identity = current?.id ?: NamedProjectIdentity.reserve(context, ProjectKind.PRO,
+                target.name, payloadExists = false)
+            val version = NamedProjectIdentity.publish(target.base, payload, projectReadLimit())
+            ProjectSaveResult.Saved(NamedProjectRef(ProjectKind.PRO, identity, target.name, version))
+        } catch (_: ProjectTooLarge) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+        } catch (_: OutOfMemoryError) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+        } catch (_: Exception) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)
+        }
+    }
+
+    @Synchronized fun loadNamed(context: Context, name: String): NamedProject<SavedProject>? = try {
+        val target = projectPath(context, name)
+        if (target == null) null else {
+            NamedProjectIdentity.readPayload(target.base, projectReadLimit(), ::readProject)?.let { loaded ->
+                NamedProject(NamedProjectIdentity.reference(context, ProjectKind.PRO,
+                    target.name, loaded.version), loaded.content)
+            }
+        }
+    } catch (_: OutOfMemoryError) { null } catch (_: Exception) { null }
+
+    @Synchronized fun deleteNamed(context: Context, expected: NamedProjectRef): Boolean {
+        if (expected.kind != ProjectKind.PRO) return false
+        val current = loadNamed(context, expected.name)?.project ?: return false
+        return current == expected && delete(context, current.name)
     }
 
     fun load(context: Context, name: String): ProDocument? = loadProject(context, name)?.document
@@ -374,6 +399,8 @@ object ProStore {
     @Synchronized internal fun loadProject(context: Context, name: String): SavedProject? {
         val target = projectPath(context, name) ?: return null
         val base = target.base
+        try { NamedProjectIdentity.recoverPublication(base, projectReadLimit()) }
+        catch (_: Exception) { return null }
         val backup = target.backup
         // Fail before allocating strings or reading hostile oversize projects.
         // On legacy backup-only recovery AtomicFile will rename the backup to base.
@@ -458,9 +485,13 @@ object ProStore {
     @Synchronized fun delete(context: Context, name: String): Boolean {
         val target = projectPath(context, name) ?: return false
         val file = target.base
+        try { NamedProjectIdentity.recoverPublication(file, projectReadLimit()) }
+        catch (_: Exception) { return false }
         val projectFiles = listOf(file, target.backup, File(file.path + ".new"))
         if (projectFiles.none { it.exists() }) return false
         AtomicFile(file).delete()
-        return projectFiles.none { it.exists() }
+        val deleted = projectFiles.none { it.exists() }
+        if (deleted) NamedProjectIdentity.forget(context, ProjectKind.PRO, target.name)
+        return deleted
     }
 }

@@ -20,7 +20,9 @@ internal data class PendingExport(
     val mime: String,
     val filename: String,
     val recipe: String,
-    val destination: String? = null
+    val destination: String? = null,
+    val nativeOwnerId: String? = null,
+    val restoreNativeDraft: Boolean = true
 )
 
 /** One immutable recipe per workspace. Only the matching picker can claim its result. */
@@ -80,20 +82,28 @@ internal class PendingExportJournal(filesDirectory: File) {
             PendingExport(
                 workspace, id, PendingExportPhase.valueOf(json.getString("phase")),
                 json.getString("mime"), json.getString("filename"), json.getString("recipe"),
-                json.optString("destination").takeIf { it.isNotEmpty() }
+                json.optString("destination").takeIf { it.isNotEmpty() },
+                json.optString("nativeOwnerId").takeIf { it.isNotEmpty() },
+                json.optBoolean("restoreNativeDraft", true) && !nativeIsResolved(workspace, id)
             )
         } catch (_: Exception) { null }
     }
 
-    fun begin(workspace: ExportWorkspace, mime: String, filename: String, recipe: String): PendingExport =
+    fun begin(workspace: ExportWorkspace, mime: String, filename: String, recipe: String,
+        nativeOwnerId: String? = null): PendingExport =
         synchronized(lock) {
             check(read(workspace) == null) { "Finish or discard the previous export request first" }
-            write(newRecord(workspace, mime, filename, recipe))
+            write(newRecord(workspace, mime, filename, recipe).copy(nativeOwnerId = nativeOwnerId))
         }
 
     fun retry(prior: PendingExport): PendingExport = synchronized(lock) {
         val current = matching(prior) ?: throw IOException("Export request is no longer available")
-        write(newRecord(current.workspace, current.mime, current.filename, current.recipe))
+        val next = write(newRecord(current.workspace, current.mime, current.filename, current.recipe).copy(
+            nativeOwnerId = current.nativeOwnerId ?: current.id,
+            restoreNativeDraft = current.restoreNativeDraft
+        ))
+        clearNativeResolution(current.workspace, current.id)
+        next
     }
 
     fun claim(expected: PendingExport, destination: Uri): PendingExport? = synchronized(lock) {
@@ -128,7 +138,91 @@ internal class PendingExportJournal(filesDirectory: File) {
         if (matching(expected) == null) return@synchronized false
         file(expected.workspace).delete()
         if (read(expected.workspace)?.id == expected.id) throw IOException("Export request could not be cleared")
+        clearNativeResolution(expected.workspace, expected.id)
         true
+    }
+
+    private fun resolutionFile() = AtomicFile(File(directory, "native-resolutions.json"))
+
+    private fun resolvedIds(): Map<ExportWorkspace, String> {
+        val atomic = resolutionFile()
+        if (!atomic.baseFile.exists() && !File(atomic.baseFile.path + ".bak").exists()) return emptyMap()
+        return atomic.openRead().use { input ->
+            if (input.channel.size() !in 2L..2048L) throw IOException("Invalid native-resolution record")
+            val json = JSONObject(String(input.readBytes(), Charsets.UTF_8))
+            ExportWorkspace.entries.mapNotNull { workspace ->
+                val id = json.optString(workspace.name)
+                if (id.isEmpty()) null else {
+                    if (!isCanonicalId(id)) throw IOException("Invalid native-resolution identity")
+                    workspace to id
+                }
+            }.toMap()
+        }
+    }
+
+    private fun nativeIsResolved(workspace: ExportWorkspace, id: String): Boolean = try {
+        resolvedIds()[workspace] == id
+    } catch (_: Exception) {
+        // An unreadable restoration permission cannot resurrect native edits;
+        // the independent captured export record remains available for retry.
+        true
+    }
+
+    private fun writeResolvedIds(ids: Map<ExportWorkspace, String>) {
+        val bytes = JSONObject().apply {
+            ids.forEach { (workspace, id) -> put(workspace.name, id) }
+        }.toString().toByteArray(Charsets.UTF_8)
+        check(bytes.size <= 2048)
+        val atomic = resolutionFile()
+        val output = atomic.startWrite()
+        try {
+            output.write(bytes)
+            output.fd.sync()
+            atomic.finishWrite(output)
+        } catch (error: Throwable) {
+            atomic.failWrite(output)
+            throw error
+        }
+        atomic.openRead().use { input ->
+            if (input.channel.size() != bytes.size.toLong() || !input.readBytes().contentEquals(bytes))
+                throw IOException("Could not record the native disposition")
+        }
+    }
+
+    private fun clearNativeResolution(workspace: ExportWorkspace, id: String) {
+        try {
+            val ids = resolvedIds()
+            if (ids[workspace] == id) writeResolvedIds(ids - workspace)
+        } catch (_: Exception) {
+            // The old request ID cannot match a newly created export.
+        }
+    }
+
+    /**
+     * Revoke native restoration without deleting captured export bytes or
+     * uncertain-destination custody. Multiple owners share one small atomic
+     * record so a Regular-to-Pro transaction does not half-resolve its parents.
+     * Call only once all native targets are ready and before their live commit.
+     */
+    fun suppressNativeRestores(
+        owners: List<Pair<ExportWorkspace, String>>
+    ): List<PendingExport> = synchronized(lock) {
+        val records = owners.mapNotNull { (workspace, ownerId) ->
+            read(workspace)?.takeIf { (it.nativeOwnerId ?: it.id) == ownerId && it.restoreNativeDraft }
+        }
+        if (records.isEmpty()) return@synchronized emptyList()
+        val ids = resolvedIds().toMutableMap()
+        records.forEach { ids[it.workspace] = it.id }
+        writeResolvedIds(ids)
+        records.map { it.copy(restoreNativeDraft = false) }
+    }
+
+    fun suppressNativeRestore(expected: PendingExport, ownerId: String): PendingExport? = synchronized(lock) {
+        val current = matching(expected) ?: return@synchronized null
+        if ((current.nativeOwnerId ?: current.id) != ownerId) return@synchronized null
+        if (!current.restoreNativeDraft) return@synchronized current
+        suppressNativeRestores(listOf(current.workspace to ownerId))
+            .firstOrNull { it.id == current.id }
     }
 
     private fun matching(expected: PendingExport): PendingExport? =
@@ -147,6 +241,8 @@ internal class PendingExportJournal(filesDirectory: File) {
             put("filename", record.filename)
             put("recipe", record.recipe)
             if (record.destination != null) put("destination", record.destination)
+            if (record.nativeOwnerId != null) put("nativeOwnerId", record.nativeOwnerId)
+            put("restoreNativeDraft", record.restoreNativeDraft)
         }.toString().toByteArray(Charsets.UTF_8)
         if (bytes.size > MAX_RECORD_BYTES) throw IOException("Export recipe is too large to keep for recovery")
         val file = file(record.workspace)

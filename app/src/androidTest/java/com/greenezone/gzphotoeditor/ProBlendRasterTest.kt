@@ -126,6 +126,6 @@ class ProBlendRasterTest {
         rule.onNodeWithText("Restore Normal").performScrollTo().performClick()
         rule.waitUntil(15_000) { centerIs(Color.BLUE) }
         rule.runOnIdle { assertEquals(ProBlend.NORMAL, current.layers.single().blend) }
-        rule.onNodeWithText("Undo").assertIsEnabled()
+        rule.onNodeWithContentDescription("Undo").assertIsEnabled()
     }
 }

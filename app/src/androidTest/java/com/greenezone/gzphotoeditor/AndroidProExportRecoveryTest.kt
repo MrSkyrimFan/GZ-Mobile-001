@@ -129,8 +129,8 @@ class AndroidProExportRecoveryTest {
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithContentDescription("Pro editable composition").fetchSemanticsNodes().isNotEmpty()
             }
-            rule.onNodeWithText("File ▾").performClick()
-            rule.onNodeWithText("Export image").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Export image…").performClick()
             rule.onNodeWithText("JPEG · JPG  ▾").performClick()
             rule.onNodeWithText("PNG · Lossless").performClick()
             rule.onNodeWithText("Save PNG").performClick()

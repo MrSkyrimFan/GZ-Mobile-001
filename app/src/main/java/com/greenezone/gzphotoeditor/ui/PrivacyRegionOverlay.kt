@@ -1,8 +1,8 @@
 package com.greenezone.gzphotoeditor.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,39 +29,54 @@ fun PrivacyRegionOverlay(
     showGuides: Boolean,
     onMove: (Float, Float) -> Unit,
     onFinished: () -> Unit,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    onCanceled: () -> Unit = {},
+    targetKey: Any? = null
 ) {
     val latestMove by rememberUpdatedState(onMove)
     val latestFinish by rememberUpdatedState(onFinished)
     val latestTap by rememberUpdatedState(onTap)
+    val latestCancel by rememberUpdatedState(onCanceled)
 
     Canvas(
         Modifier.fillMaxSize()
-            .pointerInput(Unit) { detectTapGestures(onTap = { latestTap() }) }
-            .pointerInput(imageWidth, imageHeight, canMove) {
-                var moving = false
-                fun imagePoint(offset: Offset): Pair<Float, Float>? {
-                    val factor = min(size.width.toFloat() / imageWidth, size.height.toFloat() / imageHeight)
+            .pointerInput(imageWidth, imageHeight, canMove, targetKey) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val startSize = size
+                    val factor = min(startSize.width.toFloat() / imageWidth, startSize.height.toFloat() / imageHeight)
                     val w = imageWidth * factor
                     val h = imageHeight * factor
-                    val left = (size.width - w) / 2f
-                    val top = (size.height - h) / 2f
-                    val x = (offset.x - left) / w
-                    val y = (offset.y - top) / h
-                    if (x !in 0f..1f || y !in 0f..1f) return null
-                    return x to y
-                }
-                detectDragGestures(
-                    onDragStart = { moving = canMove && imagePoint(it) != null },
-                    onDragEnd = { if (moving) latestFinish(); moving = false },
-                    onDragCancel = { if (moving) latestFinish(); moving = false },
-                    onDrag = { change, _ ->
-                        if (moving) imagePoint(change.position)?.let {
-                            latestMove(it.first, it.second)
-                            change.consume()
-                        }
+                    val left = (startSize.width - w) / 2f
+                    val top = (startSize.height - h) / 2f
+                    val firstX = (down.position.x - left) / w
+                    val firstY = (down.position.y - top) / h
+                    val ownsRegion = canMove && firstX in 0f..1f && firstY in 0f..1f
+                    down.consume()
+                    var moved = false
+                    var changed = false
+                    var completed = false
+                    try {
+                        do {
+                            val event = awaitPointerEvent()
+                            val pointer = event.changes.singleOrNull() ?: return@awaitEachGesture
+                            if (size != startSize || pointer.id != down.id || pointer.isConsumed)
+                                return@awaitEachGesture
+                            moved = moved || (pointer.position - down.position).getDistance() >
+                                viewConfiguration.touchSlop
+                            if (moved && ownsRegion) {
+                                changed = true
+                                latestMove(((pointer.position.x - left) / w).coerceIn(0f, 1f),
+                                    ((pointer.position.y - top) / h).coerceIn(0f, 1f))
+                            }
+                            pointer.consume()
+                        } while (pointer.pressed)
+                        completed = true
+                        if (changed) latestFinish() else if (!moved) latestTap()
+                    } finally {
+                        if (!completed && changed) latestCancel()
                     }
-                )
+                }
             }
     ) {
         if (!showGuides) return@Canvas

@@ -83,10 +83,10 @@ class AndroidGifExportRecoveryTest {
         val picker = DelayedPicker(original)
         rule.setContent { Workspace(picker) }
         openGifWorkspace()
-        rule.onNodeWithText("Edit existing GIF").performClick()
+        gifOption("Open GIF…")
         waitForText("Play")
         rule.onNodeWithText("Reverse").performClick()
-        rule.onNodeWithText("Save GIF").performClick()
+        gifOption("Export GIF…")
         val pending = awaitPicker(picker)
         assertTrue(PendingGifRecipe.decode(pending.recipe)?.document?.video?.reverse == true)
 
@@ -106,7 +106,7 @@ class AndroidGifExportRecoveryTest {
         assertNull(journal.read(ExportWorkspace.GIF))
         assertFalse(stage.exists())
 
-        rule.onNodeWithText("Save GIF").performClick()
+        gifOption("Export GIF…")
         val canceled = awaitPicker(picker, launches = 2)
         val canceledStage = File(context.cacheDir, "gz-gif-export/${canceled.id}.gif")
         assertTrue(canceledStage.length() > 0)
@@ -126,26 +126,26 @@ class AndroidGifExportRecoveryTest {
             val picker = DelayedPicker()
             rule.setContent { Workspace(picker) }
             openGifWorkspace()
-            rule.onNodeWithText("Open saved GIF project").performClick()
+            gifOption("Open project…")
             rule.onNodeWithText(project).performScrollTo().performClick()
-            waitForText("Video → GIF")
-            rule.onNodeWithText("Export GIF").performScrollTo().performClick()
+            waitForText("Photos")
+            gifOption("Export GIF…")
             val first = awaitPicker(picker)
             assertEquals(project, PendingGifRecipe.decode(first.recipe)?.savedName)
             assertEquals(recipe, PendingGifRecipe.decode(first.recipe)?.document)
 
             recreate(picker)
-            waitForText("Video → GIF")
+            waitForText("Photos")
             rule.runOnIdle { picker.deliver(picker.exportCodes.single(), null) }
             waitForText("GIF export cancelled")
             assertNull(journal.read(ExportWorkspace.GIF))
             assertArrayEquals(SENTINEL, bytes(untouched))
 
-            rule.onNodeWithText("Export GIF").performScrollTo().performClick()
+            gifOption("Export GIF…")
             val second = awaitPicker(picker, launches = 2)
             assertEquals(project, PendingGifRecipe.decode(second.recipe)?.savedName)
             recreate(picker, launches = 2)
-            waitForText("Video → GIF")
+            waitForText("Photos")
             rule.runOnIdle { picker.deliver(picker.exportCodes.last(), destination) }
             waitForText("GIF exported", substring = true)
             assertFrames(destination, Color.RED, Color.BLUE)
@@ -184,6 +184,11 @@ class AndroidGifExportRecoveryTest {
         CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
             MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() }
         }
+    }
+
+    private fun gifOption(label: String) {
+        rule.onNodeWithContentDescription("Options").performClick()
+        rule.onNodeWithText(label).performClick()
     }
 
     private fun openGifWorkspace() {
