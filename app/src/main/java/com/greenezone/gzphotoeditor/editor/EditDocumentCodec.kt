@@ -13,6 +13,10 @@ object EditDocumentCodec {
     private const val MAX_STROKES = 40
     private const val MAX_BRUSH_POINTS = 640
     private const val MAX_INK_POINTS = 500
+    private val inkDecimalDivisors = doubleArrayOf(
+        1.0, 10.0, 100.0, 1_000.0, 10_000.0, 100_000.0,
+        1_000_000.0, 10_000_000.0, 100_000_000.0, 1_000_000_000.0
+    )
     internal const val MAX_ENCODED_CHARS = 2_000_000
 
     internal class RecipeTooLarge : IllegalArgumentException("Edit recipe is too large")
@@ -179,6 +183,50 @@ object EditDocumentCodec {
     internal fun recoverProRecipe(content: String, projectLimit: Int): EditDocument? =
         decode(content, projectLimit)
 
+    private fun decodeInkPoints(value: String): List<BrushPoint> {
+        val points = ArrayList<BrushPoint>()
+        var start = 0
+        var tokens = 0
+        while (start < value.length && tokens < MAX_INK_POINTS) {
+            val separator = value.indexOf(';', start)
+            val end = if (separator == -1) value.length else separator
+            decodeInkPoint(value, start, end)?.let { points.add(it) }
+            start = end + 1
+            tokens++
+        }
+        return points
+    }
+
+    private fun decodeInkPoint(value: String, start: Int, end: Int): BrushPoint? {
+        var comma = -1
+        for (index in start until end) {
+            if (value[index] == ',') {
+                if (comma != -1) return null
+                comma = index
+            }
+        }
+        if (comma <= start || comma == end - 1) return null
+        val x = inkCoordinate(value, start, comma)
+        val y = inkCoordinate(value, comma + 1, end)
+        return if (x.isFinite() && y.isFinite() && x in 0f..1f && y in 0f..1f) BrushPoint(x, y) else null
+    }
+
+    private fun inkCoordinate(value: String, start: Int, end: Int): Float {
+        val digits = end - start - 2
+        if (digits !in 1..inkDecimalDivisors.lastIndex || value[start] != '0' || value[start + 1] != '.')
+            return value.substring(start, end).toFloatOrNull() ?: Float.NaN
+        var numerator = 0
+        for (index in start + 2 until end) {
+            val digit = value[index] - '0'
+            if (digit !in 0..9) return value.substring(start, end).toFloatOrNull() ?: Float.NaN
+            numerator = numerator * 10 + digit
+        }
+        // With at most nine decimal places, any nonzero gap to a float
+        // midpoint exceeds half a double ULP there (5^9 < 2^29). Conversion
+        // therefore rounds as direct float parsing does.
+        return (numerator / inkDecimalDivisors[digits]).toFloat()
+    }
+
     private fun decode(content: String, limit: Int): EditDocument? {
         if (content.length > limit) return null
         val fields = content.lineSequence().take(6000).mapNotNull { line ->
@@ -301,16 +349,6 @@ object EditDocumentCodec {
         if (version == ANCHORED_PRIVACY_VERSION && privacy.none { it.authoringGeometry != null }) return null
         val frame = cropFrame("crop.frame")
         fun color(key: String, fallback: Int): Int = fields[key]?.toIntOrNull() ?: fallback
-        fun points(key: String): List<BrushPoint> =
-            fields[key]?.split(';')?.take(MAX_INK_POINTS)?.mapNotNull { pair ->
-                val pieces = pair.split(',')
-                if (pieces.size != 2) return@mapNotNull null
-                val x = pieces[0].toFloatOrNull()
-                val y = pieces[1].toFloatOrNull()
-                if (x == null || y == null || !x.isFinite() || !y.isFinite() ||
-                    x !in 0f..1f || y !in 0f..1f) null else BrushPoint(x, y)
-            } ?: emptyList()
-
         val texts = ArrayList<TextOverlay>()
         for (i in 0 until count("creative.text.count", CreativeRaster.MAX_TEXT)) {
             val pre = "creative.text." + i + "."
@@ -360,7 +398,7 @@ object EditDocumentCodec {
         val ink = ArrayList<InkStroke>()
         for (i in 0 until count("creative.ink.count", CreativeRaster.MAX_INK)) {
             val pre = "creative.ink." + i + "."
-            val positions = points(pre + "points")
+            val positions = fields[pre + "points"]?.let(::decodeInkPoints) ?: continue
             if (positions.isEmpty()) continue
             ink.add(InkStroke(
                 points = positions,
