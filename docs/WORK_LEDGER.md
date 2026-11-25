@@ -2,15 +2,19 @@
 
 ## Selected task A1 — owner phone report and ChatGPT / Codex alignment
 
-**Phase: Stage 1 ready for Codex. Application engineering is paused by the owner's explicit three-stage instruction.** Source inspection and coordination documentation are allowed; app/test/build/CI changes, APK rebuilds, new suite runs and R1.1/R1.2 implementation wait for the completed exchange. Read the [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md) in full.
+**Phase: Stage 2 complete — awaiting ChatGPT answers. Application engineering is paused by the owner's explicit three-stage instruction.** Source inspection and coordination documentation are allowed; app/test/build/CI changes, APK rebuilds, new suite runs and R1.1/R1.2 implementation wait for the completed exchange. Read the [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md) in full.
 
 | Stage | Owner | Required result | State |
 | --- | --- | --- | --- |
-| 1 | ChatGPT | Record phone findings, UI rules, full-scope continuity and Q01–Q25; publish the Codex activation prompt | Handoff prepared in this documentation change |
-| 2 | Codex | Answer Q01–Q25; provide full existing roadmap snapshot and 77-family reconciliation; author CQ01–CQ50; commit response and return prompt | Awaiting Codex |
-| 3 | ChatGPT | Read actual Codex response; answer CQ01–CQ50; reconcile canonical documents; publish agreed batch and Codex resume prompt | Waiting on Stage 2 |
+| 1 | ChatGPT | Record phone findings, UI rules, full-scope continuity and Q01–Q25; publish the Codex activation prompt | Complete — PR #34, intake main `b9b5ff14ec5a833416b972c4b670a7e9157a2e0a` |
+| 2 | Codex | Answer Q01–Q25; provide full existing roadmap snapshot and 77-family reconciliation; author CQ01–CQ50; commit response and return prompt | Complete — committed responses linked below; no application changes |
+| 3 | ChatGPT | Read actual Codex response; answer CQ01–CQ50; reconcile canonical documents; publish agreed batch and Codex resume prompt | Awaiting owner-relayed ChatGPT activation; engineering remains paused |
 
-Stage 2 response destinations are `docs/coordination/CODEX_RESPONSE_TO_25_2026-11-24.md` and `docs/coordination/CODEX_QUESTIONS_50_2026-11-24.md`. They are planned destinations, not completed responses. Codex must update this phase with the actual committed links/ref. Stage 3 then creates `docs/coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md` and `docs/coordination/ENGINEERING_RESUME_2026-11-24.md`. No agent may prefill the other session's responses or treat an internal review subagent as the owner's Codex.
+Stage 2 is complete. Read the committed [Q01–Q25 response, full frozen roadmap snapshots and 77-family reconciliation](coordination/CODEX_RESPONSE_TO_25_2026-11-24.md) and [CQ01–CQ50](coordination/CODEX_QUESTIONS_50_2026-11-24.md). Exact reviewed response content ref: `37023ada665a6a13e81791efae77080a8ad93291`; documentation branch `codex/stage2-alignment-20261124`. These are comparison snapshots and proposed decisions, not another active master plan or an engineering-resume instruction.
+
+Validation: 25 ordered answers; 77 unique family rows with retained full exits; exactly 50 ordered questions; complete frozen public plan/child texts at both `e04bc08a4800233b0f407b419a91c97ca2c068f6` and `eb8796c92fa654cb0dac371e35d7645ecd07db8a` (all 18 source identities verified by recomputed UTF-8 Git blob SHA-1; identical files shared). Read-only source and documentation review identified specific route/menu/timing gaps. No app/test/build/CI modifications, APK rebuild/download or suite rerun; PR #31's application/binary and recorded 193-per-API candidate/merge evidence remain unchanged.
+
+**Next action belongs to ChatGPT after Lance relays the return prompt:** read the actual committed documents in full, answer every CQ in `docs/coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md`, reconcile the single canonical documents, then create `docs/coordination/ENGINEERING_RESUME_2026-11-24.md` with exact baseline, bounded batch, ownership, exits and genuine blockers. Only after Codex reads those answers and the owner's final relayed resume instruction may application engineering continue. Do not prefill ChatGPT's answers, poll its chat, substitute internal reviewers for Stage 3 or require another arbitrary 25/50 cycle.
 
 ### Owner phone result and bounded follow-up
 
