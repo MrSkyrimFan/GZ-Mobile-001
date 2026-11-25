@@ -1,20 +1,47 @@
 # GZ Editor Pro — single active work ledger
 
-## Selected task A1 — owner phone report and ChatGPT / Codex alignment
+## Completed task A1 — ChatGPT / Codex alignment
 
-**Phase: Stage 2 complete — awaiting ChatGPT answers. Application engineering is paused by the owner's explicit three-stage instruction.** Source inspection and coordination documentation are allowed; app/test/build/CI changes, APK rebuilds, new suite runs and R1.1/R1.2 implementation wait for the completed exchange. Read the [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md) in full.
+**Phase: Alignment complete — ready for owner to relay Codex resume prompt.** Stage 3 has answered all 50 questions and reconciled the canonical requirements. Codex starts application engineering only after Lance relays the final prompt and Codex reads the full [Stage 3 answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) and published [engineering-resume instruction](coordination/ENGINEERING_RESUME_2026-11-24.md). No additional arbitrary question cycle or repeated permission is required. Until that activation, this remains documentation-only.
 
-| Stage | Owner | Required result | State |
+| Stage | Owner | Result / exact evidence | State |
 | --- | --- | --- | --- |
-| 1 | ChatGPT | Record phone findings, UI rules, full-scope continuity and Q01–Q25; publish the Codex activation prompt | Complete — PR #34, intake main `b9b5ff14ec5a833416b972c4b670a7e9157a2e0a` |
-| 2 | Codex | Answer Q01–Q25; provide full existing roadmap snapshot and 77-family reconciliation; author CQ01–CQ50; commit response and return prompt | Complete — committed responses linked below; no application changes |
-| 3 | ChatGPT | Read actual Codex response; answer CQ01–CQ50; reconcile canonical documents; publish agreed batch and Codex resume prompt | Awaiting owner-relayed ChatGPT activation; engineering remains paused |
+| 1 | ChatGPT | [Owner report, requirements and Q01–Q25](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md); PR #34 merge b9b5ff14ec5a833416b972c4b670a7e9157a2e0a | Complete |
+| 2 | Codex | [25 answers, full two-checkpoint roadmap/child snapshots and all 77 mappings](coordination/CODEX_RESPONSE_TO_25_2026-11-24.md); [CQ01–CQ50](coordination/CODEX_QUESTIONS_50_2026-11-24.md); [PR #35](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/35), merge df0faa23c4908bfd847410c84798a8c3402b27af | Complete |
+| 3 | ChatGPT | [All 50 answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md), reconciled canonical documents, and [resume instruction](coordination/ENGINEERING_RESUME_2026-11-24.md) with exact committed answer/contract reference | Complete — ready for the owner-relayed activation |
 
-Stage 2 is complete. Read the committed [Q01–Q25 response, full frozen roadmap snapshots and 77-family reconciliation](coordination/CODEX_RESPONSE_TO_25_2026-11-24.md) and [CQ01–CQ50](coordination/CODEX_QUESTIONS_50_2026-11-24.md). Exact reviewed response content ref: `37023ada665a6a13e81791efae77080a8ad93291`; documentation branch `codex/stage2-alignment-20261124`. These are comparison snapshots and proposed decisions, not another active master plan or an engineering-resume instruction.
+Stage 3 read the entire 298,465-character response including both historical appendices, all 48,632 characters of questions, the full handoff and current canonical documents. Main at intake exactly matched the supplied Stage 2 merge/tree 9477d262b9e672ee5abd3ab50116500b22058a84; the Stage 2 difference was exactly three documentation paths. The 25 answers, 50 questions and 77 ordered family IDs are complete. Source observations and prior qualification are credited as inherited evidence, not newly executed tests. Historical snapshots and receipts remain unchanged.
 
-Validation: 25 ordered answers; 77 unique family rows with retained full exits; exactly 50 ordered questions; complete frozen public plan/child texts at both `e04bc08a4800233b0f407b419a91c97ca2c068f6` and `eb8796c92fa654cb0dac371e35d7645ecd07db8a` (all 18 source identities verified by recomputed UTF-8 Git blob SHA-1; identical files shared). Read-only source and documentation review identified specific route/menu/timing gaps. No app/test/build/CI modifications, APK rebuild/download or suite rerun; PR #31's application/binary and recorded 193-per-API candidate/merge evidence remain unchanged.
+The final response supplies the actual merged Stage 3 commit/PR. The resume instruction pins the completed answers/canonical content commit created before it, and the owner activation identifies the final combined documentation ref. Check live main at resume once, preserve newer authorized deltas, and do not branch from an obsolete repair checkpoint. The qualified app is still PR #31; this documentation exchange does not create a binary.
 
-**Next action belongs to ChatGPT after Lance relays the return prompt:** read the actual committed documents in full, answer every CQ in `docs/coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md`, reconcile the single canonical documents, then create `docs/coordination/ENGINEERING_RESUME_2026-11-24.md` with exact baseline, bounded batch, ownership, exits and genuine blockers. Only after Codex reads those answers and the owner's final relayed resume instruction may application engineering continue. Do not prefill ChatGPT's answers, poll its chat, substitute internal reviewers for Stage 3 or require another arbitrary 25/50 cycle.
+## Selected on activation — B1 common UI and safe editing departures
+
+**Observable result:** the four current workspaces feel like one app: one accessible top-right Options home for major commands, common header/history arrows, no duplicate major actions or Regular More/Create collage/Histogram UI; one-tap Collage chrome; every relevant dirty departure protects the correct document/child and preserves failed/canceled work.
+
+**Contract:** [PRODUCT_SPEC — agreed interaction contract](PRODUCT_SPEC.md#agreed-interaction-contract--stage-3) and [CQ01–CQ17/CQ41/CQ42](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq01). The header hides with tool chrome; active guides remain. Standalone selected-tile photo Save/Open remains explicitly labeled and separate from parent Apply. Dirty child Back resolves the child and returns only to parent. A mode departure resolves child then parent transactionally. Regular→Pro preserves Yes/No meanings and does not secretly transfer an explicitly discarded snapshot. Changed zero-layer Pro setup is protected with an honest Save limitation; named empty-document persistence remains R2.
+
+**Required minimal prerequisite:** stable content/save/entry/reset/child identities and one revision-bound save/departure result token. Couple only the compatibility-safe identity/save-result slice and proven text/shape/privacy cancellation paths needed for B1. Full R1.1 migration, R1.2 autosave, R2 compositor and R5 color work are not prerequisites.
+
+| File responsibility | One production writer / boundary |
+| --- | --- |
+| Integration, Regular, Collage and shared presentation/departure interfaces | Codex integration/Regular-Collage owner: PhotoEditorScreen.kt, CollageWorkspaceScreen.kt, RegularPhotoDock.kt, EditorDock.kt, WorkspaceModeMenu.kt, CreativeCanvasOverlays.kt and PrivacyRegionOverlay.kt; proposed new shared header/command/departure files. Own active documentation/integration. |
+| Pro adapter and routes | Pro owner: ProWorkspaceScreen.kt against the agreed shared interface; preserve tool targets, reset semantics and legacy data. |
+| GIF adapters, foreground job and measured B2 | GIF owner: VideoGifScreen.kt, GifMakerScreen.kt, GifProjectDialogs.kt, GifExportRecovery.kt; later measured GifEncoder/GifPalette/VideoGifSource/ImagePipeline paths only if evidence requires. B1/B2 do not have competing writers in these files. |
+| Minimal saved identity/baseline/storage adapters | Persistence owner: ProjectStore.kt, CollageStore.kt, ProStore.kt, GifStore.kt and only necessary shared model/session files; integration assigns every touched file exactly once before editing. No wholesale store/schema rewrite in B1. |
+| Verification and integration review | Separate reviewer checks actual callback/state/output behavior and retained assertions. Test-file ownership is assigned once; do not merge parallel rewrites. |
+
+Actual agent names are assigned at Codex activation; these are role boundaries, not claims that a particular agent is already running. Disjoint work may run in parallel after the shared interface is agreed from the recorded contract; limited concurrency can sequence the roles.
+
+**Decisive reproductions/controls:** parent single tap versus existing double-tap dependency; separate selected-tile tap path; Regular Back with prior workspace and mode change; Pro Back/Open; Collage Back/New; child Done/Back/mode and standalone-save baselines; duplicate/late Save/Back/picker results. Existing protected replacements/child routes and PR #29/#31 pixels/history are controls. Confirm source-supported gaps through these paths; do not restart an all-app audit.
+
+**B1 exit:** actual empty/loaded/busy command inventory; correct unique menu routing and touch/accessible layout; complete dirty-route matrix including failures/cancel/clean work; one gesture checkpoint and rollback; stable child/async targets; named save/reopen/decoded-output/source protection. Preserve the current 193-case behavioral coverage; a documented UI-test migration may replace obsolete File/More/Histogram-entry assumptions with the authorized Options/removal contract while retaining numerical/output/regression assertions. Full required candidate and merged-app JVM/API29/API35/signing qualification and exact APK custody follow implementation. Documentation-only Stage 3 does not run those suites.
+
+### B2 — measured GIF correction; independent work may overlap B1
+
+The 120–300-second phone report stays open. Capture the source/equivalent, recipe/output, phone/Android, provider and timing split; measure disjoint stages and then optimize one demonstrated bottleneck with unchanged output fidelity and existing 6s sampled-motion/15s Save fixture gates. Before evaluating the patch, record its workload-specific absolute/relative, memory and response/cancel targets. No universal phone completion promise or silent FPS/size/frame/quality reduction.
+
+Missing owner-specific data holds only that reproduction/closure. Continue independent B1 or R1.1 work when it is the remaining blocker; do not call F03 fixed from the small fixture. Engineer a coherent candidate before requesting its post-fix owner confirmation—confirmation cannot be a prerequisite for delivering the candidate needed for that check. Do not claim a fully fixed wave while a reproduced high-impact regression is unresolved. If phone data remains unavailable, record F03 explicitly open and provide a focused candidate only when it enables the needed observation; avoid serial partial builds.
+
 
 ### Owner phone result and bounded follow-up
 
@@ -31,7 +58,7 @@ Lance reports **unmentioned supplied phone checks worked**. Record those as owne
 
 Device/Android version and GIF workload/settings/provider/timing stages were not supplied. The physical performance report remains open even though the small CI fixture passed. Scoped phone success does not lock whole workspaces, establish true process-loss recovery or authorize release.
 
-**Proposed post-alignment priority:** resolve the named phone defects and common UI contract in a dependency-aware wave, then continue R1.1/R1.2 and the existing full roadmap. Stage 3 fixes the exact batch and any justified durability prerequisite; no implementation is authorized by this proposal alone. The new owner report is the specific reason for reopening affected touch/navigation/performance behavior. It is not a reason to repeat completed audits.
+**Agreed order:** B1 interaction correction; independent measured B2 GIF work; R1.1 then R1.2 and remaining R1; all R2–R11 children retained. The final owner-relayed resume prompt activates this work. The new report is the reason for reopening only the affected touch/navigation/performance behavior; completed audits are not repeated.
 
 Updated 2026-11-24. Read with [roadmap](GZ_ENGINEERING_ROADMAP.md), [capability inventory](CAPABILITY_MATRIX.md) and [release gates](RELEASE_GATE.md). This ledger controls execution order; the linked engineering records control run results. Historical green counts do not close newly reported defects.
 
@@ -90,7 +117,7 @@ Inventory the current state/source ownership once, pin the current main and comp
 
 | Order | Package / completion target | Prerequisite and current disposition |
 | --- | --- | --- |
-| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, saved repeated exchange and portable bundles | QUEUED — A1 alignment and agreed owner-correction sequence precede execution; preserve R1.1 then R1.2; S01–S08 remain open/partial |
+| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, saved repeated exchange and portable bundles | QUEUED after B1 and independent B2; R1.1 then R1.2; a pending owner-only GIF observation does not block independent work; S01–S08 remain open/partial |
 | R2 | Pro layer tree/groups/clipping and memory-bounded reference compositor | R1 contracts; preserve legacy pixels |
 | R3 | Full Pro selection, paint, retouch, shapes, transforms, effects and declared interchange | R2 foundation |
 | R4 | Offline Subject & Background, refine/removal and reshaping | R2/R3 mask/geometry foundation; no runtime AI |
@@ -104,9 +131,9 @@ Inventory the current state/source ownership once, pin the current main and comp
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next action — Codex Stage 2 response
+## Next action — Codex activates B1 from the final prompt
 
-Read the current alignment handoff, answer its 25 questions with evidence, return your complete existing roadmap, and author exactly 50 questions for ChatGPT. Commit the response documents, update A1 above and give Lance the return prompt specified in the handoff. Stop before application engineering. R1.1/R1.2 remain queued; their implementation and the new owner corrections begin only after Stage 3 and the final resume instruction. Preserve the qualified 0.12.10 artifact and all existing receipts. Do not rerun settled qualification or create another master backlog.
+Read the committed Stage 3 answers and engineering-resume instruction in full after Lance relays the final prompt. Pin live main, check any later delta once, assign the named file roles, reproduce the specific B1 gaps and implement the agreed contract. Start independent B2 measurement where feasible. Preserve the qualified 0.12.10 artifact and all receipts. Do not restart Q01–Q25/CQ01–CQ50, replay completed audits, or rebuild a documentation-only baseline. R1.1/R1.2 and the full roadmap follow the ordered work above.
 
 ## Pending owner/device decisions
 
@@ -114,7 +141,7 @@ Read the current alignment handoff, answer its 25 questions with evidence, retur
 - Four formal pre-Video workspace locks remain open; a limited successful phone session does not close the full product inventory.
 - Shipping device/performance, RAW-camera and interchange support tiers are explicit later decisions, informed by implementation evidence.
 - Greenezone website completion is an external dependency, not app-engineering scope. Play Console setup waits for that plus the functioning app; no account work now.
-- Exact production signing/account/listing and public release need Lance at R11. After the explicit A1 alignment hold is released, routine agreed engineering continues without repeated permission.
+- Exact production signing/account/listing and public release need Lance at R11. After the final owner-relayed activation and required reads, routine agreed engineering continues without repeated permission.
 
 ## Failure and drift rule
 

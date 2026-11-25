@@ -1,18 +1,18 @@
 # GZ Editor Pro — complete product roadmap
 
-## Latest owner update — phone findings and alignment gate
+## Alignment complete — selected owner-correction sequence
 
-The November 24, 2026 phone report credits unmentioned supplied checks as owner-reported pass. Open findings: Collage requires a quick double tap to toggle chrome, Regular/Pro/Collage lack expected dirty-exit safeguards, and GIF Save takes approximately 120–300 seconds despite working controls. The owner requests one top-right **Options** dropdown for major actions, no duplicate command locations, a common header with consistent Undo/Redo (this handoff selects arrow icons), and removal of Regular's More, Create collage and Histogram UI entries. The [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md) gives the exact contract.
+The owner's supplied 0.12.10 checks retain scoped pass credit; F01–F06 remain implementation/phone follow-up. [Stage 2](coordination/CODEX_RESPONSE_TO_25_2026-11-24.md) returned the full existing plans and all 77 mappings; [Stage 3](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) answers all 50 questions and reconciles the contracts. The historical snapshots stay historical and this remains the single active R0–R11 roadmap.
 
-**Execution is temporarily documentation-only:** ChatGPT's 25 questions → Codex's 25 answers plus complete existing roadmap and 50 questions → ChatGPT's 50 answers and canonical reconciliation → final Codex resume prompt. [A1 in the ledger](WORK_LEDGER.md) controls that phase. This explicit owner sequencing overrides older instructions to begin R1.1 or keep engineering during a phone wait.
+**On the final owner-relayed activation, Codex reads the full answers and [resume instruction](coordination/ENGINEERING_RESUME_2026-11-24.md), then executes B1:** common header/Options/arrows, unique major-command ownership, removal of Regular More/Create collage/Histogram UI, one-tap Collage and complete dirty/child departure safety. [PRODUCT_SPEC](PRODUCT_SPEC.md#agreed-interaction-contract--stage-3) owns the exact interaction rules. The shared header hides with chrome; selected-tile photo saves do not Apply to parent; all ordinary dirty switches are guarded; source/child/async identity and cancellation are explicit.
 
-This remains the single active roadmap. Codex must supply its complete pre-handoff roadmap as a labeled evidence snapshot for comparison, including all child items. Preserve all 77 inventory families and R0–R11 scope. Stage 3 selects the immediate owner-correction batch and any justified dependency; R1.1 then R1.2 remain required durability work. Historical qualification numbers remain unchanged and do not close the new physical GIF finding.
+B2 measures and corrects the actual GIF Save bottleneck, independently alongside B1 where possible. Missing owner-specific GIF data holds that reproduction/closure only. Then R1.1 → R1.2 → remaining R1, followed by every R2–R11 child below. The [single ledger](WORK_LEDGER.md) owns task/file roles and live execution. No new question cycle, shell rewrite, lost family or repeat audit is required. This Stage 3 change is documentation only; engine work starts after the stated activation.
 
 Updated 2026-11-24. Owner: Lance / Greenezone Software LLC. Engineering workspace: MrSkyrimFan/GZ-Mobile-001.
 
 ## Current direction and authority
 
-Lance supplied the independent PR #26 review (CHANGES REQUIRED), authorized fixing the issues, and requested a complete roadmap for the original professional app vision. The successor onboarding hold is lifted. The completed correction wave supplied the qualified 0.12.10 Test handset build. The latest report above records scoped owner-reported passes and open exceptions. Engineering, tests, branches, PRs and verified merges remain authorized after the current alignment hold; formal workspace locks and public release remain owner decisions.
+Lance supplied the independent PR #26 review (CHANGES REQUIRED), authorized fixing the issues, and requested a complete roadmap for the original professional app vision. The successor onboarding hold is lifted. The completed correction wave supplied the qualified 0.12.10 Test handset build. The latest report above records scoped owner-reported passes and open exceptions. Engineering, tests, branches, PRs and verified merges remain authorized after the final owner-relayed activation and required reads; formal workspace locks and public release remain owner decisions.
 
 **Latest release sequencing:** Play Console is not set up. Lance wants its setup last, after a fully functioning app AND completion of the Greenezone website. Website work is an external dependency; this app task does not authorize modifying it.
 
@@ -22,13 +22,13 @@ Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WO
 
 **Current qualified correction:** [PR #31](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/31), application merge `3ad65c533f7667a136d4fa1838afcc06d3f484da`, closes only R29-01/R29-02 Eraser engineering and the GIF Save performance failure observed during qualification. Candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0` and the merge share tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`. [Candidate run 45480001019](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) and [merged run 45483297512](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512) pass JVM/build/signing and **193/193 per Android API**, with zero failures/errors/skips. [Execution receipt and exact 0.12.10 Test APK](ERASER_REPAIR_VERIFICATION.md).
 
-All original 186 Android case identities and established GIF budgets remain; five Eraser and two cache-equivalence cases extend them. The original red reproduction, separate rotation-harness abort, and candidate 1 GIF speed failure remain in the receipt. Existing layout/style and mode ownership are preserved. Later documentation-only commits do not supersede the qualified application identity. **R1.1 bounded saved-project listing/loading and R1.2 recoverable Regular drafts remain the ordered durability items.** The current task is A1 alignment and agreement on the newly reported corrections. Whole-family completion and commercial release remain open.
+All original 186 Android case identities and established GIF budgets remain; five Eraser and two cache-equivalence cases extend them. The original red reproduction, separate rotation-harness abort, and candidate 1 GIF speed failure remain in the receipt. Existing layout/style and mode ownership are preserved. Later documentation-only commits do not supersede the qualified application identity. **R1.1 bounded saved-project listing/loading and R1.2 recoverable Regular drafts remain the ordered durability items.** A1 decisions are complete; B1 is selected on activation, with measured independent B2 and then the queued durability work. Whole-family completion and commercial release remain open.
 
 ### Prior verified PR #29 checkpoint
 
 R0 is engineering-verified in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Candidate and merged application share tree `47e95c51254ce8e8f97b3883c44dc157ea8452b4`; each passed Verify and 186/186 Android cases on both API29 and API35, with no failures/errors/skips. Version 0.12.9 Test / code 21 was that checkpoint’s qualified phone wave and is now superseded by 0.12.10 Test. Handset acceptance, all formal workspace locks and commercial release remain open.
 
-**Next durability package: R1, starting with R1.1 after the current alignment and agreed owner-correction sequence.** Preserve completed R0 evidence and follow the active ledger. The new phone report supplies a reason to reopen only its affected behavior; do not replay the earlier independent-review intake.
+**Next durability package: R1, starting with R1.1 after B1 and independent B2 work; an owner-specific GIF observation may remain pending without blocking independent durability.** Preserve completed R0 evidence and follow the active ledger. The new phone report supplies a reason to reopen only its affected behavior; do not replay the earlier independent-review intake.
 
 The legacy Pro streaming optimization passes in the recorded CI environments; the earlier 16 MiB hard-cap condition has not been independently requalified. R1/R8 retain explicit low-memory/device-tier measurements. Legacy v4 GIF aspect migration remains R7.
 
@@ -72,9 +72,11 @@ These are dependency-ordered work packages, not dates or completion percentages.
 5. Preserve existing named-save, Pro bounded save, Collage, handoff, GIF performance/fidelity and picker tests. Capture specific red-before and green-after evidence, full candidate and app-merge JVM/API29/API35 results, exact phone APK identity/signature.
 6. Correct overstated evidence wording and retain the legacy v4 GIF aspect limitation as explicit follow-up. Do not silently reinterpret old project framing.
 
-The original four defects passed that engineering exit in PR #29. The separately demonstrated R29-01/R29-02 Eraser follow-up and observed GIF Save failure passed their focused candidate/merge exit in PR #31. Both histories remain credited; neither closes the complete feature families or owner handset acceptance. Follow the selected R1.1 instead of reopening this wave without new evidence.
+The original four defects passed that engineering exit in PR #29. The separately demonstrated R29-01/R29-02 Eraser follow-up and observed GIF Save failure passed their focused candidate/merge exit in PR #31. Both engineering histories remain credited, and unmentioned supplied 0.12.10 checks now have scoped owner-reported pass credit. Full feature families and formal locks remain open. Follow the selected B1/B2 then R1.1/R1.2 ledger sequence; reopen a settled behavior only for the named new report or another specific evidence/dependency reason.
 
 ### R1 — Durable documents, source custody and complete interaction contracts
+
+**Stage 3 contract:** [CQ03/CQ07–CQ17](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq03). R1.1 uses bounded per-project records/lightweight metadata and selected-only IO decode with copy/validate/publish migration; protect twelve near-budget saves and healthy legacy bytes. R1.2 publishes acknowledged atomic generations with bounded deduplicated history, preserving declared logical Undo depth and reporting pending/failed persistence. Restore actual new-process document/source/clean baseline/history/route/object/child state; never auto-Apply a child or auto-confirm a departure. Provider bytes/resources are bounded but arbitrary remote wall time/rollback is not guaranteed; uncertain results retain stages. Portable embedded/link-only bundles and immutable repeated native-parent exchange remain required. A minimal B1 identity/result adapter does not close these families.
 
 Build the smallest needed extensions to existing modules. No application-shell rewrite.
 - Version document schemas and render semantics separately; preserve legacy Regular/Collage/Pro/GIF recipes and backups. Check bounds before allocation/write, reject essential unsupported records recoverably, and migrate copies atomically.
@@ -85,11 +87,13 @@ Build the smallest needed extensions to existing modules. No application-shell r
 - Upgrade repeated saved Regular→Pro→Regular→Pro exchange to immutable revision-linked masters with alpha/profile/precision when available. Retain both native parents. Existing Yes/No live transfer remains intact.
 - Portable native bundles with declared source embedding/link-only choice, checksums and safe import; upgrade tests use same-ID fixtures/installs rather than claiming side-by-side packages test migration.
 
-Include the new owner-reported dirty-exit failures in the R1 interaction contracts: consistent Save/Discard/Cancel, failed-save retention, transient Back precedence and independent Collage child transactions. Agree the exact route/state matrix during A1 before implementation.
+Include the new owner-reported dirty-exit failures in the R1 interaction contracts: consistent Save/Discard/Cancel, failed-save retention, transient Back precedence and independent Collage child transactions. Apply the completed Stage 3 route/state matrix in PRODUCT_SPEC; A1 is not another pending design gate.
 
 Exit: cross-workspace cold-reopen, process-loss, repeated handoff and provider-failure scenarios preserve all unaffected documents and original hashes. Only platform-specific observations genuinely requiring a handset are handed to Lance.
 
 ### R2 — Pro document and compositing foundation
+
+**Stage 3 contract:** [CQ10/CQ23–CQ24](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq23). Default new groups to isolated, apply group opacity/mask once, and explicitly version pass-through contribution semantics and stable clipping-base behavior. Preserve legacy flat rendering. Keep 12-layer/4096-edge caps until aggregate physical-tier/resource/reference evidence supports raising them, including the recorded 16 MiB read condition. Add a deliberate valid zero-layer canvas/document representation with size/background/alpha/save/reopen/export qualification; B1's protected unsaveable setup is an interim limitation, not final canvas completion.
 
 - Stable layer tree and source references; group/ungroup, isolated/pass-through groups, clipping, named layers, locks, multiselect, align/distribute, ordering and group masks.
 - Explicit layer/canvas/source/viewport transforms, alpha conventions, blend working spaces and effect order; legacy rendering remains compatible.
@@ -99,6 +103,8 @@ Exit: cross-workspace cold-reopen, process-loss, repeated handoff and provider-f
 Exit example: grouped children, clipped masked effect and independent cutout on transparency; correct group opacity and overlap; rearrange/Undo/save/process-restart/reopen/export with independently checked alpha and pixels.
 
 ### R3 — Complete Pro selection, paint, retouch and shape workflows
+
+**Stage 3 contract:** [CQ27–CQ30](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq27). Distinguish stable content/mask/selection/channel targets and cancel invalidated drafts. Freeze donor revision/sampling policy; explicit resampling is an undoable edit. Brush replay uses deterministic source-space scheduling and declared finger/stylus behavior. Native fidelity precedes named OpenRaster/PSD record-level subsets and visible loss reports; actions preflight and commit atomically. First subsets do not close all P11 scope or authorize silent flattening.
 
 - Selections: rectangle/ellipse/freehand/polygon, contiguous/global color range and luminance, add/subtract/intersect, grow/shrink/invert/feather, saved selections/channels, linked/unlinked layer/group/filter masks and grayscale mask painting.
 - Precision tools: nonuniform scale, skew/perspective/pivots, numeric entry, guides/rulers/snapping, cubic paths, shape joins/caps/dashes/booleans, gradients and fills. No Pro Text creation.
@@ -110,6 +116,8 @@ Exit example: grouped children, clipped masked effect and independent cutout on 
 Exit: every command produces the intended live image, targets the correct object, survives Undo/Redo/reopen, and independently exports correctly. Preserve old TEXT records without exposing new authoring.
 
 ### R4 — Offline Subject & Background and reshaping
+
+**Stage 3 contract:** [CQ25–CQ26](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq25). Use difficult-edge/holes/hair/fur/glass/similar-color fixtures, editable manual corrections and independently decoded alpha. Object removal preserves pixels outside the declared processing support. Deformation, freeze masks, source coordinates and texture/shading are versioned/replayable against immutable sources. No runtime models or dependency integration without concrete rights/resource evidence.
 
 Implement in Pro as one understandable family:
 1. Manual/assisted subject trace and keep/remove marks; conventional segmentation with bounded cancellation and deterministic fallback.
@@ -123,6 +131,8 @@ Exit: isolate/refine/move a complex subject onto a different background, remove 
 
 ### R5 — Regular professional photographic processing
 
+**Stage 3 contract:** [CQ31–CQ35](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq31). First DNG/Bayer/linear, managed SDR and interchange variants are explicit implementation lanes, not a reduction of RAW/HDR/color scope. Essential unsupported records fail recoverably; embedded previews are labeled. Store working/profile/render semantics, qualify real float/16-bit samples/tags and retain legacy appearance. Separate HDR import/edit/display/tone-map/output claims. Optics/detail use numerical plus real-image evidence. Multi-image merges retain sources, alignment and ghost/seam/focus corrections through task-specific controls without general Regular Masks or Histogram UI.
+
 Do not introduce a Masks authoring UI; old saved masks remain compatible.
 - Finish numerical behavior and full workflow coverage for exposure/tone, WB/color, HSL, curves, grading, Looks/custom presets, numerical clipping/histogram processing and before/after. The latest owner instruction removes the visible Histogram entry from Regular; retain needed processing/diagnostic evidence without reintroducing that UI under another menu.
 - Define linear/encoded sample meaning, float reference processing, color/alpha transforms and legacy appearance adapter before precision claims.
@@ -135,6 +145,8 @@ Exit: synthetic RAW samples, chart/neutral/ramps/optical grids and rights-cleare
 
 ### R6 — Regular organization, batch and complete everyday creativity
 
+**Stage 3 contract:** [CQ36–CQ39](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq36). Distinguish source/catalog/copy/revision IDs; byte-confirm duplicate candidates and selectively sync only compatible settings. Batch tracks each staged/published/uncertain output and never blindly repeats ambiguous writes. Text/font/decoration custody is independent and versioned. Count at least 500 actual usable original/licensed stickers with complete manifests and visual inspection; preserve retired/custom referenced assets. Concepts, format copies and trivial duplicate transforms do not satisfy the count.
+
 - Transactional local catalog: folders versus collections, ratings/flags/favorites/labels, tags/EXIF/IPTC/XMP, rules-based search/smart collections, duplicate candidates with byte confirmation, stacks and virtual copies.
 - Non-destructive sidecars and backup/restore, targeted relink, source/copy identity, selective settings copy/paste/sync with incompatible source-anchored edits excluded explicitly.
 - Durable batch jobs: frozen per-item revision/recipe/destination, multiple outputs, naming, profile/metadata choices, per-item progress/receipts, cancellation and idempotent interruption recovery.
@@ -144,6 +156,8 @@ Exit: synthetic RAW samples, chart/neutral/ramps/optical grids and rights-cleare
 Exit: 100-file catalog/recovery exercise and interrupted batch do not duplicate completed outputs or overwrite originals. Text/draw/shape/sticker/privacy objects remain independent through crop, reopen and export.
 
 ### R7 — Complete GIF and Collage scope
+
+**Stage 3 contract:** [CQ18–CQ22](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq18) and [CQ40–CQ41](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq40). F03 closes on relevant workload/fidelity/phone evidence, not the small fixture. Keep guarded truthful foreground jobs first; durable background job ownership remains required later. Timeline identities/durations, single-endpoint ping-pong and cumulative tick rounding are explicit; palette/dither choices and a preview decoded from actual staged bytes are later features, not speed shortcuts. Legacy framing uses an explicitly adopted upgraded copy. Collage remains seven layouts/1–20 tiles; child Apply, independent photo saves, relink versus reset-on-Replace and late-result ownership follow the canonical interaction contract.
 
 GIF:
 - Broaden real media and lifecycle coverage: VFR/B-frames/rotations/non-square pixels/disposal/transparency/finite loops/HDR-to-SDR policy, source grant loss and relink.
@@ -160,11 +174,15 @@ Exit: declared source/format matrix, full editable-project recovery and external
 
 ### R8 — Pre-Video acceptance and formal owner locks
 
+**Stage 3 contract:** [CQ42–CQ44](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq42). Shared-shell targets are 48dp touch controls, 320dp narrow layouts and 200% fonts with real accessible workflows. Provisional constrained/middle/high physical samples are test planning, not owner-approved shipping exclusions. Name actual models/heaps/media/providers and measured budgets; retain specific outstanding evidence. Four separate finite acceptance dossiers credit prior passes and require explicit owner locks, with only new or named regression-risk phone tasks.
+
 Close every required pre-Video inventory row or obtain a specific owner scope decision; no silent omission. Complete representative phone/OEM/codec/memory tiers, accessibility, novice and expert tasks, prolonged thermal/storage/provider tests and repeated editing/reopen/export.
 
-Give Lance one coherent verified candidate and focused handset script. Repair his findings. Record his formal acceptance of Regular, Collage, Pro and GIF separately. CI success alone cannot open Video. Continue independent authorized pre-Video work while only a genuinely device-specific observation is pending.
+Give Lance one coherent verified candidate and focused handset script. Repair his findings. Record his formal acceptance of Regular, Collage, Pro and GIF separately. CI success alone cannot open Video. After the final owner-relayed activation and required reads, continue independent authorized pre-Video work while only a genuinely device-specific observation is pending; record its affected closure explicitly.
 
 ### R9 — Separate professional Video workspace, after R8
+
+**Stage 3 future decisions:** [CQ45–CQ47](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq45). Stable IDs/rational source and sequence clocks/half-open intervals/proxy mapping precede precision tools. A first real H.264/AAC SDR lane and proposed 48kHz float mono/stereo mixing are qualified implementation slices, never closure of the full scope below. Verify actual slideshow/audio outputs and every affected redaction frame/stream/thumbnail. Four owner locks still gate all Video implementation.
 
 1. Versioned video project, source/track metadata, stable clip IDs, timeline/timebase, playback/seek, proxies, transactional edits, trim and real H.264/AAC MP4 export.
 2. Assembly: split/join/reorder/duplicate, source/sequence In/Out, append/insert/overwrite, ripple/lift/extract/roll/slip/slide, snapping/markers/frame nudge, linked/unlinked sound, J/L cuts, track targeting/locks/sync.
@@ -179,11 +197,15 @@ Exit: multitrack project with precision edits, user audio, transitions, captions
 
 ### R10 — Full editing qualification, then final customer onboarding
 
+**Stage 3 contract:** [CQ48](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq48). A shared glossary, complete English/Spanish strings/help/accessibility and versioned local acknowledgements follow all-five editing acceptance. Decline/cancel preserves projects; final terms, reacceptance and access consequences require owner decisions with current research at that phase. This does not defer current workspace Help consolidation/corrected instructions in B1.
+
 First qualify all five workspaces and shared interactions, formats, migration, accessibility and performance on the final editing build. After owner editing acceptance, implement complete English/Spanish localization, welcome/language selection, contextual help, final privacy/terms/license documents, acceptance/decline and local access flow as specified. Do not invent an in-app purchase/unlock product.
 
 Re-run editing plus fresh-install/upgrade/offline/decline/returning-user flows in both languages, large fonts and TalkBack. Third-party license diligence is continuous during engineering, separate from the deferred consumer legal screens.
 
 ### R11 — Website dependency, Play Console and release
+
+**Stage 3 contract:** [CQ49](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq49). Pin exact release source/artifacts/signing/installed splits, shipped rights/notices and same-package upgrade evidence. Owner controls keys outside the repo. Verify the actual account's current policies/testing when this gate opens; no assumed organization exemption. Website completion, final access/support/territory decisions and exact publication approval remain explicit; recovery plans cannot assume safe schema downgrade.
 
 This stage waits for the fully functioning qualified app AND Lance's Greenezone website completion.
 - Owner establishes the appropriate verified Play Console account, organization identity/payment profile and contacts; determine applicable testing requirements from that actual account. No account creation now.
@@ -215,7 +237,7 @@ Performance goals from older blueprints conflict in places and are **provisional
 6. UI source presence, a helper probe, fixture success, handset success and owner acceptance are distinct statuses. Do not call whole families complete from a button, compile or narrow synthetic test.
 7. Keep a single active ledger and this roadmap. Update status/evidence in place; retain earlier runs as history. Do not create another competing master plan or let handoffs revive stale commands.
 8. If work drifts, identify the mismatch against the selected item, stop that extra change, reconcile the ledger, and continue the correct next action. Do not restart intake or replay completed repairs.
-9. Missing product intent prompts a specific question. Missing technical detail is investigated by the engineer. The current owner-requested A1 exchange pauses application engineering until its final resume instruction; after that, continue independent agreed work while a separate device observation is pending. No guessed loss of scope, new public release, or premature Video/onboarding work.
+9. Missing product intent prompts a specific question. Missing technical detail is investigated by the engineer. A1 answers/contracts are complete; engineering activates when Lance relays the final prompt and Codex reads the committed answers/resume instruction. After activation, continue independent agreed work while a separate device observation is pending. No guessed loss of scope, new public release, or premature Video/onboarding work.
 10. Every handoff states exact completed behavior, evidence, remaining work and next action. An enabling diagnostic is not the delivered repair. No numeric completion percentage without a defined denominator.
 11. Keep original intake inputs until the work they govern is completed and accepted; do not archive a full blueprint after one repair wave.
 12. Public launch and formal locks remain explicit owner decisions. Routine verified engineering does not need repeated permission.
@@ -224,6 +246,6 @@ Performance goals from older blueprints conflict in places and are **provisional
 
 Reconciled sources: original full blueprint revision 2; revision3.1 master sections 4–11 and feature/sticker audits; revision4 owner overrides; Subject & Background addendum; full 201-message source transcript; repository PRODUCT_SPEC/UNIFIED_PRODUCT_SCOPE_09/PROFESSIONAL_ENGINEERING_ROADMAP and field guide; prior Audit 2 and the supplied independent PR #26 review. Private screenshots/original archives remain in the supplemental intake and are not published here.
 
-Settled overrides: Regular has no new Masks authoring; Pro has no Text authoring; actual edited Regular→Pro Yes/No prompt and retained Regular draft; stickers deferred during repairs; Video waits for four formal locks; consumer onboarding follows all editing; Play Console setup follows working app and website. The latest owner report additionally requires common chrome/Options/Undo-Redo, no duplicate major commands, no Regular More/Create collage/Histogram UI, and the three-stage question exchange before engineering resumes. Keep the current decisions in the canonical spec and ledger.
+Settled overrides: Regular has no new Masks authoring; Pro has no Text authoring; actual edited Regular→Pro Yes/No prompt and retained Regular draft; stickers deferred during repairs; Video waits for four formal locks; consumer onboarding follows all editing; Play Console setup follows working app and website. The latest owner report additionally requires common chrome/Options/Undo-Redo, no duplicate major commands, no Regular More/Create collage/Histogram UI, and the completed three-stage question exchange with owner-relayed activation before engineering resumes. Keep the current decisions in the canonical spec and ledger.
 
 Still requiring a later named decision: exact shipping device/performance/RAW-camera/interchange tiers; specialized CMYK/spot/prepress, photo books, tethering/plugins or vendor ecosystem support if desired; final distribution territories/support/legal choices. These are not silent additions or omissions from the enumerated core. Record scope changes explicitly with Lance.
