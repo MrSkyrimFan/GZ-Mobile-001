@@ -6,7 +6,26 @@
 
 The qualified application baseline is [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) merge `9a58c72cdcf379885150b55b498a2f0ef326dee1`, tree `2880c62d0ee69c2ac44ef61e44abcd3bc73fec60`. The [test-only checkpoint](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/14ef1471e97f2d0bfbb826eca84d87757763e10e) starts twelve-project measurement and Pro RV4 reproduction. The Regular tests capture cold preference-cache selected-first and full-list reads, warm list with a prior list retained, selected opens, actual XML bytes and raw cache characters, managed memory and timestamps. Preserve malformed and unavailable outcomes while collecting every independent sample. The Pro tests exercise unreadable, changed, recreated and obstructed delete targets through the actual picker.
 
-Pin measured memory and latency exits before the Regular migration. The metadata list should decode zero recipes and selected Open should decode exactly one on IO. Preserve IDs, versions, names/order, twelve slots, URIs, healthy bytes and stale-target protection through interrupted record/index publication and deletion recovery. Include RV4 as a bounded Pro adapter. RV5 stays in R1 export recovery. The durable draft and true process-loss work follows under R1.2.
+[Test-only run 45709116304](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45709116304) exercised the existing store. Both APIs read a real preference XML containing twelve distinct recipes of 1,989,991–1,989,993 characters. Cold means a fresh preference name in the same PID with a warm OS page cache. These times exclude Compose and source-image decode.
+
+| Legacy measurement | API29 | API35 |
+| --- | ---: | ---: |
+| Raw XML bytes | 23,881,063 | 23,881,171 |
+| Cached raw characters after either cold path | 23,880,576 | 23,880,684 |
+| Cold list / observed managed heap increase | 2,054 ms / 101.2 MiB | 3,193 ms / 83.1 MiB |
+| Warm list range, previous result still live | 1,607–1,956 ms | 2,755–2,817 ms |
+| Highest sampled managed heap in warm listing | 160.4 MiB | 116.5 MiB |
+| Cold selected-first / observed managed heap increase | 361 ms / 78.4 MiB | 602 ms / 62.4 MiB |
+| Warm selected read range | 136–230 ms | 228–245 ms |
+
+- [gz-editor-pro-emulator-receipts 15068250787](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45709116304/artifacts/15068250787) · `sha256:df3b52b52224021b231db712c32c3a8d21f705af47f2d7a038f86e4e2f573078`
+- [gz-editor-pro-emulator-api29-receipts 15066493908](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45709116304/artifacts/15066493908) · `sha256:2f6a3efb90b2e99469ff235d6b5de54717a984b6e8d2e88cf4bc478b56778c98`
+
+Both APIs completed the measurement and the malformed/unavailable lane. API35 ran 273 unique cases and confirmed all six RV4 cases cannot reach the required unreadable-record delete confirmation on the old code. API29 stopped at case 255 after the measurement. The inherited ProToolOwnershipTest log shows wrong-thread Compose view removal before a cleanup crash. Move only its harness to the existing v2 scheduler and retain every test assertion. No API29 RV4 runtime credit is claimed.
+
+**Pinned numerical exits:** use the same twelve-recipe shape and named heaps (256 MiB/API29, 192 MiB/API35). After a verified cutover, first read of the existing index and three warm lists finish **within 150 ms each**, with **at most 8 MiB** sampled managed increase per list, **zero recipe decodes** and zero materialization of the legacy preference map. A ready selected Open uses **one decode**, with warm median **at most 300 ms**, every sample **at most 650 ms**, and **at most 64 MiB** sampled managed increase per Open. The initial one-time migration runs off the UI thread within **12 s** and at most **112 MiB** sampled managed increase, with only one record materialized for validation at a time. Record all samples, bounds and results on both lanes.
+
+**Implementation contract.** The metadata list should decode zero recipes and selected Open should decode exactly one on IO. Preserve IDs, versions, names/order, twelve slots, URIs, healthy bytes and stale-target protection through interrupted record/index publication and deletion recovery. Include RV4 as a bounded Pro adapter. RV5 stays in R1 export recovery. The durable draft and true process-loss work follows under R1.2.
 
 ## Completed B1 follow-up from independent review
 
