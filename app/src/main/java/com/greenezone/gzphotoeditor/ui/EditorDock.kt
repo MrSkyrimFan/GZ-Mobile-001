@@ -132,7 +132,10 @@ fun EditorDock(
     onEditText: () -> Unit = {},
     cropImageWidth: Int = 1,
     cropImageHeight: Int = 1,
-    onHistogram: (() -> Unit)? = null
+    onHistogram: (() -> Unit)? = null,
+    onCommitAndSelect: (EditDocument, CreativeToolState) -> Unit = { next, selected ->
+        onCommit(next); onCreativeTool(selected)
+    }
 ) {
     Column(
         modifier = Modifier
@@ -168,14 +171,14 @@ fun EditorDock(
             )
             EditTab.TEXT -> TextDeck(
                 document, creativeTool, onCreativeTool, !busy, onNewText, onEditText,
-                onCommit, onSlide, onSlideFinished
+                onCommit, onSlide, onSlideFinished, onCommitAndSelect
             )
             EditTab.DRAW -> DrawDeck(
                 document, creativeTool, onCreativeTool, !busy, onCommit
             )
             EditTab.SHAPES -> ShapesDeck(
                 document, creativeTool, onCreativeTool, !busy,
-                onCommit, onSlide, onSlideFinished
+                onCommit, onSlide, onSlideFinished, onCommitAndSelect
             )
             EditTab.CROP -> CropDeck(
                 document, !busy, onCommit, onSlide, onSlideFinished,

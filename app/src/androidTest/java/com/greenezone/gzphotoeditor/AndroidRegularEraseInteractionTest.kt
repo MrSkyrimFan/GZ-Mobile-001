@@ -45,6 +45,7 @@ class AndroidRegularEraseInteractionTest {
     private val names = mutableListOf<String>()
     private var destination: Uri? = null
     private var observedCollage = CollageDocument()
+    private var activePhotoName: String? = null
     private val limitNotice = "Erasing would exceed the drawing limit. Your drawing is unchanged."
 
     private fun media(label: String): Uri = requireNotNull(resolver.insert(
@@ -125,7 +126,7 @@ class AndroidRegularEraseInteractionTest {
                 waitForCollage()
                 editSelectedTile()
             } else {
-                rule.onNodeWithText("Open media").performClick()
+                command("New photo…")
                 waitForPhoto()
                 reopenPhoto(projectName)
             }
@@ -164,6 +165,11 @@ class AndroidRegularEraseInteractionTest {
         rule.onNodeWithTag("photo-tools").assertIsDisplayed()
     }
 
+    private fun command(label: String) {
+        rule.onNodeWithText("Options", substring = false).performClick()
+        rule.onNodeWithText(label, substring = false).performClick()
+    }
+
     private fun tab(name: String) {
         ensureToolsVisible()
         rule.onNodeWithTag("photo-tools").performScrollToNode(hasText(name))
@@ -192,30 +198,35 @@ class AndroidRegularEraseInteractionTest {
     }
 
     private fun savePhoto(name: String): SavedProject {
-        tab("More")
-        rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Save project"))
-        rule.onNodeWithText("Save project", substring = false).performClick()
-        rule.onNode(hasSetTextAction()).performTextInput(name)
-        rule.onNodeWithText("Save", substring = false).performClick()
-        rule.waitUntil(15_000) {
-            rule.onAllNodesWithText("Save editable project").fetchSemanticsNodes().isEmpty()
+        ensureToolsVisible()
+        if (activePhotoName == name) {
+            command("Save project")
+        } else {
+            command("Save project as…")
+            rule.onNode(hasSetTextAction()).performTextInput(name)
+            rule.onNodeWithText("Save", substring = false).performClick()
         }
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Save editable project").fetchSemanticsNodes().isEmpty() &&
+                rule.onAllNodesWithText("Processing…", substring = false).fetchSemanticsNodes().isEmpty()
+        }
+        activePhotoName = name
         return ProjectStore.load(context).single { it.name == name }
     }
 
     private fun reopenPhoto(name: String) {
-        tab("More")
-        rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Open projects"))
-        rule.onNodeWithText("Open projects", substring = false).performClick()
+        ensureToolsVisible()
+        command("Open project…")
         rule.onNodeWithText(name, substring = false).performClick()
         rule.onNodeWithText("Open project", substring = false).performClick()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty()
         }
+        activePhotoName = name
     }
 
     private fun exportPng(collage: Boolean = false, inspect: (Bitmap) -> Unit) {
-        rule.onNodeWithText("Export", substring = false).performClick()
+        command("Export image…")
         if (rule.onAllNodesWithText("JPEG · JPG", substring = true).fetchSemanticsNodes().isNotEmpty()) {
             rule.onNodeWithText("JPEG · JPG", substring = true).performClick()
             rule.onNodeWithText("PNG · Lossless", substring = false).performClick()
@@ -301,8 +312,8 @@ class AndroidRegularEraseInteractionTest {
             val noticeShown = rule.onAllNodesWithText(limitNotice).fetchSemanticsNodes().isNotEmpty()
             ensureToolsVisible()
             rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
-            rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
-            rule.onNodeWithText("Keep editing", substring = false).performClick()
+            rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
+            rule.onNodeWithText("Cancel", substring = false).performClick()
             val saved = savePhoto(name)
             assertEquals("Later overflow retained a partial erase", original.creative.strokes,
                 saved.document.creative.strokes)
@@ -413,17 +424,14 @@ class AndroidRegularEraseInteractionTest {
     private fun saveAndReopenCollage(expected: CollageDocument) {
         val name = "Erase parent " + System.nanoTime().toString().takeLast(10)
         names += name
-        rule.onNodeWithText("Photos", substring = false).performClick()
-        rule.onNodeWithTag("collage-tile-actions").performScrollToNode(hasText("Save project"))
-        rule.onNodeWithText("Save project", substring = false).performClick()
+        command("Save project as…")
         rule.onNode(hasSetTextAction()).performTextInput(name)
         rule.onNodeWithText("Save", substring = false).performClick()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Collage project saved").fetchSemanticsNodes().isNotEmpty()
         }
         assertEquals(expected, CollageStore.load(context, name))
-        rule.onNodeWithTag("collage-tile-actions").performScrollToNode(hasText("Saved collages"))
-        rule.onNodeWithText("Saved collages", substring = false).performClick()
+        command("Open project…")
         rule.onNodeWithText(name, substring = false).performClick()
         rule.onNodeWithText("Open", substring = false).performClick()
         rule.waitUntil(15_000) {
@@ -451,7 +459,7 @@ class AndroidRegularEraseInteractionTest {
                     originalParent, observedCollage)
             }
             assertTrue("Tile capacity refusal needs visible feedback", noticeShown)
-            rule.onNodeWithText("↶", substring = false).assertIsNotEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
             saveAndReopenCollage(originalParent)
             exportPng(collage = true) { bitmap ->
                 assertEquals(1600, bitmap.width)
@@ -488,9 +496,9 @@ class AndroidRegularEraseInteractionTest {
         eraseLongLine(cancelGesture = true)
         finishTile()
         rule.runOnIdle { assertEquals("Tile cancellation changed the parent", healthy, observedCollage) }
-        rule.onNodeWithText("↶", substring = false).performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.runOnIdle { assertEquals("Canceled tile gesture inserted parent history", originalParent, observedCollage) }
-        rule.onNodeWithText("↷", substring = false).performClick()
+        rule.onNodeWithContentDescription("Redo").performClick()
         rule.runOnIdle { assertEquals(healthy, observedCollage) }
 
         editSelectedTile()
@@ -501,9 +509,9 @@ class AndroidRegularEraseInteractionTest {
         assertEquals(healthy.photos[1], erased.photos[1])
         assertEquals("erase-selected", erased.photos[0].id)
         assertNotEquals(healthy.photos[0].edits, erased.photos[0].edits)
-        rule.onNodeWithText("↶", substring = false).performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.runOnIdle { assertEquals(healthy, observedCollage) }
-        rule.onNodeWithText("↷", substring = false).performClick()
+        rule.onNodeWithContentDescription("Redo").performClick()
         rule.runOnIdle { assertEquals(erased, observedCollage) }
 
         saveAndReopenCollage(erased)

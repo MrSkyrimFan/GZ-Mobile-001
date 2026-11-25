@@ -45,6 +45,11 @@ class AndroidRegularSaveBudgetTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val resolver get() = context.contentResolver
 
+    private fun command(label: String) {
+        rule.onNodeWithText("Options", substring = false).performClick()
+        rule.onNodeWithText(label, substring = false).performClick()
+    }
+
     // Both float strings are long, but their alternating distance also exceeds
     // Regular Draw's real .000008f squared-distance filter.
     private fun points(): List<BrushPoint> = List(500) { index ->
@@ -194,12 +199,9 @@ class AndroidRegularSaveBudgetTest {
                     }
                 }
             }
-            rule.onNodeWithText("Open media").performClick()
+            command("New photo…")
             waitForPhoto()
-            rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("More"))
-            rule.onNodeWithText("More").performClick()
-            rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Open projects"))
-            rule.onNodeWithText("Open projects").performClick()
+            command("Open project…")
             rule.onNodeWithText(name).performClick()
             rule.onNodeWithText("Open project").performClick()
             rule.waitUntil(20_000) {
@@ -215,16 +217,16 @@ class AndroidRegularSaveBudgetTest {
 
             // Real Back asks to save, then a failed Save must not close the photo.
             rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
-            rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
-            rule.onNodeWithText("Save project").performClick()
+            rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
+            rule.onNodeWithText("Save", substring = false).performClick()
             rejectSaveAndKeepEditing(name, healthy)
 
-            // The same rejection must not accept the pending replacement photo.
-            rule.onNodeWithText("Open media").performClick()
-            rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
-            rule.onNodeWithText("Save project").performClick()
+            // The departure guard now runs before the picker. A failed Save must not launch it.
+            command("New photo…")
+            rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
+            rule.onNodeWithText("Save", substring = false).performClick()
             rejectSaveAndKeepEditing(name, healthy)
-            assertEquals(2, opens)
+            assertEquals("Failed Save must not launch the replacement picker", 1, opens)
             rule.onNodeWithText("Before").performClick()
             val image = rule.onNodeWithContentDescription(
                 "Photo editing canvas. Tap to hide or show tools."
@@ -238,8 +240,8 @@ class AndroidRegularSaveBudgetTest {
 
             // Dirty status is still present after both failed attempts.
             rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
-            rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
-            rule.onNodeWithText("Keep editing").performClick()
+            rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
+            rule.onNodeWithText("Cancel").performClick()
             assertEquals(healthy, stored(name))
             // Release the live editor and its decoded stroke graph before
             // independently reopening the retained project on the small API 29 heap.
@@ -257,9 +259,11 @@ class AndroidRegularSaveBudgetTest {
     }
 
     private fun rejectSaveAndKeepEditing(name: String, healthy: String) {
-        rule.onNode(hasSetTextAction()).performTextInput(name)
-        rule.onNodeWithText("Save", substring = false).performClick()
-        rule.onNodeWithText("Save editable project").assertIsDisplayed()
+        rule.waitUntil(20_000) {
+            rule.onAllNodesWithText("Project was not saved").fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithText("Project was not saved").assertIsDisplayed()
+        rule.onAllNodes(hasSetTextAction()).assertCountEquals(0)
         rule.onNodeWithText("Could not save project", substring = true).assertIsDisplayed()
         assertEquals(healthy, stored(name))
         rule.onNodeWithText("Cancel").performClick()

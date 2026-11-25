@@ -17,27 +17,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -51,6 +37,7 @@ import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.editor.ExportWorkspace
 import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
+import com.greenezone.gzphotoeditor.ui.PhotoHistogramDialog
 import com.greenezone.gzphotoeditor.editor.TextOverlay
 import com.greenezone.gzphotoeditor.editor.CreativeDocument
 import com.greenezone.gzphotoeditor.editor.CreativeRaster
@@ -69,6 +56,24 @@ import java.util.Locale
 @RunWith(AndroidJUnit4::class)
 class AndroidRegularToolsTest {
     @get:Rule val rule = createComposeRule()
+
+    private data class HistogramPreview(
+        val image: Bitmap, val showingBefore: Boolean, val exposure: Float, val generation: Int
+    )
+    private val histogramPreview = mutableStateOf<HistogramPreview?>(null)
+    private val histogramFrames = mutableListOf<Bitmap>()
+
+    private fun command(label: String) {
+        rule.onNodeWithText("Options", substring = false).performClick()
+        rule.onNodeWithText(label, substring = false).performClick()
+    }
+
+    private fun waitForNativeSave() {
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Save editable project").fetchSemanticsNodes().isEmpty() &&
+                rule.onAllNodesWithText("Processing…", substring = false).fetchSemanticsNodes().isEmpty()
+        }
+    }
 
     private fun withRegularPhoto(
         destination: Uri? = null,
@@ -117,10 +122,16 @@ class AndroidRegularToolsTest {
                             },
                             onDoneCollagePhoto = onTileDone
                         )
+                        // The removed production entry stays absent. This test-only host
+                        // measures pixels captured from the actual Regular canvas.
+                        histogramPreview.value?.let { preview ->
+                            PhotoHistogramDialog(preview.image, preview.showingBefore,
+                                preview.generation, preview.exposure) { histogramPreview.value = null }
+                        }
                     }
                 }
             }
-            if (tileEdits == null) rule.onNodeWithText("Open media").performClick()
+            if (tileEdits == null) command("New photo…")
             rule.waitUntil(15_000) { rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty() }
             if (removeSourceAfterOpen) {
                 assertEquals(1, resolver.delete(uri, null, null))
@@ -128,6 +139,12 @@ class AndroidRegularToolsTest {
             }
             test(uri)
         } finally {
+            if (histogramPreview.value != null) {
+                rule.runOnIdle { histogramPreview.value = null }
+                rule.waitForIdle()
+            }
+            histogramFrames.forEach { it.recycle() }
+            histogramFrames.clear()
             if (!removed) resolver.delete(uri, null, null)
         }
     }
@@ -196,11 +213,66 @@ class AndroidRegularToolsTest {
     }
 
     @Test fun regularHistogramFollowsExposureAndBeforeView() = withRegularPhoto {
-        fun openHistogram() {
-            rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("More"))
-            rule.onNodeWithText("More").performClick()
-            rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Histogram"))
-            rule.onNodeWithText("Histogram").performClick()
+        val canvas = rule.onNodeWithContentDescription(
+            "Photo editing canvas. Tap to hide or show tools."
+        )
+        val tools = rule.onNodeWithTag("photo-tools")
+        val more = runCatching { tools.performScrollToNode(hasText("More")) }
+        assertTrue("Regular still exposes More", more.exceptionOrNull() is AssertionError)
+        rule.onNodeWithText("Options", substring = false).performClick()
+        rule.onAllNodesWithText("Histogram", substring = false).assertCountEquals(0)
+        rule.onNodeWithText("Help", substring = false).performClick()
+        rule.onNodeWithText("Close", substring = false).performClick()
+
+        fun openHistogram(expectedWhite: Boolean) {
+            val showingBefore = rule.onAllNodesWithText("Edited", substring = false)
+                .fetchSemanticsNodes().isNotEmpty()
+            val exposureNode = rule.onAllNodesWithContentDescription("Adjust Exposure")
+                .fetchSemanticsNodes().singleOrNull()
+            val exposure = if (exposureNode != null &&
+                SemanticsProperties.ProgressBarRangeInfo in exposureNode.config)
+                exposureNode.config[SemanticsProperties.ProgressBarRangeInfo].current else 0f
+            canvas.performClick()
+            rule.onNodeWithTag("photo-tools").assertDoesNotExist()
+            var ready: Bitmap? = null
+            rule.waitUntil(15_000) {
+                val captured = canvas.captureToImage().asAndroidBitmap()
+                try {
+                    val side = minOf(captured.width, captured.height).toFloat()
+                    val left = (captured.width - side) / 2f
+                    val top = (captured.height - side) / 2f
+                    val probe = captured.getPixel((left + side * .75f).toInt(), (top + side * .5f).toInt())
+                    if ((Color.red(probe) >= 250) != expectedWhite) false else {
+                        // Read equal-area interior halves of the actual displayed image.
+                        // Letterboxing, hidden chrome and the scaled center seam are not
+                        // image-clipping evidence. Every measured color comes from the
+                        // captured Regular preview; no recipe is re-rendered by this harness.
+                        val panelWidth = (side / 4f).toInt().coerceAtLeast(1)
+                        val panelHeight = (side / 2f).toInt().coerceAtLeast(1)
+                        val imageTop = (top + side * .25f).toInt()
+                        val leftPanel = (left + side * .125f).toInt()
+                        val rightPanel = (left + side * .625f).toInt()
+                        val width = panelWidth * 2
+                        val pixels = IntArray(width * panelHeight) { index ->
+                            val column = index % width
+                            val x = (if (column < panelWidth) leftPanel else rightPanel) + column % panelWidth
+                            captured.getPixel(x, imageTop + index / width)
+                        }
+                        ready = Bitmap.createBitmap(pixels, width, panelHeight, Bitmap.Config.ARGB_8888)
+                        true
+                    }
+                } finally { captured.recycle() }
+            }
+            val preview = requireNotNull(ready)
+            histogramFrames += preview
+            rule.runOnIdle {
+                histogramPreview.value = HistogramPreview(preview, showingBefore, exposure, histogramFrames.size)
+            }
+        }
+        fun closeHistogram() {
+            rule.onNodeWithText("Close").performClick()
+            canvas.performClick()
+            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
         }
         fun expectClipping(white: Double) {
             val label = String.format(Locale.getDefault(), "Black %.1f%%  ·  White %.1f%%", 50.0, white)
@@ -218,28 +290,28 @@ class AndroidRegularToolsTest {
             rule.onNodeWithTag("photo-histogram-clipping", useUnmergedTree = true)
                 .performScrollTo().assertIsDisplayed()
         }
-        openHistogram()
+        openHistogram(expectedWhite = true)
         expectClipping(50.0)
         rule.onNodeWithContentDescription("RGB photo histogram").assertIsDisplayed()
         rule.onNodeWithText("Luminance").performClick()
         rule.onNodeWithContentDescription("Luminance photo histogram").assertIsDisplayed()
-        rule.onNodeWithText("Close").performClick()
+        closeHistogram()
 
         rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Light"))
         rule.onNodeWithText("Light").performClick()
         rule.onNodeWithContentDescription("Adjust Exposure").performTouchInput {
             swipe(center, Offset(width * .18f, center.y), 350)
         }
-        openHistogram()
+        openHistogram(expectedWhite = false)
         rule.onNodeWithText("Edited preview").assertIsDisplayed()
         expectClipping(0.0)
-        rule.onNodeWithText("Close").performClick()
+        closeHistogram()
 
         rule.onNodeWithText("Before").performClick()
-        openHistogram()
+        openHistogram(expectedWhite = true)
         rule.onNodeWithText("Before preview").assertIsDisplayed()
         expectClipping(50.0)
-        rule.onNodeWithText("Close").performClick()
+        closeHistogram()
     }
 
     @Test fun regularOmitsMaskAuthoringAndPreservesOldProjectAppearanceAndRecipe() {
@@ -268,11 +340,7 @@ class AndroidRegularToolsTest {
                 seedLegacyRegularProject(context, oldName, uri)
                 val legacy = ProjectStore.load(context).single { it.name == oldName }
                 assertEquals(historical.masks, legacy.document.masks)
-                tools.performScrollToNode(hasText("More"))
-                rule.onNodeWithText("More").performClick()
-                val actions = rule.onNodeWithTag("photo-actions")
-                actions.performScrollToNode(hasText("Open projects"))
-                rule.onNodeWithText("Open projects").performClick()
+                command("Open project…")
                 rule.onNodeWithText(oldName).performClick()
                 rule.onNodeWithText("Open project").performClick()
                 rule.waitUntil(15_000) {
@@ -280,12 +348,10 @@ class AndroidRegularToolsTest {
                 }
                 rule.waitUntil(15_000) { sampleRightOfCenter() in 100..160 }
                 assertNoMasksInPhotoTools()
-                tools.performScrollToNode(hasText("More"))
-                rule.onNodeWithText("More").performClick()
-                actions.performScrollToNode(hasText("Save project"))
-                rule.onNodeWithText("Save project").performClick()
+                command("Save project as…")
                 rule.onNode(hasSetTextAction()).performTextInput(copyName)
                 rule.onNodeWithText("Save").performClick()
+                waitForNativeSave()
                 rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
                 assertEquals(legacy.document, ProjectStore.load(context).single { it.name == copyName }.document)
             }
@@ -326,22 +392,18 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithText("Edit words").performClick()
                 rule.onNodeWithText("Phone test caption").assertIsDisplayed()
                 rule.onNodeWithText("Cancel").performClick()
-                rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("More"))
-                rule.onNodeWithText("More").performClick()
-                val actions = rule.onNodeWithTag("photo-actions")
-                actions.performScrollToNode(hasText("Save project"))
-                rule.onNodeWithText("Save project").performClick()
+                command("Save project as…")
                 rule.onNode(hasSetTextAction()).performTextInput(name)
                 rule.onNodeWithText("Save").performClick()
-                actions.performScrollToNode(hasText("Open projects"))
-                rule.onNodeWithText("Open projects").performClick()
+                waitForNativeSave()
+                command("Open project…")
                 rule.onNodeWithText(name).performClick()
                 rule.onNodeWithText("Open project").performClick()
                 rule.waitUntil(15_000) { rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty() }
                 val saved = ProjectStore.load(context).single { it.name == name }
                 assertEquals("Phone test caption", saved.document.creative.text.single().content)
 
-                rule.onNodeWithText("Export").performClick()
+                command("Export image…")
                 rule.onNodeWithText("Output: 256 × 256 pixels").assertIsDisplayed()
                 rule.onNodeWithText("JPEG · JPG  ▾").performClick()
                 rule.onNodeWithText("PNG · Lossless").performClick()
@@ -400,22 +462,18 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithContentDescription("Undo").performClick()
                 rule.onNodeWithContentDescription("Redo").performClick()
 
-                tools.performScrollToNode(hasText("More"))
-                rule.onNodeWithText("More").performClick()
-                val actions = rule.onNodeWithTag("photo-actions")
-                actions.performScrollToNode(hasText("Save project"))
-                rule.onNodeWithText("Save project").performClick()
+                command("Save project as…")
                 rule.onNode(hasSetTextAction()).performTextInput(name)
                 rule.onNodeWithText("Save").performClick()
-                actions.performScrollToNode(hasText("Open projects"))
-                rule.onNodeWithText("Open projects").performClick()
+                waitForNativeSave()
+                command("Open project…")
                 rule.onNodeWithText(name).performClick()
                 rule.onNodeWithText("Open project").performClick()
                 rule.waitUntil(15_000) {
                     rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty()
                 }
 
-                rule.onNodeWithText("Export").performClick()
+                command("Export image…")
                 rule.onNodeWithText("JPEG · JPG  ▾").performClick()
                 rule.onNodeWithText("PNG · Lossless").performClick()
                 rule.onNodeWithText("Save PNG").performClick()
@@ -452,17 +510,20 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithText("Apply").performClick()
 
                 fun openLibrary() {
-                    rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("More"))
-                    rule.onNodeWithText("More").performClick()
-                    rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Open projects"))
-                    rule.onNodeWithText("Open projects").performClick()
+                    command("Open project…")
+                    rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
+                    // Discard is provisional until Open succeeds; deleting a saved
+                    // entry and canceling this library must retain the dirty draft.
+                    rule.onNodeWithText("Discard", substring = false).performClick()
                     rule.onNodeWithText(name).performClick()
                 }
-                openLibrary()
-                rule.onNodeWithText("Open project").performClick()
-                rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
-                rule.onNodeWithText("Keep editing").performClick()
-                rule.onNodeWithText("Export").assertIsDisplayed()
+                command("Open project…")
+                rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
+                rule.onNodeWithText("Cancel", substring = false).performClick()
+                rule.onNodeWithText("Options", substring = false).performClick()
+                rule.onNodeWithText("Export image…", substring = false).assertIsDisplayed()
+                rule.onNodeWithText("Help", substring = false).performClick()
+                rule.onNodeWithText("Close", substring = false).performClick()
                 rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Text"))
                 rule.onNodeWithText("Text").performClick()
                 rule.onNodeWithText("Text 1").assertIsDisplayed()
@@ -474,6 +535,7 @@ class AndroidRegularToolsTest {
                 assertEquals(original, ProjectStore.load(context).single { it.name == name }.document)
                 rule.onNodeWithText("Delete", substring = false).performClick()
                 rule.onNodeWithText("Delete project").performClick()
+                rule.waitUntil(15_000) { ProjectStore.load(context).none { it.name == name } }
                 assertTrue(ProjectStore.load(context).none { it.name == name })
                 assertNotNull(context.contentResolver.openInputStream(source)?.use { it.read() })
                 rule.onNodeWithText("Close").performClick()
@@ -536,7 +598,7 @@ class AndroidRegularToolsTest {
         try {
             resolver.openOutputStream(destination, "wt")!!.use { it.write(existing) }
             withRegularPhoto(destination, removeSourceAfterOpen = true) {
-                rule.onNodeWithText("Export").performClick()
+                command("Export image…")
                 rule.onNodeWithText("Save JPG").performClick()
                 rule.waitUntil(15_000) {
                     rule.onAllNodesWithText("Export failed", substring = true).fetchSemanticsNodes().isNotEmpty()

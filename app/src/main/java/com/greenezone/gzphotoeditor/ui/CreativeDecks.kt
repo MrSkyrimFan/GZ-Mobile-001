@@ -74,7 +74,10 @@ fun TextDeck(
     onEdit: () -> Unit,
     onCommit: (EditDocument) -> Unit,
     onSlide: (EditDocument) -> Unit,
-    onFinished: () -> Unit
+    onFinished: () -> Unit,
+    onCommitAndSelect: (EditDocument, CreativeToolState) -> Unit = { next, selected ->
+        onCommit(next); onTool(selected)
+    }
 ) {
     val layers = document.creative.text
     val index = tool.textIndex.coerceIn(0, layers.lastIndex.coerceAtLeast(0))
@@ -103,17 +106,15 @@ fun TextDeck(
         if (current != null) {
             item { DockChip("Edit words", false, enabled, onEdit) }
             item { DockChip("Duplicate", false, enabled && layers.size < CreativeRaster.MAX_TEXT) {
-                onCommit(document.copy(creative = document.creative.copy(
+                onCommitAndSelect(document.copy(creative = document.creative.copy(
                     text = layers + current.copy(x = (current.x + .06f).coerceAtMost(1f),
                         y = (current.y + .06f).coerceAtMost(1f))
-                )))
-                onTool(tool.copy(textIndex = layers.size))
+                )), tool.copy(textIndex = layers.size))
             } }
             item { DockChip("Delete", false, enabled) {
-                onCommit(document.copy(creative = document.creative.copy(
+                onCommitAndSelect(document.copy(creative = document.creative.copy(
                     text = layers.filterIndexed { i, _ -> i != index }
-                )))
-                onTool(tool.copy(textIndex = index.coerceAtMost(layers.lastIndex - 1).coerceAtLeast(0)))
+                )), tool.copy(textIndex = index.coerceAtMost(layers.lastIndex - 1).coerceAtLeast(0)))
             } }
         }
     }
@@ -239,7 +240,10 @@ fun ShapesDeck(
     enabled: Boolean,
     onCommit: (EditDocument) -> Unit,
     onSlide: (EditDocument) -> Unit,
-    onFinished: () -> Unit
+    onFinished: () -> Unit,
+    onCommitAndSelect: (EditDocument, CreativeToolState) -> Unit = { next, selected ->
+        onCommit(next); onTool(selected)
+    }
 ) {
     val layers = document.creative.shapes
     val index = tool.shapeIndex.coerceIn(0, layers.lastIndex.coerceAtLeast(0))
@@ -267,10 +271,9 @@ fun ShapesDeck(
                 change(current.copy(filled = !current.filled))
             } }
             item { DockChip("Delete", false, enabled) {
-                onCommit(document.copy(creative = document.creative.copy(
+                onCommitAndSelect(document.copy(creative = document.creative.copy(
                     shapes = layers.filterIndexed { i, _ -> i != index }
-                )))
-                onTool(tool.copy(shapeIndex = index.coerceAtMost(layers.lastIndex - 1).coerceAtLeast(0)))
+                )), tool.copy(shapeIndex = index.coerceAtMost(layers.lastIndex - 1).coerceAtLeast(0)))
             } }
         }
     }
@@ -280,10 +283,9 @@ fun ShapesDeck(
     ) {
         itemsIndexed(ShapeKind.entries) { _, kind ->
             DockChip("+ " + kind.label, false, enabled && layers.size < CreativeRaster.MAX_SHAPES) {
-                onCommit(document.copy(creative = document.creative.copy(
+                onCommitAndSelect(document.copy(creative = document.creative.copy(
                     shapes = layers + ShapeOverlay(kind = kind, color = tool.inkColor)
-                )))
-                onTool(tool.copy(shapeIndex = layers.size))
+                )), tool.copy(shapeIndex = layers.size))
             }
         }
     }

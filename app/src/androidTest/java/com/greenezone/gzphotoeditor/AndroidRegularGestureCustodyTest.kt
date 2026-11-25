@@ -42,6 +42,7 @@ class AndroidRegularGestureCustodyTest {
     private val names = mutableListOf<String>()
     private var output: Uri? = null
     private var applied: CollagePhoto? = null
+    private var activePhotoName: String? = null
 
     private fun media(name: String): Uri = requireNotNull(
         resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
@@ -101,7 +102,7 @@ class AndroidRegularGestureCustodyTest {
                 }
             }
             contentSet = true
-            if (!tile) rule.onNodeWithText("Open media").performClick()
+            if (!tile) command("New photo…")
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
             }
@@ -118,6 +119,11 @@ class AndroidRegularGestureCustodyTest {
         }
     }
 
+    private fun command(label: String) {
+        rule.onNodeWithText("Options", substring = false).performClick()
+        rule.onNodeWithText(label, substring = false).performClick()
+    }
+
     private fun tab(name: String) {
         rule.onNodeWithTag("photo-tools").performScrollToNode(hasText(name))
         rule.onNodeWithText(name).performClick()
@@ -129,30 +135,33 @@ class AndroidRegularGestureCustodyTest {
 
     private fun save(name: String = "Gesture " + System.nanoTime()): SavedProject {
         if (name !in names) names += name
-        tab("More")
-        rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Save project"))
-        rule.onNodeWithText("Save project").performClick()
-        rule.onNode(hasSetTextAction()).performTextInput(name)
-        rule.onNodeWithText("Save", substring = false).performClick()
-        rule.waitUntil(15_000) {
-            rule.onAllNodesWithText("Save editable project").fetchSemanticsNodes().isEmpty()
+        if (activePhotoName == name) {
+            command("Save project")
+        } else {
+            command("Save project as…")
+            rule.onNode(hasSetTextAction()).performTextInput(name)
+            rule.onNodeWithText("Save", substring = false).performClick()
         }
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Save editable project").fetchSemanticsNodes().isEmpty() &&
+                rule.onAllNodesWithText("Processing…", substring = false).fetchSemanticsNodes().isEmpty()
+        }
+        activePhotoName = name
         return ProjectStore.load(context).single { it.name == name }
     }
 
     private fun reopen(name: String) {
-        tab("More")
-        rule.onNodeWithTag("photo-actions").performScrollToNode(hasText("Open projects"))
-        rule.onNodeWithText("Open projects").performClick()
+        command("Open project…")
         rule.onNodeWithText(name, substring = false).performClick()
         rule.onNodeWithText("Open project").performClick()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Project restored").fetchSemanticsNodes().isNotEmpty()
         }
+        activePhotoName = name
     }
 
     private fun exportPng(inspect: (Bitmap) -> Unit) {
-        rule.onNodeWithText("Export").performClick()
+        command("Export image…")
         if (rule.onAllNodesWithText("JPEG · JPG", substring = true).fetchSemanticsNodes().isNotEmpty()) {
             rule.onNodeWithText("JPEG · JPG", substring = true).performClick()
             rule.onNodeWithText("PNG · Lossless").performClick()

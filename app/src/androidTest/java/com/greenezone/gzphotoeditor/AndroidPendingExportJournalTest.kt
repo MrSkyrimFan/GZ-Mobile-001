@@ -6,6 +6,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.greenezone.gzphotoeditor.editor.ExportWorkspace
 import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.editor.PendingExportPhase
+import com.greenezone.gzphotoeditor.editor.NamedProjectIdentity
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.fail
+import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -68,6 +72,52 @@ class AndroidPendingExportJournalTest {
             assertEquals(ExportWorkspace.PHOTO, journal.latestWorkspace())
             assertTrue(journal.cancelPicker(regular))
             assertNull(journal.latestWorkspace())
+        }
+
+    @Test fun failedNativeDispositionRestoresPreviousPermissionsBeforeFreshRead() =
+        withJournal { journal, directory ->
+            val gif = journal.begin(ExportWorkspace.GIF, "image/gif", "loop.gif", "gif recipe", "gif-owner")
+            journal.suppressNativeRestore(gif, "gif-owner")
+            val photo = journal.begin(ExportWorkspace.PHOTO, "image/png", "photo.png", "unsaved photo", "photo-owner")
+            val pro = journal.begin(ExportWorkspace.PRO, "image/png", "pro.png", "unsaved pro", "pro-owner")
+            val destination = Uri.parse("content://export.test/uncertain")
+            val preparing = requireNotNull(journal.claim(pro, destination))
+            journal.copying(preparing)
+            val oldBytes = directory.resolve("pending-exports/native-resolutions.json").readBytes()
+            val failing = PendingExportJournal(directory) { file, bytes, bound ->
+                NamedProjectIdentity.verify(file, bytes, bound)
+                throw IOException("Injected failure after publication readback")
+            }
+            try {
+                failing.suppressNativeRestores(listOf(
+                    ExportWorkspace.PHOTO to "photo-owner", ExportWorkspace.PRO to "pro-owner"))
+                fail("The injected verification failure must reject the disposition")
+            } catch (_: IOException) { }
+            assertArrayEquals(oldBytes, directory.resolve("pending-exports/native-resolutions.json").readBytes())
+            val fresh = PendingExportJournal(directory)
+            assertFalse(requireNotNull(fresh.read(ExportWorkspace.GIF)).restoreNativeDraft)
+            assertEquals(photo, fresh.read(ExportWorkspace.PHOTO))
+            val retainedPro = requireNotNull(fresh.read(ExportWorkspace.PRO))
+            assertTrue(retainedPro.restoreNativeDraft)
+            assertEquals(pro.recipe, retainedPro.recipe)
+            assertEquals(destination.toString(), retainedPro.destination)
+            assertEquals(PendingExportPhase.COPYING, retainedPro.phase)
+        }
+
+    @Test fun nativeDispositionRejectsWrongOwnerAndSurvivesIndependentExportRetry() =
+        withJournal { journal, directory ->
+            val photo = journal.begin(ExportWorkspace.PHOTO, "image/png", "photo.png", "captured recipe", "owner-a")
+            assertNull(journal.suppressNativeRestore(photo, "owner-b"))
+            assertTrue(requireNotNull(journal.read(ExportWorkspace.PHOTO)).restoreNativeDraft)
+            val resolved = requireNotNull(journal.suppressNativeRestore(photo, "owner-a"))
+            assertFalse(resolved.restoreNativeDraft)
+            val fresh = PendingExportJournal(directory)
+            val retry = fresh.retry(resolved)
+            assertNotEquals(photo.id, retry.id)
+            assertEquals(photo.recipe, retry.recipe)
+            assertEquals("owner-a", retry.nativeOwnerId)
+            assertFalse(retry.restoreNativeDraft)
+            assertFalse(requireNotNull(PendingExportJournal(directory).read(ExportWorkspace.PHOTO)).restoreNativeDraft)
         }
 
     private fun withJournal(test: (PendingExportJournal, java.io.File) -> Unit) {

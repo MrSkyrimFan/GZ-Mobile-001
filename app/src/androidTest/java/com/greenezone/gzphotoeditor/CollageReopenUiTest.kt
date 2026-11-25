@@ -66,7 +66,7 @@ class CollageReopenUiTest {
             actions.performScrollToNode(hasText("Move right"))
             rule.onNodeWithText("Move right").performClick()
             rule.runOnIdle { assertEquals(listOf(second, first), observed.photos) }
-            rule.onNodeWithText("↶", substring = false).performClick()
+            rule.onNodeWithContentDescription("Undo").performClick()
             rule.runOnIdle { assertEquals(listOf(first, second), observed.photos) }
 
             actions.performScrollToNode(hasText("Remove"))
@@ -125,8 +125,9 @@ class CollageReopenUiTest {
                     CollageWorkspaceScreen(current, { current = it; observed = it }, {})
                 }
             }
-            rule.waitUntil(10_000) { rule.onAllNodesWithText("Projects").fetchSemanticsNodes().isNotEmpty() }
-            rule.onNode(hasText("Projects") and hasClickAction()).performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Open project…").performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithText("Intact A").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("Intact A").performClick()
             rule.onNodeWithText("Open").performClick()
             rule.waitUntil(15_000) {
@@ -134,8 +135,9 @@ class CollageReopenUiTest {
             }
             rule.onNodeWithText("Photos", substring = false).performClick()
             val actions = rule.onNodeWithTag("collage-tile-actions")
-            actions.performScrollToNode(hasText("Saved collages"))
-            rule.onNodeWithText("Saved collages").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Open project…").performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithText("Missing B").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("Missing B").performClick()
             rule.onNodeWithText("Open").performClick()
             rule.waitUntil(15_000) {
@@ -219,21 +221,23 @@ class CollageReopenUiTest {
                     CollageWorkspaceScreen(current, { current = it; restored = it }, {})
                 }
             }
-            rule.waitUntil(10_000) {
-                rule.onAllNodesWithText("Projects").fetchSemanticsNodes().isNotEmpty()
-            }
-            rule.onNodeWithText("Add photos").assertIsDisplayed()
-            val projects = rule.onNode(hasText("Projects") and hasClickAction())
-            val originalSlot = projects.fetchSemanticsNode().boundsInRoot
-            projects.performClick()
+            val options = rule.onNodeWithTag("workspace-options")
+            options.assertIsDisplayed()
+            val originalSlot = options.fetchSemanticsNode().boundsInRoot
+            options.performClick()
+            rule.onNodeWithText("Add photos…").assertIsDisplayed()
+            rule.onNodeWithText("Open project…").performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithText("Two tile portrait").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("Two tile portrait").performClick()
             rule.onNodeWithText("Open").performClick()
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
             }
             rule.runOnIdle { assertEquals(saved, restored) }
-            val export = rule.onNode(hasText("Export") and hasClickAction())
-            assertEquals(originalSlot, export.fetchSemanticsNode().boundsInRoot)
+            assertEquals(originalSlot, options.fetchSemanticsNode().boundsInRoot)
+            options.performClick()
+            val export = rule.onNode(hasText("Export image…") and hasClickAction())
+            export.assertIsDisplayed()
             export.performClick()
             rule.onNodeWithText("Export image").assertIsDisplayed()
         } finally {

@@ -107,7 +107,8 @@ class CollageExportUiTest {
                 CollageWorkspaceScreen(collage, {}, {})
             }
         }
-        rule.onNodeWithText("Export").performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Export image…").performClick()
         if (format == ImageExportFormat.PNG) {
             rule.onNodeWithText("JPEG · JPG  ▾").performClick()
             rule.onNodeWithText("PNG · Lossless").performClick()
@@ -158,7 +159,8 @@ class CollageExportUiTest {
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Photo 2 is inaccessible", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
-        rule.onNodeWithText("Export").performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Export image…").performClick()
         rule.onNodeWithText("Save JPG").performClick()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Export failed", substring = true).fetchSemanticsNodes().isNotEmpty()
@@ -177,7 +179,8 @@ class CollageExportUiTest {
                 CollageWorkspaceScreen(CollageDocument(photos), {}, {})
             }
         }
-        rule.onNodeWithText("Export").performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Export image…").performClick()
         rule.onNodeWithText("JPEG · JPG  ▾").performClick()
         rule.onNodeWithText("PNG · Lossless").performClick()
         rule.onNodeWithText("Save PNG").performClick()
@@ -187,7 +190,8 @@ class CollageExportUiTest {
         assertArrayEquals(before, resolver.openInputStream(destination)!!.use { it.readBytes() })
         assertNull(journal.read(ExportWorkspace.COLLAGE))
 
-        rule.onNodeWithText("Export").performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Export image…").performClick()
         rule.onNodeWithText("Save PNG").performClick()
         rule.waitUntil(30_000) {
             rule.onAllNodesWithText("Collage saved", substring = true).fetchSemanticsNodes().isNotEmpty()

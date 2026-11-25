@@ -14,6 +14,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.lifecycle.Lifecycle
@@ -255,6 +256,32 @@ class AndroidRegularObjectGestureContractTest {
             rule.waitForIdle()
             node.performTouchInput { moveTo(frame.at(.75f, .6f)); up() }
             rule.waitForIdle()
+            assertCanceled(fixture, document)
+        }
+    }
+
+    @Test fun heldTextDuplicateCancellationKeepsTheOriginalSelectedObjectAndHistory() {
+        val document = textDocument()
+        withPhoto(document) { fixture ->
+            tab("Text")
+            rule.onNode(
+                SemanticsMatcher("Text object row") { SemanticsActions.ScrollToIndex in it.config } and
+                    hasAnyDescendant(hasText("Text 1", substring = false))
+            ).performScrollToNode(hasText("Duplicate", substring = false))
+            val node = rule.onNodeWithTag("editable-object")
+            val frame = fitted(node)
+            node.performTouchInput { down(frame.at(.5f, .5f)); moveTo(frame.at(.65f, .55f)) }
+            rule.waitForIdle()
+            // Activate the real toolbar command while the original pointer is still held.
+            rule.onNodeWithText("Duplicate", substring = false).performClick()
+            rule.waitForIdle()
+            // There is exactly one original object. Its overlay existing proves that
+            // cancellation did not select a nonexistent duplicate index.
+            rule.onAllNodesWithTag("editable-object").assertCountEquals(1)
+            node.assertIsDisplayed()
+            node.performTouchInput { moveTo(frame.at(.75f, .6f)); up() }
+            rule.waitForIdle()
+            rule.onAllNodesWithTag("editable-object").assertCountEquals(1)
             assertCanceled(fixture, document)
         }
     }

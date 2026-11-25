@@ -26,7 +26,10 @@ internal data class PendingExport(
 )
 
 /** One immutable recipe per workspace. Only the matching picker can claim its result. */
-internal class PendingExportJournal(filesDirectory: File) {
+internal class PendingExportJournal(
+    filesDirectory: File,
+    private val verifyNativeResolution: (File, ByteArray, Long) -> Unit = NamedProjectIdentity::verify
+) {
     private val directory = File(filesDirectory, "pending-exports")
 
     private fun file(workspace: ExportWorkspace) =
@@ -146,6 +149,7 @@ internal class PendingExportJournal(filesDirectory: File) {
 
     private fun resolvedIds(): Map<ExportWorkspace, String> {
         val atomic = resolutionFile()
+        NamedProjectIdentity.recoverPublication(atomic.baseFile, 2048)
         if (!atomic.baseFile.exists() && !File(atomic.baseFile.path + ".bak").exists()) return emptyMap()
         return atomic.openRead().use { input ->
             if (input.channel.size() !in 2L..2048L) throw IOException("Invalid native-resolution record")
@@ -173,20 +177,9 @@ internal class PendingExportJournal(filesDirectory: File) {
             ids.forEach { (workspace, id) -> put(workspace.name, id) }
         }.toString().toByteArray(Charsets.UTF_8)
         check(bytes.size <= 2048)
-        val atomic = resolutionFile()
-        val output = atomic.startWrite()
-        try {
-            output.write(bytes)
-            output.fd.sync()
-            atomic.finishWrite(output)
-        } catch (error: Throwable) {
-            atomic.failWrite(output)
-            throw error
-        }
-        atomic.openRead().use { input ->
-            if (input.channel.size() != bytes.size.toLong() || !input.readBytes().contentEquals(bytes))
-                throw IOException("Could not record the native disposition")
-        }
+        // Keep verified previous permissions recoverable until the new record
+        // has passed readback. A failed disposition must not revoke restoration.
+        NamedProjectIdentity.publish(resolutionFile().baseFile, bytes, 2048, verifyNativeResolution)
     }
 
     private fun clearNativeResolution(workspace: ExportWorkspace, id: String) {
@@ -213,8 +206,9 @@ internal class PendingExportJournal(filesDirectory: File) {
         if (records.isEmpty()) return@synchronized emptyList()
         val ids = resolvedIds().toMutableMap()
         records.forEach { ids[it.workspace] = it.id }
+        val resolved = records.map { it.copy(restoreNativeDraft = false) }
         writeResolvedIds(ids)
-        records.map { it.copy(restoreNativeDraft = false) }
+        resolved
     }
 
     fun suppressNativeRestore(expected: PendingExport, ownerId: String): PendingExport? = synchronized(lock) {

@@ -60,6 +60,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.After
+import com.greenezone.gzphotoeditor.editor.CollageStore
+import com.greenezone.gzphotoeditor.editor.GifStore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -67,6 +70,46 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AndroidBackNavigationTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+
+    private val savedFixtures = mutableListOf<Pair<String, String>>()
+
+    @After fun removeSavedDepartureFixtures() {
+        val context = instrumentation.targetContext
+        savedFixtures.forEach { (kind, name) ->
+            when (kind) {
+                "photo" -> ProjectStore.delete(context, name)
+                "pro" -> ProStore.delete(context, name)
+                "collage" -> CollageStore.delete(context, name)
+                "gif" -> GifStore.delete(context, name)
+            }
+        }
+    }
+
+    private fun command(label: String) {
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText(label).performClick()
+    }
+
+    // Save the actual working snapshot before testing retained workspace history.
+    // Discard would intentionally remove that unsaved branch under the new contract.
+    private fun saveDeparture(kind: String) {
+        rule.onNodeWithText("Save").performClick()
+        val name = "back-$kind-" + System.nanoTime().toString().takeLast(12)
+        savedFixtures.add(kind to name)
+        rule.onNode(hasSetTextAction()).performTextInput(name)
+        rule.onNodeWithText("Save").performClick()
+        rule.waitUntil(15_000) {
+            val context = instrumentation.targetContext
+            when (kind) {
+                "photo" -> ProjectStore.loadNamed(context, name) != null
+                "pro" -> ProStore.loadNamed(context, name) != null
+                "collage" -> CollageStore.loadNamed(context, name) != null
+                "gif" -> GifStore.loadNamed(context, name) != null
+                else -> false
+            }
+        }
+        rule.waitForIdle()
+    }
 
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val resolver get() = instrumentation.targetContext.contentResolver
@@ -206,7 +249,7 @@ class AndroidBackNavigationTest {
                 }
             }
             contentSet = true
-            rule.onNodeWithText("Open media").performClick()
+            command("New photo…")
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
             }
@@ -223,11 +266,14 @@ class AndroidBackNavigationTest {
     private fun requestProHandoff() {
         rule.onNodeWithContentDescription("Choose editing workspace").performClick()
         rule.onNodeWithText("Photo editing Pro").performClick()
-        rule.onNodeWithText("Continue editing in Photo Pro?").assertIsDisplayed()
+        if (rule.onAllNodesWithText("Unsaved changes").fetchSemanticsNodes().isNotEmpty()) {
+            saveDeparture("photo")
+        }
+        rule.onNodeWithText("Bring this photo into Pro?").assertIsDisplayed()
     }
 
     private fun acceptProHandoff() {
-        rule.onNodeWithText("Yes, continue").performClick()
+        rule.onNodeWithText("Yes, bring photo").performClick()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Photo Pro ▾").fetchSemanticsNodes().isNotEmpty()
         }
@@ -319,7 +365,7 @@ class AndroidBackNavigationTest {
                 rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
             }
             if (replacementUri != null) {
-                rule.onNodeWithText("Open media").performClick()
+                command("New photo…")
                 rule.waitUntil(15_000) {
                     rule.onAllNodesWithText("Media opened").fetchSemanticsNodes().isNotEmpty()
                 }
@@ -361,7 +407,7 @@ class AndroidBackNavigationTest {
         rule.onNodeWithText("Tools ▾").performClick()
         rule.onNodeWithText("Transform").performClick()
         rule.onNodeWithText("Transform ▴").assertIsDisplayed()
-        rule.onNodeWithText("Undo").assertIsEnabled()
+        rule.onNodeWithContentDescription("Undo").assertIsEnabled()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithContentDescription("Pro editable composition")
                 .fetchSemanticsNodes()
@@ -389,21 +435,23 @@ class AndroidBackNavigationTest {
 
         rule.onNodeWithContentDescription("Choose editing workspace").performClick()
         rule.onNodeWithText("GIF maker").performClick()
+        rule.onNodeWithText("Unsaved Pro changes").assertIsDisplayed()
+        saveDeparture("pro")
         rule.onNodeWithText("GIF ▾").assertIsDisplayed()
 
         pressBackThroughDispatcher()
         rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
         rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
         rule.onNodeWithText("Transform ▴").assertIsDisplayed()
-        rule.onNodeWithText("Undo").assertIsEnabled()
+        rule.onNodeWithContentDescription("Undo").assertIsEnabled()
         assertEquals(
             proViewport,
             rule.onNodeWithTag("pro-canvas").fetchSemanticsNode()
                 .config[ProViewportSemanticsKey]
         )
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.onNodeWithText("Stack (1)").assertIsDisplayed()
-        rule.onNodeWithText("Redo").performClick()
+        rule.onNodeWithContentDescription("Redo").performClick()
         rule.onNodeWithText("Stack (2)").assertIsDisplayed()
         rule.onNodeWithText("Stack (2)").performClick()
         rule.onNodeWithText("Shape 2").assertIsDisplayed()
@@ -435,12 +483,12 @@ class AndroidBackNavigationTest {
             rule.onNodeWithText("Photo editing Pro").performClick()
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("GIF maker").performClick()
-            rule.onNodeWithText("Choose video").performClick()
+            command("Open video…")
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithText("Play").fetchSemanticsNodes().isNotEmpty()
             }
             rule.onNodeWithText("Reverse").performClick()
-            rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
 
             rule.onNodeWithContentDescription("Scrub GIF frames")
                 .performSemanticsAction(SemanticsActions.SetProgress) { setProgress ->
@@ -454,13 +502,14 @@ class AndroidBackNavigationTest {
 
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
+            saveDeparture("gif")
             rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
 
             pressBackThroughDispatcher()
             rule.onNodeWithText("GIF ▾").assertIsDisplayed()
             rule.onNodeWithText("Source timing").assertIsDisplayed()
             rule.onNodeWithText("Play").assertIsDisplayed()
-            rule.onNodeWithText("Undo").assertIsEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             rule.onNodeWithText("Timeline").performClick()
             assertEquals(playhead, visibleGifFrameLabel())
 
@@ -481,9 +530,9 @@ class AndroidBackNavigationTest {
             rule.onNodeWithText("Play").assertIsDisplayed()
 
             rule.onNodeWithText("Reverse").assertIsSelected()
-            rule.onNodeWithText("Undo").performClick()
+            rule.onNodeWithContentDescription("Undo").performClick()
             rule.onNodeWithText("Reverse").assertIsNotSelected()
-            rule.onNodeWithText("Redo").performClick()
+            rule.onNodeWithContentDescription("Redo").performClick()
             rule.onNodeWithText("Reverse").assertIsSelected()
         } finally {
             rule.runOnIdle { mounted.value = false }
@@ -552,11 +601,12 @@ class AndroidBackNavigationTest {
                 }
 
                 pressBackThroughDispatcher()
+                saveDeparture("collage")
                 rule.onNodeWithText("Other workspace").assertIsDisplayed()
                 pressBackThroughDispatcher()
                 rule.onNodeWithContentDescription("Adjust Outside margin").assertIsDisplayed()
-                rule.onNodeWithText("↶").assertIsEnabled()
-                rule.onNodeWithText("↶").performClick()
+                rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+                rule.onNodeWithContentDescription("Undo").performClick()
                 rule.runOnIdle {
                     assertEquals(initial.layout.margin, latest.layout.margin)
                 }
@@ -632,11 +682,12 @@ class AndroidBackNavigationTest {
                 rule.onNodeWithText("Frame duration: 800 ms").assertIsDisplayed()
 
                 pressBackThroughDispatcher()
+                saveDeparture("gif")
                 rule.onNodeWithText("Other workspace").assertIsDisplayed()
                 pressBackThroughDispatcher()
                 rule.onNodeWithText("Frame duration: 800 ms").assertIsDisplayed()
-                rule.onNodeWithText("Undo").assertIsEnabled()
-                rule.onNodeWithText("Undo").performClick()
+                rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+                rule.onNodeWithContentDescription("Undo").performClick()
                 rule.onNodeWithText("Frame duration: 350 ms").assertIsDisplayed()
 
                 rule.onNodeWithText("Photos").performClick()
@@ -669,11 +720,11 @@ class AndroidBackNavigationTest {
 
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
-            rule.onNodeWithText("Add first photo").assertIsDisplayed()
+            rule.onNodeWithText("Select an image to edit").assertIsDisplayed()
             pressBackThroughDispatcher()
             rule.onNodeWithText("Photo ▾").assertIsDisplayed()
 
-            rule.onNodeWithText("Open media").performClick()
+            command("New photo…")
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
             }
@@ -694,20 +745,21 @@ class AndroidBackNavigationTest {
             rule.onNodeWithText("Golden").performClick()
             requestProHandoff()
             rule.onNodeWithText("Cancel").performClick()
-            rule.onNodeWithText("Continue editing in Photo Pro?").assertDoesNotExist()
+            rule.onNodeWithText("Bring this photo into Pro?").assertDoesNotExist()
             rule.onNodeWithTag("photo-tools").assertIsDisplayed()
 
             requestProHandoff()
-            rule.onNodeWithText("No, open blank").performClick()
+            rule.onNodeWithText("No, start blank").performClick()
             rule.onNodeWithText("Select an image to edit").assertIsDisplayed()
             rule.onNodeWithText("Original photo", substring = true).assertDoesNotExist()
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing").performClick()
             rule.onNodeWithTag("photo-tools").assertIsDisplayed()
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+            rule.onNodeWithContentDescription("Undo").performClick()
             pressBackThroughDispatcher()
-            rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
-            rule.onNodeWithText("Keep editing").performClick()
+            rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
+            rule.onNodeWithText("Cancel").performClick()
             assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
         }
 
@@ -757,8 +809,8 @@ class AndroidBackNavigationTest {
             val expected = ImagePipeline.render(cropped, EditDocument(grade = look))
             val probes = listOf(.15f, .4f, .65f, .9f)
             fun exportAndCheck() {
-                rule.onNodeWithText("File ▾").performClick()
-                rule.onNodeWithText("Export image").performClick()
+                rule.onNodeWithText("Options").performClick()
+                rule.onNodeWithText("Export image…").performClick()
                 rule.onNodeWithText("Output: 80 × 80 pixels").performScrollTo().assertIsDisplayed()
                 if (rule.onAllNodesWithText("JPEG · JPG", substring = true).fetchSemanticsNodes().isNotEmpty()) {
                     rule.onNodeWithText("JPEG · JPG", substring = true).performScrollTo().performClick()
@@ -830,7 +882,7 @@ class AndroidBackNavigationTest {
                     val previews = rule.onAllNodesWithContentDescription("Pro editable composition")
                     previews.fetchSemanticsNodes().isNotEmpty() && matchesEditedCrop(previews[0])
                 }
-                rule.onNodeWithText("File ▾").performClick()
+                rule.onNodeWithText("Options").performClick()
                 rule.onNodeWithText("Save project").performClick()
                 rule.onNode(hasSetTextAction()).performTextInput(name)
                 rule.onNodeWithText("Save", ignoreCase = true).performClick()
@@ -853,8 +905,8 @@ class AndroidBackNavigationTest {
                 assertEquals(1f, frame.bottom, .001f)
 
                 exportAndCheck()
-                rule.onNodeWithText("File ▾").performClick()
-                rule.onNodeWithText("Open project").performClick()
+                rule.onNodeWithText("Options").performClick()
+                rule.onNodeWithText("Open project…").performClick()
                 rule.onNodeWithText(name).performScrollTo().performClick()
                 rule.waitUntil(15_000) { rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty() }
                 exportAndCheck()
@@ -880,7 +932,7 @@ class AndroidBackNavigationTest {
             val overlay = rule.onNodeWithTag("crop-frame")
             val frame = overlay.fetchSemanticsNode().boundsInRoot
             val gutter = with(rule.density) { 16.dp.roundToPx() }
-            val topControl = rule.onNodeWithText("Open media").fetchSemanticsNode().boundsInRoot
+            val topControl = rule.onNodeWithTag("workspace-header").fetchSemanticsNode().boundsInRoot
             val bottomControls = rule.onNodeWithTag("photo-tools").fetchSemanticsNode().boundsInRoot
             assertTrue(frame.top >= topControl.bottom - 1f)
             assertTrue(frame.bottom <= bottomControls.top + 1f)
@@ -925,7 +977,8 @@ class AndroidBackNavigationTest {
 
     @Test fun cleanLoadedRegularBackReturnsToEmptyStart() = withLoadedRegular { uri, original ->
         pressBackThroughDispatcher()
-        rule.onNodeWithText("Create collage").assertIsDisplayed()
+        rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
+        rule.onNodeWithText("Create collage").assertDoesNotExist()
         rule.onNodeWithTag("photo-tools").assertDoesNotExist()
         assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
     }
@@ -943,14 +996,15 @@ class AndroidBackNavigationTest {
             }
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             pressBackThroughDispatcher()
-            rule.onNodeWithText("Keep your photo edits?").assertIsDisplayed()
+            rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
 
-            rule.onNodeWithText("Keep editing").performClick()
+            rule.onNodeWithText("Cancel").performClick()
             rule.onNodeWithTag("photo-tools").assertIsDisplayed()
 
             pressBackThroughDispatcher()
             rule.onNodeWithText("Discard").performClick()
-            rule.onNodeWithText("Create collage").assertIsDisplayed()
+            rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
+        rule.onNodeWithText("Create collage").assertDoesNotExist()
             rule.onNodeWithTag("photo-tools").assertDoesNotExist()
             assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
         }
@@ -981,7 +1035,7 @@ class AndroidBackNavigationTest {
             rule.onNodeWithText("Golden").performClick()
             pressBackThroughDispatcher()
             rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-            rule.onNodeWithText("Discard").performClick()
+            rule.onNodeWithText("Discard tile changes").performClick()
             rule.onNodeWithText("Tile host").assertIsDisplayed()
             rule.runOnIdle {
                 assertEquals(0, doneCount)
@@ -1004,7 +1058,7 @@ class AndroidBackNavigationTest {
             }, onCancel = { cancelCount++ })
             rule.onNodeWithText("Golden").performClick()
             pressBackThroughDispatcher()
-            rule.onNodeWithText("Apply").performClick()
+            rule.onNodeWithText("Apply to tile").performClick()
             rule.onNodeWithText("Tile host").assertIsDisplayed()
             rule.runOnIdle {
                 assertEquals(1, doneCount)
@@ -1035,13 +1089,10 @@ class AndroidBackNavigationTest {
                     }
                 ) {
                     rule.onNodeWithText("Golden").performClick()
-                    rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("More"))
-                    rule.onNodeWithText("More").performClick()
-                    rule.onNodeWithTag("photo-actions")
-                        .performScrollToNode(hasText("Save project"))
-                    rule.onNodeWithText("Save project").performClick()
+                    command("Save photo project")
                     rule.onNode(hasSetTextAction()).performTextInput(projectName)
                     rule.onNodeWithText("Save").performClick()
+                    rule.waitUntil(15_000) { ProjectStore.loadNamed(instrumentation.targetContext, projectName) != null }
                     rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
 
                     // Project naming can leave the system IME owning the first Back.
@@ -1051,7 +1102,7 @@ class AndroidBackNavigationTest {
                         pressBackThroughDispatcher()
                     }
                     rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-                    rule.onNodeWithText("Discard").performClick()
+                    rule.onNodeWithText("Discard tile changes").performClick()
                     rule.onNodeWithText("Collage ▾").assertIsDisplayed()
                     rule.runOnIdle {
                         assertEquals(initial, committed)
@@ -1081,7 +1132,7 @@ class AndroidBackNavigationTest {
             ) {
                 pressBackThroughDispatcher()
                 rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-                rule.onNodeWithText("Discard").performClick()
+                rule.onNodeWithText("Discard tile changes").performClick()
                 rule.onNodeWithText("Collage ▾").assertIsDisplayed()
                 rule.runOnIdle {
                     assertEquals(initial, committed)
@@ -1108,12 +1159,12 @@ class AndroidBackNavigationTest {
             ) {
                 pressBackThroughDispatcher()
                 rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-                rule.onNodeWithText("Keep editing").performClick()
+                rule.onNodeWithText("Cancel").performClick()
                 rule.onNodeWithTag("photo-tools").assertIsDisplayed()
 
                 pressBackThroughDispatcher()
                 rule.onNodeWithText("Apply tile changes?").assertIsDisplayed()
-                rule.onNodeWithText("Apply").performClick()
+                rule.onNodeWithText("Apply to tile").performClick()
                 rule.onNodeWithText("Collage ▾").assertIsDisplayed()
                 rule.runOnIdle {
                     assertEquals(1, commitCount)

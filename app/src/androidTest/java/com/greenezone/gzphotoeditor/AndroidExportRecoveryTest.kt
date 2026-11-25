@@ -129,12 +129,14 @@ class AndroidExportRecoveryTest {
             assertNull(journal.read(ExportWorkspace.PHOTO))
 
             rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
-            rule.onNodeWithText("Open media").assertIsDisplayed()
+            rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
+            rule.onNodeWithText("Discard").performClick()
+            rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
-            rule.onNodeWithText("Add first photo").assertIsDisplayed()
+            rule.onNodeWithText("Select an image to edit").assertIsDisplayed()
             rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
-            rule.onNodeWithText("Open media").assertIsDisplayed()
+            rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
             rule.waitForIdle()
             rule.onNodeWithTag("photo-tools").assertDoesNotExist()
         }
@@ -185,14 +187,14 @@ class AndroidExportRecoveryTest {
             rule.setContent { Workspace(registry) }
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Collage maker").performClick()
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithText("Projects").fetchSemanticsNodes().isNotEmpty()
-            }
-            rule.onNodeWithText("Projects").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Open project…").performClick()
+            rule.waitUntil(15_000) { rule.onAllNodesWithText(originalName).fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText(originalName).performClick()
             rule.onNodeWithText("Open").performClick()
             waitForCollagePreview()
-            rule.onNodeWithText("Export").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Export image…").performClick()
             rule.onNodeWithText("JPEG · JPG  ▾").performClick()
             rule.onNodeWithText("PNG · Lossless").performClick()
             rule.onNodeWithText("Save PNG").performClick()
@@ -230,12 +232,11 @@ class AndroidExportRecoveryTest {
             assertNull(journal.read(ExportWorkspace.COLLAGE))
 
             // Save the restored editor itself. Export pixels alone only prove the journal recipe.
-            rule.onNodeWithTag("collage-sections").performScrollToNode(hasText("Photos"))
-            rule.onNodeWithText("Photos").performClick()
-            rule.onNodeWithTag("collage-tile-actions").performScrollToNode(hasText("Save project"))
-            rule.onNodeWithText("Save project").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Save project as…").performClick()
             rule.onNode(hasSetTextAction()).performTextInput(restoredName)
             rule.onNodeWithText("Save").performClick()
+            rule.waitUntil(15_000) { CollageStore.load(context, restoredName) != null }
             assertEquals(saved, CollageStore.load(context, restoredName))
         } finally {
             journal.read(ExportWorkspace.COLLAGE)?.let { journal.discard(it) }
@@ -268,7 +269,8 @@ class AndroidExportRecoveryTest {
             }
             val registry = DelayedPicker(source)
             rule.setContent { Workspace(registry) }
-            rule.onNodeWithText("Open media").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("New photo…").performClick()
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty()
             }
@@ -276,7 +278,8 @@ class AndroidExportRecoveryTest {
             rule.onNodeWithText("Crop").performClick()
             rule.onNodeWithTag("crop-transforms").performScrollToNode(hasText("Flip horizontal"))
             rule.onNodeWithText("Flip horizontal").performClick()
-            rule.onNodeWithText("Export").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Export image…").performClick()
             rule.onNodeWithText("JPEG · JPG  ▾").performClick()
             rule.onNodeWithText("PNG · Lossless").performClick()
             rule.onNodeWithText("Save PNG").performClick()

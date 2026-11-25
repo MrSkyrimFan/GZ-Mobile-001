@@ -409,7 +409,7 @@ fun PhotoEditorScreen(
                 document = loadedDocument
                 if (establishBaseline) {
                     baselineUri = uri.toString()
-                    baselineDocument = loadedDocument
+                    baselineDocument = if (restoringExport) EditDocument() else loadedDocument
                 }
                 history = EditHistory()
                 gestureStart = null
@@ -1596,7 +1596,13 @@ fun PhotoEditorScreen(
                             onCreativeTool = { cancelDraft(); creativeTools = it },
                             onNewText = { editWords(true) },
                             onEditText = { editWords(false) },
-                            onHistogram = {}
+                            onHistogram = {},
+                            onCommitAndSelect = { next, selected ->
+                                if (commit(next)) {
+                                    activeLook = "custom"
+                                    creativeTools = selected
+                                }
+                            }
                         )
                     )
                 }
