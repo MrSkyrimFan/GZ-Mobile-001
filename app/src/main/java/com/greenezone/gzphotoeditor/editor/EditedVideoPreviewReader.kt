@@ -11,6 +11,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.os.SystemClock
+import android.util.Log
 import java.io.IOException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
@@ -48,6 +49,13 @@ internal class EditedVideoPreviewReader private constructor(
     private val localWindow = ReversePreviewWindow()
     private val reverseFirstTime = if (reversePreviewWindow != null && clip.reverse)
         GifVideoMath.frameTimesMs(clip).firstOrNull() else null
+    // One bounded memo belongs to this reader, never to retained pictures or global state.
+    // The scalar sampling option is also the uncached exact-color test oracle.
+    private val colorCache = if (bulkSampleRows) YuvColorCache() else null
+    private val bitmapTiming = GifStageTiming()
+    private val samplePackTiming = GifStageTiming()
+    private var bitmapFrames = 0L
+    private var timingReported = false
     private var sampleAxes: SampleAxes? = null
     private var reverseStorage: ReverseStorage? = null
     private var inputEnded = false
@@ -63,7 +71,7 @@ internal class EditedVideoPreviewReader private constructor(
         window.setEdge(edge)
         val (width, height) = clip.frameSize(edge)
         window.picture(target, consume = shared == null)?.let {
-            return storage(width, height).render(it, checkActive)
+            return materializeBitmap { storage(width, height).render(it, checkActive, colorCache) }
         }
         if (shared == null) window.clear()
         // A paused first reverse picture must already decode through the same GOP.
@@ -113,9 +121,9 @@ internal class EditedVideoPreviewReader private constructor(
                         image.use {
                             val picture = samplePicture(it, decoder.getOutputFormat(output), width, height)
                             if (index == target && (shared == null || !prefetch)) {
-                                return picture.toBitmap(checkActive)
+                                return materializeBitmap { picture.toBitmap(checkActive, colorCache) }
                             }
-                            requireNotNull(packed).sample(picture, checkActive)
+                            samplePackTiming.measure { requireNotNull(packed).sample(picture, checkActive) }
                             retainedIndex = index
                             retainedColor = picture.color
                         }
@@ -128,11 +136,15 @@ internal class EditedVideoPreviewReader private constructor(
                 val storage = requireNotNull(packed)
                 val picture = storage.compress(color, checkActive)
                 window.retain(retainedIndex, picture)
-                if (retainedIndex == target) return storage.render(picture, checkActive)
+                if (retainedIndex == target) return materializeBitmap { storage.render(picture, checkActive, colorCache) }
             }
             if (end) throw IOException("Video ended before the requested frame")
         }
     }
+
+    /** Includes sampling/restore, exact color lookup/conversion and bitmap allocation. */
+    private fun materializeBitmap(render: () -> Bitmap): Bitmap =
+        bitmapTiming.measure(render).also { bitmapFrames++ }
 
     private fun indexAtOrBefore(timeMs: Long): Int {
         val found = times.binarySearch(timeMs)
@@ -291,10 +303,11 @@ internal class EditedVideoPreviewReader private constructor(
         val axes: SampleAxes,
         val color: PreviewColor
     ) {
-        fun toBitmap(checkActive: () -> Unit): Bitmap {
+        fun toBitmap(checkActive: () -> Unit, cache: YuvColorCache?): Bitmap {
             val pixels = IntArray(axes.width * axes.height)
             axes.forEachSample(y, u, v, checkActive) { index, sample ->
-                pixels[index] = color.pixel(sample and 255, (sample shr 8) and 255, sample shr 16)
+                pixels[index] = cache?.pixel(sample, color)
+                    ?: color.pixel(sample and 255, (sample shr 8) and 255, sample shr 16)
             }
             return Bitmap.createBitmap(pixels, axes.width, axes.height, Bitmap.Config.ARGB_8888)
         }
@@ -309,7 +322,40 @@ internal class EditedVideoPreviewReader private constructor(
         }
     }
 
+    /**
+     * Exact memoization only: a collision recomputes the original conversion.
+     * Keys include all YUV bytes and both matrix/range bits; no quantization occurs.
+     * Two 4096-entry IntArrays retain exactly 32768 bytes of cache payload.
+     */
+    internal class YuvColorCache {
+        private val keys = IntArray(CAPACITY) { -1 }
+        private val values = IntArray(CAPACITY)
+        var hits = 0L
+            private set
+        var misses = 0L
+            private set
+        val storageBytes: Int get() = (keys.size + values.size) * Int.SIZE_BYTES
+
+        fun pixel(sample: Int, color: PreviewColor): Int {
+            val packed = sample and 0x00ffffff
+            val key = packed or (color.cacheIdentity shl 24)
+            val slot = (key * -1_640_531_527) ushr 20
+            if (keys[slot] == key) {
+                hits++
+                return values[slot]
+            }
+            misses++
+            val exact = color.pixel(packed and 255, (packed ushr 8) and 255, packed ushr 16)
+            keys[slot] = key
+            values[slot] = exact
+            return exact
+        }
+
+        private companion object { const val CAPACITY = 4096 }
+    }
+
     internal class PreviewColor(hd: Boolean, fullRange: Boolean) {
+        internal val cacheIdentity: Int = (if (hd) 2 else 0) or (if (fullRange) 1 else 0)
         private val uToBlue = if (hd) 1.8556 else 1.772
         private val vToRed = if (hd) 1.5748 else 1.402
         private val uToGreen = if (hd) -.1873 else -.344136
@@ -394,7 +440,7 @@ internal class EditedVideoPreviewReader private constructor(
             return ReversePicture(samples, color)
         }
 
-        fun render(picture: ReversePicture, checkActive: () -> Unit): Bitmap {
+        fun render(picture: ReversePicture, checkActive: () -> Unit, cache: YuvColorCache?): Bitmap {
             val samples = if (picture.samples.size == raw.size) picture.samples else {
                 inflater.reset()
                 inflater.setInput(picture.samples)
@@ -404,8 +450,11 @@ internal class EditedVideoPreviewReader private constructor(
                 raw
             }
             return previewBitmap(width, height, checkActive) { _, _, index ->
-                picture.color.pixel(samples[index].toInt() and 255,
-                    samples[pitch + index].toInt() and 255, samples[2 * pitch + index].toInt() and 255)
+                val y = samples[index].toInt() and 255
+                val u = samples[pitch + index].toInt() and 255
+                val v = samples[2 * pitch + index].toInt() and 255
+                cache?.pixel(y or (u shl 8) or (v shl 16), picture.color)
+                    ?: picture.color.pixel(y, u, v)
             }
         }
 
@@ -493,9 +542,23 @@ internal class EditedVideoPreviewReader private constructor(
     }
 
     override fun close() {
-        localWindow.clear()
-        try { reverseStorage?.close() } finally {
-            try { decoder.release() } finally { extractor.release() }
+        try {
+            localWindow.clear()
+            try { reverseStorage?.close() } finally {
+                try { decoder.release() } finally { extractor.release() }
+            }
+        } finally {
+            if (!timingReported) {
+                timingReported = true
+                Log.d("GzGifReaderStage", "bulkRows=" + bulkSampleRows +
+                    " colorMemo=" + (colorCache != null) + " bitmapFrames=" + bitmapFrames +
+                    " bitmapConvertMs=" + bitmapTiming.wallMs + " bitmapConvertCpuMs=" + bitmapTiming.cpuMs +
+                    " samplePackMs=" + samplePackTiming.wallMs + " samplePackCpuMs=" + samplePackTiming.cpuMs +
+                    " colorCacheHits=" + (colorCache?.hits ?: 0L) +
+                    " colorCacheMisses=" + (colorCache?.misses ?: 0L) +
+                    " colorCacheBytes=" + (colorCache?.storageBytes ?: 0) +
+                    " sampleRowBytes=" + sampleRowStorageBytes)
+            }
         }
     }
 

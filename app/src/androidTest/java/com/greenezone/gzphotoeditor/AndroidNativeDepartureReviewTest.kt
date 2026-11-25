@@ -136,7 +136,12 @@ class AndroidNativeDepartureReviewTest {
         rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
         rule.onNodeWithText("Discard").performClick()
         rule.waitUntil(15_000) { departures == 1 }
-        assertEquals(originalPro, currentPro)
+        // Navigation follows the document callback, but currentPro is mirrored by
+        // the parent's next composition. Observe that committed composition.
+        rule.runOnIdle {
+            assertEquals(1, departures)
+            assertEquals(originalPro, currentPro)
+        }
         val retained = requireNotNull(PendingExportJournal(context.filesDir).read(ExportWorkspace.PRO))
         assertEquals(pending.recipe, retained.recipe)
         assertFalse(retained.restoreNativeDraft)
