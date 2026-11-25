@@ -1,5 +1,7 @@
 package com.greenezone.gzphotoeditor
 
+import android.content.ContentValues
+import android.provider.MediaStore
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -21,7 +23,6 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
 
 /** Owner F01/F02: exercise the real parent canvas and Back dispatcher. */
 @RunWith(AndroidJUnit4::class)
@@ -30,17 +31,26 @@ class AndroidWorkspaceContractTest {
     private lateinit var current: CollageDocument
     private var departures = 0
 
-    private fun withCollage(check: (CollageDocument, File, ByteArray) -> Unit) {
-        val source = File.createTempFile("gz-collage-contract-", ".png", rule.activity.cacheDir)
+    private fun withCollage(check: (CollageDocument, Uri, ByteArray) -> Unit) {
+        val resolver = rule.activity.contentResolver
+        val source = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, "gz-collage-contract.png")
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }))
         val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
         try {
             bitmap.eraseColor(Color.rgb(40, 110, 180))
-            source.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            requireNotNull(resolver.openOutputStream(source, "wt")).use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         } finally { bitmap.recycle() }
+        resolver.update(source, ContentValues().apply {
+            put(MediaStore.Images.Media.IS_PENDING, 0)
+        }, null, null)
         val initial = CollageDocument(photos = listOf(
-            CollagePhoto(Uri.fromFile(source).toString()), CollagePhoto(Uri.fromFile(source).toString())
+            CollagePhoto(source.toString()), CollagePhoto(source.toString())
         ))
-        val bytes = source.readBytes()
+        val bytes = requireNotNull(rule.activity.contentResolver.openInputStream(source)).use { it.readBytes() }
         try {
             rule.setContent {
                 var document by remember { mutableStateOf(initial) }
@@ -55,7 +65,7 @@ class AndroidWorkspaceContractTest {
             check(initial, source, bytes)
         } finally {
             rule.runOnIdle { rule.activity.setContentView(android.widget.FrameLayout(rule.activity)) }
-            source.delete()
+            resolver.delete(source, null, null)
         }
     }
 
@@ -73,7 +83,7 @@ class AndroidWorkspaceContractTest {
         rule.onNodeWithContentDescription("Photo collage preview").performTouchInput { click(center) }
         rule.onNodeWithText("GZ Editor Pro").assertIsDisplayed()
         rule.runOnIdle { assertEquals(initial, current) }
-        assertArrayEquals(bytes, source.readBytes())
+        assertArrayEquals(bytes, requireNotNull(rule.activity.contentResolver.openInputStream(source)).use { it.readBytes() })
     }
 
     @Test fun dirtyCollageBackWaitsForCancelThenDiscardsOnlyWorkingChanges() = withCollage { initial, source, bytes ->
@@ -96,6 +106,6 @@ class AndroidWorkspaceContractTest {
             assertEquals(initial, current)
             assertEquals(1, departures)
         }
-        assertArrayEquals(bytes, source.readBytes())
+        assertArrayEquals(bytes, requireNotNull(rule.activity.contentResolver.openInputStream(source)).use { it.readBytes() })
     }
 }

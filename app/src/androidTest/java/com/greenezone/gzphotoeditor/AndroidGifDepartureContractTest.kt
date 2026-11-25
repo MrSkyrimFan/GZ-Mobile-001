@@ -51,7 +51,7 @@ class AndroidGifDepartureContractTest {
         val originalBytes = listOf(bytes(red), bytes(blue))
         mount(context.filesDir, original)
         rule.onNodeWithText("Timing").performScrollTo().performClick()
-        rule.onNodeWithText("Play once").performScrollTo().performClick()
+        rule.onNodeWithText("Play once").performClick()
         rule.waitUntil(15_000) { !current.forever }
         val edited = current
 
