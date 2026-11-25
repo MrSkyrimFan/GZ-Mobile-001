@@ -48,15 +48,28 @@ class ProNamedSaveTest {
     }
 
     private fun openProject(name: String) {
-        click("File ▾")
-        click("Open project")
+        val saved = requireNotNull(ProStore.load(context, name))
+        rule.onNodeWithText("Options").performClick()
+        click("Open project…")
+        rule.waitUntil(15_000) { rule.onAllNodesWithText(name).fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText(name).performScrollTo().performClick()
-        waitForDialogToClose("Saved Pro projects")
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty() &&
+                rule.onAllNodesWithText(saved.layers.first().name + " ·", substring = true)
+                    .fetchSemanticsNodes().isNotEmpty() &&
+                rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                    .fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun openSave() {
-        click("File ▾")
+        rule.onNodeWithText("Options").performClick()
         click("Save project")
+    }
+
+    private fun openSaveAs() {
+        rule.onNodeWithText("Options").performClick()
+        click("Save project as…")
     }
 
     private fun saveAs(name: String) {
@@ -65,8 +78,10 @@ class ProNamedSaveTest {
     }
 
     private fun assertSaveTarget(name: String) {
-        openSave()
-        rule.onNode(hasSetTextAction()).assert(hasText(name))
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Save project").assertIsNotEnabled()
+        click("Save project as…")
+        rule.onNode(hasSetTextAction()).assert(hasText("$name copy"))
         click("Cancel")
     }
 
@@ -94,15 +109,13 @@ class ProNamedSaveTest {
             assertTrue(ProStore.save(context, nameB, b))
             switchTo("Photo editing Pro")
             openProject(nameA)
-            openSave()
-            saveAs(nameA)
-            waitForDialogToClose("Save Pro project")
+            assertSaveTarget(nameA)
 
             openProject(nameB)
             rule.onNodeWithText("Hide").performScrollTo().performClick()
             openSave()
-            click("Save")
-            waitForDialogToClose("Save Pro project")
+            rule.waitUntil(15_000) { ProStore.load(context, nameB) == editedB }
+            rule.onAllNodesWithText("Save Pro project").assertCountEquals(0)
             assertProject(nameA, a, Color.RED)
             assertProject(nameB, editedB, Color.WHITE)
 
@@ -136,20 +149,20 @@ class ProNamedSaveTest {
             switchTo("Photo editing Pro")
             openProject(nameA)
             openProject(nameB)
-            click("Undo")
+            rule.onNodeWithContentDescription("Undo").performClick()
             assertSaveTarget(nameA)
-            click("Redo")
+            rule.onNodeWithContentDescription("Redo").performClick()
             assertSaveTarget(nameB)
 
-            openSave()
+            openSaveAs()
             saveAs("  Red   $suffix  ")
             rule.waitUntil(10_000) { rule.onAllNodesWithText("Replace saved Pro project?").fetchSemanticsNodes().isNotEmpty() }
             assertProject(nameA, a, Color.RED)
             click("Cancel")
-            click("Cancel")
+            waitForDialogToClose("Save Pro project")
             assertSaveTarget(nameB)
 
-            openSave()
+            openSaveAs()
             saveAs(nameC)
             waitForDialogToClose("Save Pro project")
             assertProject(nameC, b, Color.BLUE)
@@ -158,17 +171,27 @@ class ProNamedSaveTest {
             switchTo("Photo editing Pro")
             assertSaveTarget(nameC)
 
-            openSave()
+            openSaveAs()
             saveAs("Red $suffix")
             rule.waitUntil(10_000) { rule.onAllNodesWithText("Replace saved Pro project?").fetchSemanticsNodes().isNotEmpty() }
             click("Replace project")
             waitForDialogToClose("Save Pro project")
             assertProject(nameA, b, Color.BLUE)
 
-            click("File ▾")
-            click("Open project")
+            rule.onNodeWithText("Options").performClick()
+            click("Open project…")
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithContentDescription("Delete saved project $nameA").fetchSemanticsNodes().isNotEmpty()
+            }
             rule.onNodeWithContentDescription("Delete saved project $nameA").performScrollTo().performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Delete saved Pro project?").fetchSemanticsNodes().isNotEmpty()
+            }
             click("Delete saved project")
+            rule.waitUntil(15_000) {
+                ProStore.load(context, nameA) == null &&
+                    rule.onAllNodesWithText("Delete saved Pro project?").fetchSemanticsNodes().isEmpty()
+            }
             click("Close")
             assertNull(ProStore.load(context, nameA))
             openSave()

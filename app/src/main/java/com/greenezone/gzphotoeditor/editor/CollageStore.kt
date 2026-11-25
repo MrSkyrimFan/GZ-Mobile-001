@@ -100,17 +100,21 @@ object CollageStore {
     fun normalizedName(input: String): String = input.trim().replace(Regex("\\s+"), " ").take(36)
 
     private fun key(name: String): String? {
-        val clean = normalizedName(name)
-        if (clean.isBlank()) return null
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(
-            clean.toByteArray(StandardCharsets.UTF_8)
-        )
+        if (name.isBlank()) return null
+        return Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(name.toByteArray(StandardCharsets.UTF_8))
+    }
+
+    private fun storedName(context: Context, input: String): String {
+        val exact = key(input)?.let { File(directory(context), "$it.gzc") }
+        return if (exact != null && (hasSavedFile(exact) || NamedProjectIdentity.hasPendingPublication(exact))) input else normalizedName(input)
     }
 
     @Synchronized
     fun names(context: Context): List<String> {
+        NamedProjectIdentity.recoverDirectory(directory(context), ".gzc", MAX_BYTES.toLong())
         return directory(context).listFiles()?.mapNotNull { file ->
-            val name = file.name.removeSuffix(".bak")
+            val name = file.name.removeSuffix(".bak").removeSuffix(".save-pending")
             if (!file.isFile || !name.endsWith(".gzc")) return@mapNotNull null
             try {
                 String(Base64.getUrlDecoder().decode(name.removeSuffix(".gzc")),
@@ -119,51 +123,95 @@ object CollageStore {
         }?.distinct()?.sortedBy { it.lowercase() } ?: emptyList()
     }
 
-    @Synchronized
-    fun save(context: Context, name: String, document: CollageDocument): Boolean {
-        val id = key(name) ?: return false
-        val folder = directory(context)
-        val file = File(folder, "$id.gzc")
-        if (!hasSavedFile(file) && names(context).size >= MAX_SAVED) return false
+    fun save(context: Context, name: String, document: CollageDocument): Boolean =
+        write(context, name, document, null) is ProjectSaveResult.Saved
+
+    fun saveNamed(context: Context, intent: ProjectSaveIntent,
+        document: CollageDocument): ProjectSaveResult =
+        write(context, intent.requestedName, document, intent)
+
+    @Synchronized private fun write(context: Context, input: String, document: CollageDocument,
+        intent: ProjectSaveIntent?): ProjectSaveResult {
+        if (!CollageMath.validCount(document.photos.size) ||
+            document.photos.any { !it.uri.startsWith("content://") || it.uri.length > 4096 })
+            return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_DOCUMENT)
+        if (intent?.expectedProject?.kind?.let { it != ProjectKind.COLLAGE } == true)
+            return ProjectSaveResult.Rejected(ProjectSaveFailure.TARGET_CHANGED)
         return try {
+            val name = storedName(context, input)
+            val id = key(name) ?: return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_NAME)
+            val file = File(directory(context), "$id.gzc")
             val encoded = encode(document)
-            val atomic = AtomicFile(file)
-            val stream = atomic.startWrite()
-            try {
-                stream.write(encoded.toByteArray(StandardCharsets.UTF_8))
-                stream.fd.sync()
-                atomic.finishWrite(stream)
-            } catch (failure: Exception) {
-                atomic.failWrite(stream)
-                throw failure
+            val bytes = encoded.toByteArray(StandardCharsets.UTF_8)
+            NamedProjectIdentity.recoverPublication(file, MAX_BYTES.toLong())
+            val exists = hasSavedFile(file)
+            val current = if (exists) NamedProjectIdentity.reference(context, ProjectKind.COLLAGE,
+                name, NamedProjectIdentity.fileVersion(file, MAX_BYTES.toLong())
+                    ?: return ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)) else null
+            if (intent != null) NamedProjectIdentity.authorize(ProjectKind.COLLAGE, intent, current)
+                ?.let { return it }
+            if (!exists && names(context).size >= MAX_SAVED)
+                return ProjectSaveResult.Rejected(ProjectSaveFailure.FULL)
+            val identity = current?.id ?: NamedProjectIdentity.reserve(context,
+                ProjectKind.COLLAGE, name, payloadExists = false)
+            val version = NamedProjectIdentity.publish(file, bytes, MAX_BYTES.toLong())
+            ProjectSaveResult.Saved(NamedProjectRef(ProjectKind.COLLAGE, identity, name, version))
+        } catch (_: EditDocumentCodec.RecipeTooLarge) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+        } catch (_: OutOfMemoryError) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+        } catch (_: IllegalArgumentException) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+        } catch (_: Exception) {
+            ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)
+        }
+    }
+
+    @Synchronized fun loadNamed(context: Context, input: String): NamedProject<CollageDocument>? = try {
+        val name = storedName(context, input)
+        val id = key(name)
+        if (id == null) null else {
+            val file = File(directory(context), "$id.gzc")
+            NamedProjectIdentity.readPayload(file, MAX_BYTES.toLong()) { stream, _ ->
+                decode(stream.bufferedReader(Charsets.UTF_8).readText())
+            }?.let { loaded ->
+                NamedProject(NamedProjectIdentity.reference(context, ProjectKind.COLLAGE,
+                    name, loaded.version), loaded.content)
             }
-            readRecipe(file) == encoded
-        } catch (_: Exception) { false }
+        }
+    } catch (_: OutOfMemoryError) { null } catch (_: Exception) { null }
+
+    @Synchronized fun deleteNamed(context: Context, expected: NamedProjectRef): Boolean {
+        if (expected.kind != ProjectKind.COLLAGE) return false
+        val current = loadNamed(context, expected.name)?.project ?: return false
+        return current == expected && delete(context, current.name)
     }
 
     private fun hasSavedFile(file: File): Boolean =
         file.isFile || File(file.path + ".bak").isFile
 
-    private fun readRecipe(file: File): String? =
-        AtomicFile(file).openRead().use { stream ->
-            if (stream.channel.size() > MAX_BYTES) null
-            else stream.bufferedReader(Charsets.UTF_8).readText()
-        }
-
     @Synchronized
     fun load(context: Context, name: String): CollageDocument? {
-        val id = key(name) ?: return null
+        val id = key(storedName(context, name)) ?: return null
         val file = File(directory(context), "$id.gzc")
-        if (!hasSavedFile(file)) return null
-        return try { readRecipe(file)?.let(::decode) } catch (_: Exception) { null }
+        return try {
+            NamedProjectIdentity.readPayload(file, MAX_BYTES.toLong()) { stream, _ ->
+                decode(stream.bufferedReader(Charsets.UTF_8).readText())
+            }?.content
+        } catch (_: Exception) { null }
     }
 
     @Synchronized
     fun delete(context: Context, name: String): Boolean {
-        val id = key(name) ?: return false
+        val canonical = storedName(context, name)
+        val id = key(canonical) ?: return false
         val file = File(directory(context), "$id.gzc")
+        try { NamedProjectIdentity.recoverPublication(file, MAX_BYTES.toLong()) }
+        catch (_: Exception) { return false }
         if (!hasSavedFile(file)) return false
         AtomicFile(file).delete()
-        return !hasSavedFile(file)
+        val deleted = !hasSavedFile(file)
+        if (deleted) NamedProjectIdentity.forget(context, ProjectKind.COLLAGE, canonical)
+        return deleted
     }
 }

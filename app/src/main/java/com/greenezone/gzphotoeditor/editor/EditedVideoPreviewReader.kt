@@ -11,6 +11,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.os.SystemClock
+import android.util.Log
 import java.io.IOException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
@@ -38,6 +39,7 @@ internal class EditedVideoPreviewReader private constructor(
     private val rotation: Int,
     private val prefetchReverseFrames: Boolean,
     private val filterDownscaling: Boolean,
+    private val bulkSampleRows: Boolean,
     private val reversePreviewWindow: ReversePreviewWindow?,
     private val checkActive: () -> Unit
 ) : GifFrameReader {
@@ -47,11 +49,19 @@ internal class EditedVideoPreviewReader private constructor(
     private val localWindow = ReversePreviewWindow()
     private val reverseFirstTime = if (reversePreviewWindow != null && clip.reverse)
         GifVideoMath.frameTimesMs(clip).firstOrNull() else null
+    // One bounded memo belongs to this reader, never to retained pictures or global state.
+    // The scalar sampling option is also the uncached exact-color test oracle.
+    private val colorCache = if (bulkSampleRows) YuvColorCache() else null
+    private val bitmapTiming = GifStageTiming()
+    private val samplePackTiming = GifStageTiming()
+    private var bitmapFrames = 0L
+    private var timingReported = false
     private var sampleAxes: SampleAxes? = null
     private var reverseStorage: ReverseStorage? = null
     private var inputEnded = false
     private var lastIndex = -1
     private var started = false
+    internal val sampleRowStorageBytes: Int get() = sampleAxes?.rowStorageBytes ?: 0
 
     override fun frame(atMs: Long, edge: Int): Bitmap {
         checkActive()
@@ -61,7 +71,7 @@ internal class EditedVideoPreviewReader private constructor(
         window.setEdge(edge)
         val (width, height) = clip.frameSize(edge)
         window.picture(target, consume = shared == null)?.let {
-            return storage(width, height).render(it, checkActive)
+            return materializeBitmap { storage(width, height).render(it, checkActive, colorCache) }
         }
         if (shared == null) window.clear()
         // A paused first reverse picture must already decode through the same GOP.
@@ -111,9 +121,9 @@ internal class EditedVideoPreviewReader private constructor(
                         image.use {
                             val picture = samplePicture(it, decoder.getOutputFormat(output), width, height)
                             if (index == target && (shared == null || !prefetch)) {
-                                return picture.toBitmap(checkActive)
+                                return materializeBitmap { picture.toBitmap(checkActive, colorCache) }
                             }
-                            requireNotNull(packed).sample(picture, checkActive)
+                            samplePackTiming.measure { requireNotNull(packed).sample(picture, checkActive) }
                             retainedIndex = index
                             retainedColor = picture.color
                         }
@@ -126,11 +136,15 @@ internal class EditedVideoPreviewReader private constructor(
                 val storage = requireNotNull(packed)
                 val picture = storage.compress(color, checkActive)
                 window.retain(retainedIndex, picture)
-                if (retainedIndex == target) return storage.render(picture, checkActive)
+                if (retainedIndex == target) return materializeBitmap { storage.render(picture, checkActive, colorCache) }
             }
             if (end) throw IOException("Video ended before the requested frame")
         }
     }
+
+    /** Includes sampling/restore, exact color lookup/conversion and bitmap allocation. */
+    private fun materializeBitmap(render: () -> Bitmap): Bitmap =
+        bitmapTiming.measure(render).also { bitmapFrames++ }
 
     private fun indexAtOrBefore(timeMs: Long): Int {
         val found = times.binarySearch(timeMs)
@@ -180,7 +194,7 @@ internal class EditedVideoPreviewReader private constructor(
         val hd = standard == MediaFormat.COLOR_STANDARD_BT709 ||
             (standard == null && maxOf(clip.width, clip.height) >= 1280)
         val axes = sampleAxes?.takeIf { it.width == width && it.height == height && it.crop == crop }
-            ?: SampleAxes(width, height, crop, rotation, filterDownscaling).also { sampleAxes = it }
+            ?: SampleAxes(width, height, crop, rotation, filterDownscaling, bulkSampleRows).also { sampleAxes = it }
         return SamplePicture(Plane(planes[0], axes.lumaRows), Plane(planes[1], axes.uRows),
             Plane(planes[2], axes.vRows), axes, PreviewColor(hd, fullRange))
     }
@@ -190,7 +204,8 @@ internal class EditedVideoPreviewReader private constructor(
         val height: Int,
         val crop: Rect,
         rotation: Int,
-        filterDownscaling: Boolean
+        filterDownscaling: Boolean,
+        private val bulkSampleRows: Boolean
     ) {
         private val transposed = rotation == 90 || rotation == 270
         private val sourceXs = sampleCoordinates(
@@ -207,9 +222,11 @@ internal class EditedVideoPreviewReader private constructor(
         private val sourceColumns = if (transposed) height else width
         private val sourceRows = if (transposed) width else height
         private val filtered = filterDownscaling && (sourceColumns < crop.width() || sourceRows < crop.height())
-        val lumaRows = if (filtered) FilterRows() else null
-        val uRows = if (filtered) FilterRows() else null
-        val vRows = if (filtered) FilterRows() else null
+        val lumaRows = if (filtered || bulkSampleRows) FilterRows() else null
+        val uRows = if (filtered || bulkSampleRows) FilterRows() else null
+        val vRows = if (filtered || bulkSampleRows) FilterRows() else null
+        val rowStorageBytes: Int get() = listOfNotNull(lumaRows, uRows, vRows)
+            .sumOf { it.upper.size + it.lower.size }
         private val xWeights = if (filtered) filterCoordinates(sourceColumns, crop.left, crop.width(),
             rotation == 180 || rotation == 270) else emptyArray()
         private val yWeights = if (filtered) filterCoordinates(sourceRows, crop.top, crop.height(),
@@ -232,9 +249,10 @@ internal class EditedVideoPreviewReader private constructor(
             checkActive: () -> Unit,
             consume: (Int, Int) -> Unit
         ) {
-            // Scan along decoded rows for filtered output so each YUV row pair is bulk-read once.
-            // A sideways picture visits destination columns first but keeps the same pixel indexes.
-            val byColumn = filtered && transposed
+            // Scan along decoded rows. Original-size sampling also bulk-reads each YUV row,
+            // avoiding three direct-buffer calls per output pixel with identical coordinates.
+            // A sideways picture visits destination columns first and keeps the same output indexes.
+            val byColumn = (filtered || bulkSampleRows) && transposed
             val rows = if (byColumn) width else height
             val columns = if (byColumn) height else width
             for (outer in 0 until rows) {
@@ -244,6 +262,11 @@ internal class EditedVideoPreviewReader private constructor(
                     y.cacheRows(taps, crop, 0)
                     u.cacheRows(taps, crop, 1)
                     v.cacheRows(taps, crop, 1)
+                } else if (bulkSampleRows) {
+                    val sourceRow = sourceYs[outer]
+                    y.cacheRow(sourceRow, crop, 0)
+                    u.cacheRow(sourceRow, crop, 1)
+                    v.cacheRow(sourceRow, crop, 1)
                 }
                 for (inner in 0 until columns) {
                     val row = if (byColumn) inner else outer
@@ -264,6 +287,10 @@ internal class EditedVideoPreviewReader private constructor(
             }
             val x = sourceXs[xIndex]
             val yy = sourceYs[yIndex]
+            if (bulkSampleRows) {
+                return y.readCached(x) or (u.readCached(x / 2) shl 8) or
+                    (v.readCached(x / 2) shl 16)
+            }
             return y.read(x, yy) or (u.read(x / 2, yy / 2) shl 8) or
                 (v.read(x / 2, yy / 2) shl 16)
         }
@@ -276,10 +303,11 @@ internal class EditedVideoPreviewReader private constructor(
         val axes: SampleAxes,
         val color: PreviewColor
     ) {
-        fun toBitmap(checkActive: () -> Unit): Bitmap {
+        fun toBitmap(checkActive: () -> Unit, cache: YuvColorCache?): Bitmap {
             val pixels = IntArray(axes.width * axes.height)
             axes.forEachSample(y, u, v, checkActive) { index, sample ->
-                pixels[index] = color.pixel(sample and 255, (sample shr 8) and 255, sample shr 16)
+                pixels[index] = cache?.pixel(sample, color)
+                    ?: color.pixel(sample and 255, (sample shr 8) and 255, sample shr 16)
             }
             return Bitmap.createBitmap(pixels, axes.width, axes.height, Bitmap.Config.ARGB_8888)
         }
@@ -294,7 +322,40 @@ internal class EditedVideoPreviewReader private constructor(
         }
     }
 
+    /**
+     * Exact memoization only: a collision recomputes the original conversion.
+     * Keys include all YUV bytes and both matrix/range bits; no quantization occurs.
+     * Two 4096-entry IntArrays retain exactly 32768 bytes of cache payload.
+     */
+    internal class YuvColorCache {
+        private val keys = IntArray(CAPACITY) { -1 }
+        private val values = IntArray(CAPACITY)
+        var hits = 0L
+            private set
+        var misses = 0L
+            private set
+        val storageBytes: Int get() = (keys.size + values.size) * Int.SIZE_BYTES
+
+        fun pixel(sample: Int, color: PreviewColor): Int {
+            val packed = sample and 0x00ffffff
+            val key = packed or (color.cacheIdentity shl 24)
+            val slot = (key * -1_640_531_527) ushr 20
+            if (keys[slot] == key) {
+                hits++
+                return values[slot]
+            }
+            misses++
+            val exact = color.pixel(packed and 255, (packed ushr 8) and 255, packed ushr 16)
+            keys[slot] = key
+            values[slot] = exact
+            return exact
+        }
+
+        private companion object { const val CAPACITY = 4096 }
+    }
+
     internal class PreviewColor(hd: Boolean, fullRange: Boolean) {
+        internal val cacheIdentity: Int = (if (hd) 2 else 0) or (if (fullRange) 1 else 0)
         private val uToBlue = if (hd) 1.8556 else 1.772
         private val vToRed = if (hd) 1.5748 else 1.402
         private val uToGreen = if (hd) -.1873 else -.344136
@@ -379,7 +440,7 @@ internal class EditedVideoPreviewReader private constructor(
             return ReversePicture(samples, color)
         }
 
-        fun render(picture: ReversePicture, checkActive: () -> Unit): Bitmap {
+        fun render(picture: ReversePicture, checkActive: () -> Unit, cache: YuvColorCache?): Bitmap {
             val samples = if (picture.samples.size == raw.size) picture.samples else {
                 inflater.reset()
                 inflater.setInput(picture.samples)
@@ -389,8 +450,11 @@ internal class EditedVideoPreviewReader private constructor(
                 raw
             }
             return previewBitmap(width, height, checkActive) { _, _, index ->
-                picture.color.pixel(samples[index].toInt() and 255,
-                    samples[pitch + index].toInt() and 255, samples[2 * pitch + index].toInt() and 255)
+                val y = samples[index].toInt() and 255
+                val u = samples[pitch + index].toInt() and 255
+                val v = samples[2 * pitch + index].toInt() and 255
+                cache?.pixel(y or (u shl 8) or (v shl 16), picture.color)
+                    ?: picture.color.pixel(y, u, v)
             }
         }
 
@@ -421,6 +485,23 @@ internal class EditedVideoPreviewReader private constructor(
         private val pixelStride = plane.pixelStride
 
         fun read(x: Int, y: Int) = buffer.get(origin + y * rowStride + x * pixelStride).toInt() and 255
+
+        fun cacheRow(sourceY: Int, crop: Rect, subsampleShift: Int) {
+            val rows = requireNotNull(filtered)
+            val view = requireNotNull(rowBuffer)
+            val start = crop.left shr subsampleShift
+            val end = (crop.right - 1) shr subsampleShift
+            val byteCount = (end - start) * pixelStride + 1
+            rows.start = start
+            rows.reserve(byteCount)
+            view.position(origin + (sourceY shr subsampleShift) * rowStride + start * pixelStride)
+            view.get(rows.upper, 0, byteCount)
+        }
+
+        fun readCached(x: Int): Int {
+            val rows = requireNotNull(filtered)
+            return rows.upper[(x - rows.start) * pixelStride].toInt() and 255
+        }
 
         fun cacheRows(y: FilterTaps, crop: Rect, subsampleShift: Int) {
             val rows = requireNotNull(filtered)
@@ -461,9 +542,23 @@ internal class EditedVideoPreviewReader private constructor(
     }
 
     override fun close() {
-        localWindow.clear()
-        try { reverseStorage?.close() } finally {
-            try { decoder.release() } finally { extractor.release() }
+        try {
+            localWindow.clear()
+            try { reverseStorage?.close() } finally {
+                try { decoder.release() } finally { extractor.release() }
+            }
+        } finally {
+            if (!timingReported) {
+                timingReported = true
+                Log.d("GzGifReaderStage", "bulkRows=" + bulkSampleRows +
+                    " colorMemo=" + (colorCache != null) + " bitmapFrames=" + bitmapFrames +
+                    " bitmapConvertMs=" + bitmapTiming.wallMs + " bitmapConvertCpuMs=" + bitmapTiming.cpuMs +
+                    " samplePackMs=" + samplePackTiming.wallMs + " samplePackCpuMs=" + samplePackTiming.cpuMs +
+                    " colorCacheHits=" + (colorCache?.hits ?: 0L) +
+                    " colorCacheMisses=" + (colorCache?.misses ?: 0L) +
+                    " colorCacheBytes=" + (colorCache?.storageBytes ?: 0) +
+                    " sampleRowBytes=" + sampleRowStorageBytes)
+            }
         }
     }
 
@@ -496,6 +591,8 @@ internal class EditedVideoPreviewReader private constructor(
             clip: GifVideoClip,
             prefetchReverseFrames: Boolean = false,
             filterDownscaling: Boolean = false,
+            // Scalar access remains a test oracle for exact bulk-row pixel equivalence.
+            bulkSampleRows: Boolean = true,
             reversePreviewWindow: ReversePreviewWindow? = null,
             checkActive: () -> Unit
         ): EditedVideoPreviewReader {
@@ -523,7 +620,7 @@ internal class EditedVideoPreviewReader private constructor(
                     decoder.configure(format, null, null, 0)
                     decoder.start()
                     return EditedVideoPreviewReader(clip, extractor, decoder, format, rotation,
-                        prefetchReverseFrames, filterDownscaling, reversePreviewWindow, checkActive)
+                        prefetchReverseFrames, filterDownscaling, bulkSampleRows, reversePreviewWindow, checkActive)
                 } catch (error: Throwable) {
                     decoder.release()
                     throw error

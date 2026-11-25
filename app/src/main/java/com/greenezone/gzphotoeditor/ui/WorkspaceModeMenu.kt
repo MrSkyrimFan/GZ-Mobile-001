@@ -2,6 +2,8 @@ package com.greenezone.gzphotoeditor.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -37,7 +39,7 @@ fun WorkspaceModeMenu(
         TextButton(
             enabled = enabled,
             onClick = { expanded = true },
-            modifier = Modifier.semantics { contentDescription = "Choose editing workspace" }
+            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Choose editing workspace" }
         ) {
             Text(current.shortLabel + " ▾", fontSize = 12.sp, color = EditorMint,
                 fontWeight = FontWeight.SemiBold, maxLines = 1)

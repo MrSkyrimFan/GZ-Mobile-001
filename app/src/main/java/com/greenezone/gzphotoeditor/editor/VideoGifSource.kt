@@ -441,6 +441,7 @@ object VideoGifSource {
             !clip.reverse && clip.speedPercent == 100 && clip.fps == 0 &&
             doc.edits == EditDocument() && doc.size == GifSize.SOURCE && doc.aspect == GifAspect.SOURCE &&
             doc.loopCount == clip.loopCount) {
+            Log.d("GzGifExportRoute", "route=untouched-gif-copy")
             context.contentResolver.openInputStream(Uri.parse(clip.uri))?.use { input ->
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
@@ -462,6 +463,7 @@ object VideoGifSource {
             (clip.height * decodedScale).roundToInt().coerceAtLeast(1)
         // Keep the codec's reverse window and working planes bounded even at Original size.
         val canStream = !clip.isGif && clip.sourceTimesMs.isNotEmpty() && decodedPixels <= 2_073_600L
+        Log.d("GzGifExportRoute", if (canStream) "route=streaming-codec" else "route=gif-or-retriever")
         if (canStream) {
             writeWithReader(doc, out, cancel, onProgress) {
                 openStreamingExport(context, clip, cancel)
@@ -488,7 +490,7 @@ object VideoGifSource {
 
         private fun readFallback(time: Long, edge: Int): Bitmap {
             val reader = retriever ?: open(context, clip, batchFrames = true, allowScaledBatches = true)
-                .also { retriever = it }
+                .also { retriever = it; Log.d("GzGifExportRoute", "route=streaming-fallback-retriever") }
             return reader.frame(time, edge)
         }
 

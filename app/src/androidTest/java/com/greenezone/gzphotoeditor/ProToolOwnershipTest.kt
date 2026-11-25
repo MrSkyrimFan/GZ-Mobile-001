@@ -103,15 +103,15 @@ class ProToolOwnershipTest {
         rule.onNodeWithText("↓ Behind").performScrollTo().performClick()
         rule.runOnIdle { assertEquals(listOf(second, first), current.layers) }
 
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.runOnIdle { assertEquals(listOf(first, second), current.layers) }
         rule.onNodeWithText("Second adjustment · Adjustment").assertIsDisplayed()
 
-        rule.onNodeWithText("Redo").performClick()
+        rule.onNodeWithContentDescription("Redo").performClick()
         rule.runOnIdle { assertEquals(listOf(second, first), current.layers) }
         rule.onNodeWithText("Second adjustment · Adjustment").assertIsDisplayed()
 
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.onNodeWithText("Hide").performScrollTo().performClick()
         rule.runOnIdle { assertEquals(listOf(first, second.copy(visible = false)), current.layers) }
     }
@@ -160,9 +160,9 @@ class ProToolOwnershipTest {
         tool("Layer effects")
         rule.onNodeWithText("Unchanged").performScrollTo().performClick()
         rule.runOnIdle { assertEquals(layer.copy(effect = ProPixelEffect.NONE), current.layers.single()) }
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.runOnIdle { assertEquals(layer, current.layers.single()) }
-        rule.onNodeWithText("Redo").performClick()
+        rule.onNodeWithContentDescription("Redo").performClick()
         rule.runOnIdle { assertEquals(layer.copy(effect = ProPixelEffect.NONE), current.layers.single()) }
     }
 
@@ -185,7 +185,7 @@ class ProToolOwnershipTest {
                 // 84×28 rotates to 28×84, then loses the outer quarters of its width.
                 assertEquals(14f / 84f, replaced.aspect, .0001f)
             }
-            rule.onNodeWithText("Undo").performClick()
+            rule.onNodeWithContentDescription("Undo").performClick()
             rule.runOnIdle { assertEquals(layer, current.layers.single()) }
         } finally {
             resolver.delete(replacement, null, null)

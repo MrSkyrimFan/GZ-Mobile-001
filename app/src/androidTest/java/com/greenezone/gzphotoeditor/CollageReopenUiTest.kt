@@ -66,7 +66,7 @@ class CollageReopenUiTest {
             actions.performScrollToNode(hasText("Move right"))
             rule.onNodeWithText("Move right").performClick()
             rule.runOnIdle { assertEquals(listOf(second, first), observed.photos) }
-            rule.onNodeWithText("↶", substring = false).performClick()
+            rule.onNodeWithContentDescription("Undo").performClick()
             rule.runOnIdle { assertEquals(listOf(first, second), observed.photos) }
 
             actions.performScrollToNode(hasText("Remove"))
@@ -125,8 +125,9 @@ class CollageReopenUiTest {
                     CollageWorkspaceScreen(current, { current = it; observed = it }, {})
                 }
             }
-            rule.waitUntil(10_000) { rule.onAllNodesWithText("Projects").fetchSemanticsNodes().isNotEmpty() }
-            rule.onNode(hasText("Projects") and hasClickAction()).performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Open project…").performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithText("Intact A").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("Intact A").performClick()
             rule.onNodeWithText("Open").performClick()
             rule.waitUntil(15_000) {
@@ -134,8 +135,9 @@ class CollageReopenUiTest {
             }
             rule.onNodeWithText("Photos", substring = false).performClick()
             val actions = rule.onNodeWithTag("collage-tile-actions")
-            actions.performScrollToNode(hasText("Saved collages"))
-            rule.onNodeWithText("Saved collages").performClick()
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Open project…").performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithText("Missing B").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("Missing B").performClick()
             rule.onNodeWithText("Open").performClick()
             rule.waitUntil(15_000) {
@@ -144,6 +146,14 @@ class CollageReopenUiTest {
             rule.onNodeWithContentDescription("Photo collage preview").assertDoesNotExist()
             actions.performScrollToNode(hasText("Relink source"))
             rule.onNodeWithText("Relink source").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Confirm original source").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.runOnIdle {
+                assertEquals("Relink must remain provisional until confirmation", missing, observed.photos.first())
+                assertEquals(valid, observed.photos.last())
+            }
+            rule.onNode(hasText("Use this source", substring = false) and hasAnyAncestor(isDialog())).performClick()
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
             }
@@ -168,6 +178,7 @@ class CollageReopenUiTest {
             assertTrue(CollageStore.save(storage, "Retain previous", previous))
             val published = File(folder, "gz_collages").listFiles()!!.single { it.extension == "gzc" }
             val before = published.readBytes()
+            val previousIdentity = requireNotNull(CollageStore.loadNamed(storage, "Retain previous")).project
             val obstacle = File(published.path + ".new")
             assertTrue(obstacle.mkdir())
             File(obstacle, "blocker").writeText("test")
@@ -175,6 +186,52 @@ class CollageReopenUiTest {
             assertFalse(CollageStore.save(storage, "Retain previous", replacement))
             assertArrayEquals(before, published.readBytes())
             assertEquals(previous, CollageStore.load(storage, "Retain previous"))
+            val reopened = requireNotNull(CollageStore.loadNamed(storage, "Retain previous"))
+            assertEquals(previousIdentity, reopened.project)
+            assertEquals(previous, reopened.content)
+            assertFalse("An unchanged healthy payload must not remain hidden behind a failed transaction",
+                NamedProjectIdentity.hasPendingPublication(published))
+            assertTrue("A failed save must not delete an unrelated staging obstacle", obstacle.isDirectory)
+            assertEquals("test", File(obstacle, "blocker").readText())
+        } finally {
+            folder.deleteRecursively()
+        }
+    }
+
+    @Test fun emptyStagingDirectoryRejectsSaveWithoutHidingOrMutatingHealthyProject() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val folder = Files.createTempDirectory(target.cacheDir.toPath(), "collage-empty-staging-").toFile()
+        val storage = object : ContextWrapper(target) { override fun getFilesDir(): File = folder }
+        val previous = CollageDocument(listOf(
+            CollagePhoto("content://gz.test/empty-stage-first"),
+            CollagePhoto("content://gz.test/empty-stage-second")
+        ))
+        try {
+            assertTrue(CollageStore.save(storage, "Empty staging", previous))
+            val published = File(folder, "gz_collages").listFiles()!!.single { it.extension == "gzc" }
+            val before = published.readBytes()
+            val original = requireNotNull(CollageStore.loadNamed(storage, "Empty staging"))
+            val obstacle = File(published.path + ".new")
+            assertTrue(obstacle.mkdir())
+            assertTrue(requireNotNull(obstacle.listFiles()).isEmpty())
+            val replacement = previous.copy(layout = previous.layout.copy(gap = .05f))
+
+            // Both save APIs must refuse an empty non-file staging occupant.
+            assertFalse(CollageStore.save(storage, "Empty staging", replacement))
+            assertEquals(ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE),
+                CollageStore.saveNamed(storage, ProjectSaveIntent.Update(original.project), replacement))
+            assertArrayEquals(before, published.readBytes())
+            assertTrue("Save deleted the empty staging directory", obstacle.isDirectory)
+            assertFalse(NamedProjectIdentity.hasPendingPublication(published))
+
+            // Legacy and identity-aware reads must still expose the healthy
+            // project without treating the directory as disposable AtomicFile debris.
+            assertEquals(previous, CollageStore.load(storage, "Empty staging"))
+            assertTrue("Legacy read deleted the staging directory", obstacle.isDirectory)
+            assertEquals(original, CollageStore.loadNamed(storage, "Empty staging"))
+            assertTrue("Named read deleted the staging directory", obstacle.isDirectory)
+            assertTrue(requireNotNull(obstacle.listFiles()).isEmpty())
+            assertArrayEquals(before, published.readBytes())
         } finally {
             folder.deleteRecursively()
         }
@@ -219,21 +276,23 @@ class CollageReopenUiTest {
                     CollageWorkspaceScreen(current, { current = it; restored = it }, {})
                 }
             }
-            rule.waitUntil(10_000) {
-                rule.onAllNodesWithText("Projects").fetchSemanticsNodes().isNotEmpty()
-            }
-            rule.onNodeWithText("Add photos").assertIsDisplayed()
-            val projects = rule.onNode(hasText("Projects") and hasClickAction())
-            val originalSlot = projects.fetchSemanticsNode().boundsInRoot
-            projects.performClick()
+            val options = rule.onNodeWithTag("workspace-options")
+            options.assertIsDisplayed()
+            val originalSlot = options.fetchSemanticsNode().boundsInRoot
+            options.performClick()
+            rule.onNodeWithText("Add photos…").assertIsDisplayed()
+            rule.onNodeWithText("Open project…").performClick()
+            rule.waitUntil(10_000) { rule.onAllNodesWithText("Two tile portrait").fetchSemanticsNodes().isNotEmpty() }
             rule.onNodeWithText("Two tile portrait").performClick()
             rule.onNodeWithText("Open").performClick()
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithContentDescription("Photo collage preview").fetchSemanticsNodes().isNotEmpty()
             }
             rule.runOnIdle { assertEquals(saved, restored) }
-            val export = rule.onNode(hasText("Export") and hasClickAction())
-            assertEquals(originalSlot, export.fetchSemanticsNode().boundsInRoot)
+            assertEquals(originalSlot, options.fetchSemanticsNode().boundsInRoot)
+            options.performClick()
+            val export = rule.onNode(hasText("Export image…") and hasClickAction())
+            export.assertIsDisplayed()
             export.performClick()
             rule.onNodeWithText("Export image").assertIsDisplayed()
         } finally {

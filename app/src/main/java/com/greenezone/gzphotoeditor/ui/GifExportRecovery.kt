@@ -23,6 +23,8 @@ import com.greenezone.gzphotoeditor.editor.GifStore
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.ImagePipeline
 import com.greenezone.gzphotoeditor.editor.PendingExport
+import com.greenezone.gzphotoeditor.editor.NamedProjectRef
+import com.greenezone.gzphotoeditor.editor.ProjectKind
 import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.editor.PendingExportPhase
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
@@ -40,18 +42,45 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.io.OutputStream
+import android.util.Log
+import com.greenezone.gzphotoeditor.editor.GifMath
 
-internal data class PendingGifRecipe(val document: GifDocument, val savedName: String?) {
+internal data class PendingGifRecipe(
+    val document: GifDocument,
+    val savedName: String?,
+    val savedProject: NamedProjectRef? = null
+) {
     fun encode(): String = JSONObject().apply {
         put("document", GifStore.encode(document))
         if (savedName != null) put("savedName", savedName)
+        savedProject?.let { project ->
+            put("savedProject", JSONObject().apply {
+                put("kind", project.kind.name)
+                put("id", project.id)
+                put("name", project.name)
+                put("version", project.version)
+            })
+        }
     }.toString()
 
     companion object {
         fun decode(value: String): PendingGifRecipe? = try {
             val json = JSONObject(value)
             GifStore.decode(json.getString("document"))?.let { document ->
-                PendingGifRecipe(document, json.optString("savedName").takeIf { it.isNotBlank() })
+                val name = json.optString("savedName").takeIf { it.isNotBlank() }
+                // The optional target must never make an otherwise usable captured
+                // export unreadable. Name-only and malformed metadata stay detached.
+                val project = runCatching {
+                    json.optJSONObject("savedProject")?.let { target ->
+                        NamedProjectRef(ProjectKind.valueOf(target.getString("kind")),
+                            target.getString("id"), target.getString("name"), target.getString("version"))
+                            .takeIf { it.kind == ProjectKind.GIF && it.name == name &&
+                                java.util.UUID.fromString(it.id).toString() == it.id &&
+                                Regex("[0-9a-f]{64}").matches(it.version) }
+                    }
+                }.getOrNull()
+                PendingGifRecipe(document, name, project)
             }
         } catch (_: Exception) { null }
     }
@@ -99,8 +128,15 @@ internal class GifExportOperation(
     private val journal = PendingExportJournal(context.filesDir)
     private val stages = GifExportStages(context.cacheDir)
     private val resolver = context.contentResolver
+    private val recoveredVideoReaderOwner = videoReaderOwner ?: Mutex()
     private var job: Job? = null
     private var diagnosticId: Long? = null
+    private var cancellationRequested = false
+    private var timing: GifExportTiming? = null
+    var visibleCompletion by mutableStateOf(0L)
+        private set
+    var uiAcknowledgement by mutableStateOf(0L)
+        private set
 
     var request by mutableStateOf(readRequest())
         private set
@@ -120,13 +156,26 @@ internal class GifExportOperation(
         stages.reconcile(journal.read(ExportWorkspace.GIF)?.id)
     }
 
-    private fun readRequest(): PendingExport? =
-        journal.read(ExportWorkspace.GIF)?.takeIf {
-            val recipe = PendingGifRecipe.decode(it.recipe)
-            if (recipe == null) video else (recipe.document.video != null) == video
-        }
+    // Export recovery owns its captured recipe independently of the current native route.
+    private fun readRequest(): PendingExport? = journal.read(ExportWorkspace.GIF)
 
-    fun start(recipe: PendingGifRecipe, operationId: Long? = null) {
+    fun suppressNativeRestore(ownerId: String): Boolean {
+        val pending = request ?: return true
+        if ((pending.nativeOwnerId ?: pending.id) != ownerId) return true
+        if (active || cancellationRequested) return false
+        return try {
+            val suppressed = journal.suppressNativeRestore(pending, ownerId)
+                ?: throw IOException("The retained GIF export changed. Try again.")
+            request = suppressed
+            true
+        } catch (error: Exception) {
+            onNotice("Could not discard these edits safely. " + error.message.orEmpty())
+            false
+        }
+    }
+
+    fun start(recipe: PendingGifRecipe, operationId: Long? = null, nativeOwnerId: String? = null) {
+        val requestedAt = System.nanoTime()
         if (active) return
         val prior = readRequest()
         if (prior != null) {
@@ -136,9 +185,11 @@ internal class GifExportOperation(
         }
         diagnosticId = operationId
         try {
-            val filename = if (video) "GZEditorPro.gif" else "GZEditorPro_Animation.gif"
-            val pending = journal.begin(ExportWorkspace.GIF, "image/gif", filename, recipe.encode())
+            val filename = if (recipe.document.video != null) "GZEditorPro.gif" else "GZEditorPro_Animation.gif"
+            val pending = journal.begin(ExportWorkspace.GIF, "image/gif", filename, recipe.encode(), nativeOwnerId = nativeOwnerId)
             request = pending
+            timing = GifExportTiming(pending.id, recipe.document, requestedAt)
+            uiAcknowledgement++
             beginPicker(pending, recipe.document)
         } catch (error: Exception) {
             onNotice("GIF export failed. ${error.message.orEmpty()}")
@@ -146,6 +197,7 @@ internal class GifExportOperation(
     }
 
     fun retry() {
+        val requestedAt = System.nanoTime()
         val prior = request ?: return
         if (active) return
         try {
@@ -153,6 +205,8 @@ internal class GifExportOperation(
             val next = journal.retry(prior)
             stages.transfer(prior, next)
             request = next
+            timing = GifExportTiming(next.id, recipe.document, requestedAt)
+            uiAcknowledgement++
             recoveryOpen = false
             beginPicker(next, recipe.document)
         } catch (error: Exception) {
@@ -164,12 +218,14 @@ internal class GifExportOperation(
         active = true
         onNotice("")
         trace(GifDiagnosticKind.EXPORT_STARTED, document)
-        if (!video) {
+        if (document.video == null) {
             askDestination(pending)
             return
         }
-        progress = "Writing GIF…"
+        progress = "Preparing GIF…"
+        val queued = System.nanoTime()
         job = scope.launch {
+            timing?.add("queue", System.nanoTime() - queued)
             try {
                 prepareStage(pending, document)
                 trace(GifDiagnosticKind.EXPORT_STAGED, document)
@@ -188,6 +244,7 @@ internal class GifExportOperation(
 
     private fun askDestination(pending: PendingExport) {
         progress = "Choose where to save your GIF"
+        timing?.pickerOpened = System.nanoTime()
         launchId = pending.id
     }
 
@@ -198,6 +255,11 @@ internal class GifExportOperation(
     fun launchFailed(expected: PendingExport, error: Exception) = fail(expected, error)
 
     fun receive(expected: PendingExport, result: ActivityResult) {
+        if (cancellationRequested) return
+        timing?.takeIf { it.id == expected.id }?.let { item ->
+            item.pickerOpened?.let { item.add("pickerDwell", System.nanoTime() - it) }
+            item.pickerOpened = null
+        }
         val destination = result.data?.data?.takeIf { result.resultCode == Activity.RESULT_OK }
         val claimed = try {
             if (destination == null) {
@@ -221,7 +283,9 @@ internal class GifExportOperation(
         recoveryOpen = false
         active = true
         progress = if (video) "Saving GIF…" else "Encoding GIF on your phone…"
+        val queued = System.nanoTime()
         job = scope.launch {
+            timing?.add("queue", System.nanoTime() - queued)
             try {
                 val doc = requireNotNull(PendingGifRecipe.decode(claimed.recipe)) {
                     "Saved GIF edits are unavailable."
@@ -234,17 +298,26 @@ internal class GifExportOperation(
                 progress = "Saving GIF…"
                 withContext(Dispatchers.IO) {
                     val copy = currentCoroutineContext()
+                    val transferAt = System.nanoTime()
                     copyStagedImage(staged, openDestination = {
                         journal.copying(claimed)
-                        resolver.openOutputStream(destination, "wt")
-                            ?: throw IOException("This provider cannot write the destination. Choose Files instead.")
+                        val measurement = timing
+                        val stream = if (measurement != null) measurement.measure("providerOpen") {
+                            resolver.openOutputStream(destination, "wt")
+                        } else resolver.openOutputStream(destination, "wt")
+                        val opened = stream ?: throw IOException("This provider cannot write the destination. Choose Files instead.")
+                        timing?.wrap(opened, "provider") ?: opened
                     }, checkActive = { copy.ensureActive() })
+                    timing?.add("copyTotal", System.nanoTime() - transferAt)
                     journal.discard(claimed)
                     stages.delete(claimed)
                 }
                 clearRequest(claimed)
                 trace(GifDiagnosticKind.EXPORT_COMPLETED, doc)
+                timing?.completed = System.nanoTime()
+                timing?.report("written")
                 onSaved(destination, doc)
+                visibleCompletion++
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -258,20 +331,41 @@ internal class GifExportOperation(
     }
 
     fun cancel() {
-        if (committing) return
+        if (committing || cancellationRequested) return
         val pending = request ?: return
-        try {
-            if (!journal.discard(pending)) return
-            job?.cancel()
-            clearRequest(pending)
-            trace(GifDiagnosticKind.EXPORT_CANCELLED)
-            onNotice("GIF export cancelled")
-        } catch (error: Exception) {
-            onNotice("Could not cancel the GIF export. ${error.message.orEmpty()}")
+        cancellationRequested = true
+        timing?.cancelRequested = System.nanoTime()
+        uiAcknowledgement++
+        progress = "Stopping GIF preparation…"
+        val stopping = job
+        stopping?.cancel()
+        scope.launch {
+            // Decoder/platform calls may return after cancellation was requested.
+            // Keep active ownership and the staging files until their worker releases them.
+            stopping?.join()
+            timing?.cancelRequested?.let { timing?.add("cancelWorkerStop", System.nanoTime() - it) }
+            timing?.report("stopped")
+            if (request?.id != pending.id) return@launch
+            try {
+                if (!journal.discard(pending)) {
+                    cancellationRequested = false
+                    active = false
+                    recoveryOpen = true
+                    onNotice("GIF work stopped; resolve the retained export before starting another.")
+                    return@launch
+                }
+                clearRequest(pending)
+                trace(GifDiagnosticKind.EXPORT_CANCELLED)
+                onNotice("GIF export cancelled")
+            } catch (error: Exception) {
+                cancellationRequested = false
+                fail(pending, error)
+            }
         }
     }
 
     fun discard() {
+        if (active || cancellationRequested) return
         val pending = request ?: return
         try {
             if (journal.discard(pending)) clearRequest(pending)
@@ -288,6 +382,7 @@ internal class GifExportOperation(
         recoveryFailure = null
         committing = false
         active = false
+        cancellationRequested = false
     }
 
     private fun fail(previous: PendingExport, error: Throwable) {
@@ -297,6 +392,7 @@ internal class GifExportOperation(
         } catch (_: Exception) {
             readRequest()
         }
+        timing?.report("failed")
         trace(GifDiagnosticKind.EXPORT_FAILED, error = error)
         val copyMayBeIncomplete = request?.phase == PendingExportPhase.DESTINATION_UNCERTAIN
         val explanation = when {
@@ -315,36 +411,62 @@ internal class GifExportOperation(
     private suspend fun prepareStage(pending: PendingExport, document: GifDocument): File =
         withContext(Dispatchers.IO) {
             val encode = currentCoroutineContext()
-            stages.prepare(pending) { file ->
-                if (video) {
+            stages.prepare(pending, timing) { file ->
+                if (document.video != null) {
                     val quota = GifExportGuard.maxTemporaryBytes(context.cacheDir.usableSpace)
                     if (quota < GifExportGuard.MIN_EXPORT_BYTES) {
                         throw IOException("Not enough free storage to safely create a GIF. Free at least 72 MB.")
                     }
-                    requireNotNull(videoReaderOwner).withLock {
-                        GifExportGuard.limit(file.outputStream(), quota).buffered(65_536).use { stream ->
+                    val waiting = System.nanoTime()
+                    recoveredVideoReaderOwner.withLock {
+                        timing?.add("mutexWait", System.nanoTime() - waiting)
+                        val fileStream = file.outputStream()
+                        val measured = timing?.wrap(fileStream, "stage") ?: fileStream
+                        val writingAt = System.nanoTime()
+                        GifExportGuard.limit(measured, quota).buffered(65_536).use { stream ->
                             VideoGifSource.write(context, document, stream, cancel = { encode.ensureActive() },
                                 onProgress = { index, count ->
                                     if (index == count || index % 8 == 0) {
                                         scope.launch {
-                                            if (request?.id == pending.id && active && !committing) {
+                                            if (request?.id == pending.id && active && !committing && !cancellationRequested) {
                                                 progress = "Writing frame $index of $count…"
                                             }
                                         }
                                     }
                                 })
                         }
+                        timing?.add("pipelineTotal", System.nanoTime() - writingAt)
                     }
                 } else {
-                    file.outputStream().buffered(65_536).use { stream ->
+                    val fileStream = file.outputStream()
+                    val measured = timing?.wrap(fileStream, "stage") ?: fileStream
+                    val writingAt = System.nanoTime()
+                    measured.buffered(65_536).use { stream ->
                         GifEncoder.write(stream, document, cancel = { encode.ensureActive() }) { index ->
                             ImagePipeline.decode(resolver, Uri.parse(document.frames[index]),
                                 document.size.maxEdge * 2, 1_100_000L)
                         }
                     }
+                    timing?.add("pipelineTotal", System.nanoTime() - writingAt)
                 }
             }
         }
+
+    fun acknowledgeVisibleState() {
+        timing?.let { item ->
+            val start = item.cancelRequested ?: item.started
+            item.add(if (item.cancelRequested == null) "startUiAcknowledgement" else "cancelUiAcknowledgement", System.nanoTime() - start)
+            if (item.cancelRequested != null) item.report("cancel-visible")
+        }
+    }
+
+    fun acknowledgeCompletion() {
+        timing?.let { item ->
+            item.completed?.let { item.add("completionUi", System.nanoTime() - it) }
+            item.completed = null
+            item.report("visible")
+        }
+    }
 
     private fun trace(kind: GifDiagnosticKind, doc: GifDocument? = null, error: Throwable? = null) {
         diagnosticId?.let { id ->
@@ -361,16 +483,22 @@ private class GifExportStages(cacheDirectory: File) {
     private fun complete(request: PendingExport) = File(folder, request.id + ".gif")
     private fun partial(request: PendingExport) = File(folder, request.id + ".part")
 
-    suspend fun prepare(request: PendingExport, encode: suspend (File) -> Unit): File {
+    suspend fun prepare(request: PendingExport, timing: GifExportTiming?, encode: suspend (File) -> Unit): File {
         val completed = complete(request)
-        if (completed.isFile && completed.length() > 0) return completed
+        if (completed.isFile && completed.length() > 0) {
+            timing?.bytes = completed.length()
+            return completed
+        }
         val staged = partial(request)
         try {
             encode(staged)
             currentCoroutineContext().ensureActive()
+            val finalizing = System.nanoTime()
             if (staged.length() == 0L || !staged.renameTo(completed)) {
                 throw IOException("Could not prepare the GIF for saving")
             }
+            timing?.add("stageFinalize", System.nanoTime() - finalizing)
+            timing?.bytes = completed.length()
             return completed
         } finally {
             staged.delete()
@@ -391,5 +519,41 @@ private class GifExportStages(cacheDirectory: File) {
         folder.listFiles()?.forEach { file ->
             if (file.isFile && owned.matches(file.name) && file.name.substringBefore('.') != active) file.delete()
         }
+    }
+}
+
+/** One bounded operation record; no source URI/name, media payload, file path or network reporting. */
+private class GifExportTiming(val id: String, document: GifDocument, val started: Long) {
+    var pickerOpened: Long? = null
+    var cancelRequested: Long? = null
+    var completed: Long? = null
+    var bytes = 0L
+    private val dimensions = GifMath.dimensions(document)
+    private val frames = document.video?.let(GifVideoMath::frameCount) ?: document.frames.size
+    private val nanos = linkedMapOf<String, Long>()
+    @Synchronized fun add(stage: String, elapsed: Long) {
+        nanos[stage] = (nanos[stage] ?: 0L) + elapsed.coerceAtLeast(0)
+    }
+    fun <T> measure(stage: String, block: () -> T): T {
+        val start = System.nanoTime()
+        try { return block() } finally { add(stage, System.nanoTime() - start) }
+    }
+    fun wrap(destination: OutputStream, prefix: String): OutputStream = object : OutputStream() {
+        override fun write(value: Int) = measure(prefix + "Write") { destination.write(value) }
+        override fun write(buffer: ByteArray, offset: Int, length: Int) =
+            measure(prefix + "Write") { destination.write(buffer, offset, length) }
+        override fun flush() = measure(prefix + "Flush") { destination.flush() }
+        override fun close() = measure(prefix + "Close") { destination.close() }
+    }
+    @Synchronized fun report(outcome: String) {
+        fun duration(name: String) = nanos[name] ?: 0L
+        val localIo = duration("stageWrite") + duration("stageFlush") + duration("stageClose")
+        val providerIo = duration("providerOpen") + duration("providerWrite") +
+            duration("providerFlush") + duration("providerClose")
+        val fields = nanos.entries.joinToString(" ") { it.key + "Ms=" + it.value / 1_000_000 }
+        Log.d("GzGifJobStage", "outcome=" + outcome + " frames=" + frames +
+            " canvas=" + dimensions.first + "x" + dimensions.second + " bytes=" + bytes + " " + fields +
+            " pipelineWithoutLocalIoMs=" + (duration("pipelineTotal") - localIo).coerceAtLeast(0) / 1_000_000 +
+            " copyOtherMs=" + (duration("copyTotal") - providerIo).coerceAtLeast(0) / 1_000_000)
     }
 }

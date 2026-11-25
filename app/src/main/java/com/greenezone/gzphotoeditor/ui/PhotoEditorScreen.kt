@@ -32,6 +32,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -90,6 +96,12 @@ import com.greenezone.gzphotoeditor.editor.LocalMask
 import com.greenezone.gzphotoeditor.editor.Look
 import com.greenezone.gzphotoeditor.editor.Looks
 import com.greenezone.gzphotoeditor.editor.MaskKind
+import com.greenezone.gzphotoeditor.editor.NamedProjectRef
+import com.greenezone.gzphotoeditor.editor.ProjectSaveIntent
+import com.greenezone.gzphotoeditor.editor.ProjectSaveResult
+import com.greenezone.gzphotoeditor.editor.ProjectSaveFailure
+import com.greenezone.gzphotoeditor.editor.ProStore
+import com.greenezone.gzphotoeditor.editor.ProSaveTarget
 import com.greenezone.gzphotoeditor.editor.ProjectStore
 import com.greenezone.gzphotoeditor.editor.PrivacyEdit
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
@@ -108,13 +120,25 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.roundToInt
 
 private data class PhotoReplacement(
     val uri: Uri,
     val edits: EditDocument? = null,
-    val projectName: String? = null
+    val projectName: String? = null,
+    val projectRef: NamedProjectRef? = null
 )
+
+private enum class PhotoDepartureKind { CLOSE, BACK, WORKSPACE, PICK_PHOTO, OPEN_PROJECT, REPLACE_PHOTO, PRO }
+private data class PhotoDeparture(
+    val token: WorkspaceOperationToken,
+    val kind: PhotoDepartureKind,
+    val workspace: WorkspaceMode? = null,
+    val replacement: PhotoReplacement? = null,
+    val discard: Boolean = false
+)
+
 
 
 /**
@@ -126,7 +150,8 @@ private data class PhotoReplacement(
 fun PhotoEditorScreen(
     initialCollagePhoto: CollagePhoto? = null,
     onDoneCollagePhoto: ((CollagePhoto) -> Unit)? = null,
-    onCancelCollagePhoto: (() -> Unit)? = null
+    onCancelCollagePhoto: (() -> Unit)? = null,
+    onRequestCollageWorkspace: ((WorkspaceMode, CollagePhoto?) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -153,20 +178,26 @@ fun PhotoEditorScreen(
         mutableStateOf(WorkspaceNavigation(current = recoveredWorkspace))
     }
     var collageDocument by remember {
-        val restored = coldExport?.takeIf { it.workspace == ExportWorkspace.COLLAGE }
+        val restored = coldExport?.takeIf { it.workspace == ExportWorkspace.COLLAGE && it.restoreNativeDraft }
             ?.let { PendingImageRecipe.decode(it.recipe) }
             ?.payload?.let(CollageStore::decode)
         mutableStateOf(restored ?: CollageDocument())
     }
-    var collageSession by remember { mutableStateOf(CollageWorkspaceSession()) }
+    var collageSession by remember {
+        val recovered = coldExport?.takeIf { it.workspace == ExportWorkspace.COLLAGE && it.restoreNativeDraft }
+        mutableStateOf(if (recovered == null) CollageWorkspaceSession() else CollageWorkspaceSession(
+            documentId = recovered.nativeOwnerId ?: recovered.id, entryDocument = CollageDocument()))
+    }
     val recoveredPro = remember(coldExport) {
-        coldExport?.takeIf { it.workspace == ExportWorkspace.PRO }
+        coldExport?.takeIf { it.workspace == ExportWorkspace.PRO && it.restoreNativeDraft }
             ?.let(PendingProExportRecipe::decode)
     }
     var proDocument by remember { mutableStateOf(recoveredPro?.document ?: ProDocument()) }
     var proSession by remember {
         val restored = recoveredPro?.let {
-            ProWorkspaceSession(documentEstablished = true, resetDocument = it.resetDocument)
+            ProWorkspaceSession(documentEstablished = true, resetDocument = it.resetDocument,
+                entryDocument = ProDocument(), saveTarget = ProSaveTarget(
+                    nativeOwnerId = coldExport?.let { pending -> pending.nativeOwnerId ?: pending.id }))
         }
         mutableStateOf(restored ?: ProWorkspaceSession())
     }
@@ -212,11 +243,42 @@ fun PhotoEditorScreen(
     var replacement by remember { mutableStateOf<PhotoReplacement?>(null) }
     var replacementAfterSave by remember { mutableStateOf(false) }
     var projectToDelete by remember { mutableStateOf<String?>(null) }
+    var projectDeleteRef by remember { mutableStateOf<NamedProjectRef?>(null) }
     var showProHandoff by remember { mutableStateOf(false) }
     var showTileExit by remember { mutableStateOf(false) }
     var closeAfterProjectSave by remember { mutableStateOf(false) }
 
-    var showHistogram by remember { mutableStateOf(false) }
+    var photoOwnerId by remember { mutableStateOf(UUID.randomUUID().toString()) }
+    var contentRevision by remember { mutableStateOf(0L) }
+    var activePhotoProject by remember { mutableStateOf<NamedProjectRef?>(null) }
+    var pendingDeparture by remember { mutableStateOf<PhotoDeparture?>(null) }
+    var photoPickerToken by remember { mutableStateOf<WorkspaceOperationToken?>(null) }
+    var optionsExpanded by remember { mutableStateOf(false) }
+    var showPhotoHelp by remember { mutableStateOf(false) }
+    var showPhotoReset by remember { mutableStateOf(false) }
+    var photoUiEpoch by remember { mutableStateOf(0L) }
+    var photoRetryIntent by remember { mutableStateOf<ProjectSaveIntent?>(null) }
+    var photoRetryAllowed by remember { mutableStateOf(true) }
+    var proRetryIntent by remember { mutableStateOf<ProjectSaveIntent?>(null) }
+    var proRetryAllowed by remember { mutableStateOf(true) }
+    var photoSaveAs by remember { mutableStateOf(false) }
+    var photoCollision by remember { mutableStateOf<NamedProjectRef?>(null) }
+    var tileWorkspace by remember { mutableStateOf<WorkspaceMode?>(null) }
+    var proHandoffStage by remember { mutableStateOf("") }
+    var proHandoffDiscard by remember { mutableStateOf(false) }
+    var proHandoffImport by remember { mutableStateOf(false) }
+    var expectedProDocument by remember { mutableStateOf<ProDocument?>(null) }
+    var expectedProOwner by remember { mutableStateOf<String?>(null) }
+    var proSaveName by remember { mutableStateOf("") }
+    var proSaveError by remember { mutableStateOf<String?>(null) }
+    var proSaveCollision by remember { mutableStateOf<NamedProjectRef?>(null) }
+    var gestureEpoch by remember { mutableStateOf(0L) }
+    var gestureViewStart by remember { mutableStateOf<Pair<Int, CreativeToolState>?>(null) }
+    var gestureLookStart by remember { mutableStateOf<String?>(null) }
+    lateinit var requestWorkspaceChange: (WorkspaceMode) -> Unit
+    lateinit var requestDeparture: (PhotoDepartureKind, WorkspaceMode?, PhotoReplacement?) -> Unit
+    lateinit var continueDeparture: () -> Unit
+    lateinit var performPhotoSave: (ProjectSaveIntent) -> Unit
     var showSaveLook by remember { mutableStateOf(false) }
     var showSaveProject by remember { mutableStateOf(false) }
     var projectSaveError by remember { mutableStateOf<String?>(null) }
@@ -226,15 +288,41 @@ fun PhotoEditorScreen(
     var savedLooks by remember { mutableStateOf(SavedLooks.load(context)) }
     var savedProjects by remember { mutableStateOf(ProjectStore.load(context)) }
 
-    fun commit(next: EditDocument) {
+    fun cancelDraft(): Boolean {
+        val start = gestureStart ?: return false
+        document = start
+        gestureEpoch += 1
+        gestureLookStart?.let { activeLook = it }
+        gestureViewStart?.let { (privacy, tools) -> selectedPrivacy = privacy; creativeTools = tools }
+        gestureViewStart = null
+        gestureStart = null
+        gestureLookStart = null
+        painting = false
+        currentInk = null
+        previousInkErasePoint = null
+        liveGesture = false
+        return true
+    }
+    fun beginGesture() {
+        if (gestureStart == null) {
+            gestureStart = document
+            gestureLookStart = activeLook
+            gestureViewStart = selectedPrivacy to creativeTools
+        }
+    }
+
+    fun commit(next: EditDocument): Boolean {
+        if (cancelDraft()) return false
         val updated = PrivacyMath.retainAuthoringGeometry(document, next)
         history = history.checkpoint(document, updated)
+        if (document != updated) contentRevision += 1
         document = updated
         gestureStart = null
         liveGesture = false
+        return true
     }
     fun slide(next: EditDocument) {
-        if (gestureStart == null) gestureStart = document
+        beginGesture()
         document = PrivacyMath.retainAuthoringGeometry(document, next)
         liveGesture = true
         activeLook = "custom"
@@ -242,20 +330,26 @@ fun PhotoEditorScreen(
     fun finishSlide() {
         gestureStart?.let { beginning ->
             history = history.checkpoint(beginning, document)
+            if (beginning != document) contentRevision += 1
         }
         gestureStart = null
+        gestureLookStart = null
+        gestureViewStart = null
         liveGesture = false
     }
     fun applyLook(key: String, grade: Grade) {
-        commit(document.copy(grade = grade))
-        activeLook = key
+        if (commit(document.copy(grade = grade))) activeLook = key
     }
 
     fun loadPhoto(
         uri: Uri,
         restored: EditDocument? = null,
         establishBaseline: Boolean = tileEntryBaseline == null,
-        restoringExport: Boolean = false
+        restoringExport: Boolean = false,
+        projectRef: NamedProjectRef? = null,
+        restoredOwnerId: String? = null,
+        beforePublish: () -> Boolean = { true },
+        onLoaded: () -> Unit = {}
     ) {
         val request = ++loadingToken
         scope.launch {
@@ -290,6 +384,14 @@ fun PhotoEditorScreen(
                     bitmap.recycle()
                     return@launch
                 }
+                if (!beforePublish()) {
+                    if (initialPreview !== bitmap) initialPreview.recycle()
+                    bitmap.recycle()
+                    return@launch
+                }
+                photoOwnerId = restoredOwnerId ?: UUID.randomUUID().toString()
+                contentRevision += 1
+                activePhotoProject = projectRef
                 sourceUri = uri
                 original = bitmap
                 sourceSize = dimensions
@@ -307,7 +409,7 @@ fun PhotoEditorScreen(
                 document = loadedDocument
                 if (establishBaseline) {
                     baselineUri = uri.toString()
-                    baselineDocument = loadedDocument
+                    baselineDocument = if (restoringExport) EditDocument() else loadedDocument
                 }
                 history = EditHistory()
                 gestureStart = null
@@ -326,6 +428,7 @@ fun PhotoEditorScreen(
                 if (!restoringExport) {
                     notice = if (restored == null) "Media opened" else "Project restored"
                 }
+                onLoaded()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -334,67 +437,20 @@ fun PhotoEditorScreen(
                         (error.message ?: "file missing or permission revoked")
                 }
             } finally {
-                if (request == loadingToken) busy = false
+                if (request == loadingToken) {
+                    busy = false
+                    if (pendingDeparture?.kind in listOf(PhotoDepartureKind.PICK_PHOTO,
+                            PhotoDepartureKind.OPEN_PROJECT, PhotoDepartureKind.REPLACE_PHOTO)) {
+                        // Decode failure must not leave a continuation waiting for
+                        // an unrelated later Save.
+                        pendingDeparture = null
+                    }
+                }
             }
         }
     }
 
-    fun chooseWorkspace(mode: WorkspaceMode) {
-        if (onDoneCollagePhoto != null || busy || exporting) return
-        if (mode == WorkspaceMode.VIDEO) {
-            notice = "Video editing is coming later, after the photo and GIF tools."
-            return
-        }
-        if (mode == WorkspaceMode.PHOTO && workspaceNavigation.current == WorkspaceMode.PRO &&
-            workspaceNavigation.previewBack() == WorkspaceMode.PHOTO) {
-            workspaceNavigation.commitBack()?.let { workspaceNavigation = it }
-            return
-        }
-        if (mode == WorkspaceMode.PRO && workspaceNavigation.current == WorkspaceMode.PHOTO &&
-            sourceUri != null && original != null) {
-            showProHandoff = true
-            return
-        }
-        workspaceNavigation = workspaceNavigation.open(mode)
-    }
-
-    fun openProWithRegularEdits() {
-        val uri = sourceUri ?: return
-        if (original == null || busy || exporting) return
-        showProHandoff = false
-        finishSlide()
-        val edits = document
-        busy = true
-        scope.launch {
-            try {
-                val sourcePixels = sourceSize?.let { (width, height) -> ProPixelSize(width, height) }
-                    ?: withContext(Dispatchers.IO) { ProImageGeometry.sourceSize(resolver, uri) }
-                val editedSize = ProImageGeometry.editedSize(sourcePixels, edits)
-                val source = ProImageGeometry.bind(ProLayer(uri = uri.toString(), name = "Original photo"), sourcePixels)
-                val resetDocument = ProDocument(
-                    layers = listOf(source),
-                    background = ProBackground.TRANSPARENT,
-                    sourceAspectRatio = sourcePixels.aspect,
-                    canvasSize = sourcePixels
-                )
-                proDocument = resetDocument.copy(
-                    layers = listOf(ProImageGeometry.bind(source.copy(edits = edits), sourcePixels)),
-                    sourceAspectRatio = editedSize.aspect,
-                    canvasSize = editedSize
-                )
-                proSession = ProWorkspaceSession(documentEstablished = true, resetDocument = resetDocument)
-                workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: OutOfMemoryError) {
-                notice = "There is not enough memory to open this photo in Pro."
-            } catch (_: Exception) {
-                notice = "Could not open the edited photo in Pro."
-            } finally {
-                busy = false
-            }
-        }
-    }
+    fun chooseWorkspace(mode: WorkspaceMode) { requestWorkspaceChange(mode) }
 
     fun leaveWorkspace() {
         workspaceNavigation.commitBack()?.let { workspaceNavigation = it }
@@ -402,6 +458,7 @@ fun PhotoEditorScreen(
 
     fun finishCollageTile() {
         val originalTile = initialCollagePhoto ?: return
+        if (busy || exporting || cancelDraft()) return
         val image = sourceUri?.toString() ?: originalTile.uri
         showTileExit = false
         onDoneCollagePhoto?.invoke(originalTile.copy(uri = image, edits = document))
@@ -417,25 +474,19 @@ fun PhotoEditorScreen(
     }
 
     fun requestPhotoReplacement(candidate: PhotoReplacement) {
-        if (busy || exporting) return
-        finishSlide()
-        if (isPhotoDirty()) {
-            replacement = candidate
-            showRegularExit = true
-        } else {
-            loadPhoto(candidate.uri, candidate.edits)
-        }
-    }
-
-    fun completeReplacement() {
-        val candidate = replacement ?: return
-        replacement = null
-        showRegularExit = false
-        loadPhoto(candidate.uri, candidate.edits)
+        requestDeparture(PhotoDepartureKind.REPLACE_PHOTO, null, candidate)
     }
 
     fun closeCurrentPhoto() {
+        if (!photoExport.resolveNativeDraft(photoOwnerId)) {
+            showRegularExit = true
+            return
+        }
         loadingToken += 1
+        photoOwnerId = UUID.randomUUID().toString()
+        contentRevision += 1
+        activePhotoProject = null
+        pendingDeparture = null
         sourceUri = null
         original = null
         sourceSize = null
@@ -478,7 +529,12 @@ fun PhotoEditorScreen(
         if (busy || exporting) {
             notice = if (exporting) "Finish or cancel the export before leaving this tile."
                 else "Wait for the current photo operation to finish."
+        } else if (cancelDraft()) {
+            return
+        } else if (!chromeVisible) {
+            chromeVisible = true
         } else if (isPhotoDirty()) {
+            tileWorkspace = null
             showTileExit = true
         } else {
             onCancelCollagePhoto?.invoke()
@@ -486,15 +542,12 @@ fun PhotoEditorScreen(
     }
 
     fun requestRegularBack() {
-        val previous = workspaceNavigation.commitBack()
-        if (previous != null) {
-            workspaceNavigation = previous
-        } else if (original != null) {
-            if (isPhotoDirty()) showRegularExit = true else closeCurrentPhoto()
-        }
+        requestDeparture(if (workspaceNavigation.previewBack() != null) PhotoDepartureKind.BACK
+            else PhotoDepartureKind.CLOSE, null, null)
     }
 
     fun autoTone() {
+        if (cancelDraft()) return
         val bitmap = original ?: return
         scope.launch {
             busy = true
@@ -517,6 +570,7 @@ fun PhotoEditorScreen(
     }
 
     fun autoWB() {
+        if (cancelDraft()) return
         val bitmap = original ?: return
         scope.launch {
             busy = true
@@ -537,6 +591,7 @@ fun PhotoEditorScreen(
     }
 
     fun addPrivacy(kind: PrivacyKind) {
+        if (cancelDraft()) return
         if (document.privacy.size >= PrivacyRaster.MAX_EDITS) {
             notice = "Maximum of twelve privacy layers per photo."
             return
@@ -554,6 +609,7 @@ fun PhotoEditorScreen(
     }
 
     fun removePrivacy() {
+        if (cancelDraft()) return
         if (selectedPrivacy !in document.privacy.indices) return
         val updated = document.privacy.filterIndexed { i, _ -> i != selectedPrivacy }
         commit(document.copy(privacy = updated))
@@ -561,6 +617,7 @@ fun PhotoEditorScreen(
     }
 
     fun privacyStrokeEdit(clearAll: Boolean) {
+        if (cancelDraft()) return
         val mark = document.privacy.getOrNull(selectedPrivacy) ?: return
         if (!mark.kind.usesBrush) return
         val strokes = if (clearAll) emptyList() else mark.strokes.dropLast(1)
@@ -594,7 +651,7 @@ fun PhotoEditorScreen(
             notice = "Brush limit reached. Undo a stroke or add another brush."
             return
         }
-        gestureStart = document
+        beginGesture()
         painting = true
         val updated = document.privacy.toMutableList()
         updated[selectedPrivacy] = mark.copy(strokes =
@@ -644,50 +701,43 @@ fun PhotoEditorScreen(
         panY = (panY + translation.y).coerceIn(-maxY, maxY)
     }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
-        if (it != null) requestPhotoReplacement(PhotoReplacement(it))
-    }
     var recoveredPhotoHandled by remember(photoExport.initialRecoveryId) { mutableStateOf(false) }
     LaunchedEffect(photoExport.initialRecoveryId, workspaceNavigation.current) {
         if (photoExport.initialRecoveryId == null || workspaceNavigation.current != WorkspaceMode.PHOTO ||
             recoveredPhotoHandled
         ) return@LaunchedEffect
         recoveredPhotoHandled = true
-        if (sourceUri != null) return@LaunchedEffect
+        if (sourceUri != null || !photoExport.nativeRecoveryExpected) return@LaunchedEffect
         val request = photoExport.recoveredRequest
         if (request != null) {
-            loadPhoto(request.source, request.edits, restoringExport = true)
+            loadPhoto(request.source, request.edits, restoringExport = true,
+                restoredOwnerId = photoExport.recoveredOwnerId)
         } else {
             notice = "The previous export recipe could not be restored."
         }
     }
     fun openPicker() {
-        if (!busy && !exporting) {
-            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }
+        requestDeparture(PhotoDepartureKind.PICK_PHOTO, null, null)
     }
     fun saveLook() {
+        if (cancelDraft()) return
         draftName = ""
         showSaveLook = true
     }
-    fun saveProject() {
+    fun saveProject(saveAs: Boolean = false) {
+        if (busy || exporting || cancelDraft()) return
         projectSaveError = null
-        closeAfterProjectSave = false
-        replacementAfterSave = false
-        draftName = ""
-        showSaveProject = true
-    }
-    fun saveProjectAndClose() {
-        projectSaveError = null
-        replacementAfterSave = replacement != null
-        closeAfterProjectSave = !replacementAfterSave
-        draftName = ""
-        showSaveProject = true
+        photoSaveAs = saveAs
+        photoCollision = null
+        val active = activePhotoProject
+        if (!saveAs && active != null) performPhotoSave(ProjectSaveIntent.Update(active))
+        else {
+            draftName = ""
+            showSaveProject = true
+        }
     }
     fun openProjects() {
-        savedProjects = ProjectStore.load(context)
-        selectedProject = null
-        showProjects = true
+        requestDeparture(PhotoDepartureKind.OPEN_PROJECT, null, null)
     }
 
     fun applyInkErase(point: BrushPoint) {
@@ -721,7 +771,7 @@ fun PhotoEditorScreen(
             notice = "Drawing layer limit reached. Clear some strokes first."
             return
         }
-        gestureStart = document
+        beginGesture()
         painting = true
         previousInkErasePoint = null
         if (creativeTools.erase) {
@@ -771,6 +821,7 @@ fun PhotoEditorScreen(
     }
 
     fun editWords(newLayer: Boolean) {
+        if (cancelDraft()) return
         if (!newLayer && document.creative.text.getOrNull(creativeTools.textIndex) == null) return
         editingTextIndex = if (newLayer) -1 else creativeTools.textIndex
         textDraft = if (newLayer) "" else document.creative.text[editingTextIndex].content
@@ -812,7 +863,7 @@ fun PhotoEditorScreen(
     }
 
     fun moveCrop(frame: CropFrame) {
-        if (gestureStart == null) gestureStart = document
+        beginGesture()
         document = PrivacyMath.retainAuthoringGeometry(document, document.copy(
             crop = if (document.crop == CropRatio.ORIGINAL) CropRatio.FREE else document.crop,
             cropFrame = frame,
@@ -827,16 +878,321 @@ fun PhotoEditorScreen(
         liveGesture = false
     }
 
+
+    fun departureOwned(pending: PhotoDeparture): Boolean =
+        pending.token.ownerId == photoOwnerId && pending.token.contentRevision == contentRevision
+
+    fun cancelDeparture() {
+        photoUiEpoch += 1
+        photoRetryIntent = null
+        proRetryIntent = null
+        pendingDeparture = null
+        photoPickerToken = null
+        showRegularExit = false
+        showSaveProject = false
+        showProjects = false
+        photoCollision = null
+        showProHandoff = false
+        proHandoffStage = ""
+        proSaveCollision = null
+        expectedProDocument = null
+        expectedProOwner = null
+    }
+
+    fun commitDiscard(pending: PhotoDeparture, recoveryResolved: Boolean = false): Boolean {
+        if (!pending.discard) return true
+        if (!recoveryResolved && !photoExport.resolveNativeDraft(photoOwnerId)) {
+            showRegularExit = true
+            return false
+        }
+        document = baselineDocument
+        history = EditHistory()
+        gestureStart = null
+        liveGesture = false
+        currentInk = null
+        previousInkErasePoint = null
+        activeLook = "custom"
+        contentRevision += 1
+        return true
+    }
+
+    fun openPreparedPhoto(candidate: PhotoReplacement) {
+        val pending = pendingDeparture ?: return
+        if (!departureOwned(pending)) { cancelDeparture(); return }
+        // loadPhoto publishes only after decode succeeds. A canceled or failed
+        // replacement therefore never commits a provisional Discard.
+        loadPhoto(candidate.uri, candidate.edits, establishBaseline = true,
+            projectRef = candidate.projectRef,
+            beforePublish = {
+                pendingDeparture == pending && departureOwned(pending) &&
+                    (!pending.discard || photoExport.resolveNativeDraft(photoOwnerId))
+            }, onLoaded = {
+                pendingDeparture = null
+                showRegularExit = false
+                showProjects = false
+            })
+    }
+
+    fun finishProHandoff(importPhoto: Boolean) {
+        val pending = pendingDeparture ?: return
+        if (!departureOwned(pending) || expectedProDocument != proDocument ||
+            expectedProOwner != proSession.ownerId) {
+            cancelDeparture()
+            notice = "The work changed. Start the transfer again."
+            return
+        }
+        val resolvedEdits = if (pending.discard) baselineDocument else document
+        val resolvedUri = if (pending.discard) baselineUri?.let(Uri::parse) else sourceUri
+        busy = true
+        showProHandoff = false
+        scope.launch {
+            try {
+                val prepared = if (importPhoto) {
+                    val uri = checkNotNull(resolvedUri)
+                    withContext(Dispatchers.IO) {
+                        val pixels = ProImageGeometry.sourceSize(resolver, uri)
+                        val editedSize = ProImageGeometry.editedSize(pixels, resolvedEdits)
+                        val layer = ProImageGeometry.bind(ProLayer(uri = uri.toString(), name = "Original photo"), pixels)
+                        val reset = ProDocument(layers = listOf(layer), background = ProBackground.TRANSPARENT,
+                            sourceAspectRatio = pixels.aspect, canvasSize = pixels)
+                        reset.copy(layers = listOf(ProImageGeometry.bind(layer.copy(edits = resolvedEdits), pixels)),
+                            sourceAspectRatio = editedSize.aspect, canvasSize = editedSize) to reset
+                    }
+                } else ProDocument() to ProDocument()
+                if (pendingDeparture != pending || !departureOwned(pending) ||
+                    expectedProDocument != proDocument || expectedProOwner != proSession.ownerId) {
+                    cancelDeparture()
+                    notice = "The work changed. Start the transfer again."
+                    return@launch
+                }
+                val resolvedRecoveries = startupJournal.suppressNativeRestores(buildList {
+                    if (pending.discard) add(ExportWorkspace.PHOTO to photoOwnerId)
+                    if (proHandoffDiscard) add(ExportWorkspace.PRO to proSession.nativeOwnerKey())
+                })
+                photoExport.adoptNativeDisposition(resolvedRecoveries)
+                if (!commitDiscard(pending, recoveryResolved = true)) return@launch
+                proDocument = prepared.first
+                proSession = ProWorkspaceSession(documentEstablished = true,
+                    resetDocument = prepared.second, entryDocument = prepared.first)
+                cancelDeparture()
+                workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: OutOfMemoryError) {
+                cancelDeparture()
+                notice = "There is not enough memory to open this photo in Pro. Both workspaces are unchanged."
+            } catch (_: Exception) {
+                cancelDeparture()
+                notice = "Could not open the photo in Pro. Both workspaces are unchanged."
+            } finally { busy = false }
+        }
+    }
+
+    fun resolveProForHandoff(importPhoto: Boolean) {
+        proHandoffImport = importPhoto
+        if (proSession.isDirty(proDocument)) {
+            proHandoffStage = "resolve"
+            showProHandoff = true
+        } else finishProHandoff(importPhoto)
+    }
+
+    fun saveInactivePro(intent: ProjectSaveIntent) {
+        if (busy || exporting) return
+        val pending = pendingDeparture ?: return
+        val captured = proDocument
+        val capturedSession = proSession
+        val capturedUiEpoch = photoUiEpoch
+        if (!departureOwned(pending) || expectedProDocument != captured ||
+            expectedProOwner != capturedSession.ownerId) { cancelDeparture(); return }
+        busy = true
+        proSaveError = null
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                ProStore.saveNamed(context, intent, captured, capturedSession.resetDocument)
+            }
+            busy = false
+            if (proSession.ownerId != capturedSession.ownerId || proDocument != captured) {
+                cancelDeparture()
+                notice = "The Pro work changed. Its pending departure was canceled."
+                return@launch
+            }
+            when (result) {
+                is ProjectSaveResult.Saved -> {
+                    proSession = proSession.saved(captured, result.project)
+                    if (photoUiEpoch == capturedUiEpoch && pendingDeparture == pending && departureOwned(pending)) finishProHandoff(proHandoffImport)
+                }
+                is ProjectSaveResult.Exists -> if (photoUiEpoch == capturedUiEpoch) {
+                    proSaveCollision = result.project
+                    proHandoffStage = "collision"
+                }
+                is ProjectSaveResult.Rejected -> if (photoUiEpoch == capturedUiEpoch) {
+                    proSaveError = "Pro could not be saved (" + result.reason.name.lowercase().replace('_', ' ') +
+                        "). Both working documents remain open."
+                    if (intent is ProjectSaveIntent.Create) proHandoffStage = "name"
+                    else {
+                        proRetryIntent = intent
+                        proRetryAllowed = result.reason != ProjectSaveFailure.TARGET_CHANGED
+                        proHandoffStage = "failure"
+                    }
+                }
+            }
+        }
+    }
+
+    continueDeparture = continuation@{
+        val pending = pendingDeparture ?: return@continuation
+        if (!departureOwned(pending)) { cancelDeparture(); return@continuation }
+        showRegularExit = false
+        when (pending.kind) {
+            PhotoDepartureKind.CLOSE -> closeCurrentPhoto()
+            PhotoDepartureKind.BACK -> {
+                if (!commitDiscard(pending)) return@continuation
+                cancelDeparture()
+                leaveWorkspace()
+            }
+            PhotoDepartureKind.WORKSPACE -> {
+                val target = pending.workspace ?: return@continuation
+                if (!commitDiscard(pending)) return@continuation
+                cancelDeparture()
+                workspaceNavigation = workspaceNavigation.open(target)
+            }
+            PhotoDepartureKind.PICK_PHOTO -> photoPickerToken = pending.token
+            PhotoDepartureKind.OPEN_PROJECT -> {
+                savedProjects = ProjectStore.load(context)
+                selectedProject = null
+                showProjects = true
+            }
+            PhotoDepartureKind.REPLACE_PHOTO -> pending.replacement?.let(::openPreparedPhoto)
+            PhotoDepartureKind.PRO -> {
+                proHandoffDiscard = false
+                expectedProDocument = proDocument
+                expectedProOwner = proSession.ownerId
+                val hasProWork = proSession.documentEstablished || proDocument != ProDocument() ||
+                    proSession.history.undo.isNotEmpty() || proSession.history.redo.isNotEmpty()
+                proHandoffStage = if (hasProWork) "choose" else "appearance"
+                showProHandoff = true
+            }
+        }
+    }
+
+    requestDeparture = request@{ kind, mode, candidate ->
+        if (busy || exporting || pendingDeparture != null || cancelDraft()) return@request
+        val pending = PhotoDeparture(WorkspaceOperationToken(photoOwnerId, contentRevision),
+            kind, mode, candidate)
+        pendingDeparture = pending
+        if (isPhotoDirty()) showRegularExit = true else continueDeparture()
+    }
+
+    requestWorkspaceChange = changeWorkspace@{ mode ->
+        if (!mode.available || busy || exporting) return@changeWorkspace
+        if (onDoneCollagePhoto != null) {
+            if (onRequestCollageWorkspace == null || cancelDraft()) return@changeWorkspace
+            if (isPhotoDirty()) {
+                tileWorkspace = mode
+                showTileExit = true
+            } else onRequestCollageWorkspace(mode, null)
+            return@changeWorkspace
+        }
+        if (mode == workspaceNavigation.current) return@changeWorkspace
+        if (workspaceNavigation.current != WorkspaceMode.PHOTO) {
+            if (mode == WorkspaceMode.PHOTO && workspaceNavigation.previewBack() == WorkspaceMode.PHOTO) {
+                leaveWorkspace()
+            } else workspaceNavigation = workspaceNavigation.open(mode)
+        } else {
+            requestDeparture(if (mode == WorkspaceMode.PRO && original != null) PhotoDepartureKind.PRO
+                else PhotoDepartureKind.WORKSPACE, mode, null)
+        }
+    }
+
+    performPhotoSave = save@{ intent ->
+        if (busy || exporting || gestureStart != null) return@save
+        val uri = sourceUri ?: return@save
+        val capturedDocument = document
+        val capturedOwner = photoOwnerId
+        val capturedRevision = contentRevision
+        val capturedDeparture = pendingDeparture
+        val capturedUiEpoch = photoUiEpoch
+        projectSaveError = null
+        busy = true
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                ProjectStore.saveNamed(context, intent, uri, capturedDocument)
+            }
+            busy = false
+            if (photoOwnerId != capturedOwner) return@launch
+            when (result) {
+                is ProjectSaveResult.Saved -> {
+                    activePhotoProject = result.project
+                    // This native save baseline is deliberately independent of
+                    // tileEntryBaseline: standalone Save does not Apply a tile.
+                    baselineUri = uri.toString()
+                    baselineDocument = capturedDocument
+                    savedProjects = ProjectStore.load(context)
+                    if (photoUiEpoch != capturedUiEpoch) return@launch
+                    showSaveProject = false
+                    photoCollision = null
+                    photoRetryIntent = null
+                    notice = "Project saved on your phone"
+                    if (capturedDeparture != null && pendingDeparture == capturedDeparture &&
+                        capturedRevision == contentRevision && document == capturedDocument) {
+                        continueDeparture()
+                    } else if (capturedDeparture != null) cancelDeparture()
+                }
+                is ProjectSaveResult.Exists -> if (photoUiEpoch == capturedUiEpoch) photoCollision = result.project
+                is ProjectSaveResult.Rejected -> if (photoUiEpoch == capturedUiEpoch) {
+                    projectSaveError = "Could not save project (" +
+                        result.reason.name.lowercase().replace('_', ' ') +
+                        "). Your edits remain open."
+                    if (intent is ProjectSaveIntent.Create) showSaveProject = true
+                    else {
+                        showSaveProject = false
+                        photoRetryIntent = intent
+                        photoRetryAllowed = result.reason != ProjectSaveFailure.TARGET_CHANGED
+                    }
+                }
+            }
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val cancelCurrentDraft by rememberUpdatedState({ cancelDraft() })
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) cancelCurrentDraft()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            cancelCurrentDraft()
+        }
+    }
+
+    photoPickerToken?.let { launchToken ->
+        key(launchToken.operationId) {
+            val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+                val pending = pendingDeparture
+                if (photoPickerToken == launchToken && pending?.token == launchToken &&
+                    pending.kind == PhotoDepartureKind.PICK_PHOTO && departureOwned(pending)) {
+                    photoPickerToken = null
+                    if (uri == null) cancelDeparture() else openPreparedPhoto(PhotoReplacement(uri))
+                }
+            }
+            LaunchedEffect(launchToken.operationId) {
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }
+        }
+    }
+
     LaunchedEffect(initialCollagePhoto?.uri) {
         val photo = initialCollagePhoto
-        if (photo != null) loadPhoto(Uri.parse(photo.uri), photo.edits)
+        if (photo != null) loadPhoto(Uri.parse(photo.uri), photo.edits, establishBaseline = true)
     }
 
     BackHandler(enabled = onDoneCollagePhoto != null) {
         requestTileBack()
     }
     BackHandler(
-        enabled = onDoneCollagePhoto == null && !showHistogram &&
+        enabled = onDoneCollagePhoto == null &&
             workspaceNavigation.current == WorkspaceMode.PHOTO &&
             (workspaceNavigation.previewBack() != null || original != null || busy || exporting)
     ) {
@@ -844,7 +1200,9 @@ fun PhotoEditorScreen(
             notice = if (exporting) "Finish the export before leaving this photo."
                 else "Wait for the current photo operation to finish."
         } else {
-            requestRegularBack()
+            if (cancelDraft()) Unit
+            else if (!chromeVisible) chromeVisible = true
+            else requestRegularBack()
         }
     }
 
@@ -913,7 +1271,15 @@ fun PhotoEditorScreen(
             onBack = ::leaveWorkspace,
             onSwitch = ::chooseWorkspace,
             session = collageSession,
-            onSession = { collageSession = it }
+            onSession = { collageSession = it },
+            onTrySwitch = { mode, commitPrepared ->
+                if (!mode.available || busy || exporting || workspaceNavigation.current != WorkspaceMode.COLLAGE) false
+                else if (!commitPrepared()) false
+                else {
+                    workspaceNavigation = workspaceNavigation.open(mode)
+                    true
+                }
+            }
         )
         return
     }
@@ -1030,7 +1396,9 @@ fun PhotoEditorScreen(
                         showGuides = true,
                         onMove = ::movePrivacy,
                         onFinished = ::finishSlide,
-                        onTap = { chromeVisible = !chromeVisible }
+                        onTap = { chromeVisible = !chromeVisible },
+                        onCanceled = { cancelDraft() },
+                        targetKey = Triple(photoOwnerId, selectedPrivacy, gestureEpoch)
                     )
                 }
                 if (cropEditing) {
@@ -1045,8 +1413,9 @@ fun PhotoEditorScreen(
                         showGuides = true,
                         onChange = ::moveCrop,
                         onFinished = ::finishSlide,
-                        onCanceled = ::cancelCrop,
-                        onTap = { chromeVisible = !chromeVisible }
+                        onCanceled = { cancelDraft() },
+                        onTap = { chromeVisible = !chromeVisible },
+                        targetKey = photoOwnerId to gestureEpoch
                     )
                 }
                 if (textEditing) {
@@ -1059,7 +1428,9 @@ fun PhotoEditorScreen(
                         showGuides = true,
                         onChanged = ::moveCreative,
                         onFinished = ::finishSlide,
-                        onTap = { chromeVisible = !chromeVisible }
+                        onTap = { chromeVisible = !chromeVisible },
+                        onCanceled = { cancelDraft() },
+                        targetKey = listOf(photoOwnerId, selectedTab, if (textEditing) creativeTools.textIndex else creativeTools.shapeIndex, gestureEpoch)
                     )
                 }
                 if (shapeEditing) {
@@ -1072,7 +1443,9 @@ fun PhotoEditorScreen(
                         showGuides = true,
                         onChanged = ::moveCreative,
                         onFinished = ::finishSlide,
-                        onTap = { chromeVisible = !chromeVisible }
+                        onTap = { chromeVisible = !chromeVisible },
+                        onCanceled = { cancelDraft() },
+                        targetKey = listOf(photoOwnerId, selectedTab, if (textEditing) creativeTools.textIndex else creativeTools.shapeIndex, gestureEpoch)
                     )
                 }
                 if (drawingActive) {
@@ -1089,150 +1462,83 @@ fun PhotoEditorScreen(
                 }
             }
         } else {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                modifier = Modifier.padding(horizontal = 28.dp)
-            ) {
-                Button(
-                    onClick = ::openPicker,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = EditorMint, contentColor = Color(0xFF0B1E18)
-                    )
-                ) { Text("Open media", fontWeight = FontWeight.Bold) }
-                if (onDoneCollagePhoto == null) {
-                    Button(
-                        onClick = { chooseWorkspace(WorkspaceMode.COLLAGE) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF26333C),
-                            contentColor = EditorWhite
-                        )
-                    ) { Text("Create collage") }
-                }
-            }
+            Text("Choose Options → New photo… to begin.", color = EditorMuted,
+                modifier = Modifier.padding(28.dp))
         }
 
-        if (original == null && chromeVisible) {
-            Row(
-                modifier = Modifier.align(Alignment.TopCenter)
-                    .fillMaxWidth().statusBarsPadding()
-                    .padding(start = 18.dp, end = 7.dp, top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("GZ Editor Pro", color = EditorWhite, fontSize = 21.sp,
-                    fontWeight = FontWeight.Bold)
-                if (onDoneCollagePhoto == null) {
-                    WorkspaceModeMenu(WorkspaceMode.PHOTO, !busy && !exporting, ::chooseWorkspace)
-                }
-            }
-            Text(
-                "© 2026 Greenezone Software LLC",
-                color = EditorMuted,
-                fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.BottomStart)
-                    .navigationBarsPadding().padding(start = 16.dp, bottom = 12.dp)
-            )
+        if (original == null) {
+            Text("© 2026 Greenezone Software LLC", color = EditorMuted, fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding()
+                    .padding(start = 16.dp, bottom = 12.dp))
         }
 
-        if (chromeVisible && original != null) {
-            Column(
-                Modifier.align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .then(if (selectedTab == EditTab.CROP) {
-                        Modifier.onSizeChanged { topChromeHeight = it.height }
-                    } else Modifier)
-                    .background(Brush.verticalGradient(
-                        listOf(Color(0xE5090C13), Color(0xC5090C13), Color.Transparent)
-                    ))
-                    .statusBarsPadding()
-                    .padding(start = 11.dp, end = 7.dp, top = 3.dp, bottom = 12.dp)
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().height(39.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("GZ Editor Pro", color = EditorWhite,
-                        fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    if (onDoneCollagePhoto == null) {
-                        WorkspaceModeMenu(WorkspaceMode.PHOTO, !busy && !exporting, ::chooseWorkspace)
-                    }
-                    TextButton(
-                        onClick = {
-                            if (onDoneCollagePhoto != null) finishCollageTile()
-                            else photoExport.openDialog()
-                        },
-                        enabled = !busy && !exporting
-                    ) {
-                        Text(if (onDoneCollagePhoto != null) "Done" else "Export",
-                            color = EditorMint,
-                            fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    }
-                }
-                Row(
-                    Modifier.fillMaxWidth().height(42.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        onClick = ::openPicker,
-                        enabled = !busy && !exporting
-                    ) { Text("Open media", color = EditorWhite, fontSize = 13.sp) }
-                    IconButton(
-                        modifier = Modifier.size(42.dp).semantics { contentDescription = "Undo" },
-                        onClick = {
-                            history.undo(document)?.let { (previous, changes) ->
-                                document = previous
-                                history = changes
-                                activeLook = "custom"
-                            }
-                        },
-                        enabled = history.undo.isNotEmpty() && !busy && !exporting
-                    ) { Text("↶", color = EditorWhite, fontSize = 27.sp) }
-                    IconButton(
-                        modifier = Modifier.size(42.dp).semantics { contentDescription = "Redo" },
-                        onClick = {
-                            history.redo(document)?.let { (next, changes) ->
-                                document = next
-                                history = changes
-                                activeLook = "custom"
-                            }
-                        },
-                        enabled = history.redo.isNotEmpty() && !busy && !exporting
-                    ) { Text("↷", color = EditorWhite, fontSize = 27.sp) }
-                    TextButton(
-                        onClick = { compare = !compare },
-                        enabled = !busy && !exporting
-                    ) {
-                        Text(if (compare) "Edited" else "Before",
-                            color = EditorWhite, fontSize = 12.sp)
-                    }
-                }
-                if (notice.isNotEmpty()) {
-                    Text(
-                        notice,
-                        color = EditorWhite,
-                        fontSize = 12.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp)
-                    )
-                }
-            }
-
-            if (zoom > 1.01f && original != null) {
-                TextButton(
-                    onClick = {
-                        zoom = 1f; panX = 0f; panY = 0f
+        if (chromeVisible || original == null) {
+            Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                .onSizeChanged { topChromeHeight = it.height }
+                .background(Brush.verticalGradient(
+                    listOf(Color(0xE5090C13), Color(0xC5090C13), Color.Transparent)))
+                .statusBarsPadding().padding(horizontal = 7.dp, vertical = 3.dp)) {
+                val hasPhoto = original != null && sourceUri != null
+                val photoReason = "Open a photo first."
+                val child = onDoneCollagePhoto != null
+                EditorWorkspaceHeader(
+                    workspace = WorkspaceMode.PHOTO,
+                    commands = buildList {
+                        add(WorkspaceCommand(WorkspaceCommandId.NEW, "New photo…", onInvoke = ::openPicker))
+                        add(WorkspaceCommand(WorkspaceCommandId.OPEN_PROJECT,
+                            if (child) "Open photo project…" else "Open project…", onInvoke = ::openProjects))
+                        add(WorkspaceCommand(WorkspaceCommandId.SAVE,
+                            if (child) "Save photo project" else "Save project", hasPhoto,
+                            if (hasPhoto) null else photoReason, onInvoke = { saveProject() }))
+                        add(WorkspaceCommand(WorkspaceCommandId.SAVE_AS,
+                            if (child) "Save photo project as…" else "Save project as…", hasPhoto,
+                            if (hasPhoto) null else photoReason, onInvoke = { saveProject(true) }))
+                        if (!child) add(WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export image…",
+                            hasPhoto, if (hasPhoto) null else photoReason, onInvoke = { photoExport.openDialog() }))
+                        add(WorkspaceCommand(WorkspaceCommandId.RESET, "Reset all edits…", hasPhoto,
+                            if (hasPhoto) null else photoReason, onInvoke = { showPhotoReset = true }))
+                        add(WorkspaceCommand(WorkspaceCommandId.HELP, "Help", onInvoke = { showPhotoHelp = true }))
                     },
-                    modifier = Modifier.align(Alignment.TopEnd)
-                        .statusBarsPadding().padding(top = 64.dp, end = 10.dp)
-                        .background(Color(0xC9151D24), RoundedCornerShape(12.dp))
-                ) {
-                    Text("Fit • " + String.format(Locale.US, "%.1f×", zoom),
-                        color = EditorMint, fontSize = 12.sp)
+                    canUndo = history.undo.isNotEmpty(), canRedo = history.redo.isNotEmpty(),
+                    onUndo = {
+                        history.undo(document)?.let { (previous, changes) ->
+                            document = previous; history = changes
+                            contentRevision += 1; activeLook = "custom"
+                        }
+                    },
+                    onRedo = {
+                        history.redo(document)?.let { (next, changes) ->
+                            document = next; history = changes
+                            contentRevision += 1; activeLook = "custom"
+                        }
+                    },
+                    onChooseWorkspace = ::chooseWorkspace,
+                    menuExpanded = optionsExpanded, onMenuExpandedChange = { optionsExpanded = it },
+                    enabled = !busy && !exporting && gestureStart == null,
+                    onBack = if (child) ::requestTileBack else if (hasPhoto ||
+                        workspaceNavigation.previewBack() != null) ::requestRegularBack else null,
+                    workspaceSelectionEnabled = !child || onRequestCollageWorkspace != null
+                )
+                if (hasPhoto) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { compare = !compare }, enabled = !busy && !exporting) {
+                            Text(if (compare) "Edited" else "Before", color = EditorWhite)
+                        }
+                        if (zoom > 1.01f) TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) {
+                            Text("Fit canvas", color = EditorMint)
+                        }
+                        if (child) {
+                            TextButton(onClick = { if (!busy && !exporting) {
+                                cancelDraft(); onCancelCollagePhoto?.invoke()
+                            } }, enabled = !busy && !exporting) { Text("Cancel", color = EditorWhite) }
+                            TextButton(onClick = ::finishCollageTile, enabled = !busy && !exporting) {
+                                Text("Done", color = EditorMint)
+                            }
+                        }
+                    }
                 }
+                if (notice.isNotEmpty()) Text(notice, color = EditorWhite, fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp))
             }
 
             if (original != null) {
@@ -1255,12 +1561,13 @@ fun PhotoEditorScreen(
                             busy = busy || exporting,
                             privacyIndex = selectedPrivacy,
                             isStandalone = onDoneCollagePhoto == null,
-                            showHistogram = tileEntryBaseline == null && onDoneCollagePhoto == null,
+                            showHistogram = false,
                             creativeTool = creativeTools,
                             cropSize = cropImageSize
                         ),
                         actions = RegularDockActions(
                             onTab = {
+                                cancelDraft()
                                 selectedTab = it
                                 if (it == EditTab.PRIVACY || it == EditTab.TEXT || it == EditTab.DRAW ||
                                     it == EditTab.SHAPES || it == EditTab.CROP) {
@@ -1269,14 +1576,13 @@ fun PhotoEditorScreen(
                                     panY = 0f
                                 }
                             },
-                            onSelectPrivacy = { selectedPrivacy = it },
+                            onSelectPrivacy = { cancelDraft(); selectedPrivacy = it },
                             onAddPrivacy = ::addPrivacy,
                             onDeletePrivacy = ::removePrivacy,
                             onUndoPrivacyStroke = { privacyStrokeEdit(false) },
                             onClearPrivacy = { privacyStrokeEdit(true) },
                             onCommit = {
-                                commit(it)
-                                activeLook = "custom"
+                                if (commit(it)) activeLook = "custom"
                             },
                             onSlide = ::slide,
                             onSlideFinished = ::finishSlide,
@@ -1284,14 +1590,20 @@ fun PhotoEditorScreen(
                             onAutoTone = ::autoTone,
                             onAutoWB = ::autoWB,
                             onSaveLook = ::saveLook,
-                            onSaveProject = ::saveProject,
+                            onSaveProject = { saveProject() },
                             onProjects = ::openProjects,
                             onOpen = ::openPicker,
                             onCollage = { chooseWorkspace(WorkspaceMode.COLLAGE) },
-                            onCreativeTool = { creativeTools = it },
+                            onCreativeTool = { cancelDraft(); creativeTools = it },
                             onNewText = { editWords(true) },
                             onEditText = { editWords(false) },
-                            onHistogram = { showHistogram = true }
+                            onHistogram = {},
+                            onCommitAndSelect = { next, selected ->
+                                if (commit(next)) {
+                                    activeLook = "custom"
+                                    creativeTools = selected
+                                }
+                            }
                         )
                     )
                 }
@@ -1316,19 +1628,17 @@ fun PhotoEditorScreen(
         }
     }
 
-    if (showHistogram && selectedImage != null) {
-        val image = original?.let { input ->
-            if (compare) previewState.beforeImage.takeIf { previewState.beforeStamp == (input to PhotoGeometry.from(previewEdits)) }
-            else selectedImage.takeIf { previewState.processedStamp == PreviewStamp(input, previewEdits) }
-        }
-        PhotoHistogramDialog(
-            image = image,
-            showingBefore = compare,
-            sourceGeneration = loadingToken,
-            exposure = previewEdits.grade.exposure
-        ) { showHistogram = false }
-    }
-    PhotoExportDialogs(photoExport, sourceUri, sourceSize, document, busy, notice)
+    if (onDoneCollagePhoto == null) PhotoExportDialogs(photoExport, sourceUri, sourceSize, document, busy, notice, photoOwnerId)
+    if (showPhotoHelp) PhotoHelpDialog { showPhotoHelp = false }
+    if (showPhotoReset) AlertDialog(
+        onDismissRequest = { showPhotoReset = false },
+        title = { Text("Reset all edits?") },
+        text = { Text("Return this photo to its original appearance. You can undo this edit.") },
+        confirmButton = { TextButton(onClick = {
+            commit(EditDocument()); activeLook = "none"; showPhotoReset = false
+        }) { Text("Reset") } },
+        dismissButton = { TextButton(onClick = { showPhotoReset = false }) { Text("Cancel") } }
+    )
     if (showTextDialog) {
         TextEditDialog(
             content = textDraft,
@@ -1354,42 +1664,49 @@ fun PhotoEditorScreen(
             onDismiss = { showSaveLook = false }
         )
     }
-    if (showSaveProject) {
+
+    if (showSaveProject && photoCollision == null) {
         SaveNameDialog(
-            title = "Save editable project",
-            description = "Stores your edits and a local reference to this photo. " +
-                "Keep the original photo available.",
+            title = if (onDoneCollagePhoto != null) "Save photo project" else "Save editable project",
+            description = "Stores your edits and a local reference to this photo. Keep the original photo available.",
             name = draftName,
             onName = { draftName = it; projectSaveError = null },
             error = projectSaveError,
             onSave = {
-                val uri = sourceUri
-                if (replacementAfterSave && ProjectStore.normalizedName(draftName) == replacement?.projectName) {
-                    projectSaveError = "Choose a different name from the project you are opening."
-                } else if (uri != null && ProjectStore.save(context, draftName, uri, document)) {
-                    savedProjects = ProjectStore.load(context)
-                    if (tileEntryBaseline == null) {
-                        baselineUri = uri.toString()
-                        baselineDocument = document
-                    }
-                    val shouldClose = closeAfterProjectSave
-                    val shouldReplace = replacementAfterSave
-                    closeAfterProjectSave = false
-                    replacementAfterSave = false
-                    showSaveProject = false
-                    when {
-                        shouldReplace -> completeReplacement()
-                        shouldClose -> closeCurrentPhoto()
-                        else -> notice = "Project saved on your phone"
-                    }
-                } else projectSaveError = "Could not save project. Your edits are still open. Reduce edit details or free a saved-project slot (maximum twelve)."
+                val target = activePhotoProject
+                performPhotoSave(if (!photoSaveAs && target != null)
+                    ProjectSaveIntent.Update(target) else ProjectSaveIntent.Create(draftName))
             },
-            onDismiss = {
-                closeAfterProjectSave = false
-                if (replacementAfterSave) replacement = null
-                replacementAfterSave = false
-                showSaveProject = false
-            }
+            onDismiss = ::cancelDeparture
+        )
+    }
+    photoRetryIntent?.let { retry ->
+        AlertDialog(
+            onDismissRequest = ::cancelDeparture,
+            title = { Text("Project was not saved") },
+            text = { Text(projectSaveError ?: "Your working edits remain open.") },
+            confirmButton = { Column {
+                if (photoRetryAllowed) TextButton(onClick = { performPhotoSave(retry) }, enabled = !busy) {
+                    Text("Retry")
+                }
+                TextButton(onClick = {
+                    photoRetryIntent = null; photoSaveAs = true; draftName = ""
+                    projectSaveError = null; showSaveProject = true
+                }, enabled = !busy) { Text("Save as…") }
+            } },
+            dismissButton = { TextButton(onClick = ::cancelDeparture) { Text("Cancel") } }
+        )
+    }
+    photoCollision?.let { collision ->
+        AlertDialog(
+            onDismissRequest = ::cancelDeparture,
+            title = { Text("Replace saved project?") },
+            text = { Text("Replace “" + collision.name + "” with this photo project? Its original media stays unchanged.") },
+            confirmButton = { TextButton(onClick = {
+                photoCollision = null
+                performPhotoSave(ProjectSaveIntent.Replace(collision))
+            }, enabled = !busy) { Text("Replace") } },
+            dismissButton = { TextButton(onClick = ::cancelDeparture) { Text("Cancel") } }
         )
     }
     if (showProjects) {
@@ -1398,141 +1715,200 @@ fun PhotoEditorScreen(
             selectedName = selectedProject,
             onSelect = { selectedProject = it },
             onOpen = {
-                savedProjects.firstOrNull { it.name == selectedProject }?.let {
-                    requestPhotoReplacement(PhotoReplacement(it.image, it.document, it.name))
+                val name = selectedProject
+                val captured = pendingDeparture
+                if (name != null && captured != null && departureOwned(captured) && !busy) {
+                    busy = true
+                    scope.launch {
+                        val loaded = withContext(Dispatchers.IO) { ProjectStore.loadNamed(context, name) }
+                        busy = false
+                        if (pendingDeparture != captured || !departureOwned(captured)) return@launch
+                        if (loaded == null) {
+                            cancelDeparture()
+                            notice = "Could not open that project. Your photo is unchanged."
+                        } else {
+                            showProjects = false
+                            openPreparedPhoto(PhotoReplacement(loaded.content.image, loaded.content.document,
+                                loaded.project.name, loaded.project))
+                        }
+                    }
                 }
-                showProjects = false
             },
             onDelete = {
-                selectedProject?.let {
-                    projectToDelete = it
-                    showProjects = false
+                val name = selectedProject
+                if (name != null && !busy) {
+                    val lookupEpoch = photoUiEpoch
+                    val lookupDeparture = pendingDeparture
+                    busy = true
+                    scope.launch {
+                        val loaded = withContext(Dispatchers.IO) { ProjectStore.loadNamed(context, name) }
+                        busy = false
+                        if (photoUiEpoch != lookupEpoch || pendingDeparture != lookupDeparture) return@launch
+                        if (loaded != null) {
+                            projectDeleteRef = loaded.project
+                            projectToDelete = loaded.project.name
+                            showProjects = false
+                        } else notice = "That saved project is no longer available."
+                    }
                 }
             },
-            onDismiss = { showProjects = false }
+            onDismiss = ::cancelDeparture
         )
     }
     projectToDelete?.let { name ->
         AlertDialog(
-            onDismissRequest = { projectToDelete = null; showProjects = true },
+            onDismissRequest = { projectToDelete = null; projectDeleteRef = null; showProjects = true },
             title = { Text("Delete saved project?") },
-            text = { Text("Delete \"$name\" from saved projects. Your original photo stays on your phone.") },
+            text = { Text("Delete “" + name + "” from saved projects. Your original photo stays on your phone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    if (ProjectStore.delete(context, name)) {
-                        savedProjects = ProjectStore.load(context)
-                        selectedProject = null
-                        notice = "Project reference removed."
-                    } else {
-                        notice = "Could not delete project."
+                    val expected = projectDeleteRef
+                    if (expected != null && !busy) {
+                        val deleteEpoch = photoUiEpoch
+                        busy = true
+                        scope.launch {
+                            val deleted = withContext(Dispatchers.IO) { ProjectStore.deleteNamed(context, expected) }
+                            busy = false
+                            if (deleted) {
+                                savedProjects = ProjectStore.load(context)
+                                if (activePhotoProject?.id == expected.id) activePhotoProject = null
+                                selectedProject = null
+                                notice = "Project reference removed."
+                            } else notice = "The saved project changed or could not be deleted."
+                            if (photoUiEpoch == deleteEpoch) {
+                                projectToDelete = null
+                                projectDeleteRef = null
+                                showProjects = true
+                            }
+                        }
                     }
-                    projectToDelete = null
-                    showProjects = true
-                }) { Text("Delete project") }
+                }, enabled = !busy) { Text("Delete project") }
             },
             dismissButton = {
-                TextButton(onClick = { projectToDelete = null; showProjects = true }) {
+                TextButton(onClick = { projectToDelete = null; projectDeleteRef = null; showProjects = true }) {
                     Text("Cancel")
                 }
             }
         )
     }
-    if (showRegularExit) {
-        val keepEditing = {
-            showRegularExit = false
-            replacement = null
-        }
-        AlertDialog(
-            onDismissRequest = keepEditing,
-            title = { Text("Keep your photo edits?") },
-            text = {
-                Text(if (replacement == null) {
-                    "Save an editable project, discard these changes, or keep editing."
-                } else {
-                    "Save or discard your current edits before opening the other photo."
-                })
-            },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = keepEditing) {
-                        Text("Keep editing")
-                    }
-                    TextButton(onClick = {
-                        showRegularExit = false
-                        saveProjectAndClose()
-                    }) {
-                        Text("Save project")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    if (replacement == null) closeCurrentPhoto() else completeReplacement()
-                }) {
-                    Text("Discard")
-                }
-            }
-        )
-    }
+    if (showRegularExit) WorkspaceDepartureDialog(
+        message = "Save this photo project, discard the unsaved changes, or cancel.",
+        onSave = { showRegularExit = false; saveProject() },
+        onDiscard = {
+            pendingDeparture = pendingDeparture?.copy(discard = true)
+            continueDeparture()
+        },
+        onCancel = ::cancelDeparture
+    )
     if (showProHandoff) {
-        val hasProWork = proDocument.layers.isNotEmpty() ||
-            proSession.history.undo.isNotEmpty() || proSession.history.redo.isNotEmpty()
-        AlertDialog(
-            onDismissRequest = { showProHandoff = false },
-            title = { Text("Continue editing in Photo Pro?") },
-            text = {
-                Column {
-                    Text("Bring this photo and its current edits into Pro. Your Regular photo stays open.")
-                    if (hasProWork) {
-                        Text("Starting a new session replaces the current Pro work. Saved projects stay available.")
+        when (proHandoffStage) {
+            "choose" -> AlertDialog(
+                onDismissRequest = ::cancelDeparture,
+                title = { Text("Existing Pro work") },
+                text = { Text("Resume the existing Pro work or start another Pro document.") },
+                confirmButton = {
+                    Column {
                         TextButton(onClick = {
-                            showProHandoff = false
-                            finishSlide()
-                            workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
-                        }) { Text("Resume Pro work") }
+                            val pending = pendingDeparture
+                            if (pending != null && departureOwned(pending) && commitDiscard(pending)) {
+                                cancelDeparture()
+                                workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
+                            }
+                        }) { Text("Resume existing Pro") }
+                        TextButton(onClick = { proHandoffStage = "appearance" }) { Text("Start another Pro") }
+                    }
+                },
+                dismissButton = { TextButton(onClick = ::cancelDeparture) { Text("Cancel") } }
+            )
+            "appearance" -> AlertDialog(
+                onDismissRequest = ::cancelDeparture,
+                title = { Text("Bring this photo into Pro?") },
+                text = { Text(if (pendingDeparture?.discard == true)
+                    "Use the saved or entry appearance selected by Discard. The abandoned edits will not be transferred."
+                    else "Use this photo with its current Regular edits, or start a blank Pro canvas.") },
+                confirmButton = { TextButton(onClick = { resolveProForHandoff(true) }) { Text("Yes, bring photo") } },
+                dismissButton = {
+                    Column {
+                        TextButton(onClick = { resolveProForHandoff(false) }) { Text("No, start blank") }
+                        TextButton(onClick = ::cancelDeparture) { Text("Cancel") }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = ::openProWithRegularEdits) { Text("Yes, continue") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = { showProHandoff = false }) { Text("Cancel") }
+            )
+            "resolve" -> WorkspaceDepartureDialog(
+                title = "Unsaved Pro changes",
+                message = "Resolve the existing Pro work before replacing it. A canceled or failed transfer keeps both workspaces open.",
+                saveEnabled = proDocument.layers.isNotEmpty(),
+                saveDisabledReason = if (proDocument.layers.isEmpty())
+                    "This empty canvas setup cannot be saved as a project yet." else null,
+                discardLabel = if (proDocument.layers.isEmpty()) "Discard setup" else "Discard",
+                onSave = {
+                    val target = proSession.saveTarget.savedRef
+                    if (target != null) saveInactivePro(ProjectSaveIntent.Update(target))
+                    else { proSaveName = ""; proSaveError = null; proHandoffStage = "name" }
+                },
+                onDiscard = { proHandoffDiscard = true; finishProHandoff(proHandoffImport) },
+                onCancel = ::cancelDeparture
+            )
+            "name" -> SaveNameDialog(
+                title = "Save Pro project",
+                description = "Save the existing Pro document before replacing it.",
+                name = proSaveName, onName = { proSaveName = it; proSaveError = null },
+                error = proSaveError,
+                onSave = { saveInactivePro(ProjectSaveIntent.Create(proSaveName)) },
+                onDismiss = ::cancelDeparture
+            )
+            "failure" -> AlertDialog(
+                onDismissRequest = ::cancelDeparture,
+                title = { Text("Pro project was not saved") },
+                text = { Text(proSaveError ?: "The existing Pro work remains open.") },
+                confirmButton = { Column {
+                    if (proRetryAllowed) TextButton(onClick = {
+                        proRetryIntent?.let(::saveInactivePro)
+                    }, enabled = !busy) { Text("Retry") }
                     TextButton(onClick = {
-                        showProHandoff = false
-                        finishSlide()
-                        proDocument = ProDocument()
-                        proSession = ProWorkspaceSession(documentEstablished = true)
-                        workspaceNavigation = workspaceNavigation.open(WorkspaceMode.PRO)
-                    }) { Text("No, open blank") }
-                }
+                        proRetryIntent = null; proSaveName = ""; proSaveError = null
+                        proHandoffStage = "name"
+                    }, enabled = !busy) { Text("Save as…") }
+                } },
+                dismissButton = { TextButton(onClick = ::cancelDeparture) { Text("Cancel") } }
+            )
+            "collision" -> proSaveCollision?.let { collision ->
+                AlertDialog(
+                    onDismissRequest = ::cancelDeparture,
+                    title = { Text("Replace saved Pro project?") },
+                    text = { Text("Replace “" + collision.name + "” with the existing Pro work?") },
+                    confirmButton = { TextButton(onClick = {
+                        saveInactivePro(ProjectSaveIntent.Replace(collision))
+                    }, enabled = !busy) { Text("Replace") } },
+                    dismissButton = { TextButton(onClick = ::cancelDeparture) { Text("Cancel") } }
+                )
             }
-        )
+        }
     }
-    if (showTileExit) {
-        AlertDialog(
-            onDismissRequest = { showTileExit = false },
-            title = { Text("Apply tile changes?") },
-            text = { Text("Only Apply or Done changes this collage tile.") },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = { showTileExit = false }) {
-                        Text("Keep editing")
-                    }
-                    TextButton(onClick = { finishCollageTile() }) {
-                        Text("Apply")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
+    if (showTileExit) WorkspaceDepartureDialog(
+        title = "Apply tile changes?",
+        message = if (tileWorkspace == null) "Apply the changes to this tile or discard them and return to the collage."
+            else "Resolve this tile first. The collage will remain open until its own departure is resolved.",
+        saveLabel = "Apply to tile",
+        discardLabel = "Discard tile changes",
+        onSave = {
+            val mode = tileWorkspace
+            if (mode == null) finishCollageTile()
+            else {
+                val entry = initialCollagePhoto
+                if (entry != null) {
                     showTileExit = false
-                    onCancelCollagePhoto?.invoke()
-                }) {
-                    Text("Discard")
+                    onRequestCollageWorkspace?.invoke(mode,
+                        entry.copy(uri = sourceUri?.toString() ?: entry.uri, edits = document))
                 }
             }
-        )
-    }
+        },
+        onDiscard = {
+            showTileExit = false
+            val mode = tileWorkspace
+            if (mode == null) onCancelCollagePhoto?.invoke()
+            else onRequestCollageWorkspace?.invoke(mode, null)
+        },
+        onCancel = { showTileExit = false; tileWorkspace = null }
+    )
 }

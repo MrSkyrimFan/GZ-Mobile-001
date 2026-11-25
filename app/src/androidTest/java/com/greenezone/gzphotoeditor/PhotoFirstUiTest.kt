@@ -44,7 +44,9 @@ class PhotoFirstUiTest {
         rule.onNodeWithText("GIF maker").assertExists()
         rule.onNodeWithText("Video editing · Coming soon").assertExists()
         rule.onNodeWithText("Photo editing Pro").performClick()
-        rule.onNodeWithText("Add first photo").assertExists()
+        rule.onNodeWithText("Select an image to edit").assertExists()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Open photo as new document…").assertExists()
     }
 
     @Test fun proCreatesShapesWithoutOfferingTextFromCleanCanvas() {
@@ -63,7 +65,8 @@ class PhotoFirstUiTest {
                 )
             }
         }
-        rule.onNodeWithText("Or start with a blank canvas").performClick()
+        rule.onNodeWithText("+ Add layer").performClick()
+        rule.onNodeWithText("Draw / Brush").performClick()
         rule.onNodeWithText("+ Add layer").performClick()
         rule.onNodeWithText("Words / Text").assertDoesNotExist()
         rule.onNodeWithText("Shape").performClick()
@@ -133,14 +136,15 @@ class PhotoFirstUiTest {
             }
         }
         rule.onNodeWithText("Select one video to turn into a GIF").assertIsDisplayed()
-        rule.onNodeWithText("Choose video").assertIsDisplayed()
-        rule.onNodeWithText("Open saved GIF project").assertExists()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Open video…").assertIsDisplayed()
+        rule.onNodeWithText("Open project…").assertExists()
         rule.onNodeWithText("Instead: animate multiple photos").assertDoesNotExist()
     }
 
     @Test fun firstOpenExplainsHowToStartWithoutTinyPreview() {
         rule.setContent { MaterialTheme(colorScheme = darkColorScheme()) { PhotoEditorScreen() } }
-        rule.onNodeWithText("Open media").assertIsDisplayed()
+        rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
         rule.onNodeWithText("© 2026 Greenezone Software LLC").assertExists()
     }
 
@@ -324,11 +328,13 @@ class PhotoFirstUiTest {
                 PhotoEditorScreen()
             }
         }
-        rule.onNodeWithText("Open media").assertIsDisplayed()
-        rule.onNodeWithText("Create collage").performClick()
+        rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
+        rule.onNodeWithText("Create collage").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+        rule.onNodeWithText("Collage maker").performClick()
         rule.onNodeWithText("Collage").assertIsDisplayed()
-        rule.onNodeWithText("Back").performClick()
-        rule.onNodeWithText("Open media").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Back").performClick()
+        rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
     }
 
     @Test fun selectingLightToolShowsOneSliderAtATime() {

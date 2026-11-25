@@ -71,34 +71,42 @@ class AndroidGifProjectIdentityTest {
         rule.onNodeWithText("Reverse").performClick()
         waitVideo(secondUri, !second.video!!.reverse)
         val editedSecond = current
+        val targetBeforeSave = requireNotNull(GifStore.loadNamed(storage, "Beta video")).project
         videoSave()
-        val suggestedName = draftName()
-        submitName()
+        rule.waitUntil(15_000) { GifStore.load(storage, "Beta video") == editedSecond }
+        val targetAfterSave = requireNotNull(GifStore.loadNamed(storage, "Beta video")).project
+        assertEquals("Save must retain the opened project's stable identity", targetBeforeSave.id, targetAfterSave.id)
         assertEquals("Saving B must leave A's source and recipe intact",
             first, GifStore.load(storage, "Alpha video"))
         assertEquals(editedSecond, GifStore.load(storage, "Beta video"))
-        assertEquals("Beta video", suggestedName)
+        assertEquals("Beta video", targetAfterSave.name)
 
-        videoSave()
+        videoFile("Save project as…")
         rule.onNode(hasSetTextAction()).performTextReplacement("  Alpha   video  ")
         rule.onNodeWithText("Save").performClick()
         rule.onNodeWithText("Replace GIF project?").assertIsDisplayed()
         rule.onNodeWithText("Cancel").performClick()
-        rule.onNodeWithText("Cancel").performClick()
+        // Collision Cancel ends the entire captured save/departure attempt.
+        rule.onNodeWithText("Replace GIF project?").assertDoesNotExist()
+        rule.onNode(hasSetTextAction()).assertDoesNotExist()
         assertEquals(first, GifStore.load(storage, "Alpha video"))
         assertEquals(editedSecond, GifStore.load(storage, "Beta video"))
 
-        videoFile("Choose video")
+        videoFile("Open video…")
         waitVideo(firstUri, first.video!!.reverse)
         videoSave()
         assertEquals("", draftName())
         rule.onNodeWithText("Cancel").performClick()
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         waitVideo(secondUri, editedSecond.video!!.reverse)
         videoSave()
-        assertEquals("Beta video", draftName())
-        rule.onNodeWithText("Cancel").performClick()
-        rule.onNodeWithText("Redo").performClick()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Saving GIF project").fetchSemanticsNodes().isEmpty()
+        }
+        assertEquals("Undo must restore the correct named save target", targetBeforeSave.id,
+            requireNotNull(GifStore.loadNamed(storage, "Beta video")).project.id)
+        assertEquals(first, GifStore.load(storage, "Alpha video"))
+        rule.onNodeWithContentDescription("Redo").performClick()
         waitVideo(firstUri, first.video!!.reverse)
         videoSave()
         assertEquals("", draftName())
@@ -135,13 +143,15 @@ class AndroidGifProjectIdentityTest {
         ) { it(720f) }
         rule.waitUntil(15_000) { current.delayMs == 720 }
         val editedSecond = current
+        val targetBeforeSave = requireNotNull(GifStore.loadNamed(storage, "Beta photos")).project
         photoSave()
-        val suggestedName = draftName()
-        submitName()
+        rule.waitUntil(15_000) { GifStore.load(storage, "Beta photos") == editedSecond }
+        val targetAfterSave = requireNotNull(GifStore.loadNamed(storage, "Beta photos")).project
+        assertEquals("Save must retain the opened photo project's identity", targetBeforeSave.id, targetAfterSave.id)
         assertEquals("Saving B must leave A's photo order and timing intact",
             first, GifStore.load(storage, "Alpha photos"))
         assertEquals(editedSecond, GifStore.load(storage, "Beta photos"))
-        assertEquals("Beta photos", suggestedName)
+        assertEquals("Beta photos", targetAfterSave.name)
 
         restartWorkspace()
         videoOpen("Alpha photos")
@@ -158,17 +168,17 @@ class AndroidGifProjectIdentityTest {
         var source = first
         mount(storage.filesDir, chooseVideo = { source })
 
-        rule.onNodeWithText("Choose video").performClick()
+        videoFile("Open video…")
         waitVideo(first, false)
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.onNodeWithText("Select one video to turn into a GIF").assertIsDisplayed()
-        rule.onNodeWithText("Redo").assertIsEnabled().performClick()
+        rule.onNodeWithContentDescription("Redo").assertIsEnabled().performClick()
         waitVideo(first, false)
-        rule.onNodeWithText("Undo").performClick()
+        rule.onNodeWithContentDescription("Undo").performClick()
         rule.runOnIdle { source = second }
-        rule.onNodeWithText("Choose video").performClick()
+        videoFile("Open video…")
         waitVideo(second, false)
-        rule.onNodeWithText("Redo").assertIsNotEnabled()
+        rule.onNodeWithContentDescription("Redo").assertIsNotEnabled()
     }
 
     @Test fun deletingNamedBackupOnlyProjectReclaimsCapacityWithoutLosingCurrentEdits() = withProjects { storage ->
@@ -183,7 +193,7 @@ class AndroidGifProjectIdentityTest {
         assertTrue(GifStore.save(storage, obsoleteName, recipe))
         mount(storage.filesDir)
 
-        rule.onNodeWithText("Open saved GIF project").performClick()
+        videoFile("Open project…")
         rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()
         rule.onNodeWithText("Delete GIF project?").assertIsDisplayed()
         rule.onNodeWithText("Cancel").performClick()
@@ -194,7 +204,7 @@ class AndroidGifProjectIdentityTest {
         rule.waitUntil(15_000) { !current.forever }
         val working = current
 
-        photoSave()
+        videoFile("Save project as…")
         rule.onNode(hasSetTextAction()).performTextReplacement("New GIF recipe")
         rule.onNodeWithText("Save").performClick()
         rule.onNodeWithText("The saved GIF project list is full", substring = true).assertIsDisplayed()
@@ -207,7 +217,7 @@ class AndroidGifProjectIdentityTest {
         assertTrue(base.renameTo(backup))
         assertTrue(blocked.mkdir())
         rule.onNodeWithText("Photos").performScrollTo().performClick()
-        rule.onNodeWithText("Open saved").performScrollTo().performClick()
+        videoFile("Open project…")
         fun deleteObsolete() {
             rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()
             rule.onNodeWithText("Delete").performClick()
@@ -333,27 +343,23 @@ class AndroidGifProjectIdentityTest {
     }
 
     private fun videoFile(item: String) {
-        rule.onNodeWithText("File ▾").performClick()
+        rule.onNodeWithText("Options").performClick()
         rule.onNodeWithText(item).performClick()
     }
 
     private fun videoOpen(name: String) {
-        if (current.video == null) rule.onNodeWithText("Open saved GIF project").performClick()
-        else videoFile("Open saved GIF project")
+        videoFile("Open project…")
         rule.onNodeWithText(name).performScrollTo().performClick()
     }
 
     private fun videoSave() = videoFile("Save project")
 
     private fun photoOpen(name: String) {
-        rule.onNodeWithText("Open saved").performScrollTo().performClick()
+        videoFile("Open project…")
         rule.onNodeWithText(name).performScrollTo().performClick()
     }
 
-    private fun photoSave() {
-        rule.onNodeWithText("Projects").performScrollTo().performClick()
-        rule.onNodeWithText("Save project").performScrollTo().performClick()
-    }
+    private fun photoSave() = videoFile("Save project")
 
     private fun draftName(): String =
         rule.onNode(hasSetTextAction()).fetchSemanticsNode().config[SemanticsProperties.EditableText].text
@@ -361,7 +367,10 @@ class AndroidGifProjectIdentityTest {
     private fun submitName(name: String? = null) {
         if (name != null) rule.onNode(hasSetTextAction()).performTextReplacement(name)
         rule.onNodeWithText("Save").performClick()
-        rule.waitUntil(15_000) { rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() }
+         rule.waitUntil(15_000) {
+            rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty() &&
+                rule.onAllNodesWithText("Saving GIF project").fetchSemanticsNodes().isEmpty()
+        }
     }
 
     private fun waitVideo(uri: Uri, reverse: Boolean) {

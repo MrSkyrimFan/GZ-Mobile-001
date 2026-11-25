@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -92,8 +93,8 @@ class ProAndGifExportFailureTest {
         previewError = "Source for image layer 1 is unavailable",
         failure = "Export failed"
     ) {
-        rule.onNodeWithText("File ▾").performClick()
-        rule.onNodeWithText("Export image").performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Export image…").performClick()
         rule.onNodeWithText("Save JPG").performClick()
     }
 
@@ -104,7 +105,8 @@ class ProAndGifExportFailureTest {
         previewError = "Photo 1 unavailable",
         failure = "GIF export failed"
     ) {
-        rule.onNodeWithText("Export GIF").performScrollTo().performClick()
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Export GIF…").performClick()
     }
 }
 

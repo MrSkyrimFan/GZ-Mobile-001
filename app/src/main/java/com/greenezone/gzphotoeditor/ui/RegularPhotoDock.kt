@@ -43,7 +43,8 @@ internal class RegularDockActions(
     val onCreativeTool: (CreativeToolState) -> Unit,
     val onNewText: () -> Unit,
     val onEditText: () -> Unit,
-    val onHistogram: () -> Unit
+    val onHistogram: () -> Unit,
+    val onCommitAndSelect: (EditDocument, CreativeToolState) -> Unit
 )
 
 @Composable
@@ -83,6 +84,7 @@ internal fun RegularPhotoDock(state: RegularDockState, actions: RegularDockActio
         onEditText = actions.onEditText,
         cropImageWidth = cropWidth,
         cropImageHeight = cropHeight,
-        onHistogram = histogram
+        onHistogram = histogram,
+        onCommitAndSelect = actions.onCommitAndSelect
     )
 }

@@ -51,7 +51,7 @@ jobs:
           reject_matches 'ChromaVale|Focavera|com[.]greenezone[.](chromavale|focavera)' app/src/main app/build.gradle.kts settings.gradle.kts
           reject_matches 'android[.]permission[.](INTERNET|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE)' app/src/main
       - name: Test and assemble
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Verify testing package
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
@@ -97,6 +97,10 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_3a
+          # Retain the API35 lane; its actual runtime heap is logged by the profile.
+          # API29 below uses an explicit guest-property preflight.
+          ram-size: 2048M
+          heap-size: 256M
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: bash .github/scripts/android-test-with-receipts.sh
@@ -125,6 +129,7 @@ jobs:
     timeout-minutes: 45
     env:
       ORG_GRADLE_PROJECT_gzPhoneTestInstall: 'true'
+      GZ_CI_HEAP_MIB: '256'
     permissions:
       contents: read
     steps:
@@ -152,8 +157,13 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_3a
+          # Runner v2 writes heap-size to hw.heapSize; the AVD key is vm.heapSize.
+          # The test script also verifies guest properties after restarting zygote.
+          pre-emulator-launch-script: |
+            sed -i '/^vm\.heapSize=/d;/^hw\.heapSize=/d' "$ANDROID_AVD_HOME/test.avd/config.ini"
+            printf 'vm.heapSize=256\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
           disable-animations: true
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
           script: bash .github/scripts/android-test-with-receipts.sh
       - name: Upload Android 10 emulator test receipts
         if: always()

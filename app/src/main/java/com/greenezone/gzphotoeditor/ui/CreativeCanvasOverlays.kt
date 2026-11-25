@@ -61,7 +61,8 @@ fun CropFrameOverlay(
     onFinished: () -> Unit,
     onCanceled: () -> Unit,
     onTap: () -> Unit,
-    imageInset: Dp = 0.dp
+    imageInset: Dp = 0.dp,
+    targetKey: Any? = null
 ) {
     val latestFrame by rememberUpdatedState(frame)
     val change by rememberUpdatedState(onChange)
@@ -71,7 +72,7 @@ fun CropFrameOverlay(
     Canvas(
         Modifier.fillMaxSize()
             .testTag("crop-frame")
-            .pointerInput(aspectRatio, imageWidth, imageHeight, imageInset) {
+            .pointerInput(aspectRatio, imageWidth, imageHeight, imageInset, targetKey) {
                 val radius = 32.dp.toPx()
                 val insetPixels = imageInset.roundToPx().toFloat()
                 awaitEachGesture {
@@ -156,50 +157,64 @@ fun EditableObjectOverlay(
     showGuides: Boolean,
     onChanged: (Float, Float, Float, Float) -> Unit,
     onFinished: () -> Unit,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    onCanceled: () -> Unit = {},
+    targetKey: Any? = null
 ) {
     val latest by rememberUpdatedState(floatArrayOf(centerX, centerY, width, height))
     val change by rememberUpdatedState(onChanged)
     val finish by rememberUpdatedState(onFinished)
     val tap by rememberUpdatedState(onTap)
+    val cancel by rememberUpdatedState(onCanceled)
     Canvas(
-        Modifier.fillMaxSize()
-            .pointerInput(Unit) { detectTapGestures(onTap = { tap() }) }
-            .pointerInput(imageWidth, imageHeight) {
-                val img = imageSpace(size.width.toFloat(), size.height.toFloat(), imageWidth, imageHeight)
-                var corner = false
-                var active = false
-                detectDragGestures(
-                    onDragStart = { pos ->
-                        val p = img.point(pos)
-                        val f = latest
-                        val cx = f[0]; val cy = f[1]
-                        val w = f[2]; val h = f[3]
-                        val dx = p?.x ?: -1f
-                        val dy = p?.y ?: -1f
-                        corner = abs(dx - (cx + w / 2f)) * img.w < 38f &&
-                            abs(dy - (cy + h / 2f)) * img.h < 38f
-                        active = p != null && (corner ||
-                            (dx in cx - w / 2f..cx + w / 2f &&
-                                dy in cy - h / 2f..cy + h / 2f))
-                    },
-                    onDragEnd = { if (active) finish(); active = false },
-                    onDragCancel = { if (active) finish(); active = false },
-                    onDrag = { event, delta ->
-                        if (!active) return@detectDragGestures
-                        val f = latest
-                        val dx = delta.x / img.w
-                        val dy = delta.y / img.h
-                        if (corner) {
-                            change(f[0], f[1], (f[2] + 2f * dx).coerceIn(.05f, 1f),
-                                (f[3] + 2f * dy).coerceIn(.04f, 1f))
-                        } else {
-                            change((f[0] + dx).coerceIn(0f, 1f),
-                                (f[1] + dy).coerceIn(0f, 1f), f[2], f[3])
-                        }
-                        event.consume()
+        Modifier.fillMaxSize().testTag("editable-object")
+            .pointerInput(imageWidth, imageHeight, targetKey) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val startSize = size
+                    val img = imageSpace(startSize.width.toFloat(), startSize.height.toFloat(), imageWidth, imageHeight)
+                    val initial = latest.copyOf()
+                    val p = img.point(down.position)
+                    val radius = 24.dp.toPx()
+                    val corner = p != null &&
+                        abs(p.x - (initial[0] + initial[2] / 2f)) * img.w <= radius &&
+                        abs(p.y - (initial[1] + initial[3] / 2f)) * img.h <= radius
+                    val ownsObject = p != null && (corner ||
+                        (p.x in initial[0] - initial[2] / 2f..initial[0] + initial[2] / 2f &&
+                         p.y in initial[1] - initial[3] / 2f..initial[1] + initial[3] / 2f))
+                    down.consume()
+                    var moved = false
+                    var changed = false
+                    var completed = false
+                    try {
+                        do {
+                            val event = awaitPointerEvent()
+                            val pointer = event.changes.singleOrNull() ?: return@awaitEachGesture
+                            if (size != startSize || pointer.id != down.id || pointer.isConsumed)
+                                return@awaitEachGesture
+                            val delta = pointer.position - down.position
+                            moved = moved || delta.getDistance() > viewConfiguration.touchSlop
+                            if (moved && ownsObject) {
+                                val dx = delta.x / img.w
+                                val dy = delta.y / img.h
+                                changed = true
+                                if (corner) {
+                                    change(initial[0], initial[1],
+                                        (initial[2] + 2f * dx).coerceIn(.05f, 1f),
+                                        (initial[3] + 2f * dy).coerceIn(.04f, 1f))
+                                } else {
+                                    change((initial[0] + dx).coerceIn(0f, 1f),
+                                        (initial[1] + dy).coerceIn(0f, 1f), initial[2], initial[3])
+                                }
+                            }
+                            pointer.consume()
+                        } while (pointer.pressed)
+                        completed = true
+                        if (changed) finish() else if (!moved) tap()
+                    } finally {
+                        if (!completed && changed) cancel()
                     }
-                )
+                }
             }
     ) {
         if (!showGuides) return@Canvas

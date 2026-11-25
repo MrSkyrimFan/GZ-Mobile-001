@@ -80,7 +80,9 @@ internal class PhotoExportController(
     )
     private val initial = if (restorePending) journal.read(ExportWorkspace.PHOTO) else null
     val initialRecoveryId: String? = initial?.id
-    val recoveredRequest = initial?.let(PhotoExportRequest::decode)
+    val nativeRecoveryExpected: Boolean = initial?.restoreNativeDraft == true
+    val recoveredRequest = initial?.takeIf { it.restoreNativeDraft }?.let(PhotoExportRequest::decode)
+    val recoveredOwnerId: String? = initial?.let { it.nativeOwnerId ?: it.id }
     private val running = mutableStateOf(false)
     val inProgress: State<Boolean> = running
 
@@ -134,7 +136,7 @@ internal class PhotoExportController(
         }
     }
 
-    fun request(source: Uri?, document: EditDocument) {
+    fun request(source: Uri?, document: EditDocument, nativeOwnerId: String? = null) {
         if (source == null) return
         closeDialog()
         if (pending != null) {
@@ -147,7 +149,7 @@ internal class PhotoExportController(
         try {
             val record = journal.begin(ExportWorkspace.PHOTO, selectedSettings.format.mime,
                 target + "." + selectedSettings.format.extension,
-                PhotoExportRequest(source, selectedSettings, document).encode())
+                PhotoExportRequest(source, selectedSettings, document).encode(), nativeOwnerId)
             pending = record
             launchId = record.id
         } catch (_: EditDocumentCodec.RecipeTooLarge) {
@@ -157,6 +159,22 @@ internal class PhotoExportController(
         } catch (error: Exception) {
             report("Could not prepare export: " + (error.message ?: "local storage failed"))
         }
+    }
+
+    fun adoptNativeDisposition(records: List<PendingExport>) {
+        val current = pending ?: return
+        records.firstOrNull { it.workspace == ExportWorkspace.PHOTO && it.id == current.id }
+            ?.let { pending = it }
+    }
+
+    fun resolveNativeDraft(ownerId: String): Boolean = try {
+        pending?.let { record ->
+            journal.suppressNativeRestore(record, ownerId)?.let { pending = it }
+        }
+        true
+    } catch (_: Exception) {
+        report("Could not record Discard. Your working photo is still open.")
+        false
     }
 
     fun retry(record: PendingExport) {
@@ -292,7 +310,8 @@ internal fun PhotoExportDialogs(
     sourceSize: Pair<Int, Int>?,
     document: EditDocument,
     busy: Boolean,
-    notice: String
+    notice: String,
+    nativeOwnerId: String? = null
 ) {
     val recovery = owner.pending
     if (owner.recoveryVisible && recovery != null && !busy && !owner.inProgress.value) {
@@ -310,7 +329,7 @@ internal fun PhotoExportDialogs(
         ExportDialog(
             settings = owner.settings,
             onSettings = owner::updateSettings,
-            onSave = { owner.request(source, document) },
+            onSave = { owner.request(source, document, nativeOwnerId) },
             onDismiss = owner::closeDialog,
             originalOutput = owner.originalOutput(sourceSize, document)
         )
