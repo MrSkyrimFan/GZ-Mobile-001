@@ -1,10 +1,18 @@
 # GZ Editor Pro — complete product roadmap
 
+## Latest owner update — phone findings and alignment gate
+
+The November 24, 2026 phone report credits unmentioned supplied checks as owner-reported pass. Open findings: Collage requires a quick double tap to toggle chrome, Regular/Pro/Collage lack expected dirty-exit safeguards, and GIF Save takes approximately 120–300 seconds despite working controls. The owner requests one top-right **Options** dropdown for major actions, no duplicate command locations, a common header with consistent Undo/Redo (this handoff selects arrow icons), and removal of Regular's More, Create collage and Histogram UI entries. The [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md) gives the exact contract.
+
+**Execution is temporarily documentation-only:** ChatGPT's 25 questions → Codex's 25 answers plus complete existing roadmap and 50 questions → ChatGPT's 50 answers and canonical reconciliation → final Codex resume prompt. [A1 in the ledger](WORK_LEDGER.md) controls that phase. This explicit owner sequencing overrides older instructions to begin R1.1 or keep engineering during a phone wait.
+
+This remains the single active roadmap. Codex must supply its complete pre-handoff roadmap as a labeled evidence snapshot for comparison, including all child items. Preserve all 77 inventory families and R0–R11 scope. Stage 3 selects the immediate owner-correction batch and any justified dependency; R1.1 then R1.2 remain required durability work. Historical qualification numbers remain unchanged and do not close the new physical GIF finding.
+
 Updated 2026-11-24. Owner: Lance / Greenezone Software LLC. Engineering workspace: MrSkyrimFan/GZ-Mobile-001.
 
 ## Current direction and authority
 
-Lance supplied the independent PR #26 review (CHANGES REQUIRED), authorized fixing the issues, and requested a complete roadmap for the original professional app vision. The successor onboarding hold is lifted. The completed correction wave now supplies a qualified 0.12.10 Test handset build; owner acceptance remains open. Engineering, tests, branches, PRs and verified merges are authorized; physical acceptance, formal workspace locks and public release remain owner decisions.
+Lance supplied the independent PR #26 review (CHANGES REQUIRED), authorized fixing the issues, and requested a complete roadmap for the original professional app vision. The successor onboarding hold is lifted. The completed correction wave supplied the qualified 0.12.10 Test handset build. The latest report above records scoped owner-reported passes and open exceptions. Engineering, tests, branches, PRs and verified merges remain authorized after the current alignment hold; formal workspace locks and public release remain owner decisions.
 
 **Latest release sequencing:** Play Console is not set up. Lance wants its setup last, after a fully functioning app AND completion of the Greenezone website. Website work is an external dependency; this app task does not authorize modifying it.
 
@@ -14,13 +22,13 @@ Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WO
 
 **Current qualified correction:** [PR #31](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/31), application merge `3ad65c533f7667a136d4fa1838afcc06d3f484da`, closes only R29-01/R29-02 Eraser engineering and the GIF Save performance failure observed during qualification. Candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0` and the merge share tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`. [Candidate run 45480001019](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) and [merged run 45483297512](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512) pass JVM/build/signing and **193/193 per Android API**, with zero failures/errors/skips. [Execution receipt and exact 0.12.10 Test APK](ERASER_REPAIR_VERIFICATION.md).
 
-All original 186 Android case identities and established GIF budgets remain; five Eraser and two cache-equivalence cases extend them. The original red reproduction, separate rotation-harness abort, and candidate 1 GIF speed failure remain in the receipt. Existing layout/style and mode ownership are preserved. Later documentation-only commits do not supersede the qualified application identity. **R1.1 bounded saved-project listing/loading is the next engineering task; R1.2 recoverable Regular drafts follows.** Handset acceptance, whole-family completion and commercial release remain open.
+All original 186 Android case identities and established GIF budgets remain; five Eraser and two cache-equivalence cases extend them. The original red reproduction, separate rotation-harness abort, and candidate 1 GIF speed failure remain in the receipt. Existing layout/style and mode ownership are preserved. Later documentation-only commits do not supersede the qualified application identity. **R1.1 bounded saved-project listing/loading and R1.2 recoverable Regular drafts remain the ordered durability items.** The current task is A1 alignment and agreement on the newly reported corrections. Whole-family completion and commercial release remain open.
 
 ### Prior verified PR #29 checkpoint
 
 R0 is engineering-verified in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Candidate and merged application share tree `47e95c51254ce8e8f97b3883c44dc157ea8452b4`; each passed Verify and 186/186 Android cases on both API29 and API35, with no failures/errors/skips. Version 0.12.9 Test / code 21 was that checkpoint’s qualified phone wave and is now superseded by 0.12.10 Test. Handset acceptance, all formal workspace locks and commercial release remain open.
 
-**Next roadmap package: R1, starting with R1.1.** Preserve the completed R0 evidence and follow the active ledger. Do not replay the independent-review intake or reopen repairs without a new reason.
+**Next durability package: R1, starting with R1.1 after the current alignment and agreed owner-correction sequence.** Preserve completed R0 evidence and follow the active ledger. The new phone report supplies a reason to reopen only its affected behavior; do not replay the earlier independent-review intake.
 
 The legacy Pro streaming optimization passes in the recorded CI environments; the earlier 16 MiB hard-cap condition has not been independently requalified. R1/R8 retain explicit low-memory/device-tier measurements. Legacy v4 GIF aspect migration remains R7.
 
@@ -36,7 +44,7 @@ A paid-once, fully offline Android creative application with five separate, unde
 | GIF | Silent animation from video/GIF/photo sequences; neutral import, real edited playback, timeline and frame edits, captions, palette controls, accurate timing/color, persistence and externally playable GIF output. Sound belongs in Video. |
 | Video | Separate professional timeline with clips, compositing, user-owned audio/music/voice, precision editing, effects, keyframes and real MP4 output. **Implementation starts only after Lance formally accepts/locks all four pre-Video workspaces.** |
 
-Preserve the established dark image-first style, workspace selector and working Regular/Collage layout. A necessary functional change must name its user benefit and affected surface. PR #31 changed no layout or style. Broad reskins and new product scope need owner decisions.
+Preserve the established dark image-first style and workspace separation. The owner now explicitly requests a common top area, consistent Undo/Redo and a single Options dropdown for major commands across current workspaces, inherited by gated future Video. Remove duplicate file/help entry points and Regular's More/Create collage/Histogram UI. These named functional UI changes supersede blanket protection of the old header/dock layout; unrelated editing behavior remains protected. PR #31 itself changed no layout or style. Broad unrelated reskins and new product scope still need owner decisions.
 
 The terms Lightroom-class, Photoshop-style and studio-quality are behavioral references. The finite capabilities below govern delivery; they are not permission to copy those products or to claim universal parity. The no-AI and mode-ownership rules override incompatible features. Required families cannot disappear merely because they are difficult.
 
@@ -77,6 +85,8 @@ Build the smallest needed extensions to existing modules. No application-shell r
 - Upgrade repeated saved Regular→Pro→Regular→Pro exchange to immutable revision-linked masters with alpha/profile/precision when available. Retain both native parents. Existing Yes/No live transfer remains intact.
 - Portable native bundles with declared source embedding/link-only choice, checksums and safe import; upgrade tests use same-ID fixtures/installs rather than claiming side-by-side packages test migration.
 
+Include the new owner-reported dirty-exit failures in the R1 interaction contracts: consistent Save/Discard/Cancel, failed-save retention, transient Back precedence and independent Collage child transactions. Agree the exact route/state matrix during A1 before implementation.
+
 Exit: cross-workspace cold-reopen, process-loss, repeated handoff and provider-failure scenarios preserve all unaffected documents and original hashes. Only platform-specific observations genuinely requiring a handset are handed to Lance.
 
 ### R2 — Pro document and compositing foundation
@@ -114,7 +124,7 @@ Exit: isolate/refine/move a complex subject onto a different background, remove 
 ### R5 — Regular professional photographic processing
 
 Do not introduce a Masks authoring UI; old saved masks remain compatible.
-- Finish numerical behavior and full workflow coverage for existing exposure/tone, WB/color, HSL, curves, grading, Looks/custom presets, clipping/histogram and before/after.
+- Finish numerical behavior and full workflow coverage for exposure/tone, WB/color, HSL, curves, grading, Looks/custom presets, numerical clipping/histogram processing and before/after. The latest owner instruction removes the visible Histogram entry from Regular; retain needed processing/diagnostic evidence without reintroducing that UI under another menu.
 - Define linear/encoded sample meaning, float reference processing, color/alpha transforms and legacy appearance adapter before precision claims.
 - DNG first: explicit supported mosaic/linear/compression/opcode subset, sensor black/white/linearization, CFA phase, demosaic, WB/calibration, camera profiles and scene-linear exposure/highlight policy. Embedded JPEG is labeled preview. Broader vendor RAW follows rights-cleared camera samples and dependency review; do not bundle LibRaw by default.
 - ICC/profile assignment versus conversion; sRGB and qualified wide-gamut SDR first, proof/gamut warnings, numeric samples, output intent and truthful 16-bit PNG/TIFF. HDR display/export only as separately qualified variants.
@@ -137,7 +147,7 @@ Exit: 100-file catalog/recovery exercise and interrupted batch do not duplicate 
 
 GIF:
 - Broaden real media and lifecycle coverage: VFR/B-frames/rotations/non-square pixels/disposal/transparency/finite loops/HDR-to-SDR policy, source grant loss and relink.
-- Measure source-open, edit-to-first-correct-still, scrub, first moving frame, sustained presented cadence, reverse, full Save and copy separately. Preserve current portrait and rotated 720p60 gates.
+- Measure source-open, edit-to-first-correct-still, scrub, first moving frame, sustained presented cadence, reverse, full Save and copy separately. The new owner report of 120–300-second saves is an open physical-workload finding; unknown device/source/output settings must be captured, and the bottleneck measured without quality shortcuts. Preserve current portrait and rotated 720p60 gates.
 - Add explicit frame/segment assembly, split/remove/duplicate/reorder, per-frame holds, ping-pong endpoint rules, keyed captions/overlays, palette/dither choices and encoded appearance preview.
 - Qualify new photo-sequence creation separately from compatibility with existing saved sequences.
 - Legacy v4 anamorphic migration: source reinspection, reversible versioned upgrade with before/after preview, preserve old framing and manual aspect intent until adopted; missing source cannot trigger guessed migration.
@@ -205,7 +215,7 @@ Performance goals from older blueprints conflict in places and are **provisional
 6. UI source presence, a helper probe, fixture success, handset success and owner acceptance are distinct statuses. Do not call whole families complete from a button, compile or narrow synthetic test.
 7. Keep a single active ledger and this roadmap. Update status/evidence in place; retain earlier runs as history. Do not create another competing master plan or let handoffs revive stale commands.
 8. If work drifts, identify the mismatch against the selected item, stop that extra change, reconcile the ledger, and continue the correct next action. Do not restart intake or replay completed repairs.
-9. Missing product intent prompts a specific question. Missing technical detail is investigated by the engineer. While waiting, continue independent authorized work. No guessed loss of scope, new public release, or premature Video/onboarding work.
+9. Missing product intent prompts a specific question. Missing technical detail is investigated by the engineer. The current owner-requested A1 exchange pauses application engineering until its final resume instruction; after that, continue independent agreed work while a separate device observation is pending. No guessed loss of scope, new public release, or premature Video/onboarding work.
 10. Every handoff states exact completed behavior, evidence, remaining work and next action. An enabling diagnostic is not the delivered repair. No numeric completion percentage without a defined denominator.
 11. Keep original intake inputs until the work they govern is completed and accepted; do not archive a full blueprint after one repair wave.
 12. Public launch and formal locks remain explicit owner decisions. Routine verified engineering does not need repeated permission.
@@ -214,6 +224,6 @@ Performance goals from older blueprints conflict in places and are **provisional
 
 Reconciled sources: original full blueprint revision 2; revision3.1 master sections 4–11 and feature/sticker audits; revision4 owner overrides; Subject & Background addendum; full 201-message source transcript; repository PRODUCT_SPEC/UNIFIED_PRODUCT_SCOPE_09/PROFESSIONAL_ENGINEERING_ROADMAP and field guide; prior Audit 2 and the supplied independent PR #26 review. Private screenshots/original archives remain in the supplemental intake and are not published here.
 
-Settled overrides: Regular has no new Masks authoring; Pro has no Text authoring; actual edited Regular→Pro Yes/No prompt and retained Regular draft; stickers deferred during repairs; Video waits for four formal locks; consumer onboarding follows all editing; Play Console setup follows working app and website. Keep these in one place.
+Settled overrides: Regular has no new Masks authoring; Pro has no Text authoring; actual edited Regular→Pro Yes/No prompt and retained Regular draft; stickers deferred during repairs; Video waits for four formal locks; consumer onboarding follows all editing; Play Console setup follows working app and website. The latest owner report additionally requires common chrome/Options/Undo-Redo, no duplicate major commands, no Regular More/Create collage/Histogram UI, and the three-stage question exchange before engineering resumes. Keep the current decisions in the canonical spec and ledger.
 
 Still requiring a later named decision: exact shipping device/performance/RAW-camera/interchange tiers; specialized CMYK/spot/prepress, photo books, tethering/plugins or vendor ecosystem support if desired; final distribution territories/support/legal choices. These are not silent additions or omissions from the enumerated core. Record scope changes explicitly with Lance.

@@ -1,10 +1,18 @@
 # GZ Editor Pro — continuity / engineering custody
 
-## Current owner direction (2026-11-24)
+## Latest owner direction — phone report received; alignment first
+
+November 24, 2026 (America/Denver): Lance reports the unmentioned supplied phone checks worked. GIF controls now work; open findings are Collage single-tap chrome, missing dirty-exit protection in Regular/Pro/Collage, and GIF Save taking approximately 120–300 seconds. The owner requests a consistent top area and Undo/Redo presentation (this handoff selects common arrows), one top-right **Options** dropdown for major file/help actions, removal of duplicate command locations, and removal of Regular's More, Create collage and Histogram entries. See the [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md) for exact requirements and acceptance criteria.
+
+**Current selected task is the three-stage documentation exchange, not R1.1 implementation:** ChatGPT publishes 25 questions; Codex answers them, supplies its full operative roadmap and asks exactly 50; ChatGPT answers all 50 and reconciles the single roadmap/ledger before returning an engineering-resume prompt. App/test/build/CI changes, rebuilds and new engineering are paused until then. Latest owner instructions control over older generic "continue while waiting" language.
+
+The prior PR #29/#31 successes and original failure history remain credited. Unmentioned checklist items are owner-reported pass, with the named exceptions still open; no formal workspace lock or commercial acceptance is inferred. R1.1 bounded project listing and R1.2 recoverable Regular drafts remain required after the agreed owner-correction sequence. Live main before this docs change was `eb8796c92fa654cb0dac371e35d7645ecd07db8a`; its difference from the qualified application was documentation only. [WORK_LEDGER](WORK_LEDGER.md) owns the live exchange phase and response links.
+
+## Retained qualified engineering checkpoint (2026-11-24)
 
 **Current qualified application:** PR #31 is merged at `3ad65c533f7667a136d4fa1838afcc06d3f484da`, with tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to the qualified candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. Candidate run 45480001019 and merged-main run 45483297512 each pass JVM/build/signing and **193/193 Android cases per API29/API35**, zero failures/errors/skips. The current combined phone build is **0.12.10 Test / code 22 / phonetest.v22**. [Exact source, raw receipts, APK and phone script](ERASER_REPAIR_VERIFICATION.md).
 
-Lance explicitly authorized these repository fixes after the independent PR #29 review. R29-01/R29-02 Eraser geometry/capacity corrections and the observed GIF Save performance correction are engineering-verified. The prior original four R0 repairs remain credited. The old 0.12.9 delivery hold is superseded by the qualified replacement; owner handset acceptance and all formal workspace/release gates remain open. Follow [WORK_LEDGER](WORK_LEDGER.md): **R1.1 bounded saved-project listing/loading is next; R1.2 recoverable Regular drafts follows**. Do not restart the completed repair intake without a named new failure.
+Lance explicitly authorized these repository fixes after the independent PR #29 review. R29-01/R29-02 Eraser geometry/capacity corrections and the observed GIF Save performance correction are engineering-verified. The prior original four R0 repairs remain credited. The old 0.12.9 delivery hold is superseded by the qualified replacement. The latest phone report above supplies scoped owner-reported passes and named exceptions; all formal workspace/release gates remain open. Follow [WORK_LEDGER](WORK_LEDGER.md) for the alignment hold and agreed correction sequence. **R1.1 bounded saved-project listing/loading and R1.2 recoverable Regular drafts remain the ordered durability items.** Do not restart the completed repair intake without a named new failure.
 
 A later documentation-only `main` commit may contain this reconciliation. The app/test/Gradle/CI inputs qualified here belong to the exact application commit above; documentation changes do not create a newly tested APK.
 

@@ -1,5 +1,19 @@
 # GZ Editor Pro engineering and release gates
 
+## Current owner report and alignment gate
+
+Lance has reported the 0.12.10 phone results: unmentioned supplied checks worked, with the exceptions below. See the [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md). This updates scoped handset evidence; it does not grant formal workspace locks or commercial acceptance.
+
+- [x] Owner phone report received and unmentioned supplied checks credited as owner-reported pass.
+- [ ] F01: parent Collage and selected-tile UI reliably hide/show with one tap; active tools/guides remain usable.
+- [ ] F02: safe dirty departures in Regular/Pro/Collage, correct Save/Discard/Cancel, failed-save retention and transient/child-route ownership; verify GIF's shared contract.
+- [ ] F03: actual 120–300-second phone GIF Save workload measured and improved with full output fidelity and existing CI gates preserved.
+- [ ] F04–F06: common top-right Options, deduplicated major commands, shared header and Undo/Redo arrows; Regular More/Create collage/Histogram UI removed as requested.
+- [ ] Codex answers all 25, supplies its complete operative roadmap and asks exactly 50 questions.
+- [ ] ChatGPT answers all 50, reconciles canonical documents and publishes the final Codex resume instruction before app engineering restarts.
+
+No new app build or CI rerun is required for the current documentation-only exchange. Existing receipts remain immutable evidence; later app corrections need normal candidate/merge qualification.
+
 ## Current engineering qualification — PR #31 / 0.12.10 Test
 
 The named R29-01/R29-02 Eraser correction and observed GIF Save performance failure have passed candidate and merged-application qualification. This closes the focused engineering gate and makes **0.12.10 Test** the current combined phone candidate. [Execution evidence, raw receipts and exact APK](ERASER_REPAIR_VERIFICATION.md). The prior 0.12.9 download is historical and superseded for this pass.
@@ -9,16 +23,16 @@ The named R29-01/R29-02 Eraser correction and observed GIF Save performance fail
 - [x] Exact detail-aware GIF caching preserves uncached Android raster pixels and the established fixture/output/budgets. The observed 28,331 ms failed candidate remains in the evidence chain.
 - [x] Final candidate and merge retain all original 186 case identities and add five Eraser plus two cache-fidelity cases. JVM/build/signing and **193/193 per API29/API35** pass with zero failures/errors/skips.
 - [x] The merged API35 emulator-exercised APK is independently identified as 0.12.10 / code 22 / phonetest.v22; Android v2 signature and SHA-256 are recorded in the execution receipt.
-- [ ] Owner completes the focused combined 0.12.10 phone pass. Automation does not replace original-media, physical Back, OEM/provider, sustained-performance or workspace acceptance evidence.
+- [x] Owner has reported the focused 0.12.10 phone pass: unmentioned supplied checks worked. The named exceptions and requested changes are open in the current gate above; broader device/process-loss and workspace acceptance remain separate.
 
-Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. R1.1 remains the selected next engineering task.
+Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. A1 alignment is the selected current task; R1.1/R1.2 remain queued after the agreed owner-correction sequence.
 
 ### Retained PR #29 checkpoint — historical, not the current download
 
 - [x] R0 fresh-cover/manual-Crop, bounded Regular save/export, complete long Draw/cancel and Pro lasso have regression evidence against actual flows.
 - [x] Exact corrected candidate and merged application pass JVM and full API29/API35; preserve prior 174 cases and established GIF budgets. Independently review failure receipts and output assertions.
 - [x] Historical exercised v0.12.9/code 21 phone APK has source/run/artifact/hash/package/signature recorded in PR #29. Its four original engineering corrections remain credited; PR #31 supplies the current phone artifact.
-- [ ] Owner completes one combined phone pass with the focused new cases plus retained field cases below. Physical acceptance remains separate from CI.
+- [x] The replacement 0.12.10 phone report has been received; use its scoped passes and named exceptions above. Do not request another historical 0.12.9 pass.
 - [ ] All required families in the [capability inventory](CAPABILITY_MATRIX.md) complete the [roadmap](GZ_ENGINEERING_ROADMAP.md); a repaired current build is not the entire professional app.
 - [ ] Lance formally locks all four pre-Video workspaces before Video implementation.
 - [ ] All five editing workspaces complete/accepted before final English/Spanish welcome and customer legal acceptance.
@@ -29,11 +43,13 @@ Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `
 
 ## Retained field-correction acceptance
 
+This is the historical control/acceptance catalog. Earlier File/More/Histogram routes below describe the builds under review then; F04–F06 above supersede those UI locations. The latest owner report credits unmentioned supplied checks as working, with named exceptions. Unattempted specialized device/provider/media tiers remain separate; do not infer they passed from the general phone report or request the whole historical script again.
+
 - [ ] Open a rights-cleared 1080×1920 portrait video of approximately five seconds from the GIF workspace. Compare untouched playback with trim around 2.19–4.99 seconds, Reverse, B&W or Punch, speed, crop, Undo/Redo and rapid edits. Confirm changing picture content, correct direction and responsive controls. Reopen a saved project and decode the exported animation independently to check orientation, motion, color, duration and frame schedule. Include 720p60 B-frames and representative phone media.
 - [ ] Enter Regular Crop through the normal UI. Drag four corners, four edges and the interior in Freeform and fixed ratio with touch input. Verify predictable anchoring, pointer-down acquisition, letterbox interactions, expected crop pixels and saved-project reopen. Confirm Regular and Collage tile editing omit Masks authoring and retain Text, Blur & cover and old mask-bearing projects.
 - [ ] Enter Pro from an edited portrait in Regular. Confirm Yes transfers the current appearance and geometry. Confirm No opens an empty editor and dismissal keeps Regular open. Switch back via the menu and Back, and verify Regular's source, edits, history and output still match. Check Pro Text authoring is absent and legacy text still renders, and exercise File → Delete current work with Cancel and Confirm. Verify originals, Regular edits and named saved projects survive.
 - [ ] Exercise Pro layer selection, transform, masks, opacity/blend, painting and repair through pixel change, Undo/Redo, save/reopen and export. Check Back through active tools, menus, dialogs, keyboard and workspaces. Verify physical gestures from both edges, half-cancel and rapid double Back on a handset, including picker/IME ownership.
-- [x] Audit 2 engineering gate for v0.12.8 Test. The exact candidate and merged application commit passed JVM verification and 174 of 174 instrumented tests on Android 10 and on Android 15. The emulator-exercised APK identity and hash are recorded in the repair evidence. Owner phone checks above remain open. [Repair evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45337105839) · [Merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608) · [APK artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102).
+- [x] Audit 2 engineering gate for v0.12.8 Test. The exact candidate and merged application commit passed JVM verification and 174 of 174 instrumented tests on Android 10 and on Android 15. The emulator-exercised APK identity and hash are recorded in the repair evidence. At that historical checkpoint, the phone checks were open; the latest report at the top now governs scoped handset credit and exceptions. [Repair evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45337105839) · [Merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608) · [APK artifact](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608/artifacts/14895803102).
 
 ### November 23 independent audit cases
 

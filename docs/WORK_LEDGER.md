@@ -1,12 +1,41 @@
 # GZ Editor Pro — single active work ledger
 
+## Selected task A1 — owner phone report and ChatGPT / Codex alignment
+
+**Phase: Stage 1 ready for Codex. Application engineering is paused by the owner's explicit three-stage instruction.** Source inspection and coordination documentation are allowed; app/test/build/CI changes, APK rebuilds, new suite runs and R1.1/R1.2 implementation wait for the completed exchange. Read the [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md) in full.
+
+| Stage | Owner | Required result | State |
+| --- | --- | --- | --- |
+| 1 | ChatGPT | Record phone findings, UI rules, full-scope continuity and Q01–Q25; publish the Codex activation prompt | Handoff prepared in this documentation change |
+| 2 | Codex | Answer Q01–Q25; provide full existing roadmap snapshot and 77-family reconciliation; author CQ01–CQ50; commit response and return prompt | Awaiting Codex |
+| 3 | ChatGPT | Read actual Codex response; answer CQ01–CQ50; reconcile canonical documents; publish agreed batch and Codex resume prompt | Waiting on Stage 2 |
+
+Stage 2 response destinations are `docs/coordination/CODEX_RESPONSE_TO_25_2026-11-24.md` and `docs/coordination/CODEX_QUESTIONS_50_2026-11-24.md`. They are planned destinations, not completed responses. Codex must update this phase with the actual committed links/ref. Stage 3 then creates `docs/coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md` and `docs/coordination/ENGINEERING_RESUME_2026-11-24.md`. No agent may prefill the other session's responses or treat an internal review subagent as the owner's Codex.
+
+### Owner phone result and bounded follow-up
+
+Lance reports **unmentioned supplied phone checks worked**. Record those as owner-reported pass and retain all PR #29/#31 evidence. The new exceptions/requests are:
+
+| Finding | Owner-observed result or request | Relevant existing families |
+| --- | --- | --- |
+| F01 | Collage requires quick double tap; restore one-tap hide/show while preserving active tools and guides | S04, C03 |
+| F02 | Regular/Pro/Collage exit lacks expected unsaved-work protection; reconcile every departure and child transaction | S01, S03, S04, S05, C03 |
+| F03 | GIF Save approximately 2–5 minutes on phone; menus/options work | G02, G08, S05 |
+| F04 | One clearly titled top-right Options dropdown for New/Open media, Open projects, Save project, Export, Help; eliminate duplicate major command locations | S08, Q01 |
+| F05 | Remove Regular More entirely and its Create collage and Histogram entries; preserve other commands and underlying compatible processing | S08, R03 |
+| F06 | Common header/style/control layout and consistent Undo/Redo requested; shared arrow icons selected in this handoff for current workspaces and future gated Video | S08, Q01 |
+
+Device/Android version and GIF workload/settings/provider/timing stages were not supplied. The physical performance report remains open even though the small CI fixture passed. Scoped phone success does not lock whole workspaces, establish true process-loss recovery or authorize release.
+
+**Proposed post-alignment priority:** resolve the named phone defects and common UI contract in a dependency-aware wave, then continue R1.1/R1.2 and the existing full roadmap. Stage 3 fixes the exact batch and any justified durability prerequisite; no implementation is authorized by this proposal alone. The new owner report is the specific reason for reopening affected touch/navigation/performance behavior. It is not a reason to repeat completed audits.
+
 Updated 2026-11-24. Read with [roadmap](GZ_ENGINEERING_ROADMAP.md), [capability inventory](CAPABILITY_MATRIX.md) and [release gates](RELEASE_GATE.md). This ledger controls execution order; the linked engineering records control run results. Historical green counts do not close newly reported defects.
 
-## Current state — PR #31 engineering complete; owner phone pass open
+## Qualified application baseline — PR #31 engineering complete
 
 [PR #31](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/31) is merged at application commit `3ad65c533f7667a136d4fa1838afcc06d3f484da`. It shares tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511` with candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run 45480001019](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) and [merged-main run 45483297512](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512) each pass JVM/assembly/signing and **193/193 on API29 and API35**, zero failures/errors/skips. The current combined phone candidate is **0.12.10 Test / code 22 / phonetest.v22**. [Raw receipts, exact APK, retained failures and phone checklist](ERASER_REPAIR_VERIFICATION.md).
 
-Later documentation-only commits reconcile this state without replacing that tested application commit or APK. Owner handset acceptance, the complete Draw/GIF families, all workspace locks and commercial release remain open. R14 is PARTIAL, not complete. The four original PR #29 corrections remain credited; its 0.12.9 artifact is historical and superseded for current delivery.
+Later documentation-only commits reconcile this state without replacing that tested application commit or APK. The phone report above supplies owner-reported passes with named exceptions. The complete Draw/GIF families, all workspace locks and commercial release remain open. R14 is PARTIAL, not complete. The four original PR #29 corrections remain credited; its 0.12.9 artifact is historical and superseded for current delivery.
 
 ### Completed scoped follow-up — R29-01/R29-02 and observed GIF Save failure
 
@@ -18,13 +47,13 @@ Later documentation-only commits reconcile this state without replacing that tes
 
 **Scoped production files:** `InkMath.kt`, `PhotoEditorScreen.kt`, `EditDocumentCodec.kt`, `ImagePipeline.kt`, `GifEncoder.kt`, `VideoGifSource.kt`, and test version. The one observed rotation-harness fault was corrected through its rule import only. No layout/style, mode ownership, Pro production, preview routing, schema, dependency or workflow change. Baseline main was `e04bc08a4800233b0f407b419a91c97ca2c068f6`, with the same application as PR #29 merge `c9efc5aa0673f21b98f150733582a24996b34d10`.
 
-### Next selected engineering item — R1.1 bounded saved-project listing and loading
+### Queued durability item — R1.1 bounded saved-project listing and loading
 
 **Observable result:** opening the saved-project list reads lightweight metadata and decodes only the selected recipe. A full twelve-save set containing near-budget recipes and failed/corrupt entries remains bounded in memory; selection opens the intended project and existing saved bytes remain intact.
 
-Inventory the current state/source ownership once, pin the current main and compare app/test/Gradle/CI inputs against the qualified application, identify affected files, and define the decisive fault experiment before editing. Preserve saved projects through any required storage migration. Keep the existing UI and list behavior; do not restart blueprint intake or reopen the completed repair wave without a new reason. R1.1 is selected but has not been implemented by PR #31.
+Inventory the current state/source ownership once, pin the current main and compare app/test/Gradle/CI inputs against the qualified application, identify affected files, and define the decisive fault experiment before editing. Preserve saved projects through any required storage migration. Preserve list behavior and unrelated working UI while applying the owner's specified common chrome after alignment; do not restart blueprint intake or reopen the completed repair wave without a new reason. R1.1 is queued and has not been implemented by PR #31.
 
-**Following item R1.2 — recoverable Regular working drafts.** Persist completed edits atomically, keep transient gestures out of checkpoints, retain source identity/grants and restore selected work after genuine process loss. Carry the same contracts to Pro/Collage/GIF in subsequent R1 slices. Handset testing of 0.12.10 remains a separate owner gate; it does not imply all workspaces are accepted.
+**Following item R1.2 — recoverable Regular working drafts.** Persist completed edits atomically, keep transient gestures out of checkpoints, retain source identity/grants and restore selected work after genuine process loss. Carry the same contracts to Pro/Collage/GIF in subsequent R1 slices. The reported 0.12.10 phone checks supply scoped owner evidence with named exceptions; they do not imply all workspaces are accepted.
 
 ## Completed wave R0 — independent PR #26 corrections
 
@@ -49,7 +78,7 @@ Inventory the current state/source ownership once, pin the current main and comp
 - The baseline legacy Pro failure occurred in JSON unescaping: its 7,591,944-byte transient allocation exceeded the 16 MiB heap observed in that run. The merged read optimization reduces copies while preserving format, file/recipe limits, validation, backup behavior and full recovery equality. Later larger-heap success is not evidence that this memory failure disappeared.
 - Final changed-candidate and merged-application results, exact artifact identity and any further diagnostic disposition belong in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29). Preserve all earlier failures. These bounded qualification repairs do not close the broader R1 durability/memory package.
 
-**Retained state transition:** PR #29 closed its original R0 reproductions. The newly demonstrated Eraser failures reopened only that behavior and are now engineering-verified in PR #31, together with the observed GIF Save correction. R1.1 is next. Reopen a settled behavior only for a named new failure, changed dependency, weaker evidence or owner report; record that reason. Handset acceptance remains separately open.
+**Retained state transition:** PR #29 closed its original R0 reproductions. The newly demonstrated Eraser failures reopened only that behavior and are now engineering-verified in PR #31, together with the observed GIF Save correction. R1.1 remains the next durability item after the current alignment and agreed corrections. Reopen a settled behavior only for a named new failure, changed dependency, weaker evidence or owner report; record that reason. The latest owner report is recorded above.
 
 **Preserve:** all original 174 Android cases, established GIF performance/fidelity budgets, mode boundaries, named project identity, immutable picker recipes, all source files and independent Collage tiles. Historical version 0.12.9 / code 21 isolated that phone test from prior builds. Current 0.12.10 / code 22 is also a separate test package; neither proves same-ID upgrade behavior.
 
@@ -57,7 +86,7 @@ Inventory the current state/source ownership once, pin the current main and comp
 
 | Order | Package / completion target | Prerequisite and current disposition |
 | --- | --- | --- |
-| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, saved repeated exchange and portable bundles | NEXT — begin R1.1 above; required families S01–S08 remain open/partial |
+| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, saved repeated exchange and portable bundles | QUEUED — A1 alignment and agreed owner-correction sequence precede execution; preserve R1.1 then R1.2; S01–S08 remain open/partial |
 | R2 | Pro layer tree/groups/clipping and memory-bounded reference compositor | R1 contracts; preserve legacy pixels |
 | R3 | Full Pro selection, paint, retouch, shapes, transforms, effects and declared interchange | R2 foundation |
 | R4 | Offline Subject & Background, refine/removal and reshaping | R2/R3 mask/geometry foundation; no runtime AI |
@@ -71,17 +100,17 @@ Inventory the current state/source ownership once, pin the current main and comp
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next action — execute the selected R1.1
+## Next action — Codex Stage 2 response
 
-Deliver bounded saved-project listing/loading using its observable result above, followed by R1.2. Preserve the qualified 0.12.10 artifact for the owner’s combined phone pass. Routine authorized engineering can continue while that separate pass is pending; Video and workspace acceptance still require the existing explicit owner gates. Do not restart the correction intake, rerun settled qualification to manufacture progress, or create another master backlog.
+Read the current alignment handoff, answer its 25 questions with evidence, return your complete existing roadmap, and author exactly 50 questions for ChatGPT. Commit the response documents, update A1 above and give Lance the return prompt specified in the handoff. Stop before application engineering. R1.1/R1.2 remain queued; their implementation and the new owner corrections begin only after Stage 3 and the final resume instruction. Preserve the qualified 0.12.10 artifact and all existing receipts. Do not rerun settled qualification or create another master backlog.
 
 ## Pending owner/device decisions
 
-- Current 0.12.10 Test handset acceptance remains open. Use the exact merged API35 APK and focused script in the PR #31 execution receipt: original portrait GIF, visible Eraser gaps and independent Collage tiles, retained fresh-cover Crop/Draw/Pro lasso, Regular→Pro custody, and physical Back/picker/provider behavior. The 160-stroke boundaries are already covered by seeded automation; do not ask Lance to draw 160 strokes by hand.
+- The 0.12.10 Test phone report has been received: unmentioned supplied checks worked; F01–F03 and the F04–F06 UI requests remain open. Follow the alignment handoff. Do not ask Lance to repeat the whole successful script or draw 160 strokes by hand. Any later handset request must identify the remaining device-specific observation or a concrete regression risk.
 - Four formal pre-Video workspace locks remain open; a limited successful phone session does not close the full product inventory.
 - Shipping device/performance, RAW-camera and interchange support tiers are explicit later decisions, informed by implementation evidence.
 - Greenezone website completion is an external dependency, not app-engineering scope. Play Console setup waits for that plus the functioning app; no account work now.
-- Exact production signing/account/listing and public release need Lance at R11. Routine authorized engineering continues without repeated permission.
+- Exact production signing/account/listing and public release need Lance at R11. After the explicit A1 alignment hold is released, routine agreed engineering continues without repeated permission.
 
 ## Failure and drift rule
 
