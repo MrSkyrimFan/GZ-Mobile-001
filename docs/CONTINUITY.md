@@ -1,6 +1,8 @@
 # GZ Editor Pro — continuity / engineering custody
 
-## Latest owner direction — B1 qualified; focused phone checks and R1.1 next
+> **Current custody — November 25, 2026:** [GPT-6.2 Sol Ultra successor handoff](NEW_CHAT_HANDOFF_2026-11-25.md). Complete read-only onboarding, then remain idle for Lance to relay the ongoing GPT-6 Pro review and his directions. This is the current handoff/review gate; the older Audit 2 hold and Stage 3 activation were already consumed. PR #37 remains the qualified 0.12.11 Test application; PR #38/#39 and this handoff change documentation only. R1.1 remains the next planned engineering package after review reconciliation, subject to any substantiated correction that takes precedence. [Full independent-review brief](coordination/GPT_6_PRO_REVIEW_BRIEF_2026-11-25.md).
+
+## Latest owner direction — successor custody and pending independent review
 
 November 24, 2026 (America/Denver): Lance's unmentioned supplied 0.12.10 checks retain owner-reported pass credit. F01–F06 remain the named interaction/performance/UI work: one-tap Collage, dirty departure protection, 120–300-second GIF Save, common Options/header/arrows, no duplicate major actions and no Regular More/Create collage/Histogram UI.
 
@@ -10,9 +12,9 @@ The required exchange is complete: [Stage 1 owner report and 25 questions](CODEX
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next ordered package: R1.1 bounded saved-project listing/loading, then R1.2 recoverable working drafts.** The readiness note identifies the exact sources, migration boundary and decisive measurements. All 77 families and remaining R1–R11 children remain in the one roadmap. Video still waits for four explicit workspace locks; final bilingual/customer onboarding waits for all five completed/accepted workspaces. Play Console setup remains last, after the working app and Greenezone website.
+**Next planned engineering package after current review reconciliation: R1.1 bounded saved-project listing/loading, then R1.2 recoverable working drafts.** The readiness note identifies the exact sources, migration boundary and decisive measurements. All 77 families and remaining R1–R11 children remain in the one roadmap. Video still waits for four explicit workspace locks; final bilingual/customer onboarding waits for all five completed/accepted workspaces. Play Console setup remains last, after the working app and Greenezone website.
 
-The canonical specification and completed Stage 3 answers control the selected repairs. B2 retains the recorded numeric misses and the reported GIF phone case; R1.1, R1.2 and all remaining R1–R11 children continue in the agreed order. Do not restart intake or the completed 25/50 exchange.
+The canonical specification and completed Stage 3 answers control the selected repairs. B2 retains the recorded numeric misses and the reported GIF phone case; R1.1, R1.2 and all remaining R1–R11 children retain their agreed order after the current review gate. Do not restart intake or the completed 25/50 exchange.
 
 Lance narrowed GIF F03 to a pre-picker wait on a 2–3 second trim with other settings at defaults. Exact source, phone/Android and post-fix physical confirmation remain unknown; only their reproduction/closure is held. All 77 capability families, deeper process-loss/RAW/Pro/GIF/Collage obligations, historical 16 MiB Pro and v4 GIF limits, four formal workspace locks, all-five onboarding gate and website-before-Console/publication gates remain. A candidate needed for post-fix phone evidence is delivered before that confirmation; its limitations stay explicit.
 
@@ -26,7 +28,7 @@ A later documentation-only `main` commit may contain this reconciliation. The ap
 
 ### Prior PR #29 checkpoint (historical)
 
-Lance supplied GPT-6 Pro's independent PR #26 review (CHANGES REQUIRED), authorized fixing the defects and requested the complete intended professional-app roadmap. **The successor read-only hold is lifted.** Engineering/PRs/verified merges are authorized. The four original R0 corrections passed candidate and merged-main qualification at that checkpoint. Its v0.12.9 Test artifact is historical and superseded first by PR #31 and now PR #37 for focused phone testing. Formal workspace locks and publication remain owner decisions.
+Lance supplied GPT-6 Pro's independent PR #26 review (CHANGES REQUIRED), authorized fixing the defects and requested the complete intended professional-app roadmap. **The earlier Audit 2 read-only hold was lifted at that checkpoint.** Standing engineering/PR/verified-merge authority remains subject to the current successor/review gate. The four original R0 corrections passed candidate and merged-main qualification at that checkpoint. Its v0.12.9 Test artifact is historical and superseded first by PR #31 and now PR #37 for focused phone testing. Formal workspace locks and publication remain owner decisions.
 
 Start with the [single work ledger](WORK_LEDGER.md), [complete roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family capability inventory](CAPABILITY_MATRIX.md), [product requirements](PRODUCT_SPEC.md) and [release gates](RELEASE_GATE.md). R0 covers fresh-cover manual Crop, Regular serialization limits, complete long Draw/cancel and complete Pro lasso. Its linked PR preserves that historical execution receipt. That original gate passed; the PR #37 receipt above governs current delivery. [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Both complete Android suites passed 186/186 on candidate and merge; source trees are identical. The exact APK identity is in the PR.
 
@@ -36,13 +38,13 @@ Play Console is not set up. Setup occurs last, after a fully functioning app AND
 
 PR #26 merge `372e0e947caacb2ceaf603bc4ff5a60e44cc33ec` passed JVM and 174/174 tests on each API29/API35 at candidate and merge. Version 0.12.8 Test is prior engineering evidence, not the newly recommended combined candidate. Intake main `d2a8f4de41839e25ad54060be803746d7307bee8` includes documentation refreshes only. [Prior repair evidence](AUDIT_2_REPAIR_VERIFICATION.md) · [Prior merged workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45339000608).
 
-The original November 23 handoff required waiting for the review. Lance has now supplied it and authorized action; do not revive that historical hold. The private complete source transcript and intake archives remain supplemental evidence.
+The original November 23 handoff required waiting for the review. Lance subsequently supplied that review and authorized action; do not revive that historical hold or confuse it with the new November 25 successor/review gate. The private complete source transcript and intake archives remain supplemental evidence.
 
 ## Revision 4 and the engineering field guide (2026-11-22)
 
 The [engineering field guide](gz-editor-pro-field-guide/00_START_HERE.md) records verified repair revisions, known-answer fixtures, and end-to-end checks for the current workspaces. Use the live repository and the [release gates](RELEASE_GATE.md) to confirm which results apply to the build under review.
 
-[Product requirements](PRODUCT_SPEC.md) reflect the owner's latest instructions and Revision 4. Use these to resolve conflicts with earlier handoffs and version records. Check live GitHub refs before issuing builds or relying on historical branch IDs. Work directly in the authorized GitHub repository. Keep owner evidence and the active task package in the supplemental intake until the work it governs is complete. Keep original handoff archives intact.
+[Product requirements](PRODUCT_SPEC.md) reflect the owner's latest instructions and Revision 4. Use these to resolve conflicts with earlier handoffs and version records. Check live GitHub refs before issuing builds or relying on historical branch IDs. Work directly in the authorized GitHub repository. Keep existing original intake evidence intact; all new active task packages and handoffs belong in the repository. Keep original handoff archives intact.
 
 The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repair verifies the issues found in its post-merge audit, including limited GIF trim budgets, small Crop hit targets, and Pro reset and layer ownership across Undo. Field qualification still includes real post-edit GIF motion, finger-friendly Regular crop, workspace tool ownership, Pro File reset and Back, and the confirmation-based Regular-to-Pro handoff. Protect working Regular and independent Collage workflows. Pro tools may be reorganized where the existing interface obstructs the job. Follow [Release gates](RELEASE_GATE.md) for engineering verification and owner acceptance.
 
@@ -50,7 +52,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 - Single authorized repo: `MrSkyrimFan/GZ-Mobile-001`.
 - Baseline GZ Editor Pro 0.6 merge: `2a0f11b7eef2c5b42e5f569890b694a1dd7ba265`.
 - Historical 0.7 engineering branch: `feature/gz-editor-pro-creation-export-07`.
-- Application ID unchanged: `com.greenezone.gzphotoeditor`; launcher name GZ Editor Pro. Target Android 10+, compile/target SDK36.
+- Production application ID: `com.greenezone.gzphotoeditor`; current separate phone-test package: `com.greenezone.gzphotoeditor.phonetest.v23`, 0.12.11 Test/code23. Target Android 10+, compile/target SDK36. A separate test installation is not same-ID upgrade proof.
 - Retail target $2.99 one-time. Offline editing without runtime AI, ads, watermarks, in-app purchases, subscriptions, tracking or remote services.
 
 ## Architecture
@@ -62,7 +64,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 - Preserve the photo-first Regular interface, Looks, curves, color, Blur & cover, and Undo/Redo. Legacy Regular masks remain readable and renderable. New masking and selections belong in Pro.
 
 ## Hard rules
-Trace owner-visible failures through production entry points. Test JVM and Android bitmap/Compose behavior, inspect rendered output, and link verification to the exact candidate commit. Engineering and verified merge authority follow the current owner instructions above. Handset qualification, formal workspace locks, and commercial release each require their own evidence or owner decision. Keep changes inside the GZ app repository and its supplemental intake.
+Trace owner-visible failures through production entry points. Test JVM and Android bitmap/Compose behavior, inspect rendered output, and link verification to the exact candidate commit. Engineering and verified merge authority follow the current owner instructions above. Handset qualification, formal workspace locks, and commercial release each require their own evidence or owner decision. Keep all new engineering, documentation and handoff changes inside the GZ app repository. Existing intake and APKs remain protected.
 
 ## Collage wave v0.8.0 (2026-11-21 local)
 Verified main baseline at the start of the historical v0.8 wave: `7508ff715d39dbb13ae543961b943cee5c78c22b` (GZ Editor Pro 0.7).
@@ -81,7 +83,7 @@ The later Video phase is gated by formal owner acceptance of all four current wo
 This retained section describes earlier command placement. PR #37's common Options/header contract supersedes those locations; the underlying history/custody evidence remains credited.
 The collage header uses two compact rows to prevent clipping, exposes an always-available Add action once photos exist, plus Undo/Redo. Snapshot history includes tile additions/removals/order/edits and layout operations; slider gestures produce one checkpoint. Source-URI export collision is blocked, nesting a collage while editing a tile is disabled, and coroutine cancellation is propagated. Tests added for history and maximum gap with 20 photos.
 
-## Nov 21 v0.9 owner continuation
+## Historical Nov 21 v0.9 owner continuation
 - Version 0.8 is merged on main `6080b98de997806ee3300d1ef68ebbb84422f072` with passed merged-main CI. The owner has **not tested 0.8 on their phone** yet.
 - New non-negotiable interface: top-right dropdown with independent Regular, Pro, Collage, GIF and Video (Coming soon) workspaces. Do not cram all features into regular editor.
 - Target $2.99 **one time**, no AI/ads/IAP/cloud. Prior features and files preserved. **Video last.**

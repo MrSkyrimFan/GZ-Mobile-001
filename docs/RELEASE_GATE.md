@@ -1,5 +1,7 @@
 # GZ Editor Pro engineering and release gates
 
+> **Current custody — November 25, 2026:** [GPT-6.2 Sol Ultra successor handoff](NEW_CHAT_HANDOFF_2026-11-25.md). Complete read-only onboarding, then remain idle for Lance to relay the ongoing GPT-6 Pro review and his directions. This is the current handoff/review gate; the older Audit 2 hold and Stage 3 activation were already consumed. PR #37 remains the qualified 0.12.11 Test application; PR #38/#39 and this handoff change documentation only. R1.1 remains the next planned engineering package after review reconciliation, subject to any substantiated correction that takes precedence. [Full independent-review brief](coordination/GPT_6_PRO_REVIEW_BRIEF_2026-11-25.md).
+
 ## Current owner report and alignment gate
 
 Lance has reported the 0.12.10 phone results: unmentioned supplied checks worked, with the exceptions below. See the [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md). This updates scoped handset evidence; it does not grant formal workspace locks or commercial acceptance.
@@ -36,7 +38,7 @@ The [canonical interaction contract](PRODUCT_SPEC.md#agreed-interaction-contract
 
 Historical tests using removed File/More/Histogram UI routes must migrate to the authorized command/absence contract with a traceable assertion mapping; preserve numerical/output and unrelated regression checks. Do not delete failing coverage, weaken 6s/15s gates or retry unchanged application failures.
 
-A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. Engineering may continue independent agreed work. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
+A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. After the current successor/review gate, engineering may continue independent agreed work. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
 
 
 ## Current engineering qualification — PR #37 / 0.12.11 Test
@@ -45,7 +47,7 @@ A missing owner clip/settings/physical observation holds only that F03 reproduct
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next ordered package: R1.1 bounded saved-project listing/loading, then R1.2 recoverable working drafts.** The readiness note identifies the exact sources, migration boundary and decisive measurements. All 77 families and remaining R1–R11 children remain in the one roadmap. Video still waits for four explicit workspace locks; final bilingual/customer onboarding waits for all five completed/accepted workspaces. Play Console setup remains last, after the working app and Greenezone website.
+**Next planned engineering package after current review reconciliation: R1.1 bounded saved-project listing/loading, then R1.2 recoverable working drafts.** The readiness note identifies the exact sources, migration boundary and decisive measurements. All 77 families and remaining R1–R11 children remain in the one roadmap. Video still waits for four explicit workspace locks; final bilingual/customer onboarding waits for all five completed/accepted workspaces. Play Console setup remains last, after the working app and Greenezone website.
 
 The detailed B1 checklist above retains its complete product/owner scope. Executed fixture results support the bounded engineering claims in the receipt. In particular, 320dp/200% font and touch tests do not replace real TalkBack/keyboard or broader device acceptance. B2 numerical misses are not waived by B1 delivery.
 

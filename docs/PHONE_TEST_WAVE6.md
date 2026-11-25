@@ -1,3 +1,5 @@
+> **Historical checkpoint — current route updated November 25, 2026.** Follow the [GPT-6.2 Sol Ultra successor handoff](NEW_CHAT_HANDOFF_2026-11-25.md), [current ledger](WORK_LEDGER.md) and [PR #37 / 0.12.11 Test evidence and focused phone script](B1_WORKSPACE_VERIFICATION.md). Current task: read-only successor onboarding, then wait for Lance's ongoing GPT-6 Pro review. Original text below retains its dated evidence; its “current”, “next”, delivery, engineering and test commands are historical, not fresh instructions. Do not replay completed intake, question exchanges, builds or phone scripts. The [current review brief](coordination/GPT_6_PRO_REVIEW_BRIEF_2026-11-25.md) supersedes older review prompts.
+
 # GZ Editor Pro 0.7 — ONE consolidated Android field test
 
 Download the debug APK from the successful **merged-main GitHub Actions** artifact `gz-editor-pro-debug`. Extract `app-debug.apk` and install, retaining app data where Android signing permits. Keep existing photos untouched.

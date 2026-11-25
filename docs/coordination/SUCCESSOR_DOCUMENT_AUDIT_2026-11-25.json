@@ -1,0 +1,695 @@
+{
+  "schema_version": 1,
+  "date_local": "2026-11-25",
+  "timezone": "America/Denver",
+  "baseline_commit": "ac4e1ee2652db139d8862d91a660abe82450bc57",
+  "purpose": "Reconcile every active continuation/resume route and classify historical documents without rewriting original evidence.",
+  "application_commit": "46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30",
+  "application_changes": false,
+  "capability_status_changes": false,
+  "scope": {
+    "markdown_documents_read": 61,
+    "active_documents_reconciled": 9,
+    "historical_route_banners": 30,
+    "original_history_and_package_evidence": "Preserved unchanged except explicit routing wrappers. Original package manifests stay immutable. Only the field guide's current committed-file manifest tracks its two changed wrappers."
+  },
+  "documents": [
+    {
+      "path": "AGENTS.md",
+      "baseline_blob_sha": "771b96df9891398359b378ba8085f93173b55e45",
+      "baseline_bytes": 6590,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "78802626866d66f80f0918aaa219eaf72a108d24ed0e84b7e3d06cf6d0080412",
+      "result_bytes": 7920
+    },
+    {
+      "path": "README.md",
+      "baseline_blob_sha": "16d24ceb66f1004efe01673a7706fd47f49a8172",
+      "baseline_bytes": 16933,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "79ac6cfd3c99d30d46b5fbd0badbc2b80a03d8e565c98967a382f369a8b11616",
+      "result_bytes": 17670
+    },
+    {
+      "path": "docs/AAA_RELEASE_AUDIT_013.md",
+      "baseline_blob_sha": "638fde7237cb582be8ff5f67798b855b77c2149a",
+      "baseline_bytes": 5823,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "d883019d8e5d95cd822d494d368534d8bab723d0139553b04c2047fa2cca8c57",
+      "result_bytes": 6546
+    },
+    {
+      "path": "docs/AUDIT_2_REPAIR_VERIFICATION.md",
+      "baseline_blob_sha": "ee96a2776736cf939ba934a7226d0d6b291a07be",
+      "baseline_bytes": 6050,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "5053ce480a5916bf0d16e6a1ff9f4c51142ae82f3f2e0e30f9e2529650a8d3e7",
+      "result_bytes": 6773
+    },
+    {
+      "path": "docs/B1_WORKSPACE_VERIFICATION.md",
+      "baseline_blob_sha": "3ca3249c99caafedb566ec918c2f28fd02c3fca4",
+      "baseline_bytes": 34824,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "befb9d6314042a42454a9fada46852ae06da11b4c7ede156a788eebc1caa1a38",
+      "result_bytes": 35599
+    },
+    {
+      "path": "docs/CAPABILITY_MATRIX.md",
+      "baseline_blob_sha": "0391b3d9ee0dff342987dd0dbae87d6006d14b65",
+      "baseline_bytes": 21355,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "1c095c04049959b84107fdfd69fce3b3895e5b97bf2f19b46ce4aec1f9c721c1",
+      "result_bytes": 22034
+    },
+    {
+      "path": "docs/CODEX_ALIGNMENT_HANDOFF_2026-11-24.md",
+      "baseline_blob_sha": "f4d6bbc8191a90eb565c2b42ef24c98f5e9c8d93",
+      "baseline_bytes": 41353,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "d847d2deaa87037757a03ae1c9cd59ffe2f04daae91d4496459969402b3f8687",
+      "result_bytes": 42288
+    },
+    {
+      "path": "docs/CONTINUITY.md",
+      "baseline_blob_sha": "884626eb16175d9f2f30c533eec6daa3df9efbf2",
+      "baseline_bytes": 14471,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "7578528901a1d5150ec03a6232c85cbfc5030252d39e9c4f14657eb2bb41791e",
+      "result_bytes": 15590
+    },
+    {
+      "path": "docs/ERASER_REPAIR_VERIFICATION.md",
+      "baseline_blob_sha": "77b91f486794ece6eb66d47f1bf46cd80af05705",
+      "baseline_bytes": 19899,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "eaa38334b9838191a90ce7f039a6f0c06f33d85e40291bb166ad6ba3e20097c1",
+      "result_bytes": 20622
+    },
+    {
+      "path": "docs/GZ_ENGINEERING_ROADMAP.md",
+      "baseline_blob_sha": "7c6753519c985fdc2cdde38419c0a115c6ef75cc",
+      "baseline_bytes": 44146,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "e5b604e26cbaa68a5f1c63a268393983ad35e06aa58f1daf28ae650a36a7baea",
+      "result_bytes": 45022
+    },
+    {
+      "path": "docs/NEW_CHAT_HANDOFF_2026-11-24.md",
+      "baseline_blob_sha": "5b0241287272c6e0794c6cc42aef7dc4c226b3dd",
+      "baseline_bytes": 18017,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "93aa3b34f0b17c0401357c8d08798735642dc4f08565fc6269475597aa35bc29",
+      "result_bytes": 18829
+    },
+    {
+      "path": "docs/PHONE_QA_014.md",
+      "baseline_blob_sha": "585400d63819e84f98acdcce866c2645c5ff00a8",
+      "baseline_bytes": 5811,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "4f648c4c4395b4186fa646e2b9315edfb576564f22408f78517bafd8ddc499c9",
+      "result_bytes": 6534
+    },
+    {
+      "path": "docs/PHONE_TEST_WAVE2.md",
+      "baseline_blob_sha": "23c03dc8d347ba363d7bce83e9e1f5d409921556",
+      "baseline_bytes": 2848,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "92f868b87c8ac4226bbc9e92f46dd6c3b869679679e1b5738e8f1b87f8ff2bcf",
+      "result_bytes": 3571
+    },
+    {
+      "path": "docs/PHONE_TEST_WAVE3.md",
+      "baseline_blob_sha": "a8e2a235e47afa0c7a52472a11ba04fca36db568",
+      "baseline_bytes": 3919,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "b73972f76c98df53a396b2935469687eb40abe567c25e14d2a238cf825c7d653",
+      "result_bytes": 4642
+    },
+    {
+      "path": "docs/PHONE_TEST_WAVE4.md",
+      "baseline_blob_sha": "6d2743def0c18246f38c261e10123a55d3f45b32",
+      "baseline_bytes": 2776,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "c3763557c19746fe8ac208a58bc89333358dcd810a2dec238835e73b5b2d5d75",
+      "result_bytes": 3499
+    },
+    {
+      "path": "docs/PHONE_TEST_WAVE5.md",
+      "baseline_blob_sha": "bbd6b775f5b8a0566a6826d8f0f47cd0f9ef9369",
+      "baseline_bytes": 2305,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "e28b58d0aa2d70065d54f6da09816cbb9ead8665b76225f37a4a11201bdf0d6d",
+      "result_bytes": 3110
+    },
+    {
+      "path": "docs/PHONE_TEST_WAVE6.md",
+      "baseline_blob_sha": "ed6a2b48675f533c34e50c3d9b5b22ec7f8f4b04",
+      "baseline_bytes": 2454,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "6888f54edf82b2646e4333340f70b962cbbce8116945e302c49b52cea700acad",
+      "result_bytes": 3177
+    },
+    {
+      "path": "docs/PHONE_TEST_WAVE7.md",
+      "baseline_blob_sha": "4628d304a5cc299acc185a5d68c627ee48ff80b0",
+      "baseline_bytes": 2387,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "261f50f7ad07ba33bd943921d320279faca0e649295f6fc364beb5a85cdbe1d1",
+      "result_bytes": 3110
+    },
+    {
+      "path": "docs/PHONE_TEST_WAVE8.md",
+      "baseline_blob_sha": "f3af894f3d7c91329057220b45d04dd5d7a7839e",
+      "baseline_bytes": 2404,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "43eeb52eba7e16a44c4028e7ebbcc2f77fa87ae8f85a5f0bdc998a6737a26b6b",
+      "result_bytes": 3127
+    },
+    {
+      "path": "docs/PHONE_TEST_WAVE9.md",
+      "baseline_blob_sha": "95a3255df88d49bf590f8dbedf9a303b15d5d64d",
+      "baseline_bytes": 4490,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "9de7c94aebb303c124f4927ebfbc07d9984282e13f162f8d2f80df1830f1e2e2",
+      "result_bytes": 5213
+    },
+    {
+      "path": "docs/PRODUCTION_REBUILD_010.md",
+      "baseline_blob_sha": "c467f25bdd5445f2d4353df58ff088ce6041dd1a",
+      "baseline_bytes": 4505,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "a183c04ab2c4f1e1988c910ea92b6df3e1b0d8a54c2795423866c122e6114d8f",
+      "result_bytes": 5228
+    },
+    {
+      "path": "docs/PRODUCT_SPEC.md",
+      "baseline_blob_sha": "09cb9655688d16d2d2260fc0b90c36b7dca038b0",
+      "baseline_bytes": 26025,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "de97b762dd07fdafefac4fd61b948d2ef3415538e16843ada9eb76dd699e1b17",
+      "result_bytes": 27437
+    },
+    {
+      "path": "docs/PROFESSIONAL_ENGINEERING_ROADMAP.md",
+      "baseline_blob_sha": "a2697f4add074c29dad71a4303c49aecdc5e1769",
+      "baseline_bytes": 9026,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "cf14dc03764ddd3fa6f4348385ec95c9d7953171dde213b74e2bff0ddcd9a34b",
+      "result_bytes": 9749
+    },
+    {
+      "path": "docs/PRO_GIF_REBUILD_011.md",
+      "baseline_blob_sha": "9e7d6be411c8c8f4f1e9a8a1c3b43439be0e2eca",
+      "baseline_bytes": 2873,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "36e173ff7c699bafd119aeae2a63111bef7f0ea14f6ec9b48f19c9a49009c1e1",
+      "result_bytes": 3596
+    },
+    {
+      "path": "docs/RELEASE_GATE.md",
+      "baseline_blob_sha": "c7984d5685865cf70d3cb7771cbf3de1959d6cb8",
+      "baseline_bytes": 25185,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "d39565bf2bc80c91632cb8a87705acd081fdc07e19d1c4187ef1fe456eac590c",
+      "result_bytes": 25953
+    },
+    {
+      "path": "docs/UNIFIED_PRODUCT_SCOPE_09.md",
+      "baseline_blob_sha": "51792479496322564ffd4f3b80be04af3d43e9cb",
+      "baseline_bytes": 5530,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "18b6e539ceb693571ff2d82c20061e7de420834b4495c98f3437f39b67497aa5",
+      "result_bytes": 6253
+    },
+    {
+      "path": "docs/W0_NAVIGATION_001.md",
+      "baseline_blob_sha": "2c8ab89e2f292345eb613b2771316e77926925b9",
+      "baseline_bytes": 9672,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "9843d9d9de6fa74a438d627501702f986dd07659693551ae02719849c0b05bc9",
+      "result_bytes": 10395
+    },
+    {
+      "path": "docs/WORK_LEDGER.md",
+      "baseline_blob_sha": "afa3e5ecae9059a33bb089f846ce2769d1beff6d",
+      "baseline_bytes": 38321,
+      "action": "Active state/routing reconciled; requirements and evidence retained.",
+      "result_sha256": "50932e0fdae5ca30ccb78e293d460ad8ba216bf4a3c5bfb4303634958291a66e",
+      "result_bytes": 41111
+    },
+    {
+      "path": "docs/coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md",
+      "baseline_blob_sha": "02f8ca319ffe79a9c00e341f4c4be93b6fb2443e",
+      "baseline_bytes": 138028,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "28988d909afca320fbb094982e771f5a85459461a224df2beec8416841ed6864",
+      "result_bytes": 138959
+    },
+    {
+      "path": "docs/coordination/CODEX_QUESTIONS_50_2026-11-24.md",
+      "baseline_blob_sha": "ab3d315b289bf1a6e9fd0d42a531623415426394",
+      "baseline_bytes": 48889,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "05b475b27385c7fa81bddf73984f16b4a0b7da34068b5bd8aa318446f90d4ecf",
+      "result_bytes": 49820
+    },
+    {
+      "path": "docs/coordination/CODEX_RESPONSE_TO_25_2026-11-24.md",
+      "baseline_blob_sha": "9e9ae79e4b76d03030c36700c27f86d54c19c7d4",
+      "baseline_bytes": 299713,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "5676070cf20703ab60e3abfed5bd23a4c5c848095c08294373570ad72dc7f521",
+      "result_bytes": 300644
+    },
+    {
+      "path": "docs/coordination/ENGINEERING_RESUME_2026-11-24.md",
+      "baseline_blob_sha": "0f44bf419239decec58318f00baf1a7e5d726f16",
+      "baseline_bytes": 24093,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "35ec5db0ee558e23701528171a0d1bcfb1f1c59593c6889684b0ebb0193e564e",
+      "result_bytes": 25024
+    },
+    {
+      "path": "docs/coordination/GPT_6_PRO_REVIEW_BRIEF_2026-11-25.md",
+      "baseline_blob_sha": "e5835697e95da643abef968b9eb0e3c6f72828f6",
+      "baseline_bytes": 26923,
+      "action": "Preserved exact pinned brief supplied to GPT-6 Pro."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/00_REPOSITORY_START_HERE.md",
+      "baseline_blob_sha": "991dcff17ea85bda1395057ea2e5067ace5207d5",
+      "baseline_bytes": 4184,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "5a74ef62ecc74bc065cddfd4c311b956c230c387ef59cea6a0bf89cbc6bb6639",
+      "result_bytes": 4919
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/CODEX_EXECUTION_PROMPT.md",
+      "baseline_blob_sha": "1088fda9eb8b68a41105c080b6b3f3fdf8efffdc",
+      "baseline_bytes": 3528,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "af6c387513ba53a1a143449ad6304770891b153dc81c3eae436efcb72f958e85",
+      "result_bytes": 4263
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/FIX_ORDER.md",
+      "baseline_blob_sha": "64cfdf0a795bc4bd704a7748acb63c735ee88ffa",
+      "baseline_bytes": 8015,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/LAB.md",
+      "baseline_blob_sha": "7c820b94463cb610d2f9a89437e76a9ee4e10cb7",
+      "baseline_bytes": 5372,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/README.md",
+      "baseline_blob_sha": "87bd8f8f0a009b96fa1110a48b34db2b046c634f",
+      "baseline_bytes": 4809,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/RECEIPTS_ON_GITHUB.md",
+      "baseline_blob_sha": "14660ecb4ab15fa9856e1f016e10fd601515c439",
+      "baseline_bytes": 3328,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/SHA256SUMS.txt",
+      "baseline_blob_sha": "4b219eda236d413d731baab1576d8700a2e73317",
+      "baseline_bytes": 3449,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/START_CODEX.txt",
+      "baseline_blob_sha": "5d83c384e3a07ff9dd723166a9311f286d8abb0c",
+      "baseline_bytes": 1443,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/chapters/10_PRO.md",
+      "baseline_blob_sha": "f01ebe106f34c52f9d5c4b2d7568c842fc0e9175",
+      "baseline_bytes": 21052,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/chapters/20_GIF.md",
+      "baseline_blob_sha": "f0f14649d0a9a24438410a6fc294222118526a70",
+      "baseline_bytes": 17997,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/chapters/30_REGULAR_COLLAGE.md",
+      "baseline_blob_sha": "78629cf40e23911c94a0f46b2748c2c6f8376803",
+      "baseline_bytes": 22173,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/chapters/40_ANDROID_EXPORT_AND_RECOVERY.md",
+      "baseline_blob_sha": "b0dd236a488f903a40fa745179de5a2a4edd2131",
+      "baseline_bytes": 10736,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/chapters/50_VERIFICATION_HISTORY.md",
+      "baseline_blob_sha": "ffa7459f1dc3d2d92db0d953b8456a78e3e9c4d6",
+      "baseline_bytes": 11044,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/ProBoundaryControls.txt",
+      "baseline_blob_sha": "b4064e7da0e9ed2942c4c8def1171386cd1bd53d",
+      "baseline_bytes": 281,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/ci_guard_controls.txt",
+      "baseline_blob_sha": "0cb35a4edea52714d07eed445a6164364c304e72",
+      "baseline_bytes": 177,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/field_guide_controls.txt",
+      "baseline_blob_sha": "5c1d7ee4edeba5ee6e239add563e12928d05aa0f",
+      "baseline_bytes": 650,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/final_artifacts.json",
+      "baseline_blob_sha": "dd6faf0ccf57c07a84a53c709300e37bff58b09c",
+      "baseline_bytes": 2246,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/final_ci_replay.txt",
+      "baseline_blob_sha": "5e18f3c515513a5de9321b3a7aad41c6228566f2",
+      "baseline_bytes": 524,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/gif_controls.txt",
+      "baseline_blob_sha": "a187c253494778c90435d8fdb894fbf19d96fd2a",
+      "baseline_bytes": 122,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/historical_receipt_extracts.json",
+      "baseline_blob_sha": "54b66624675caa546a7ec30457d07e22d681df06",
+      "baseline_bytes": 38388,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/prs.json",
+      "baseline_blob_sha": "9a199f59dfe146ea4233b59b9956b85d322841c2",
+      "baseline_bytes": 2758,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/regular_cover_controls.txt",
+      "baseline_blob_sha": "2f93a4336bb9586ae099ef457f3c35b7c44d80d2",
+      "baseline_bytes": 154,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/evidence/verified_apk.txt",
+      "baseline_blob_sha": "428ab07c5438ce26780c3d505911cce632a83cfa",
+      "baseline_bytes": 562,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/ProBoundaryControls.java",
+      "baseline_blob_sha": "a2427cf6f0ed5a58b98f8522ea39c9689a210c0b",
+      "baseline_bytes": 2623,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/ProStoreRoundTripInstrumented.kt.example",
+      "baseline_blob_sha": "b4d7a75d7f1360e47ae82e92c584e31af48a417f",
+      "baseline_bytes": 2538,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/check_regular_cover_flip.py",
+      "baseline_blob_sha": "fe1f76d607a14ce394aa20f90fca098de8ffd076",
+      "baseline_bytes": 3284,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/gif_aspect_fixture.py",
+      "baseline_blob_sha": "0ad390fa0bd0da37f76c9d3b8864604f6b72ad95",
+      "baseline_bytes": 2016,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/gif_check_display_aspect.py",
+      "baseline_blob_sha": "ab5e8baab83bf1d88411dc535e7f9b34685ddf0a",
+      "baseline_bytes": 1550,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/gif_hold_fixture.py",
+      "baseline_blob_sha": "ee45d1f402c4bffca51134fffd6c974f8463b65e",
+      "baseline_bytes": 2519,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/gif_host_controls.py",
+      "baseline_blob_sha": "e6ad98482c926ed6972549fd348c84824f1d712e",
+      "baseline_bytes": 2658,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/gif_inputs/gif_aspect_anamorphic.mp4",
+      "baseline_blob_sha": "3535ffbb87e5098538aa6b8f861249b41496d217",
+      "baseline_bytes": 7584,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/gif_inputs/gif_aspect_square.mp4",
+      "baseline_blob_sha": "c047a5089dd5d2c38881c9e1b4e6181e586313d0",
+      "baseline_bytes": 4090,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/gif_inputs/gif_long_hold.gif",
+      "baseline_blob_sha": "67eef9c75ad1a275dc18a24a17bbee5c2b37c87f",
+      "baseline_bytes": 66,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/regular_cover_source.png",
+      "baseline_blob_sha": "9f197dec50a1ef28811cb055319898dd3596d14b",
+      "baseline_bytes": 473,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/verify_ci.py",
+      "baseline_blob_sha": "e26bf512dc02e91f8538f7e8f67fc6ccfb4c7068",
+      "baseline_bytes": 2314,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-audit-2-20261123/proofs/verify_prior_ci_guard.py",
+      "baseline_blob_sha": "7e39de9b7b05daf8146ebb594dee9cfc434c2d62",
+      "baseline_bytes": 2442,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/00_START_HERE.md",
+      "baseline_blob_sha": "c7e13649cbdd2cd50b53bb968f45496298e8a548",
+      "baseline_bytes": 4925,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "0a8db782d476f5487d0be7436b08990ad3545b07ab047f2c3477fe091477f273",
+      "result_bytes": 5660
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/01_ENGINEERING_CHECKPOINT.md",
+      "baseline_blob_sha": "fd6b91e1a40e5103617d78fb97d6e42c9c26bc8e",
+      "baseline_bytes": 8653,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/02_STILL_WORKSPACES.md",
+      "baseline_blob_sha": "e3c5443dc5938eeecf43511ddf49c0e1365d0826",
+      "baseline_bytes": 24315,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/03_MOTION.md",
+      "baseline_blob_sha": "c940cba0a59d33dd28a31a6744ba4336f3eef591",
+      "baseline_bytes": 19784,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/04_INTERACTION_AND_DOCUMENTS.md",
+      "baseline_blob_sha": "0cf7057e4d73c764e5656c3bc09c1b96fdcc0397",
+      "baseline_bytes": 11918,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/05_QUALIFICATION_AND_DELIVERY.md",
+      "baseline_blob_sha": "99e14d9d885f176ddd713cfab11da19646183da9",
+      "baseline_bytes": 12142,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/06_VERIFICATION_MATRIX.md",
+      "baseline_blob_sha": "781ad07428ea521ecb9bf81064bdb964e6a41b94",
+      "baseline_bytes": 11037,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/07_EVIDENCE_AND_REFERENCES.md",
+      "baseline_blob_sha": "91338303ded185d6d65d2c2c995268d3a4346997",
+      "baseline_bytes": 4941,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/08_WHERE_TO_LOOK_IN_CODE.md",
+      "baseline_blob_sha": "a95a324e26bb3d73c57cf03b05b7e248113c7534",
+      "baseline_bytes": 4694,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/README.md",
+      "baseline_blob_sha": "5df0e28ae99bc9ca15fbca377339a773fc30910c",
+      "baseline_bytes": 2239,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "285cee745bd32774fc85d6539f89673811296363ff677920c107bf9cf8a09279",
+      "result_bytes": 2974
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/REPO_FILE_SHA256SUMS.txt",
+      "baseline_blob_sha": "b11fbd43909a646ae10f068588453f013ad3f79d",
+      "baseline_bytes": 1638,
+      "action": "Updated only two current committed-file hashes; original package checksum manifest remains unchanged.",
+      "result_sha256": "fbed70fdb544ef7f1e571fa002f20efe4b6bb7d0d5e878f547c7d0e7e02cba7f",
+      "result_bytes": 1638
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/SHA256SUMS.txt",
+      "baseline_blob_sha": "768294b1a8cc62faa3a460dc615a84c325ba4bed",
+      "baseline_bytes": 1606,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/fixtures/README.md",
+      "baseline_blob_sha": "9227dc81cf084570658da72682c2f3393be320ca",
+      "baseline_bytes": 4453,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/fixtures/base_gold.png",
+      "baseline_blob_sha": "677066cf44030e8ef16951146b9e400fbedb4602",
+      "baseline_bytes": 891,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/fixtures/check_gif.py",
+      "baseline_blob_sha": "f33628ffbe4e1f671a267f5fc8a7103812d38014",
+      "baseline_bytes": 2542,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/fixtures/histogram_4_patches.png",
+      "baseline_blob_sha": "1784c303d9d961b4692b2e4eae2ac7f33df9c736",
+      "baseline_bytes": 605,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/fixtures/panorama_4000x100.png",
+      "baseline_blob_sha": "92096fa1e9895d4299777fc4b60ec5cb94947bbc",
+      "baseline_bytes": 1623,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/fixtures/portrait_clock_1080p30.mp4",
+      "baseline_blob_sha": "34313e3920c2eeaf9732ec01952fd80fc56d678e",
+      "baseline_bytes": 56592,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/gz-editor-pro-field-guide/fixtures/upper_blue_strip.png",
+      "baseline_blob_sha": "54c2972a0e8a091dd63a1132081d09fc63e8d80f",
+      "baseline_bytes": 868,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/qualification/PR31_0.12.10.json",
+      "baseline_blob_sha": "6e9650412587f95342a5bd0ba708b79baacee822",
+      "baseline_bytes": 8486,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/review-handoff-2026-11-23/01-transcript-intake-and-initial-work.md",
+      "baseline_blob_sha": "540d431f16cc5d74cbb715a4d22bc731d00a2a7f",
+      "baseline_bytes": 81487,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/review-handoff-2026-11-23/02-transcript-revision-4-repairs.md",
+      "baseline_blob_sha": "18fce33065fb2b18fd16b380342508a53d32a5d3",
+      "baseline_bytes": 42278,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/review-handoff-2026-11-23/03-transcript-throughput-and-latest-work.md",
+      "baseline_blob_sha": "24b37e77e3a84b458400e136ee3f4bbf343596a0",
+      "baseline_bytes": 16743,
+      "action": "Preserved historical evidence/technical material; current routing supplied by package entrypoint and successor handoff."
+    },
+    {
+      "path": "docs/review-handoff-2026-11-23/ENGINEERING_EVIDENCE.md",
+      "baseline_blob_sha": "f8f5f33e1651750497f9f6305d8c13e599173647",
+      "baseline_bytes": 16697,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "7f042693c87986426c3b23b7c750694f639cd750f9879de49ab353a30931a17c",
+      "result_bytes": 17432
+    },
+    {
+      "path": "docs/review-handoff-2026-11-23/GPT_PRO_REVIEW_PROMPT.md",
+      "baseline_blob_sha": "188fd7cb205a69af16a2448c2f2314e88bf704d1",
+      "baseline_bytes": 2289,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "b334e4e1a5ca22a4edb7fe66910570ae7c2f4b18355e536f118ada2187b0c22a",
+      "result_bytes": 3024
+    },
+    {
+      "path": "docs/review-handoff-2026-11-23/README.md",
+      "baseline_blob_sha": "816866401fd31dbefc5ef60d9f1c6fc35713f3af",
+      "baseline_bytes": 3053,
+      "action": "Historical body retained exactly; current routing banner added.",
+      "result_sha256": "0351b5464a831dc582c49bea9b9895744a0b8d31d97e849728584e13a4a8ef73",
+      "result_bytes": 3788
+    }
+  ],
+  "added_records": [
+    {
+      "path": "docs/NEW_CHAT_HANDOFF_2026-11-25.md",
+      "sha256": "6056c80c2d451ea4c5091e7227c027bf3e82f2e63afeea7c1cea687db144843e",
+      "bytes": 18411
+    },
+    {
+      "path": "docs/coordination/SUCCESSOR_VISIBLE_CONTEXT_READER_2026-11-25.mjs",
+      "sha256": "22010ba5e4605f2aa2b31b03d4268f4b0ae8fb0d4289e23f8808dfb798dd8e8f",
+      "bytes": 3649
+    },
+    {
+      "path": "docs/coordination/SUCCESSOR_SOURCE_RECEIPT_2026-11-25.json",
+      "sha256": "a188b4593187da65bd2f58ca0ad5e48a0c7819626dfd148c4311ccb5a2d10aff",
+      "bytes": 4706
+    }
+  ],
+  "validation": {
+    "source_reader": "Executed read-only against original; matched pinned prefix and canonical hashes with all145 entries.",
+    "historical_bodies": "All30 original bodies retained verbatim below routing banners.",
+    "capability_matrix": "All capability rows retained verbatim; no scope/status promotion.",
+    "links": "All newly introduced relative Markdown targets checked against existing plus added repository paths.",
+    "publication": "Verify tree/diff, complete GitHub readback, normal required checks and merged main before successor dispatch.",
+    "no_new_local_exports": true,
+    "no_manual_app_builds_or_emulator_runs": true,
+    "scope_limit": "Documentation/source custody only; no handset, B2, workspace lock or release acceptance credit."
+  }
+}
