@@ -1,6 +1,6 @@
 # GZ Editor Pro — continuity / engineering custody
 
-> **Current work — November 25, 2026:** Lance relayed the completed [GPT-6 Pro review](coordination/GPT_6_PRO_INDEPENDENT_REVIEW_2026-11-25.md). The [work ledger](WORK_LEDGER.md) selects a bounded B1 follow-up for Pro layer actions, Collage header/taps, and nested departure evidence. PR #37 supplies the qualified 0.12.11 Test APK for focused diagnostic handset checks. R1.1 follows the correction wave. B2/F03 and the separate acceptance gates stay open.
+> **Current work — November 25, 2026:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. R1.1 begins with the saved-project baseline in the [work ledger](WORK_LEDGER.md). B2/F03 and wider acceptance remain open. See the [B1 qualification](B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
 
 ## Latest owner direction — successor custody and completed independent review
 
@@ -8,7 +8,7 @@ November 24, 2026 (America/Denver): Lance's unmentioned supplied 0.12.10 checks 
 
 The required exchange is complete: [Stage 1 owner report and 25 questions](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md), [Codex's 25 answers/full historical plans/77 mappings](coordination/CODEX_RESPONSE_TO_25_2026-11-24.md), [its 50 questions](coordination/CODEX_QUESTIONS_50_2026-11-24.md), and [ChatGPT's full 50 answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md). Stage 2 merged in PR #35 at df0faa23c4908bfd847410c84798a8c3402b27af, exactly matching live main at Stage 3 intake; only three docs changed from Stage 1. Stage 3 changes only coordination/canonical documentation, not app/test/build/CI inputs or qualification receipts.
 
-**B1 interaction corrections are engineering-qualified for handset confirmation in [PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37).** The final candidate `044e93321292a3678b92394b5efda50aae2e07b9` and application merge `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30` pass JVM/build/signing and **258/258 cases on each of Android 10/API29 and Android 15/API35**, zero failures/errors/skips. All 193 inherited Android identities remain. The current phone build is **0.12.11 Test / code 23 / phonetest.v23**. [Exact runs, raw failures, APK identity and focused phone script](B1_WORKSPACE_VERIFICATION.md).
+**B1 interaction corrections are engineering-qualified for handset confirmation in [PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37).** The final candidate `044e93321292a3678b92394b5efda50aae2e07b9` and application merge `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30` pass JVM/build/signing and **258/258 cases on each of Android 10/API29 and Android 15/API35**, zero failures/errors/skips. All 193 inherited Android identities remain. The original B1 checkpoint supplied **0.12.11 Test / code 23 / phonetest.v23**. [Exact runs, raw failures, APK identity and focused phone script](B1_WORKSPACE_VERIFICATION.md).
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
@@ -52,7 +52,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 - Single authorized repo: `MrSkyrimFan/GZ-Mobile-001`.
 - Baseline GZ Editor Pro 0.6 merge: `2a0f11b7eef2c5b42e5f569890b694a1dd7ba265`.
 - Historical 0.7 engineering branch: `feature/gz-editor-pro-creation-export-07`.
-- Production application ID: `com.greenezone.gzphotoeditor`; current separate phone-test package: `com.greenezone.gzphotoeditor.phonetest.v23`, 0.12.11 Test/code23. Target Android 10+, compile/target SDK36. A separate test installation is not same-ID upgrade proof.
+- Production application ID: `com.greenezone.gzphotoeditor`; current separate phone-test package: `com.greenezone.gzphotoeditor.phonetest.v24`, 0.12.12 Test/code24. Target Android 10+, compile/target SDK36. A separate test installation is not same-ID upgrade proof.
 - Retail target $2.99 one-time. Offline editing without runtime AI, ads, watermarks, in-app purchases, subscriptions, tracking or remote services.
 
 ## Architecture

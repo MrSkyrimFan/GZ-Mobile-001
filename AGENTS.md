@@ -1,6 +1,6 @@
 # GZ Editor Pro engineering instructions
 
-> **Current work — November 25, 2026:** Lance relayed the completed [GPT-6 Pro review](docs/coordination/GPT_6_PRO_INDEPENDENT_REVIEW_2026-11-25.md). The [work ledger](docs/WORK_LEDGER.md) selects a bounded B1 follow-up for Pro layer actions, Collage header/taps, and nested departure evidence. PR #37 supplies the qualified 0.12.11 Test APK for focused diagnostic handset checks. R1.1 follows the correction wave. B2/F03 and the separate acceptance gates stay open.
+> **Current work — November 25, 2026:** [PR #41](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/41) qualifies **0.12.12 Test / code 24 / phonetest.v24** for focused handset confirmation. Candidate and merge passed JVM/build/signing and **265/265 on each of API29 and API35**, with all inherited cases retained. R1.1 begins with the saved-project baseline in the [work ledger](docs/WORK_LEDGER.md). B2/F03 and wider acceptance remain open. See the [B1 qualification](docs/B1_WORKSPACE_VERIFICATION.md#pr-41-follow-up--01212-test).
 
 ## Latest owner instruction — independent review received
 
@@ -8,7 +8,7 @@ Lance has completed the supplied 0.12.10 phone checks and reports unmentioned ch
 
 **The three-stage documentation exchange is complete.** Codex returned all 25 answers, full historical roadmap snapshots/77-family reconciliation and 50 questions in PR #35; ChatGPT answered every CQ and reconciled the canonical documents. Read [all 50 answers](docs/coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md), [the engineering-resume instruction](docs/coordination/ENGINEERING_RESUME_2026-11-24.md), [PRODUCT_SPEC](docs/PRODUCT_SPEC.md) and the active [WORK_LEDGER](docs/WORK_LEDGER.md). Lance relayed the final prompt and Codex completed these full reads on November 25. B1 common UI/safe departures are engineering-qualified in PR #37 for focused handset confirmation. B2 has representative gains but unmet performance exits; F03 remains open. First complete the bounded review corrections and evidence in the active ledger, then R1.1/R1.2 and the complete roadmap. A missing owner-specific GIF observation holds only its affected closure. Follow the live ledger and docs/B1_WORKSPACE_VERIFICATION.md for exact candidate/merge/APK/failure evidence; do not revive the consumed activation hold. Do not repeat the 25/50 exchange, reopen intake, simulate another agent's approval, rebuild a documentation-only baseline or rerun completed audits. Historical Stage 1/2 documents preserve their instructions as dated evidence; the live ledger and completed Stage 3 contract now control execution.
 
-**Qualified application:** `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30`, 0.12.11 Test/code23, with candidate/merged-app 258/258 per API29/API35 and JVM/build/signing receipts. Later documentation-only heads do not replace this tested binary. B1 handset confirmation, B2 target completion, F03 and all broader workspace/release gates stay separate.
+**Qualified application:** `9a58c72cdcf379885150b55b498a2f0ef326dee1` (PR #41), 0.12.12 Test/code24, with candidate and merged-app 265/265 per API29/API35 plus JVM/build/signing. Follow the active ledger for R1.1. Handset, B2/F03 and wider acceptance stay open.
 
 ## Authority and current work
 
