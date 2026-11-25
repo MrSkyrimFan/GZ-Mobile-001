@@ -24,6 +24,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.core.app.ActivityOptionsCompat
@@ -104,14 +106,19 @@ class AndroidGifPreparationProfileTest {
             if (options) rule.onNodeWithText("Export GIF…").performClick()
             else rule.onNodeWithText("Save GIF").performClick()
             try {
-                rule.waitUntil(360_000) { pickerAt.get() > 0 }
+                rule.waitUntil(360_000) {
+                    failOnExportError("the GIF destination picker")
+                    pickerAt.get() > 0
+                }
             } finally {
                 Log.i("GzGifDefaultProfile", "device=" + Build.MODEL + " api=" + Build.VERSION.SDK_INT +
+                    " runtimeMaxHeapBytes=" + Runtime.getRuntime().maxMemory() +
                     " source=1080x1920 sourceFrames=150 trimStartMs=" + clip.startMs + " trimEndMs=" + clip.endMs +
                     " canvas=1080x1920 fps=source speed=100 reverse=false neutral=true scheduledFrames=" + expectedTimes.size +
                     " preparationToPickerMs=" + if (pickerAt.get() > 0) (pickerAt.get() - began) / 1_000_000 else -1)
             }
             rule.waitUntil(30_000) {
+                failOnExportError("GIF saved")
                 rule.onAllNodesWithText("GIF saved", substring = false).fetchSemanticsNodes().isNotEmpty()
             }
             val completedMs = (SystemClock.elapsedRealtimeNanos() - began) / 1_000_000
@@ -157,6 +164,7 @@ class AndroidGifPreparationProfileTest {
             } finally { raster.recycle() }
             assertArrayEquals(originalHash, hash(source))
             Log.i("GzGifDefaultProfile", "completionMs=" + completedMs +
+                " runtimeMaxHeapBytes=" + Runtime.getRuntime().maxMemory() +
                 " encodedDurationMs=" + metadata.durationMs + " verifiedFrames=" + metadata.sourceTimesMs.size)
         } finally {
             rule.runOnIdle { rule.activity.setContentView(android.widget.FrameLayout(rule.activity)) }
@@ -189,15 +197,18 @@ class AndroidGifPreparationProfileTest {
             rule.onNodeWithText("Options").performClick()
             rule.onNodeWithText("Export GIF…").performClick()
             rule.waitUntil(15_000) {
+                failOnExportError("GIF frame-writing progress")
                 rule.onAllNodesWithText("Writing frame ", substring = true).fetchSemanticsNodes().isNotEmpty()
             }
             val requested = SystemClock.elapsedRealtimeNanos()
             rule.onNodeWithText("Cancel export").performClick()
             rule.waitUntil(5_000) {
+                failOnExportError("GIF export cancellation")
                 rule.onAllNodesWithText("GIF export cancelled", substring = false).fetchSemanticsNodes().isNotEmpty()
             }
             val observedStopMs = (SystemClock.elapsedRealtimeNanos() - requested) / 1_000_000
             Log.i("GzGifCancellationProfile", "api=" + Build.VERSION.SDK_INT +
+                " runtimeMaxHeapBytes=" + Runtime.getRuntime().maxMemory() +
                 " canvas=1080x1920 trimEndMs=2665 observedStopMs=" + observedStopMs)
             assertTrue("Local preparation cancellation exceeded 1000 ms: " + observedStopMs, observedStopMs <= 1000)
             assertEquals(0L, pickerCount.get())
@@ -209,6 +220,17 @@ class AndroidGifPreparationProfileTest {
             rule.runOnIdle { rule.activity.setContentView(android.widget.FrameLayout(rule.activity)) }
             media.forEach { resolver.delete(it, null, null) }
             folder.deleteRecursively()
+        }
+    }
+
+    private fun failOnExportError(waitingFor: String) {
+        val errors = rule.onAllNodesWithText("GIF export failed.", substring = true)
+            .fetchSemanticsNodes()
+            .flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty() }
+            .map { it.text }
+            .distinct()
+        if (errors.isNotEmpty()) {
+            throw AssertionError("While waiting for " + waitingFor + ": " + errors.joinToString(" | "))
         }
     }
 
