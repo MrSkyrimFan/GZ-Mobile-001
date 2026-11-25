@@ -1,12 +1,60 @@
 # B1 workspace correction verification
 
-Status: integrated draft, not yet qualified for handset delivery. Updated November 25, 2026.
+Status: B1 engineering-qualified for focused handset confirmation; B2 target completion and F03 remain open. Updated November 25, 2026.
 
 ## Authority and exact baseline
 
-Lance relayed the completed Stage 3 answers/resume prompt. The full CQ01–CQ50, active instructions, specification, roadmap, 77-family inventory and release gate were read before source edits. Baseline main was `6f7c574f223e5349a74e622e97433736a07f4a44`, tree `99239d1fd9efc25a4324aa39bb6ebe44a02395ff`. Its qualified app remains PR #31 merge `3ad65c533f7667a136d4fa1838afcc06d3f484da`, 0.12.10 Test/code22, until this changed app passes complete qualification.
+Lance relayed the completed Stage 3 answers/resume prompt. The full CQ01–CQ50, active instructions, specification, roadmap, 77-family inventory and release gate were read before source edits. Baseline main was `6f7c574f223e5349a74e622e97433736a07f4a44`, tree `99239d1fd9efc25a4324aa39bb6ebe44a02395ff`. The inherited qualified app was PR #31 merge `3ad65c533f7667a136d4fa1838afcc06d3f484da`, 0.12.10 Test/code22. The following PR #37 qualification supersedes its phone download and retains its regression evidence.
 
-[Draft PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37) implements B1 plus B2 measurements. Engineering branch is `codex/b1-workspace-contract-20261125`; `feature/b1-contract-verification-20261125` invokes the unchanged push-triggered full matrix. This document is an evidence receipt; [WORK_LEDGER](WORK_LEDGER.md) and [GZ_ENGINEERING_ROADMAP](GZ_ENGINEERING_ROADMAP.md) remain the single execution record and roadmap.
+[PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37) implements B1 plus B2 measurements. Engineering branch is `codex/b1-workspace-contract-20261125`; `feature/b1-contract-verification-20261125` invokes the unchanged push-triggered full matrix. This document is an evidence receipt; [WORK_LEDGER](WORK_LEDGER.md) and [GZ_ENGINEERING_ROADMAP](GZ_ENGINEERING_ROADMAP.md) remain the single execution record and roadmap.
+
+## Qualified candidate, merge and exact phone artifact
+
+| Evidence | Exact identity / result |
+| --- | --- |
+| Final candidate | `044e93321292a3678b92394b5efda50aae2e07b9`; [full run 45596352650](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45596352650) |
+| Application merge | `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30`; [full run 45600142592](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45600142592) |
+| Shared candidate/merge tree | `57b3ff2510e059184bfaefee2e781d350bf0930f` |
+| Candidate and merge results | JVM/build/signing pass; **258/258 per API29 and API35**, zero failures/errors/skips |
+| Retained method set | All 193 inherited cases plus 65 added cases; 258 unique Android identities, zero missing/duplicates |
+| Phone identity | **GZ Editor Pro 0.12.11 Test**, version code 23, `com.greenezone.gzphotoeditor.phonetest.v23`, minSdk 29/targetSdk 36 |
+| Merged API35 exercised artifact | [15017086053](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45600142592/artifacts/15017086053), APK 33,767,477 bytes; ZIP SHA-256 `a3aee3437252cf3df4bd7091094baa1c5ad7a4124200e6bcc349256003de0065` |
+| Exact APK SHA-256 | `969d2c095f856a65f3d6de905e253dfd6e225e479a451edf4b21b2989362f971` |
+| Signature | Independently verified for API29–36; Android APK Signature Scheme v2 valid; signer certificate SHA-256 `a72deddffe1cdb7eabfb7ffb5853c42dcb1c14b8bac779d65b33e533f737de59` |
+
+This separately installed phone package is for focused testing; it does not establish a same-ID production upgrade. Later documentation-only main revisions do not create another binary or replace the qualified application identity above. Full failure history below is retained. No workspace lock, whole-family completion, universal media claim or public release acceptance follows from these checks.
+
+Full candidate XML archives were read and matched GitHub's published ZIP digests: API29 artifact `15014039551`, SHA-256 `6bd2168262ca87bcdeab274f4e309c691c94a95e66989c13fa7102b35f2de5f4`; API35 `15015510834`, `2fb63d2305e09e1b26c4231643e7dedda637be5aa709431a91bbb718d1d9dac0`. Merged API29: `15017235171`, `56a28424c9232f0de23cd15cac8da6a7d1120d98ba9ba850d65ad823aa03af00`. Merged API35: `15016297183`, `b30657e49ff3f2f7e3f59baa37bbe0ea32c30087916a607790399543cf63b7ac`. Every full XML declares 258 tests and zero failures/errors/skips, matching all 258 expected case identities with zero missing/extra/duplicates. Sorted identity SHA-256: `8daa78d5f2580cdf8fc86f2811e34e5d70c403cf846ad6a6e458b3eab669cbed`.
+
+The candidate phone artifact `15014628554` was independently checked before merge: ZIP SHA-256 `2331ed8a9523bb44d956b04bc4cfce3686ff0108718b2a9a1aaf6cee6a720058`, APK SHA-256 `a0dc759c749555d2344f68029afa3a9f50e7418f174f3d88458781fb238476ee`, valid v2 signature for API29–36 with no errors/warnings, and the same declared v23 package/version/SDK/label. Its signer certificate SHA-256 is `534841609eced8454465ca782b285dd3a62da7c24dc438bbb0dda548cc5ce4c8`. The merged artifact in the table is the delivery, separately verified; temporary candidate verification is not a handset installation or upgrade test.
+
+### Final representative observations, with targets unchanged
+
+These are individual executions on separate CI hosts, **not a matched cold/warm sample study**. The same default-quality fixture is 1080×1920, 150 source frames, trim 0–2665 ms, Original/source FPS/100% forward/neutral, yielding 80 scheduled frames. Initial baseline heap properties were not recorded; the final measured runtime limits below are explicit.
+
+| Metric | Candidate API29 | Candidate API35 | Merge API29 | Merge API35 |
+| --- | ---: | ---: | ---: | ---: |
+| Application maximum heap (MiB) | 256 | 192 | 256 | 192 |
+| Export activation to picker (ms) | 13666 | 13601 | 14159 | 14893 |
+| Source reader wall (ms) | 7995 | 9050 | 8371 | 10255 |
+| Source reader calling-thread CPU (ms) | 7082 | 8187 | 6988 | 9023 |
+| Pipeline (ms) | 11596 | 12073 | 12174 | 13484 |
+| Start UI acknowledgement (ms) | 65 | 102 | 83 | 92 |
+| Cancel UI acknowledgement (ms) | 22 | 66 | 49 | 50 |
+| Cancel worker stop (ms) | 43 | 15 | 34 | 17 |
+| Observed cancel-command to completed notice (ms) | 137 | 162 | 138 | 132 |
+| GIF bytes | 995576 | 995576 | 995576 | 995576 |
+| Verified frames | 80 | 80 | 80 | 80 |
+| Encoded duration (ms) | 2670 | 2670 | 2670 | 2670 |
+
+All four final observations retain 995,576 output bytes, 80 frames, 2670 ms complete scheduled duration, unchanged source bytes and the same independently decoded sample errors as the respective original API baseline. Every selected-frame scalar/bulk/cache comparison and inherited 6 s motion/15 s Save gate passes. The default full-resolution profile is a separate workload; its preparation time is not compared against the smaller fixture's 15 s gate.
+
+The **10,000 ms absolute AND 50% picker-reduction targets remain unmet on both APIs**. Relative to the original 20,932/26,262 ms baselines, candidate preparation is 13,666/13,601 ms and merged preparation 14,159/14,893 ms. The **50% source-reader reduction remains unmet on API29** (original 15,199 ms; candidate 7,995/merge 8,371) and is met for these API35 observations (original 22,354 ms; candidate 9,050/merge 10,255). Final start/cancel acknowledgements are below 250 ms and observed cancellation below 1000 ms; retain the earlier 257 ms start miss rather than deleting it or claiming a universal response guarantee.
+
+Each completed original-size profile reports 32,768 bytes of exact-color cache payload, 4,320 bytes of sample-row arrays, 165,885,502 exact-cache hits and 2,498 misses. The reverse cap and full-frame buffers are unchanged. Source-reader/bitmap/encoder counters overlap and must not be summed as disjoint stages. Actual owner-media/phone measurements and the required matched sample study remain open.
+
+
+The fixed targets are retained. The two bounded optimization experiments were evaluated with representative gains and unmet exits; do not recast the separate-host observations as a matched cold/warm study. B2 target completion and F03 remain open, including the 13.698-second/257-ms API35 sample below. The next performance decision requires matched measurements on the declared workload and an evidence-backed cause; no third speculative optimization is a prerequisite for delivering this regression-qualified B1 candidate. Independent R1.1 work follows the ledger.
 
 ## Reproductions and diagnosed failures
 
@@ -72,7 +120,7 @@ The GIF profile now fails immediately when the actual UI reports `GIF export fai
 
 Candidate `f4802bb807e3f0a96fc20b4335b3e17c06453377`, [run 45595436544](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45595436544), passes build/JVM/signing. API29 job `139140147036` stops in preflight with **zero Android tests executed**. The old guest values are maximum `512m` and empty growth limit; after framework restart both are exactly `256m`. The guard rejects `pidof zygote64` returning `3180 4097` instead of a single PID (old PID `1664`). This is a process-identification assumption in the new CI guard, not an application regression or proof of an Android suite pass.
 
-The bounded correction selects the single `zygote64` with parent PID1 from Android's process table and requires a changed owner PID, `init.svc.zygote=running` and both exact heap properties. This checks the init-owned VM rather than counting same-named children. All budgets, full-suite selection and application code are unchanged. The next push supersedes the unqualified run; preserve its preflight failure instead of retrying it unchanged.
+The bounded correction selects the single `zygote64` with parent PID1 from Android's process table and requires a changed owner PID, `init.svc.zygote=running` and both exact heap properties. This checks the init-owned VM rather than counting same-named children. All budgets, full-suite selection and application code are unchanged. Candidate `044e93321292a3678b92394b5efda50aae2e07b9` supersedes the unqualified run. Its API35 job was canceled by branch concurrency; no full API35 pass is credited to candidate 4. The preflight failure is retained rather than retried unchanged.
 
 ## Implemented contract and finite review
 
@@ -86,7 +134,7 @@ Finite independent reviews found and corrected stale native-export restoration, 
 
 ## Existing assertion migration
 
-All **193 original Android method identities** are retained. The first integrated run executed **250 cases**; its failures are preserved above. The follow-up adds exact saved-GIF recovery, bulk/scalar ARGB equivalence and actual preparation cancellation regressions; the next combined source contains **258 cases**, all 193 inherited identities retained with zero duplicates, pending runtime qualification. Required candidate and merged-main JVM/API29/API35/signing receipts remain pending.
+All **193 original Android method identities** are retained. The first integrated run executed **250 cases**; its failures are preserved above. The follow-up adds exact saved-GIF recovery, bulk/scalar ARGB equivalence and actual preparation cancellation regressions; the final combined source contains **258 cases**, all 193 inherited identities retained with zero duplicates. Required candidate and merged-main qualification is recorded above.
 
 | Existing files / scope | Authorized route changes | Retained checks |
 | --- | --- | --- |
@@ -127,7 +175,7 @@ The added row cache must scale with source row width, not retained frame count; 
 
 F03 remains open until the applicable measured and owner handset evidence exists.
 
-### Post-review changes awaiting execution
+### Post-review changes included in final qualification
 
 The bulk-row source reviewer found no production correctness issue and requested two stronger test details: include a neighboring reverse timestamp so the test consumes an actually retained packed picture, and use the strict less-than row-cache bound. Both were applied. The exact-pixel comparison covers selected native-size, rotated, reverse-cache, anamorphic and filtered frames; it does not claim every frame of every supported source.
 
@@ -135,13 +183,13 @@ The empty staging-directory regression additionally verifies both legacy/named S
 
 The first-run fixes retain the original method identities and non-UI assertions. Collision cancellation now asserts the entire canceled dialog is gone; held-pointer toolbar commands use the actual semantic click without introducing an invalid second DOWN; dialog actions are scoped to their modal; crop/relink and Pro completion wait for their actual state. The Pro hidden-save fixture now uses a distinct name inside the existing 28-character input limit. These changes do not alter content, quality or timing acceptance checks.
 
-A separate source review checked the new actual-UI cancellation profile and its timing report. The canceled notice follows worker join and journal clearance; the test observes completion including dispatch/polling overhead, while worker-stop and visible-frame acknowledgement are logged separately. It cancels during frame preparation, not necessarily at an exact frame number. Execution is still required.
+A separate source review checked the new actual-UI cancellation profile and its timing report. The canceled notice follows worker join and journal clearance; the test observes completion including dispatch/polling overhead, while worker-stop and visible-frame acknowledgement are logged separately. It cancels during frame preparation, not necessarily at an exact frame number. The final candidate and merge execution above supply the bounded runtime result.
 
 The final targeted Help read confirms the changed Pro, GIF and Photo instructions use Options/Save project/Export and the Collage Help describes the common command location and independent tile workflow. This is source confirmation of the renamed-command documentation, not a separate UI execution claim.
 
 ## Delivery gate
 
-Do not deliver this draft as qualified. Complete the integrated candidate and merge JVM/API29/API35/signing checks, resolve reproduced high-impact failures, preserve run/artifact hashes and verify the exact phone APK. Then provide one coherent candidate and a short owner confirmation script. Workspace locks, R1–R11 completion, Video, bilingual final onboarding, website dependency, Play Console setup and public release retain their separate roadmap/owner gates.
+The integrated candidate and merge JVM/API29/API35/signing checks and exact phone-APK verification above qualify this coherent B1 handset candidate. Its focused script follows. B2 numerical/actual-phone exits remain explicitly open; do not label the wave fully performance-complete. Workspace locks, R1–R11 completion, Video, bilingual final onboarding, website dependency, Play Console setup and public release retain their separate roadmap/owner gates.
 
 ## Focused handset confirmation after a qualified artifact is delivered
 
