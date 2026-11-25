@@ -121,15 +121,12 @@ internal object LegacyPhotoProjects {
 
     private fun identity(context: Context, key: String, version: String): LegacyIdentity {
         val name = nameFromKey(key)
-        if (name != null) {
-            try {
-                return LegacyIdentity(NamedProjectIdentity.reference(context, ProjectKind.PHOTO, name, version), true)
-            } catch (_: Exception) {
-                // An unavailable original identity must not be silently overwritten.
-            }
-        }
+        // Valid keys must keep their real identity. If its sidecar is unavailable,
+        // leave v1 authoritative so a later attempt can import the original record.
+        if (name != null)
+            return LegacyIdentity(NamedProjectIdentity.reference(context, ProjectKind.PHOTO, name, version), true)
         val orphan = UUID.nameUUIDFromBytes(("Regular unavailable legacy key:" + key).toByteArray(Charsets.UTF_8))
-        val label = name ?: "[Unavailable " + orphan.toString().take(12) + "]"
+        val label = "[Unavailable " + orphan.toString().take(12) + "]"
         return LegacyIdentity(NamedProjectRef(ProjectKind.PHOTO, orphan.toString(), label, version), false)
     }
 
@@ -164,6 +161,7 @@ internal object LegacyPhotoProjects {
         private var writer: EntryWriter? = null
         private var stringValue = false
         private var completeRoot = false
+        private var appliedPending = false
 
         override fun startElement(uri: String, localName: String, qName: String, attributes: Attributes) {
             val element = localName.ifEmpty { qName }
@@ -175,7 +173,10 @@ internal object LegacyPhotoProjects {
                     if (!keys.add(storageKey) || keys.size > PhotoProjectFiles.LIMIT + 1)
                         throw SAXException("Invalid Regular project preference occupancy")
                     key = storageKey
-                    if (pending?.key != storageKey) {
+                    if (pending?.key == storageKey) {
+                        pending.previous?.let { rows += it }
+                        appliedPending = true
+                    } else {
                         stringValue = element == "string"
                         writer = EntryWriter(context)
                         if (!stringValue) {
@@ -211,7 +212,7 @@ internal object LegacyPhotoProjects {
         }
 
         fun complete(): List<PhotoProjectFiles.Record> {
-            pending?.previous?.let { rows += it }
+            if (!appliedPending) pending?.previous?.let { rows += it }
             if (rows.size > PhotoProjectFiles.LIMIT)
                 throw IOException("The legacy Regular project library exceeds its slot limit")
             // A fabricated label for an invalid key must not mask an actual

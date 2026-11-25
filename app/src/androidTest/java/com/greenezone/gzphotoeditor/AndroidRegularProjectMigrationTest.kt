@@ -126,6 +126,9 @@ class AndroidRegularProjectMigrationTest {
             writeRegularLegacyXml(fixture.legacyXml) { emit -> emit("Decoy", zeta) }
             fixture.pendingSave.writeText(JSONObject().put("version", 1)
                 .put("key", regularLegacyKey("Alpha")).put("previous", alpha).toString())
+            val legacyBytes = fixture.legacyXml.readBytes()
+            val backupBytes = fixture.legacyBackup.readBytes()
+            val pendingBytes = fixture.pendingSave.readBytes()
 
             val rows = requireNotNull(ProjectStore.listMetadata(fixture.context()))
             assertEquals(listOf("Alpha", "Corrupt", "Unavailable", "zeta"), rows.map { it.project.name })
@@ -143,7 +146,20 @@ class AndroidRegularProjectMigrationTest {
             assertNull(runCatching { context.contentResolver.openInputStream(absentSource)?.use { it.read() } }.getOrNull())
             assertTrue(rows[3].readable)
             assertEquals(zeta, requireNotNull(regularProjectPayloadFile(context, "zeta")).readText())
-            assertFalse(fixture.pendingSave.exists())
+
+            // The legacy rollback now only explains which bytes migration
+            // adopted. A later native save must stay authoritative across open.
+            val updatedDoc = alphaDoc.copy(grade = Grade(exposure = .5f))
+            val updated = saved(ProjectStore.saveNamed(fixture.context(),
+                ProjectSaveIntent.Update(alphaRow.project), alphaSource, updatedDoc))
+            assertEquals(alphaId, updated.id)
+            assertNotEquals(alphaRow.project.version, updated.version)
+            val reopened = fixture.context()
+            assertEquals(updated, requireNotNull(ProjectStore.listMetadata(reopened)).first().project)
+            assertEquals(updatedDoc, ProjectStore.loadNamed(reopened, updated)?.content?.document)
+            assertArrayEquals(legacyBytes, fixture.legacyXml.readBytes())
+            assertArrayEquals(backupBytes, fixture.legacyBackup.readBytes())
+            assertArrayEquals(pendingBytes, fixture.pendingSave.readBytes())
         }
 
     @Test fun failedCutoverKeepsLegacyBytesAndCanRetryWithTheSameIdentity() =
@@ -174,6 +190,41 @@ class AndroidRegularProjectMigrationTest {
             assertEquals(document, ProjectStore.loadNamed(retried, row.project)?.content?.document)
             assertArrayEquals(original.toByteArray(),
                 requireNotNull(regularProjectPayloadFile(retried, "Protected")).readBytes())
+        }
+
+    @Test fun temporarilyUnavailableLegacyIdentityDefersCutoverAndRecoversTheOriginalProject() =
+        withRegularProjectFixture { fixture ->
+            val context = fixture.context()
+            val name = "Protected"
+            val uri = Uri.parse("content://r11-fixture/restored-identity")
+            val document = EditDocument(grade = Grade(exposure = .3f))
+            val original = raw(uri, document)
+            writeRegularLegacyXml(fixture.legacyXml) { emit ->
+                emit("Neighbor", raw(uri, EditDocument()))
+                emit(name, original)
+            }
+            val legacyBytes = fixture.legacyXml.readBytes()
+            val legacyId = NamedProjectIdentity.reserve(context, ProjectKind.PHOTO, name, false)
+            val sidecar = File(context.filesDir, "named-project-identities/photo/${regularLegacyKey(name)}.id")
+            val displaced = File(sidecar.path + ".test-preserved")
+            assertTrue(sidecar.renameTo(displaced))
+            assertTrue(sidecar.mkdir())
+
+            assertNull(ProjectStore.listMetadata(fixture.context()))
+            assertFalse(PhotoProjectFiles.indexFile(context).exists())
+            assertArrayEquals(legacyBytes, fixture.legacyXml.readBytes())
+
+            assertTrue(sidecar.delete())
+            assertTrue(displaced.renameTo(sidecar))
+            val retried = fixture.context()
+            val rows = requireNotNull(ProjectStore.listMetadata(retried))
+            assertEquals(listOf("Neighbor", name), rows.map { it.project.name })
+            assertTrue(rows.all { it.readable })
+            val recovered = rows.last().project
+            assertEquals(legacyId, recovered.id)
+            assertEquals(version(original), recovered.version)
+            assertEquals(document, ProjectStore.loadNamed(retried, recovered)?.content?.document)
+            assertArrayEquals(legacyBytes, fixture.legacyXml.readBytes())
         }
 
     @Test fun interruptedIndexRollbackAndUnreferencedRecordsNeverResurrectDeletedProject() =

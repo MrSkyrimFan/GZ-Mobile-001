@@ -17,7 +17,6 @@ internal data class SavedPhotoProjectMetadata(
 /** Up to twelve named local projects; original photos stay in the system media store. */
 object ProjectStore {
     private val names = compareBy<PhotoProjectFiles.Record> { it.project.name.lowercase() }
-        .thenBy { it.project.name }
 
     private fun index(
         context: Context,
@@ -148,7 +147,8 @@ object ProjectStore {
             val result = ProjectSaveResult.Saved(project)
             val generation = PhotoProjectFiles.writeRecord(context, bytes, version)
             val row = PhotoProjectFiles.Record(project, bytes.size.toLong(), true, generation)
-            val nextRows = (rows.filterNot { it === current } + row).sortedWith(names)
+            val revised = if (current == null) rows + row else rows.map { if (it === current) row else it }
+            val nextRows = revised.sortedWith(names)
             PhotoProjectFiles.publishIndex(context, nextRows, verifyIndex)
             // After commit, cleanup is independent of the user-visible acknowledgement.
             cleanObsoleteRecords(context, nextRows)
