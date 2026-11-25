@@ -907,8 +907,17 @@ class AndroidBackNavigationTest {
                 exportAndCheck()
                 rule.onNodeWithText("Options").performClick()
                 rule.onNodeWithText("Open project…").performClick()
+                rule.waitUntil(15_000) { rule.onAllNodesWithText(name).fetchSemanticsNodes().isNotEmpty() }
                 rule.onNodeWithText(name).performScrollTo().performClick()
-                rule.waitUntil(15_000) { rule.onAllNodesWithText("Saved Pro projects").fetchSemanticsNodes().isEmpty() }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Pro project opened").fetchSemanticsNodes().isNotEmpty() &&
+                        rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                            .fetchSemanticsNodes().isNotEmpty()
+                }
+                rule.waitUntil(15_000) {
+                    val previews = rule.onAllNodesWithContentDescription("Pro editable composition")
+                    previews.fetchSemanticsNodes().isNotEmpty() && matchesEditedCrop(previews[0])
+                }
                 exportAndCheck()
 
                 pressBackThroughDispatcher()
