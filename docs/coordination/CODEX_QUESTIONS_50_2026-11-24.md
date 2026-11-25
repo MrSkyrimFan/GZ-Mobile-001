@@ -52,7 +52,7 @@ ChatGPT must answer every CQ01–CQ50 in `CHATGPT_RESPONSE_TO_50_2026-11-24.md`,
 
 **Implementation/acceptance impact:** Determines which document users save and prevents accidental parent/sibling changes or silent removal of useful existing behavior.
 
-**Proposed default for validation:** Parent-owned primary persistence; Done/Cancel remain direct; no ambiguous Save project. If standalone commands remain, name their independent ownership explicitly.
+**Proposed default for validation:** Keep existing standalone photo Save/Open explicitly labeled pending this decision. Parent-owned Save/Export is an optional addition after child resolution, not a preapproved replacement. Done/Cancel remain direct; never equate standalone Save with Apply.
 
 ## CQ05
 
@@ -118,7 +118,7 @@ ChatGPT must answer every CQ01–CQ50 in `CHATGPT_RESPONSE_TO_50_2026-11-24.md`,
 
 **Decision — Empty Pro canvas durability:** Should changed canvas/background settings before the first Pro layer constitute a saveable dirty document or nonpersistent setup?
 
-**Current understanding:** ProMath.valid requires1–12 layers; present Save is disabled on empty canvas.
+**Current understanding:** ProMath.valid requires 1–12 layers; present Save is disabled on empty canvas.
 
 **Evidence:** Q09; ProModel138–143; ProWorkspaceScreen905. See the [pinned intake roadmap](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/b9b5ff14ec5a833416b972c4b670a7e9157a2e0a/docs/GZ_ENGINEERING_ROADMAP.md) and corresponding source index in the response.
 
@@ -214,7 +214,7 @@ ChatGPT must answer every CQ01–CQ50 in `CHATGPT_RESPONSE_TO_50_2026-11-24.md`,
 
 **Decision — GIF workload and performance acceptance:** Validate the minimum workload/device evidence and separate thresholds needed to close the120–300-second phone finding without treating the small emulator fixture as universal.
 
-**Current understanding:** Owner workload/device/provider details are missing; existing3.872s/3.334s fixture is180×320/88frames/2.950s.
+**Current understanding:** Owner workload/device/provider details are missing; existing3.872s/3.334s fixture is180×320/88 frames/2.950s.
 
 **Evidence:** Q11–Q13; F03; PR31 qualification. See the [pinned intake roadmap](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/b9b5ff14ec5a833416b972c4b670a7e9157a2e0a/docs/GZ_ENGINEERING_ROADMAP.md) and corresponding source index in the response.
 
@@ -286,7 +286,7 @@ ChatGPT must answer every CQ01–CQ50 in `CHATGPT_RESPONSE_TO_50_2026-11-24.md`,
 
 **Decision — Pro capacity tiers and renderer exit:** What measured device/effect workloads permit increasing12-layer/4096-edge caps, and what parity/resource proof completes the tiled compositor?
 
-**Current understanding:** Current whole-bitmap renderer plus8MiB source cache does not prove tiled capacity.
+**Current understanding:** Current whole-bitmap renderer plus 8 MiB source cache does not prove tiled capacity.
 
 **Evidence:** Q17; ProModel133/175; ProRaster162–301. See the [pinned intake roadmap](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/b9b5ff14ec5a833416b972c4b670a7e9157a2e0a/docs/GZ_ENGINEERING_ROADMAP.md) and corresponding source index in the response.
 
@@ -334,7 +334,7 @@ ChatGPT must answer every CQ01–CQ50 in `CHATGPT_RESPONSE_TO_50_2026-11-24.md`,
 
 **Decision — Retouch donor replay:** Validate donor revision and sampling policy for fixed/aligned clone, heal, patch and conventional inpaint.
 
-**Current understanding:** Current donor copying uses immutable input bitmap with80 marks; Soft repair is a low-opacity blend.
+**Current understanding:** Current donor copying uses immutable input bitmap with 80 marks; Soft repair is a low-opacity blend.
 
 **Evidence:** Q18; ProTools171–208; P09. See the [pinned intake roadmap](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/b9b5ff14ec5a833416b972c4b670a7e9157a2e0a/docs/GZ_ENGINEERING_ROADMAP.md) and corresponding source index in the response.
 
@@ -476,7 +476,7 @@ ChatGPT must answer every CQ01–CQ50 in `CHATGPT_RESPONSE_TO_50_2026-11-24.md`,
 
 ## CQ40
 
-**Decision — Collage layout acceptance:** Validate a finite layout/control corpus proving all seven layouts and1–20 tiles, including one-tile output, extreme aspect, gaps/borders/rounding/alpha and orientation.
+**Decision — Collage layout acceptance:** Validate a finite layout/control corpus proving all seven layouts and 1–20 tiles, including one-tile output, extreme aspect, gaps/borders/rounding/alpha and orientation.
 
 **Current understanding:** Owner contract is1–20; code validCount supports it although some help says2–20.
 
@@ -508,7 +508,7 @@ ChatGPT must answer every CQ01–CQ50 in `CHATGPT_RESPONSE_TO_50_2026-11-24.md`,
 
 **Implementation/acceptance impact:** Defines professional usability and prevents visual-only approval.
 
-**Proposed default for validation:** Proposed48dp targets,320dp/narrow and landscape/split layouts, through200%font, logical TalkBack focus/action descriptions and reachable controls; adjust targets explicitly with evidence if needed.
+**Proposed default for validation:** Proposed48dp targets,320dp/narrow and landscape/split layouts, through 200%font, logical TalkBack focus/action descriptions and reachable controls; adjust targets explicitly with evidence if needed.
 
 ## CQ43
 
