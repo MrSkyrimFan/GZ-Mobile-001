@@ -478,7 +478,7 @@ fun PhotoEditorScreen(
     }
 
     fun closeCurrentPhoto() {
-        if (!photoExport.resolveNativeDraft(photoOwnerId)) {
+        if (!recoveryResolved && !photoExport.resolveNativeDraft(photoOwnerId)) {
             showRegularExit = true
             return
         }
@@ -899,7 +899,7 @@ fun PhotoEditorScreen(
         expectedProOwner = null
     }
 
-    fun commitDiscard(pending: PhotoDeparture): Boolean {
+    fun commitDiscard(pending: PhotoDeparture, recoveryResolved: Boolean = false): Boolean {
         if (!pending.discard) return true
         if (!photoExport.resolveNativeDraft(photoOwnerId)) {
             showRegularExit = true
@@ -965,11 +965,12 @@ fun PhotoEditorScreen(
                     notice = "The work changed. Start the transfer again."
                     return@launch
                 }
-                startupJournal.suppressNativeRestores(buildList {
+                val resolvedRecoveries = startupJournal.suppressNativeRestores(buildList {
                     if (pending.discard) add(ExportWorkspace.PHOTO to photoOwnerId)
                     if (proHandoffDiscard) add(ExportWorkspace.PRO to proSession.nativeOwnerKey())
                 })
-                if (!commitDiscard(pending)) return@launch
+                photoExport.adoptNativeDisposition(resolvedRecoveries)
+                if (!commitDiscard(pending, recoveryResolved = true)) return@launch
                 proDocument = prepared.first
                 proSession = ProWorkspaceSession(documentEstablished = true,
                     resetDocument = prepared.second, entryDocument = prepared.first)

@@ -261,7 +261,7 @@ class AndroidGifDepartureContractTest {
     }
 
     private fun option(label: String) {
-        rule.onNodeWithContentDescription("Options").performClick()
+        rule.onNodeWithText("Options").performClick()
         rule.onNodeWithText(label).performClick()
     }
 

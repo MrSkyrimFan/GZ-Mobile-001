@@ -7,11 +7,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -37,10 +34,9 @@ import androidx.compose.ui.unit.sp
 /**
  * One presentation for all native editors. The host controls visibility and the
  * transient Options state; this component never changes a document or route.
- * Controls wrap at narrow widths/large font scales instead of becoming a
- * horizontally scrolling file toolbar or an inaccessible clipped row.
+ * Options stays at the trailing edge beside the wrapping brand. Workspace and
+ * history have a deliberate second row; major commands never scroll horizontally.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EditorWorkspaceHeader(
     workspace: WorkspaceMode,
@@ -62,14 +58,43 @@ fun EditorWorkspaceHeader(
     }
     BackHandler(enabled = menuExpanded) { onMenuExpandedChange(false) }
     Column(modifier.fillMaxWidth().testTag("workspace-header")) {
-        Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
-            fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Text("GZ Editor Pro", color = EditorWhite, fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 10.dp))
+            Box {
+                TextButton(
+                    onClick = { onMenuExpandedChange(true) },
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("workspace-options")
+                ) { Text("Options", color = EditorMint, fontWeight = FontWeight.Bold) }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { onMenuExpandedChange(false) }
+                ) {
+                    commands.forEach { command ->
+                        DropdownMenuItem(
+                            modifier = Modifier.heightIn(min = 48.dp)
+                                .testTag("workspace-command-" + command.id.name.lowercase()),
+                            enabled = enabled && command.enabled,
+                            onClick = {
+                                onMenuExpandedChange(false)
+                                command.onInvoke()
+                            },
+                            text = {
+                                Column {
+                                    Text(command.label)
+                                    if (!command.enabled && command.disabledReason != null) {
+                                        Text(command.disabledReason, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (onBack != null) {
                     IconButton(
                         onClick = onBack, enabled = enabled,
@@ -81,44 +106,16 @@ fun EditorWorkspaceHeader(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = onUndo, enabled = enabled && canUndo,
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = EditorWhite, disabledContentColor = EditorMuted.copy(alpha = .38f)),
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = EditorWhite,
+                        disabledContentColor = EditorMuted.copy(alpha = .38f)),
                     modifier = Modifier.size(48.dp).semantics { contentDescription = "Undo" }
                 ) { HistoryArrow(redo = false) }
                 IconButton(
                     onClick = onRedo, enabled = enabled && canRedo,
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = EditorWhite, disabledContentColor = EditorMuted.copy(alpha = .38f)),
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = EditorWhite,
+                        disabledContentColor = EditorMuted.copy(alpha = .38f)),
                     modifier = Modifier.size(48.dp).semantics { contentDescription = "Redo" }
                 ) { HistoryArrow(redo = true) }
-                Box {
-                    TextButton(
-                        onClick = { onMenuExpandedChange(true) },
-                        modifier = Modifier.heightIn(min = 48.dp).testTag("workspace-options")
-                    ) { Text("Options", color = EditorMint, fontWeight = FontWeight.Bold) }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { onMenuExpandedChange(false) }
-                    ) {
-                        commands.forEach { command ->
-                            DropdownMenuItem(
-                                modifier = Modifier.heightIn(min = 48.dp)
-                                    .testTag("workspace-command-" + command.id.name.lowercase()),
-                                enabled = enabled && command.enabled,
-                                onClick = {
-                                    onMenuExpandedChange(false)
-                                    command.onInvoke()
-                                },
-                                text = {
-                                    Column {
-                                        Text(command.label)
-                                        if (!command.enabled && command.disabledReason != null) {
-                                            Text(command.disabledReason, fontSize = 12.sp)
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
             }
         }
     }

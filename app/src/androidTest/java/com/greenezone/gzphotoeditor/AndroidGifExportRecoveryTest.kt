@@ -187,7 +187,7 @@ class AndroidGifExportRecoveryTest {
     }
 
     private fun gifOption(label: String) {
-        rule.onNodeWithContentDescription("Options").performClick()
+        rule.onNodeWithText("Options").performClick()
         rule.onNodeWithText(label).performClick()
     }
 

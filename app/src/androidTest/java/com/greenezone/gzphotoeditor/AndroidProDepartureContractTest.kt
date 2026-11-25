@@ -120,7 +120,7 @@ class AndroidProDepartureContractTest {
                 assertEquals(0, backCalls)
                 assertFalse(current.layers.single().visible)
             }
-            rule.onNodeWithContentDescription("Options").performClick()
+            rule.onNodeWithText("Options").performClick()
             rule.onNodeWithText("Save project").performClick()
             rule.onNode(hasSetTextAction()).performTextInput(name)
             rule.onNodeWithText("Save").performClick()
@@ -175,7 +175,7 @@ class AndroidProDepartureContractTest {
         try {
             openAndEdit()
             val saved = initial.copy(layers = listOf(initial.layers.single().copy(visible = false)))
-            rule.onNodeWithContentDescription("Options").performClick()
+            rule.onNodeWithText("Options").performClick()
             rule.onNodeWithText("Save project").performClick()
             rule.onNode(hasSetTextAction()).performTextInput(name)
             rule.onNodeWithText("Save").performClick()
@@ -191,7 +191,7 @@ class AndroidProDepartureContractTest {
             }
             // This harness records departure without unmounting: the explicit reset
             // still has a separate original baseline and cannot delete the named save.
-            rule.onNodeWithContentDescription("Options").performClick()
+            rule.onNodeWithText("Options").performClick()
             rule.onNodeWithText("Delete current work…").performClick()
             rule.onNodeWithText("Delete work").performClick()
             rule.runOnIdle {

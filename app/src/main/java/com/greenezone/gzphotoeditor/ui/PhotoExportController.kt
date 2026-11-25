@@ -161,6 +161,12 @@ internal class PhotoExportController(
         }
     }
 
+    fun adoptNativeDisposition(records: List<PendingExport>) {
+        val current = pending ?: return
+        records.firstOrNull { it.workspace == ExportWorkspace.PHOTO && it.id == current.id }
+            ?.let { pending = it }
+    }
+
     fun resolveNativeDraft(ownerId: String): Boolean = try {
         pending?.let { record ->
             journal.suppressNativeRestore(record, ownerId)?.let { pending = it }

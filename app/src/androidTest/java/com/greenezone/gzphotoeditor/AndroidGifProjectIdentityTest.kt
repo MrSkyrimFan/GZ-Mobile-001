@@ -341,7 +341,7 @@ class AndroidGifProjectIdentityTest {
     }
 
     private fun videoFile(item: String) {
-        rule.onNodeWithContentDescription("Options").performClick()
+        rule.onNodeWithText("Options").performClick()
         rule.onNodeWithText(item).performClick()
     }
 

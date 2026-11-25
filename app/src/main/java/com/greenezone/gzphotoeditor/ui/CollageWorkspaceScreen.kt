@@ -41,6 +41,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -137,7 +138,45 @@ internal data class CollageWorkspaceSession(
 private data class CollageTileEntry(
     val parentId: String, val tile: CollagePhoto, val sourceRevision: Long
 )
-private data class TileSourceChoice(val entry: CollageTileEntry, val keepEdits: Boolean)
+private data class TileSourceChoice(
+    val entry: CollageTileEntry, val keepEdits: Boolean,
+    val operationId: String = UUID.randomUUID().toString()
+)
+
+/** The registry key and callback both belong to one immutable picker launch. */
+@Composable
+private fun CollageAddPhotoPicker(
+    token: WorkspaceOperationToken?,
+    onResult: (WorkspaceOperationToken, List<Uri>) -> Unit
+) {
+    if (token == null) return
+    key(token.operationId) {
+        val launcher = rememberLauncherForActivityResult(
+            ActivityResultContracts.PickMultipleVisualMedia(CollageMath.MAX_PHOTOS)
+        ) { onResult(token, it) }
+        LaunchedEffect(token.operationId) {
+            try {
+                launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            } catch (_: Exception) { onResult(token, emptyList()) }
+        }
+    }
+}
+
+@Composable
+private fun CollageTileSourcePicker(choice: TileSourceChoice?,
+    onResult: (TileSourceChoice, Uri?) -> Unit) {
+    if (choice == null) return
+    key(choice.operationId) {
+        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
+            onResult(choice, it)
+        }
+        LaunchedEffect(choice.operationId) {
+            try {
+                launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            } catch (_: Exception) { onResult(choice, null) }
+        }
+    }
+}
 private data class PreparedTileSource(val choice: TileSourceChoice, val photo: CollagePhoto)
 
 private sealed interface CollageDestination {
@@ -666,45 +705,45 @@ internal fun CollageWorkspaceScreenContent(
         }
     }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(CollageMath.MAX_PHOTOS)
-    ) { uris ->
-        val token = mediaToken
-        mediaToken = null
-        if (token != null) addPhotos(uris, token)
+    CollageAddPhotoPicker(mediaToken) { token, uris ->
+        if (mediaToken?.operationId == token.operationId) {
+            mediaToken = null
+            addPhotos(uris, token)
+        }
     }
-    val replacePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        val choice = tileSourceChoice
-        tileSourceChoice = null
-        if (uri != null && choice != null && resolveTile(choice.entry, null) != null) {
-            preparingSources = true
-            scope.launch {
-                try {
-                    retainReadPermission(uri)
-                    withContext(Dispatchers.IO) { ImagePipeline.decode(resolver, uri, 256, 65_536L).recycle() }
-                    preparingSources = false
-                    if (resolveTile(choice.entry, null) == null) {
-                        conflictNotice = "The selected tile changed. Its current source and edits were preserved."
-                        return@launch
-                    }
-                    val next = choice.entry.tile.copy(uri = uri.toString(),
-                        edits = if (choice.keepEdits) choice.entry.tile.edits else EditDocument())
-                    if (choice.keepEdits) preparedRelink = PreparedTileSource(choice, next)
-                    else resolveTile(choice.entry, next)?.let {
-                        commit(it, forceSourceId = next.id)
-                        notice = "Photo replaced; its old adjustments were cleared."
-                    }
-                } catch (canceled: CancellationException) { throw canceled }
-                catch (_: OutOfMemoryError) { notice = "Not enough memory to open that photo. The tile is unchanged." }
-                catch (_: Exception) { notice = "That photo could not be opened. The original tile and edits are unchanged." }
-                finally { preparingSources = false }
+    CollageTileSourcePicker(tileSourceChoice) { choice, uri ->
+        // An obsolete null, duplicate or late result cannot consume a newer choice.
+        if (tileSourceChoice?.operationId == choice.operationId) {
+            tileSourceChoice = null
+            if (uri != null && resolveTile(choice.entry, null) != null) {
+                preparingSources = true
+                scope.launch {
+                    try {
+                        retainReadPermission(uri)
+                        withContext(Dispatchers.IO) { ImagePipeline.decode(resolver, uri, 256, 65_536L).recycle() }
+                        preparingSources = false
+                        if (resolveTile(choice.entry, null) == null) {
+                            conflictNotice = "The selected tile changed. Its current source and edits were preserved."
+                            return@launch
+                        }
+                        val next = choice.entry.tile.copy(uri = uri.toString(),
+                            edits = if (choice.keepEdits) choice.entry.tile.edits else EditDocument())
+                        if (choice.keepEdits) preparedRelink = PreparedTileSource(choice, next)
+                        else resolveTile(choice.entry, next)?.let {
+                            commit(it, forceSourceId = next.id)
+                            notice = "Photo replaced; its old adjustments were cleared."
+                        }
+                    } catch (canceled: CancellationException) { throw canceled }
+                    catch (_: OutOfMemoryError) { notice = "Not enough memory to open that photo. The tile is unchanged." }
+                    catch (_: Exception) { notice = "That photo could not be opened. The original tile and edits are unchanged." }
+                    finally { preparingSources = false }
+                }
             }
         }
     }
     fun launchTileSource(choice: TileSourceChoice) {
-        if (busy() || resolveTile(choice.entry, null) == null) return
+        if (busy() || tileSourceChoice != null || resolveTile(choice.entry, null) == null) return
         tileSourceChoice = choice
-        replacePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
     fun chooseTileSource(keepEdits: Boolean) {
         val entry = tileEntry() ?: return
@@ -713,13 +752,12 @@ internal fun CollageWorkspaceScreenContent(
         if (keepEdits) launchTileSource(choice) else replaceConfirmation = choice
     }
     fun openMulti() {
-        if (busy() || cancelLayout()) return
+        if (busy() || mediaToken != null || cancelLayout()) return
         if (latestDocument.photos.size >= CollageMath.MAX_PHOTOS) {
             notice = "Maximum of twenty photos reached."
             return
         }
         mediaToken = WorkspaceOperationToken(documentId, contentRevision)
-        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
 
     editingTile?.let { entry ->

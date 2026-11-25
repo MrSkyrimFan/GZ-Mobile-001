@@ -116,8 +116,8 @@ class AndroidGifPreparationProfileTest {
             val expectedDelays = GifVideoMath.frameDelaysMs(clip)
             // Support the unchanged application's visible action for baseline measurement,
             // and the B1 authoritative Options route without touching encoder settings.
-            val options = rule.onAllNodesWithContentDescription("Options").fetchSemanticsNodes().isNotEmpty()
-            if (options) rule.onNodeWithContentDescription("Options").performClick()
+            val options = rule.onAllNodesWithText("Options").fetchSemanticsNodes().isNotEmpty()
+            if (options) rule.onNodeWithText("Options").performClick()
             val began = SystemClock.elapsedRealtimeNanos()
             if (options) rule.onNodeWithText("Export GIF…").performClick()
             else rule.onNodeWithText("Save GIF").performClick()

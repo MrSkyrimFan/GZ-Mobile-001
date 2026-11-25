@@ -58,7 +58,7 @@ class AndroidGifWorkspacePlaybackTest {
     }
 
     private fun exportGif() {
-        rule.onNodeWithContentDescription("Options").performClick()
+        rule.onNodeWithText("Options").performClick()
         rule.onNodeWithText("Export GIF…").performClick()
     }
 

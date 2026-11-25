@@ -93,7 +93,7 @@ class ProAndGifExportFailureTest {
         previewError = "Source for image layer 1 is unavailable",
         failure = "Export failed"
     ) {
-        rule.onNodeWithContentDescription("Options").performClick()
+        rule.onNodeWithText("Options").performClick()
         rule.onNodeWithText("Export image…").performClick()
         rule.onNodeWithText("Save JPG").performClick()
     }
@@ -105,7 +105,7 @@ class ProAndGifExportFailureTest {
         previewError = "Photo 1 unavailable",
         failure = "GIF export failed"
     ) {
-        rule.onNodeWithContentDescription("Options").performClick()
+        rule.onNodeWithText("Options").performClick()
         rule.onNodeWithText("Export GIF…").performClick()
     }
 }

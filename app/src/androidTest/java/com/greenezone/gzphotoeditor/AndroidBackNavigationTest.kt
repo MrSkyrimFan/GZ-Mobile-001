@@ -80,7 +80,7 @@ class AndroidBackNavigationTest {
                 "photo" -> ProjectStore.delete(context, name)
                 "pro" -> ProStore.delete(context, name)
                 "collage" -> CollageStore.delete(context, name)
-                "gif" -> GifStore.delete(context, name)
+                "gif" -> GifStore.deleteProject(context, name)
             }
         }
     }
