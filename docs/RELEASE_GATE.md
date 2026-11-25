@@ -9,10 +9,35 @@ Lance has reported the 0.12.10 phone results: unmentioned supplied checks worked
 - [ ] F02: safe dirty departures in Regular/Pro/Collage, correct Save/Discard/Cancel, failed-save retention and transient/child-route ownership; verify GIF's shared contract.
 - [ ] F03: actual 120–300-second phone GIF Save workload measured and improved with full output fidelity and existing CI gates preserved.
 - [ ] F04–F06: common top-right Options, deduplicated major commands, shared header and Undo/Redo arrows; Regular More/Create collage/Histogram UI removed as requested.
-- [ ] Codex answers all 25, supplies its complete operative roadmap and asks exactly 50 questions.
-- [ ] ChatGPT answers all 50, reconciles canonical documents and publishes the final Codex resume instruction before app engineering restarts.
+- [x] Codex answered all 25, supplied full two-checkpoint roadmap/child snapshots and all 77 mappings, and asked exactly 50 questions — [PR #35](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/35), df0faa23c4908bfd847410c84798a8c3402b27af.
+- [x] ChatGPT answered all 50 and reconciled canonical documents — [answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) and [resume instruction](coordination/ENGINEERING_RESUME_2026-11-24.md).
+- [ ] Owner relays the final prompt; Codex reads both committed documents before application engineering starts. Record activation in the ledger; this is the existing exchange handoff, not another approval/question cycle.
 
 No new app build or CI rerun is required for the current documentation-only exchange. Existing receipts remain immutable evidence; later app corrections need normal candidate/merge qualification.
+
+## Agreed B1/B2 qualification exits
+
+The [canonical interaction contract](PRODUCT_SPEC.md#agreed-interaction-contract--stage-3) and [Stage 3 answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) define expected behavior; these unchecked exits are future engineering work.
+
+- [ ] Common header/Options and history arrows work in every current workspace and both GIF routes, empty/loaded/busy; one major-command location; no Regular More/Create collage/Histogram entry.
+- [ ] New/Open/project Save/Save as/Export/Help dispatch the right native owner. Save identity/collisions and clean/dirty states are correct; Export never falsely saves native edits.
+- [ ] A free Collage tap selects the hit tile and toggles once, both ways; margin taps preserve selection. Tool drag/paint/crop/pinch/cancel does not toggle; header/tool chrome hides together and active guides stay usable.
+- [ ] Every dirty Back/mode/New/Open/replace route is safe, including Regular with a prior workspace, Pro and parent Collage; GIF common consistency is separately verified. Clean exits do not prompt falsely.
+- [ ] Child Back resolves Apply/Discard/Cancel and returns only to parent. A child mode departure stages child then parent resolution; parent Cancel/failed save preserves provisional work. Standalone photo Save is distinct from Apply and parent Save.
+- [ ] Gesture cancellation restores full document/history in Draw/crop/text/shape/privacy paths; successful edits commit once. Transient Back, IME/menu/dialog/picker, half-cancel and rapid repeated commands preserve ownership.
+- [ ] Regular→Pro Yes/No/Resume/Cancel and explicit source/target Discard follow the recorded transaction; discarded snapshots are not secretly transferred, failed target preparation does not lose either parent.
+- [ ] Empty Pro setup has an honest unavailable Save and protected Discard setup/Cancel; named zero-layer persistence remains R2, not falsely claimed complete.
+- [ ] Saved-byte/source protection, dense-save refusal, identity across Undo, delayed/duplicate callbacks, named reopen and independent image/GIF output remain correct.
+- [ ] Shared-shell accessibility targets: 48dp touch, 320dp narrow/landscape/split layouts, through 200% fonts, real TalkBack/keyboard navigation and accessible reveal/disabled reasons.
+- [ ] B2 records the actual/equivalent phone workload and disjoint queue/decode/render/palette/encode/stage/provider/UI times; fixes a measured bottleneck at unchanged requested output. Keep raw samples and unknowns explicit.
+- [ ] B2 preserves 6s sampled-motion/15s Save fixture gates and existing rotated reference assertions. Before patch evaluation, name workload-specific absolute/relative/fidelity/memory/response targets; 250ms request acknowledgement is an engineering target, not a worker-stop guarantee.
+- [ ] Final application candidate and merged application pass required JVM/API29/API35/build/signing, with exact case identities/results, source/run/artifact/byte-hash identity and independent outputs. Preserve original failures.
+- [ ] Focused owner checks validate changed interactions and actual GIF phone performance on the delivered coherent candidate. This post-fix phone confirmation follows delivery; it cannot be a prerequisite for producing the artifact needed to test.
+
+Historical tests using removed File/More/Histogram UI routes must migrate to the authorized command/absence contract with a traceable assertion mapping; preserve numerical/output and unrelated regression checks. Do not delete failing coverage, weaken 6s/15s gates or retry unchanged application failures.
+
+A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. Engineering may continue independent agreed work. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
+
 
 ## Current engineering qualification — PR #31 / 0.12.10 Test
 
@@ -25,7 +50,7 @@ The named R29-01/R29-02 Eraser correction and observed GIF Save performance fail
 - [x] The merged API35 emulator-exercised APK is independently identified as 0.12.10 / code 22 / phonetest.v22; Android v2 signature and SHA-256 are recorded in the execution receipt.
 - [x] Owner has reported the focused 0.12.10 phone pass: unmentioned supplied checks worked. The named exceptions and requested changes are open in the current gate above; broader device/process-loss and workspace acceptance remain separate.
 
-Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. A1 alignment is the selected current task; R1.1/R1.2 remain queued after the agreed owner-correction sequence.
+Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) · [merged-main run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512). Later documentation-only commits record these results without constituting new app/test/Gradle/CI inputs or a new qualified binary. A1 decisions are complete; B1 is selected on owner-relayed activation, independent measured B2 may overlap, and R1.1/R1.2 remain queued.
 
 ### Retained PR #29 checkpoint — historical, not the current download
 
