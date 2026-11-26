@@ -414,26 +414,39 @@ class AndroidU1ProcessRecoveryTest {
     private fun awaitActiveWork(
         store: NativeWorkStore, missing: String, matches: (NativeWorkState) -> Boolean
     ): NativeWorkState {
-        val until = SystemClock.elapsedRealtime() + 12_000L
-        do {
-            val current = runBlocking {
-                val catalog = ok(store.recover())
-                catalog.active?.let { selected ->
-                    when (val loaded = store.load(selected.ref)) {
-                        is NativeWorkResult.Ok -> loaded.value.state
-                        is NativeWorkResult.Failed -> {
-                            // The host may acknowledge the layer edit after this poll read the catalog.
-                            // Retry that exact revision race using the next authoritative catalog.
-                            if (loaded.reason != NativeWorkFailure.STALE) error("Native custody failed: ${loaded.reason}")
-                            null
+        var matched: NativeWorkState? = null
+        var observed: NativeWorkState? = null
+        try {
+            // Discard only readies a Compose effect. Keep its clock moving while
+            // waiting for the exact durable root from the action.
+            compose.waitUntil(12_000L) {
+                val current = runBlocking {
+                    val catalog = ok(store.recover())
+                    catalog.active?.let { selected ->
+                        when (val loaded = store.load(selected.ref)) {
+                            is NativeWorkResult.Ok -> loaded.value.state
+                            is NativeWorkResult.Failed -> {
+                                // The host may acknowledge the layer edit after this poll read the catalog.
+                                // Retry that exact revision race using the next authoritative catalog.
+                                if (loaded.reason != NativeWorkFailure.STALE) error("Native custody failed: ${loaded.reason}")
+                                null
+                            }
                         }
                     }
                 }
+                observed = current
+                if (current != null && matches(current)) matched = current
+                matched != null
             }
-            if (current != null && matches(current)) return current
-            SystemClock.sleep(80)
-        } while (SystemClock.elapsedRealtime() < until)
-        error(missing)
+        } finally {
+            if (matched == null) {
+                val last = observed
+                Log.i(TAG, "pending: $missing, mode=${last?.mode}, root=${last?.id}, " +
+                    "named=${last?.pro?.saveTarget?.savedRef?.name}")
+                Log.i(TAG, compose.onRoot().printToString())
+            }
+        }
+        return requireNotNull(matched)
     }
 
     private fun waitText(label: String) {
