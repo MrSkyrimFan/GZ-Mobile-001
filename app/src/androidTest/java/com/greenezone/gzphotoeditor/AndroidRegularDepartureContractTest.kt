@@ -235,6 +235,40 @@ class AndroidRegularDepartureContractTest {
         return requireNotNull(ProjectStore.loadNamed(fixture.context, name))
     }
 
+    @Test fun u1RegularToProOffersOneFourChoiceSurfaceAndCancelKeepsTheEdit() {
+        withEditor { fixture ->
+            openPhoto(fixture)
+            flip()
+            rule.onNodeWithContentDescription("Choose editing workspace").performTouchInput { click(center) }
+            rule.onNodeWithText("Photo editing Pro", substring = false).performTouchInput { click(center) }
+
+            val dialog = hasAnyAncestor(isDialog())
+            rule.onNode(hasText("Bring current work", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Discard", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Save current work", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Cancel", substring = false) and dialog).performTouchInput { click(center) }
+            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+        }
+    }
+
+    @Test fun u1RegularOptionsSeparateDeleteFromResetAndKeepNamedProject() {
+        withEditor { fixture ->
+            openPhoto(fixture)
+            val earlier = saveAs(fixture, "Retained before delete")
+            flip()
+            rule.onNodeWithTag("workspace-options").performTouchInput { click(center) }
+            rule.onNodeWithTag("workspace-command-reset").assertIsEnabled()
+            rule.onNodeWithTag("workspace-command-delete").assertIsEnabled()
+                .performTouchInput { click(center) }
+            rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog()))
+                .performTouchInput { click(center) }
+            rule.onNodeWithTag("photo-tools").assertDoesNotExist()
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+            assertEquals(earlier, ProjectStore.loadNamed(fixture.context, "Retained before delete"))
+        }
+    }
+
     @Test fun canceledAndDuplicatePickerResultsCannotReplaceOrCancelANewerImport() {
         withEditor { fixture ->
             openPhoto(fixture)
