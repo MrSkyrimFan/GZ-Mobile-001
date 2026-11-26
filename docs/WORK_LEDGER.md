@@ -1,6 +1,26 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 25, 2026.** [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43) qualifies **0.12.13 Test / code 25 / phonetest.v25**. Candidate and merge passed JVM, build, signing, and **279/279 on API29 and API35**. R1.2 is next. Handset, B2/F03, RV5, workspace and release gates remain open. See the [R1.1 receipt below](#completed-r11--bounded-saved-projects-and-pro-rv4).
+> **Current work — November 25, 2026.** Qualified application: [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43), **0.12.13 Test / code 25 / phonetest.v25**, app merge **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**; candidate and merge each passed JVM/build/signing and **279/279 on API29 and API35**. The [latest owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and opens the Pro blend/tool-ownership, shared controls, Delete/Reset and symmetric switching corrections. **U1 is next**, including its minimum R1.2/S06 custody dependency; the full remaining roadmap is preserved. B2 numeric/F03 workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [Execution ledger](WORK_LEDGER.md#next-engineering-action--u1-coherent-workspace-workflow).
+
+## Active owner correction — U1
+
+The [0.12.13 owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied phone instructions 1–5. O25-01–O25-06 authorize specific blend/input, Pro tool-ownership, shared-control, Delete/Reset and bidirectional transfer corrections. [PRODUCT_SPEC](PRODUCT_SPEC.md) and [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md) replace conflicting old interaction rules. This docs-only reconciliation does not implement the fixes or change the qualified APK.
+
+**Status: Blueprint reconciled — ready for owner to relay Codex U1 prompt.** The next decisive action is the exact-baseline reproduction and project-instruction alignment in the [finite Codex handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md). No new 25/50 cycle or full historical audit.
+
+| Slice | Observable exit and owner boundary | Dependency / disposition |
+| --- | --- | --- |
+| U1-01 | Pro Blend accepts actual taps on all16 supported modes, records the selected layer/value once, and matches history/native reopen/decoded output; no dead-looking no-backdrop or busy chips | Pro UI owner; first establish source-condition red cases on b0f0d0e5e2d879ddddedede442ba92ef30b69a78. Exact owner state remains unknown. |
+| U1-02 | Pro exposes layer/mask/vector/paint/adjustment workflows, with no copied top-level Regular development deck or ambiguous Draw entry; native legacy edits remain usable | Same Pro owner; can proceed beside custody work. Full P01–P16 scope is retained, not claimed delivered by labels. |
+| U1-03 | Same Tools/Options/Undo-Redo anchors and unique command homes in all current contexts; Delete truly empties, Reset retains media and is undoable; no resurrection or wrong-owner changes | Shared commands/header owner plus serialized screen adapters. Preserve child transactions, insets/tap repair and output-copy ownership. |
+| U1-04 | One four-choice Regular↔Pro surface, no named save for Bring, displaced draft protection, repeated native lineage, final Save from either mode and cold reopen with editable Pro layers | Minimum Regular+Pro acknowledged draft/lineage slice of R1.2/S03/S06 required before transfer commits. One host/coordinator writer; no all-R2 prerequisite. |
+| U1-05 | One coherent final candidate and exact app merge qualified with full JVM/API29/API35/build/signing, inherited-test mapping, failure receipts, APK hash/signature and focused phone script | Integrate U1-01–04; independent code/evidence review. Owner confirmation follows artifact delivery. |
+
+All current-source and reproduction references are in the report/handoff. Preserve PR #41 busy selection, Collage insets/free-tap and nested save safety; PR #43 metadata-only listing/selected decode/migration/RV4; earlier Eraser/crop/cancel and GIF controls/fidelity. Passing unmentioned behavior is not permission for an unrelated refactor. New implementation may reuse protected code while preserving its observable contract.
+
+**Independent remaining work:** B2's fixed numeric and matched-workload exits/F03 quantitative closure; RV5 provider stage/retry recovery; the rest of R1.2 and R1; every R2–R11 child. A missing device sample blocks only its affected performance conclusion. U1's linked-session draft slice does not close all workspace recovery or complete S06's wider revision/bundle scope.
+
+The completed qualification sections below preserve their exact historical results, failures and baselines. Any old “next” wording inside a retained checkpoint describes that checkpoint; this active section and the final next-action section control dispatch.
 
 ## Completed R1.1 — bounded saved projects and Pro RV4
 
@@ -99,7 +119,7 @@ The final response supplies the actual merged Stage 3 commit/PR. The resume inst
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next engineering package is R1.2 recoverable Regular working drafts.** R1.1 saved-project durability and Pro RV4 are engineering-qualified in [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43). All 77 capability families and remaining R1–R11 children retain their agreed scope. Four explicit workspace locks precede Video. Final bilingual and customer onboarding follow acceptance of all five workspaces. Play Console setup follows the working app and Greenezone website.
+**Next engineering package is U1: coherent workspace workflow.** The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) select working Pro blend controls, distinct photographic/layered workflows, common control anchors, Delete versus Reset and one four-choice Regular↔Pro switch. Bring requires a minimum durable Regular/Pro working-session and native-lineage slice from R1.2/S06. Remaining R1.2/R1 and every R2–R11 child remain required. R1.1/RV4 qualification, all 77 families, four locks before Video, all-five acceptance before final bilingual onboarding and app plus website before Console are retained.
 
 The following scope/assignment and dated execution notes preserve the B1 evidence chain. The current result is the qualification summary above; old failing candidates are historical evidence, not reopened work.
 
@@ -162,7 +182,7 @@ The 120–300-second phone report stays open. Capture the source/equivalent, rec
 Missing owner-specific data holds only that reproduction/closure. After the current review gate, continue independent R1.1 work when unavailable phone data is the remaining blocker; do not call F03 fixed from the small fixture. Engineer a coherent candidate before requesting its post-fix owner confirmation—confirmation cannot be a prerequisite for delivering the candidate needed for that check. Do not claim a fully fixed wave while a reproduced high-impact regression is unresolved. If phone data remains unavailable, record F03 explicitly open and provide a focused candidate only when it enables the needed observation; avoid serial partial builds.
 
 
-### Owner phone result and bounded follow-up
+### Historical 0.12.10 owner phone result and bounded follow-up
 
 Lance reports **unmentioned supplied phone checks worked**. Record those as owner-reported pass and retain all PR #29/#31 evidence. The new exceptions/requests are:
 
@@ -177,7 +197,7 @@ Lance reports **unmentioned supplied phone checks worked**. Record those as owne
 
 Phone/Android and exact source remain unknown. Lance subsequently identified the pre-picker wait, approximately 2–3-second trim and otherwise default settings. The physical performance report remains open even though the small CI fixture passed. Scoped phone success does not lock whole workspaces, establish true process-loss recovery or authorize release.
 
-**Agreed order:** B1 interaction correction; independent measured B2 GIF work; R1.1 then R1.2 and remaining R1; all R2–R11 children retained. The final Stage 3 owner-relayed prompt activated the completed B1 work; the current successor/review gate controls the next dispatch. The new report is the reason for reopening only the affected touch/navigation/performance behavior; completed audits are not repeated.
+**Historical Stage 3 order:** B1 interaction correction; independent measured B2 GIF work; R1.1 then R1.2 and remaining R1. U1 now precedes the remaining R1 work and moves forward only its required custody slice; all R2–R11 children are retained. The final Stage 3 owner-relayed prompt activated the completed B1 work; the current successor/review gate controls the next dispatch. The new report is the reason for reopening only the affected touch/navigation/performance behavior; completed audits are not repeated.
 
 Updated 2026-11-25. Read with [roadmap](GZ_ENGINEERING_ROADMAP.md), [capability inventory](CAPABILITY_MATRIX.md) and [release gates](RELEASE_GATE.md). This ledger controls execution order; the linked engineering records control run results. Historical green counts do not close newly reported defects.
 
@@ -240,7 +260,8 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 | Order | Package / completion target | Prerequisite and current disposition |
 | --- | --- | --- |
-| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, saved repeated exchange and portable bundles | R1.1 engineering-qualified; next R1.2, while B2's numeric/matched-sample exits and F03 remain open without blocking independent work; S01–S08 remain open/partial |
+| U1 | Named owner workspace corrections: blend, tool roles, common controls, Delete/Reset and four-choice live exchange | Current; minimum R1.2/S03/S06 custody included only as necessary. O25 report and blueprint control. |
+| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, live/saved repeated exchange and portable bundles | R1.1 qualified; after U1 finish remaining R1.2/all-workspace recovery and other R1 children, including RV5. B2/F03 stays independent; S01–S08 remain open/partial |
 | R2 | Pro layer tree/groups/clipping and memory-bounded reference compositor | R1 contracts; preserve legacy pixels |
 | R3 | Full Pro selection, paint, retouch, shapes, transforms, effects and declared interchange | R2 foundation |
 | R4 | Offline Subject & Background, refine/removal and reshaping | R2/R3 mask/geometry foundation; no runtime AI |
@@ -254,18 +275,22 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next engineering action — R1.2 recoverable working drafts
+## Next engineering action — U1 coherent workspace workflow
 
-Scope R1.2 against the consumed Stage 3 contract and the existing roadmap. Cover completed-edit persistence, atomic bounded history, and true new-process recovery of the Regular document, source, draft history, clean baseline, route and child state. Reuse the R1.1 and B1 custody contracts. B2/F03 and the formal device, workspace and release gates remain separate.
+After the owner relays the committed [Codex handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md), reconcile actual applicable project-local instructions, verify live main versus the recorded documentation/app refs, and name one writer per shared file. Reproduce the supported blend/input conditions and old Delete/switch behavior before replacing them.
+
+Implement the finite U1 slices above using the detailed blueprint; do not stop at a new menu label, a one-way bitmap transfer or an in-memory draft. Final Save from either workspace must preserve linked native editability. Keep documentation/evidence updates coupled to the exact code and actual measured exits. Deliver one coherent corrected APK after candidate/merge qualification; no new APK is made for this documentation change.
+
+Then complete remaining R1.2: acknowledged completed edits, atomic bounded history, actual new-process restore of document/source/baselines/route/child state, expanded to all workspace owners. The minimal U1 dependency must be subtracted accurately from what remains, not used to mark the whole package complete. Continue ordered R1 and R2–R11 without another arbitrary alignment cycle.
 
 ## Pending owner/device decisions
 
-- The 0.12.10 Test phone report has been received: unmentioned supplied checks worked; F01/F02/F04–F06 now have bounded B1 engineering qualification with focused owner confirmation pending; F03 and B2's unmet exits remain open. Follow the alignment handoff. Do not ask Lance to repeat the whole successful script or draw 160 strokes by hand. Any later handset request must identify the remaining device-specific observation or a concrete regression risk.
+- Latest 0.12.13 supplied instructions 1–5: unmentioned checks are owner-reported passes and protected. New O25/U1 changes need only their focused handset observations after qualification. Broad device/process-loss/provider cases and unmeasured GIF performance are separate; do not request the complete passed script again.
 - Four formal pre-Video workspace locks remain open; a limited successful phone session does not close the full product inventory.
 - Shipping device/performance, RAW-camera and interchange support tiers are explicit later decisions, informed by implementation evidence.
 - Greenezone website completion is an external dependency, not app-engineering scope. Play Console setup waits for that plus the functioning app; no account work now.
-- Exact production signing/account/listing and public release need Lance at R11. After the current review is relayed and reconciled with Lance's directions, routine agreed engineering continues under the retained authority without another unnecessary permission cycle.
+- Exact production signing/account/listing and public release need Lance at R11. After the committed U1 handoff is relayed and read, routine agreed engineering continues under the retained authority without another unnecessary permission cycle.
 
 ## Failure and drift rule
 
-For a failed check, record the exact symptom and phase, causal hypothesis and bounded next correction. Do not retry unchanged application failures, relax an established budget for green, replay passed intake, or call a helper result full workflow acceptance. Reopen settled work only for a new failure, relevant dependency change, weaker evidence or an owner report, with the reason recorded.
+For a failed check, record the exact symptom and phase, causal hypothesis and bounded next correction. Do not retry unchanged application failures, relax an established budget for green, replay passed intake, or call a helper result full workflow acceptance. The latest owner protects unmentioned passed behavior. Change it only within the named U1/required-dependency authorization or subsequent owner direction; record unrelated concerns without modifying them. Preserve meaningful regression checks for authorized changes.

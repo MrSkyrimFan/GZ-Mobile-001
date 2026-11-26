@@ -1,49 +1,51 @@
 # GZ Editor Pro engineering and release gates
 
-> **Current work — November 25, 2026.** [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43) qualifies **0.12.13 Test / code 25 / phonetest.v25**. Candidate and merge passed JVM, build, signing, and **279/279 on API29 and API35**. R1.2 is next. Handset, B2/F03, RV5, workspace and release gates remain open. See the [exact R1.1 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
+> **Current work — November 25, 2026.** Qualified application: [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43), **0.12.13 Test / code 25 / phonetest.v25**, app merge **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**; candidate and merge each passed JVM/build/signing and **279/279 on API29 and API35**. The [latest owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and opens the Pro blend/tool-ownership, shared controls, Delete/Reset and symmetric switching corrections. **U1 is next**, including its minimum R1.2/S06 custody dependency; the full remaining roadmap is preserved. B2 numeric/F03 workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [Execution ledger](WORK_LEDGER.md#next-engineering-action--u1-coherent-workspace-workflow).
 
-## Current owner report and alignment gate
+## Latest owner evidence and U1 correction gate
 
-Lance has reported the 0.12.10 phone results: unmentioned supplied checks worked, with the exceptions below. See the [owner phone report and Codex alignment handoff](CODEX_ALIGNMENT_HANDOFF_2026-11-24.md). This updates scoped handset evidence; it does not grant formal workspace locks or commercial acceptance.
+The [0.12.13 phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied instructions 1–5 as passed and protects them. O25-01–O25-06 are current exceptions/new requirements. Do not keep a blanket “phone confirmation pending” over credited checks or turn that scoped statement into device-tier, numerical performance or formal workspace acceptance.
 
-- [x] Owner phone report received and unmentioned supplied checks credited as owner-reported pass.
-- [ ] F01 (B1 engineering-qualified; owner confirmation pending): parent Collage and selected-tile UI reliably hide/show with one tap; active tools/guides remain usable.
-- [ ] F02 (B1 engineering-qualified; owner confirmation pending): safe dirty departures in Regular/Pro/Collage, correct Save/Discard/Cancel, failed-save retention and transient/child-route ownership; verify GIF's shared contract.
-- [ ] F03: actual 120–300-second phone GIF Save workload measured and improved with full output fidelity and existing CI gates preserved.
-- [ ] F04–F06 (B1 engineering-qualified; owner confirmation pending): common top-right Options, deduplicated major commands, shared header and Undo/Redo arrows; Regular More/Create collage/Histogram UI removed as requested.
-- [x] Codex answered all 25, supplied full two-checkpoint roadmap/child snapshots and all 77 mappings, and asked exactly 50 questions — [PR #35](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/35), df0faa23c4908bfd847410c84798a8c3402b27af.
-- [x] ChatGPT answered all 50 and reconciled canonical documents — [answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) and [resume instruction](coordination/ENGINEERING_RESUME_2026-11-24.md).
-- [x] Owner relayed the final prompt; Codex read all 50 answers, the resume instruction and canonical records before engineering (November 25). Activation is recorded in the ledger.
+- [x] Latest owner report received; unmentioned supplied phone checks credited with their actual scope.
+- [x] Earlier A1 25/50 exchange, owner relay and required reads completed. No new alignment questionnaire or activation hold.
+- [x] R1.1/RV4 and inherited B1 follow-up retain their exact candidate/merge engineering receipts.
+- [ ] U1-01: all advertised Pro blend choices work through actual pointer input, correct target/property/history/native reopen and independently decoded output; explicit no-backdrop/busy/scroll/stale cases.
+- [ ] U1-02: Regular photographic and Pro layer/mask/vector/paint/adjustment workflows have clear distinct roles; no duplicate generic development deck; legacy capabilities and saved data remain intact.
+- [ ] U1-03: common anchored Tools/Options/Undo-Redo and context layout across empty/loaded/busy current workspaces; one major command home; distinct Delete and undoable retained-media Reset, including child/GIF ownership and no resurrection.
+- [ ] U1-04: one four-choice Regular↔Pro surface both directions, no named Save for Bring, no Resume/Yes-No cascade, displaced drafts safe, real native repeated exchange, final linked Save from either mode and cold reopen after new-process loss.
+- [ ] U1-05: complete changed-candidate and exact app-merge JVM/API29/API35/build/signing qualification, inherited-assertion mapping, independent review, failure receipts and exact APK identity; followed by the focused owner run.
+- [ ] B2 numeric/matched-sample and F03 quantitative phone-workload closure; no new measurements supplied by the latest generic pass.
+- [ ] RV5 stage/retry recovery and the full remaining R1–R11/device/owner/release gates.
 
-The documentation-only exchange needed no app rebuild. [PR #37](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/37) now has complete candidate/merge JVM/build/signing and **258/258 per API29/API35** plus exact phone-APK verification. [Bounded engineering evidence and retained failures](B1_WORKSPACE_VERIFICATION.md). Lance clarified F03 as a pre-picker wait on a 2–3 second clip with otherwise default options. The two measured optimizations improved representative preparation with unchanged tested output; the fixed preparation/response targets are not fully met, and the matched cold/warm and actual-phone closure remain open.
+[WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md#u1-acceptance--finite-observable-and-cumulative) defines U1's complete observable matrix. Its minimum R1.2/S06 prerequisite does not close all durable drafts or full repeated-revision/bundle scope. The owner must be able to edit native Pro layers after switching and saving at the end; an in-memory old stack or flattened-only saved derivative fails.
 
-## Agreed B1/B2 qualification exits
+## Retained B1/B2 coverage and remaining evidence
 
-The [canonical interaction contract](PRODUCT_SPEC.md#agreed-interaction-contract--stage-3) and [Stage 3 answers](coordination/CHATGPT_RESPONSE_TO_50_2026-11-24.md) define expected behavior; these unchecked exits remain open until their stated evidence is recorded.
+The amended [canonical contract](PRODUCT_SPEC.md#agreed-interaction-contract--stage-3) and [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) govern current behavior. Original Stage 3 answers remain dated evidence. Composite coverage rows below include broader cases beyond the supplied phone checks; an unchecked row does not revoke the newly credited basic behavior. Use existing receipts and target only changed/risk-bearing paths rather than rerunning completed audits.
 
 - [ ] Common header/Options and history arrows work in every current workspace and both GIF routes, empty/loaded/busy; one major-command location; no Regular More/Create collage/Histogram entry.
 - [ ] New/Open/project Save/Save as/Export/Help dispatch the right native owner. Save identity/collisions and clean/dirty states are correct; Export never falsely saves native edits.
 - [ ] A free Collage tap selects the hit tile and toggles once, both ways; margin taps preserve selection. Tool drag/paint/crop/pinch/cancel does not toggle; header/tool chrome hides together and active guides stay usable.
-- [ ] Every dirty Back/mode/New/Open/replace route is safe, including Regular with a prior workspace, Pro and parent Collage; GIF common consistency is separately verified. Clean exits do not prompt falsely.
+- [ ] Every ordinary dirty Back/New/Open/replace/other-workspace route retains its safe transaction. Top-level Regular↔Pro now uses U1's four choices, including clean loaded documents needing a Bring/fresh choice; truly empty work does not prompt falsely.
 - [ ] Child Back resolves Apply/Discard/Cancel and returns only to parent. A child mode departure stages child then parent resolution; parent Cancel/failed save preserves provisional work. Standalone photo Save is distinct from Apply and parent Save.
 - [ ] Gesture cancellation restores full document/history in Draw/crop/text/shape/privacy paths; successful edits commit once. Transient Back, IME/menu/dialog/picker, half-cancel and rapid repeated commands preserve ownership.
-- [ ] Regular→Pro Yes/No/Resume/Cancel and explicit source/target Discard follow the recorded transaction; discarded snapshots are not secretly transferred, failed target preparation does not lose either parent.
+- [ ] U1 replaces the historical Yes/No/Resume interaction with symmetric Discard / Save current work / Bring current work / Cancel; discarded snapshots are not transferred and failed preparation loses neither parent. Preserve the old tests' source/cancellation safety intent in mapped replacement assertions.
 - [ ] Empty Pro setup has an honest unavailable Save and protected Discard setup/Cancel; named zero-layer persistence remains R2, not falsely claimed complete.
 - [ ] Saved-byte/source protection, dense-save refusal, identity across Undo, delayed/duplicate callbacks, named reopen and independent image/GIF output remain correct.
 - [ ] Shared-shell accessibility targets: 48dp touch, 320dp narrow/landscape/split layouts, through 200% fonts, real TalkBack/keyboard navigation and accessible reveal/disabled reasons.
 - [ ] B2 records the actual/equivalent phone workload and disjoint queue/decode/render/palette/encode/stage/provider/UI times; fixes a measured bottleneck at unchanged requested output. Keep raw samples and unknowns explicit.
 - [ ] B2 preserves 6s sampled-motion/15s Save fixture gates and existing rotated reference assertions. Before patch evaluation, name workload-specific absolute/relative/fidelity/memory/response targets; 250ms request acknowledgement is an engineering target, not a worker-stop guarantee.
 - [x] PR #37 final application candidate and merged application pass required JVM/API29/API35/build/signing, with exact case identities/results, source/run/artifact/byte-hash identity and independent outputs. Preserve original failures.
-- [ ] Focused owner checks validate changed interactions and actual GIF phone performance on the delivered coherent candidate. This post-fix phone confirmation follows delivery; it cannot be a prerequisite for producing the artifact needed to test.
+- [ ] Focused owner checks validate U1's newly changed interactions after the coherent qualified candidate is delivered. The unmentioned supplied v25 checks remain credited; additional GIF numerical/matched-workload evidence is a separate outstanding observation.
 
-Historical tests using removed File/More/Histogram UI routes must migrate to the authorized command/absence contract with a traceable assertion mapping; preserve numerical/output and unrelated regression checks. Do not delete failing coverage, weaken 6s/15s gates or retry unchanged application failures.
+Historical tests using removed File/More/Histogram, old Yes/No/Resume or reset-as-Delete routes must migrate only to the specifically authorized contract with a traceable assertion mapping; preserve numerical/output and unrelated safety regression checks. Do not delete failing coverage, weaken 6s/15s gates or retry unchanged application failures.
 
-A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. After the current successor/review gate, engineering may continue independent agreed work. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
+A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. After the owner relays the U1 handoff, engineering continues independent authorized work. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
 
 
 ## Current engineering qualification — PR #43 / 0.12.13 Test
 
-Regular saved-project migration, metadata listing, selected Open and Pro unreadable deletion have bounded engineering qualification. The prior B1 handset script, physical migration coverage, B2/F03 and formal workspace and release gates each retain their own verification. See the [exact R1.1 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
+Regular saved-project migration, metadata listing, selected Open and Pro unreadable deletion have bounded engineering qualification. The latest unmentioned supplied phone checks are credited. Physical same-ID migration, broader device cases, quantitative B2/F03 and formal workspace/release gates retain separate evidence requirements. See the [exact R1.1 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
 
 ## Retained B1 engineering qualification — PR #37 / 0.12.11 Test
 
@@ -51,13 +53,13 @@ Regular saved-project migration, metadata listing, selected Open and Pro unreada
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next engineering package is R1.2 recoverable Regular working drafts.** R1.1 saved-project durability and Pro RV4 are engineering-qualified in [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43). All 77 capability families and remaining R1–R11 children retain their agreed scope. Four explicit workspace locks precede Video. Final bilingual and customer onboarding follow acceptance of all five workspaces. Play Console setup follows the working app and Greenezone website.
+**Next engineering package is U1: coherent workspace workflow.** The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) select working Pro blend controls, distinct photographic/layered workflows, common control anchors, Delete versus Reset and one four-choice Regular↔Pro switch. Bring requires a minimum durable Regular/Pro working-session and native-lineage slice from R1.2/S06. Remaining R1.2/R1 and every R2–R11 child remain required. R1.1/RV4 qualification, all 77 families, four locks before Video, all-five acceptance before final bilingual onboarding and app plus website before Console are retained.
 
 The detailed B1 checklist above retains its complete product/owner scope. Executed fixture results support the bounded engineering claims in the receipt. In particular, 320dp/200% font and touch tests do not replace real TalkBack/keyboard or broader device acceptance. B2 numerical misses are not waived by B1 delivery.
 
 - [x] Exact candidate `044e93321292a3678b92394b5efda50aae2e07b9` and application merge `46ffc891d7a02fffc0b2a4e8f807de8fbefc2c30`, tree `57b3ff2510e059184bfaefee2e781d350bf0930f`, pass complete JVM/build/signing and 258/258 per API29/API35; all 193 inherited identities remain.
 - [x] The API35 merged-run exercised APK is independently identified as 0.12.11/code23/phonetest.v23 with a verified Android v2 signature and recorded SHA-256.
-- [ ] Owner confirms the focused 0.12.11 interactions and actual default-quality phone GIF result.
+- [x] Superseding 0.12.13 owner report received; unmentioned supplied instructions 1–5 are passed within their scope. This does not supply missing GIF timings or every historical specialized case.
 - [ ] B2 fixed completion/response targets, matched samples and F03 closure complete; current partial measurements are credited separately.
 
 ## Retained engineering qualification — PR #31 / 0.12.10 Test (historical)
@@ -88,6 +90,8 @@ Qualified application commit: `3ad65c533f7667a136d4fa1838afcc06d3f484da`, tree `
 [Single work ledger and current execution receipts](WORK_LEDGER.md). Historical PR #29 app merge `c9efc5aa0673f21b98f150733582a24996b34d10`: candidate and merged-main each pass Verify and 186/186 on both API29/API35; exact APK identity is in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29). The earlier successor review hold is lifted by the supplied review and owner's engineering request. Existing evidence below retains its original scope/date; it does not close new defects or full release.
 
 ## Retained field-correction acceptance
+
+> Historical checklist: old File/Delete-to-baseline and confirmation-based handoff descriptions record earlier requirements. Current Delete empties work, Reset retains media, and Regular↔Pro uses the U1 four-choice contract. Historical results remain evidence; obsolete interaction expectations are not release blockers to reinstate.
 
 This is the historical control/acceptance catalog. Earlier File/More/Histogram routes below describe the builds under review then; F04–F06 above supersede those UI locations. The latest owner report credits unmentioned supplied checks as working, with named exceptions. Unattempted specialized device/provider/media tiers remain separate; do not infer they passed from the general phone report or request the whole historical script again.
 
