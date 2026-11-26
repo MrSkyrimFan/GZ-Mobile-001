@@ -54,6 +54,13 @@ Independent exact-source review passed the Open lease, bitmap transfer and Save 
 
 [Corrected Open baseline 45907070523](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907070523) supplied the actual ActivityResult registry for Pro and synchronized the pending action with Compose. It keeps the old application behavior and the exact held-publication assertions.
 
+
+The corrected v26 Open baseline produced all five intended failures independently on both APIs. Repeated failed named Opens accumulated one, two and three leases in both Regular and Pro; the stale Regular named Open retained one lease; the stale and canceled working-draft Opens each retained both the active and displaced preparations. The exact route/content, named records, unrelated drafts and retry/source checks reached the lease assertion. Restoring source access succeeded in both named routes. These supersede only the initial harness-failed observations.
+- API29 [raw receipt 15159145281](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907070523/artifacts/15159145281) · `sha256:72611caa940b6565767f95df0efa081b86002ecd12804bfa25db55975f2d4494`
+- API35 [raw receipt 15158442140](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907070523/artifacts/15158442140) · `sha256:8da60006113808547b5942425f2ab8920259026af2ca50a7cced0a028417c671`
+
+The independent Pro source reviewer verified at `e813f7a91b54befa3d680e773dc278135a0d6ecf` that the mode-keyed bitmap and rendering states isolate late finished output from native input and preserve the matching preview dimensions. The reviewed Save consumer preserves the captured baseline and binds the exact prior target without replacing current content or reauthorizing a canceled switch.
+
 ### Documentation review receipt
 
 Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.
