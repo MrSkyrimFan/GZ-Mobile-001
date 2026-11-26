@@ -21,6 +21,12 @@ These are existing-run/artifact inspections, not new app test executions. The tw
 
 **Dispatch:** complete U1R-01/U1R-02 and dispose of U1R-V1, independently review and qualify one coherent candidate/merge, then resume remaining R1.2. Do not recommend v26 as a clean corrected U1 build while those paths remain open. No app source, tests, build configuration or CI is changed by this documentation update; no APK is rebuilt and no suite rerun. All 77 rows and full child scope remain.
 
+### Documentation review receipt
+
+Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.
+
+Root read back all eleven changed Markdown files from GitHub, checked new relative file links and compared the complete changed-path inventory. All 77 matrix rows are unchanged; the roadmap from R1 through its end retains the complete prior text. No application inputs changed. The PR review records the exact final documentation head and disposition before verified merge.
+
 ## U1 owner relay and execution alignment
 
 Lance relayed the U1 implementation prompt. Live `main` matched `ffecb3e23a0acd85c0d164166e9e6ae72c33195e` (PR #45), which adds twelve Markdown paths to the prior docs commit. The reviewed behavioral pin is `9514b574a859ef547ec4a854cb23806cf24e0df8`. The difference from that pin is the ledger and handoff receipt. The application/test/build/CI inputs still match qualified v25 app `b0f0d0e5e2d879ddddedede442ba92ef30b69a78`. PR #43's 279/279 evidence remains prior qualification.
@@ -266,7 +272,7 @@ Lance relayed the [complete GPT-6 Pro review](coordination/GPT_6_PRO_INDEPENDENT
 
 **Execution and exit:** integration owns refs, scope, and active records. First run the new reproductions against existing production, preserve exact outcomes and correct diagnosed fixture failures without weakening assertions. Land one coherent corrected candidate with independent review, full JVM/API29/API35/build/signing and the full 258-case inherited coverage plus targeted additions. Qualify the exact merge and artifact before new delivery. Keep diagnosis, runtime and handset results explicit.
 
-**Next ordered work is R1.2.** RV5 stays in R1 export recovery. B2/F03 retain the 10-second and 50 percent targets, earlier 257 ms miss, matched-sample and actual handset gaps. Missing owner GIF data holds that specific reproduction and closure.
+**Historical next action at the PR #41 checkpoint: R1.2.** RV5 stays in R1 export recovery. B2/F03 retain the 10-second and 50 percent targets, earlier 257 ms miss, matched-sample and actual handset gaps. Missing owner GIF data holds that specific reproduction and closure.
 
 ## Completed task A1 — ChatGPT / Codex alignment
 
@@ -288,7 +294,7 @@ The final response supplies the actual merged Stage 3 commit/PR. The resume inst
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next engineering package is U1: coherent workspace workflow.** The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) select working Pro blend controls, distinct photographic/layered workflows, common control anchors, Delete versus Reset and one four-choice Regular↔Pro switch. Bring requires a minimum durable Regular/Pro working-session and native-lineage slice from R1.2/S06. Remaining R1.2/R1 and every R2–R11 child remain required. R1.1/RV4 qualification, all 77 families, four locks before Video, all-five acceptance before final bilingual onboarding and app plus website before Console are retained.
+**Historical next action after the 0.12.13 owner report: U1 coherent workspace workflow.** The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) select working Pro blend controls, distinct photographic/layered workflows, common control anchors, Delete versus Reset and one four-choice Regular↔Pro switch. Bring requires a minimum durable Regular/Pro working-session and native-lineage slice from R1.2/S06. Remaining R1.2/R1 and every R2–R11 child remain required. R1.1/RV4 qualification, all 77 families, four locks before Video, all-five acceptance before final bilingual onboarding and app plus website before Console are retained.
 
 The following scope/assignment and dated execution notes preserve the B1 evidence chain. The current result is the qualification summary above; old failing candidates are historical evidence, not reopened work.
 
