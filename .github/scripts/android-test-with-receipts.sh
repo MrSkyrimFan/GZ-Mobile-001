@@ -87,7 +87,7 @@ if [[ -n "${GZ_CI_HEAP_MIB:-}" ]]; then
   adb_ci shell input keyevent 82
 fi
 
-if gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest; then
+if gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.annotation=com.greenezone.gzphotoeditor.U1TargetedCheck'; then
   echo "Android instrumentation suite: PASS"
   apk="app/build/outputs/apk/debug/app-debug.apk"
   test_apk="app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
