@@ -21,6 +21,21 @@ These are existing-run/artifact inspections, not new app test executions. The tw
 
 **Dispatch:** complete U1R-01/U1R-02 and dispose of U1R-V1, independently review and qualify one coherent candidate/merge, then resume remaining R1.2. Do not recommend v26 as a clean corrected U1 build while those paths remain open. No app source, tests, build configuration or CI is changed by this documentation update; no APK is rebuilt and no suite rerun. All 77 rows and full child scope remain.
 
+### Owner relay and execution alignment
+
+Lance relayed the bounded review correction on November 26. Live main is `b2ecc80481d10ee47097037d6616199e50bf4be7` (PR #48), tree `90a0e96f00c6a054706a47fc4fb40e54f0ea3cd6`. The qualified PR #46 app `e6321322526521ace13a45c231b25bb08f91c565`, tree `e15ba826d15cfb42449461f2528718e9efca5819`, differs by twelve Markdown paths. The app, test, Gradle and CI inputs still match v26. The repository has one applicable root `AGENTS.md`. The actual Windows project directory and its ancestors contain no AGENTS file. The existing project routing cache `For Codex/START_HERE.md` now pins the follow-up at PR #48 and the live ledger. Its historical section is byte-preserved. Original intake, archives, and APKs stay outside the engineering workspace.
+
+Both pinned review and follow-up were read in full, along with the current project instructions, product specification, blueprint, ledger, roadmap, 77-row inventory, release gates, continuity and active owner phone report. The first bounded check runs new reproduction tests with the qualified v26 production behavior. Preserve the actual shortcut taps and mask/retouch mutation, failed and canceled Open lease counts, and held inline Save outcome before landing behavior changes.
+
+| Writer | Exact file ownership |
+| --- | --- |
+| Root integration | `PhotoEditorScreen.kt`, new `AndroidU1ReviewOpenTest.kt`, baseline test seam integration if required, build test identity, refs, receipts and canonical records. |
+| Pro reviewer/writer | `ProWorkspaceScreen.kt` and new `AndroidU1ReviewProShortcutsTest.kt`. After the held Save result, own any justified exact Pro-side acknowledgement. |
+| Custody reviewer/writer | `NativeWorkStore.kt` for the acquisition boundary and inspection seam, and new `AndroidU1ReviewLeaseTest.kt`. |
+| Held Save test writer | New `AndroidU1ReviewProSaveTest.kt`. Coordinate the controlled publication seam with the host writer. |
+
+The optional Collage wording item is deferred to keep the delivery focused. The next decisive result is the red baseline on API29/API35. The existing 303 case identities, numerical limits, inherited assertions, and process qualification remain required.
+
 ### Documentation review receipt
 
 Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.
