@@ -32,6 +32,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -57,17 +58,18 @@ class AndroidRegularDepartureContractTest {
         }
     }
 
-    private class IsolatedContext(base: Context, val gate: SaveGate) : ContextWrapper(base) {
+    private class IsolatedContext(base: Context, val gate: SaveGate, private val realBridgeRoot: Boolean) : ContextWrapper(base) {
         private val suffix = ".b1-departure-" + System.nanoTime()
         private val directory = Files.createTempDirectory(base.cacheDir.toPath(), "b1-departure-").toFile()
         private val preferences = mutableSetOf<String>()
         override fun getDataDir(): File = directory
-        override fun getFilesDir(): File = directory
+        override fun getFilesDir(): File = if (realBridgeRoot) baseContext.filesDir else directory
         override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
             preferences += name + suffix
             return baseContext.getSharedPreferences(name + suffix, mode)
         }
         fun close() {
+            if (realBridgeRoot) File(baseContext.filesDir, "native-work-v1").deleteRecursively()
             preferences.forEach { baseContext.deleteSharedPreferences(it) }
             directory.deleteRecursively()
         }
@@ -102,10 +104,11 @@ class AndroidRegularDepartureContractTest {
     private fun withEditor(
         tile: Boolean = false,
         onChildWorkspace: (WorkspaceMode, CollagePhoto?) -> Unit = { _, _ -> },
+        realBridgeRoot: Boolean = false,
         test: (Fixture) -> Unit
     ) {
         val gate = SaveGate()
-        val context = IsolatedContext(rule.activity, gate)
+        val context = IsolatedContext(rule.activity, gate, realBridgeRoot)
         val resolver = context.contentResolver
         val sources = mutableListOf<Uri>()
         val mounted = mutableStateOf(true)
@@ -233,6 +236,281 @@ class AndroidRegularDepartureContractTest {
             ).fetchSemanticsNodes().isEmpty()
         }
         return requireNotNull(ProjectStore.loadNamed(fixture.context, name))
+    }
+
+    @Test fun u1RegularToProOffersOneFourChoiceSurfaceAndCancelKeepsTheEdit() {
+        withEditor { fixture ->
+            openPhoto(fixture)
+            flip()
+            rule.onNodeWithContentDescription("Choose editing workspace").performTouchInput { click(center) }
+            rule.onNodeWithText("Photo editing Pro", substring = false).performTouchInput { click(center) }
+
+            val dialog = hasAnyAncestor(isDialog())
+            rule.onNode(hasText("Bring current work", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Discard", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Save current work", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Cancel", substring = false) and dialog).performTouchInput { click(center) }
+            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+        }
+    }
+
+    @Test fun u1RegularOptionsSeparateDeleteFromResetAndKeepNamedProject() {
+        withEditor { fixture ->
+            openPhoto(fixture)
+            val earlier = saveAs(fixture, "Retained before delete")
+            flip()
+            rule.onNodeWithTag("workspace-options").performTouchInput { click(center) }
+            rule.onNodeWithTag("workspace-command-reset").assertIsEnabled()
+            rule.onNodeWithTag("workspace-command-delete").assertIsEnabled()
+                .performTouchInput { click(center) }
+            rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog()))
+                .performTouchInput { click(center) }
+            rule.onNodeWithTag("photo-tools").assertDoesNotExist()
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+            assertEquals(earlier, ProjectStore.loadNamed(fixture.context, "Retained before delete"))
+        }
+    }
+
+    @Test fun u1RepeatedBringKeepsNativeLayersAndAddsNoNamedRecord() {
+        withEditor(realBridgeRoot = true) { fixture ->
+            val namedPhotoBefore = requireNotNull(ProjectStore.listMetadata(fixture.context)).map { it.project }
+            val namedProBefore = ProStore.names(fixture.context)
+            openPhoto(fixture)
+            flip()
+            workspace("Photo editing Pro")
+            rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Original photo", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("+ Add layer", substring = false).performTouchInput { click(center) }
+            rule.onNodeWithText("Shape layer", substring = false).performTouchInput { click(center) }
+            rule.onNodeWithText("Shape layer 2 · Shape", substring = false).assertIsDisplayed()
+
+            workspace("Photo editing")
+            rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+            waitPhoto()
+            flip()
+
+            workspace("Photo editing Pro")
+            rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Shape layer 2 · Shape", substring = false).fetchSemanticsNodes().isNotEmpty()
+            }
+            assertEquals(namedPhotoBefore, requireNotNull(ProjectStore.listMetadata(fixture.context)).map { it.project })
+            assertEquals(namedProBefore, ProStore.names(fixture.context))
+
+            rule.onNodeWithTag("workspace-tools").performTouchInput { click(center) }
+            rule.onNodeWithText("Layers", substring = false).performTouchInput { click(center) }
+            rule.onNodeWithText("+ Add layer", substring = false).performTouchInput { click(center) }
+            rule.onNodeWithText("Shape layer", substring = false).performTouchInput { click(center) }
+
+            workspace("Photo editing")
+            rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+            waitPhoto()
+            flip()
+            val name = "U1 mixed Regular " + System.nanoTime().toString().takeLast(10)
+            try {
+                val saved = saveAs(fixture, name)
+                val manifest = requireNotNull(saved.content.linkedWork)
+                val result = runBlocking {
+                    NativeWorkStore(fixture.context).loadNamed(manifest, saved.project)
+                } as NativeWorkResult.Ok<NativeWorkState>
+                val restored = result.value
+                val regular = requireNotNull(restored.regular)
+                val pro = requireNotNull(restored.pro).document
+                assertEquals(NativeWorkMode.REGULAR, restored.mode)
+                assertTrue(regular.document.mirrored)
+                assertEquals(regular.document, regular.clean)
+                assertEquals(1, pro.linkedFinishes.size)
+                assertEquals(fixture.sources[0].toString(), pro.layers.first().uri)
+                assertEquals(ProLayerKind.SHAPE, pro.layers.last().kind)
+                assertEquals(listOf("Shape layer 2", "Shape layer 3"), pro.layers.drop(1).map { it.name })
+                assertTrue(pro.layers.drop(1).all { it.edits.creative.shapes.isNotEmpty() })
+                val codec = NativeWorkCodec(NativeWorkFiles(fixture.context))
+                assertTrue(codec.finishRecipe(pro.linkedFinishes.single()).mirrored)
+                assertEquals(namedProBefore, ProStore.names(fixture.context))
+            } finally {
+                ProjectStore.delete(fixture.context, name)
+            }
+        }
+    }
+
+    @Test fun u1ProStartedRepeatedBringKeepsEachNativeEditInFinalProNamedSave() {
+        withEditor(realBridgeRoot = true) { fixture ->
+            val name = "U1 mixed Pro " + System.nanoTime().toString().takeLast(10)
+            val namedPhotoBefore = requireNotNull(ProjectStore.listMetadata(fixture.context)).map { it.project }
+            val namedProBefore = ProStore.names(fixture.context)
+            try {
+                workspace("Photo editing Pro")
+                options("New / Open media…")
+                rule.onNodeWithText("Open photo as new document…", substring = false)
+                    .performTouchInput { click(center) }
+                rule.waitUntil(5_000) { fixture.picker.requests.size == 1 }
+                deliver(fixture, 0, fixture.sources[0])
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("+ Add layer", substring = false).fetchSemanticsNodes().isNotEmpty()
+                }
+                rule.onNodeWithText("+ Add layer", substring = false).performTouchInput { click(center) }
+                rule.onNodeWithText("Shape layer", substring = false).performTouchInput { click(center) }
+
+                workspace("Photo editing")
+                rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+                waitPhoto()
+                flip()
+                workspace("Photo editing Pro")
+                rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Shape layer 2 · Shape", substring = false)
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                rule.onNodeWithTag("workspace-tools").performTouchInput { click(center) }
+                rule.onNodeWithText("Layers", substring = false).performTouchInput { click(center) }
+                rule.onNodeWithText("+ Add layer", substring = false).performTouchInput { click(center) }
+                rule.onNodeWithText("Shape layer", substring = false).performTouchInput { click(center) }
+
+                workspace("Photo editing")
+                rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+                waitPhoto()
+                flip()
+                workspace("Photo editing Pro")
+                rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Shape layer 3 · Shape", substring = false)
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                assertEquals(namedPhotoBefore, requireNotNull(ProjectStore.listMetadata(fixture.context)).map { it.project })
+                assertEquals(namedProBefore, ProStore.names(fixture.context))
+
+                options("Save project as…")
+                rule.onNode(hasSetTextAction()).performTextReplacement(name)
+                rule.onNodeWithText("Save", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Save Pro project", substring = false).fetchSemanticsNodes().isEmpty()
+                }
+                val saved = requireNotNull(ProStore.loadNamed(fixture.context, name))
+                val manifest = requireNotNull(saved.content.linkedWork)
+                val result = runBlocking {
+                    NativeWorkStore(fixture.context).loadNamed(manifest, saved.project)
+                } as NativeWorkResult.Ok<NativeWorkState>
+                val restored = result.value
+                val pro = requireNotNull(restored.pro).document
+                assertEquals(NativeWorkMode.PRO, restored.mode)
+                assertEquals(2, pro.linkedFinishes.size)
+                val codec = NativeWorkCodec(NativeWorkFiles(fixture.context))
+                assertTrue(pro.linkedFinishes.all { codec.finishRecipe(it).mirrored })
+                assertEquals(fixture.sources[0].toString(), pro.layers.first().uri)
+                assertEquals(listOf("Shape layer 2", "Shape layer 3"), pro.layers.drop(1).map { it.name })
+                assertTrue(pro.layers.drop(1).all { it.kind == ProLayerKind.SHAPE && it.edits.creative.shapes.isNotEmpty() })
+                assertEquals(2, saved.content.document.linkedFinishes.size)
+            } finally {
+                ProStore.delete(fixture.context, name)
+            }
+        }
+    }
+
+    @Test fun u1IdenticalDerivativeBytesDoNotReplayAnAlreadyLinkedRegularFinish() {
+        withEditor(realBridgeRoot = true) { fixture ->
+            val name = "U1 same PNG " + System.nanoTime().toString().takeLast(10)
+            fun bringTo(label: String) {
+                workspace(label)
+                rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+                if (label == "Photo editing") waitPhoto()
+                else rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Original photo · Image", substring = false)
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+            }
+
+            try {
+                // The solid-color source produces identical PNGs before and after the flip.
+                // Its editable native parent differs once the first Regular finish is linked.
+                openPhoto(fixture)
+                bringTo("Photo editing Pro")
+                bringTo("Photo editing")
+                flip()
+                bringTo("Photo editing Pro")
+                bringTo("Photo editing")
+                rule.onNodeWithContentDescription("Undo", substring = false).assertIsNotEnabled()
+                bringTo("Photo editing Pro")
+
+                options("Save project as…")
+                rule.onNode(hasSetTextAction()).performTextReplacement(name)
+                rule.onNodeWithText("Save", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Save Pro project", substring = false).fetchSemanticsNodes().isEmpty()
+                }
+                val saved = requireNotNull(ProStore.loadNamed(fixture.context, name))
+                val manifest = requireNotNull(saved.content.linkedWork)
+                val result = runBlocking {
+                    NativeWorkStore(fixture.context).loadNamed(manifest, saved.project)
+                } as NativeWorkResult.Ok<NativeWorkState>
+                val restored = result.value
+                val nativePro = requireNotNull(restored.pro).document
+                val regular = requireNotNull(restored.regular)
+                val derivative = requireNotNull(restored.link?.derivative)
+                val finish = nativePro.linkedFinishes.single()
+                assertEquals(finish.derivativeSha, derivative.sha)
+                assertNotEquals(finish.proParentSha, derivative.parent.sha)
+                assertTrue(NativeWorkCodec(NativeWorkFiles(fixture.context)).finishRecipe(finish).mirrored)
+                assertEquals(EditDocument(), regular.document)
+            } finally {
+                ProStore.delete(fixture.context, name)
+            }
+        }
+    }
+
+    @Test fun u1RegularSwitchSavesInlineAndThenOpensBlankPro() {
+        withEditor { fixture ->
+            val name = "U1 Regular inline"
+            openPhoto(fixture)
+            flip()
+            workspace("Photo editing Pro")
+            rule.onNodeWithText("Save current work", substring = false).performTouchInput { click(center) }
+            rule.onNodeWithText("Bring current work", substring = false).assertExists()
+            rule.onNode(hasSetTextAction()).performTextReplacement(name)
+            rule.onNodeWithText("Save current work", substring = false).performTouchInput { click(center) }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Open a photo or create a canvas from Options.", substring = false)
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+            val saved = requireNotNull(ProjectStore.loadNamed(fixture.context, name))
+            assertEquals(fixture.sources[0], saved.content.image)
+            assertTrue(saved.content.document.mirrored)
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+        }
+    }
+
+    @Test fun u1ProSwitchSavesTheLinkedWorkInlineAndThenOpensBlankRegular() {
+        withEditor(realBridgeRoot = true) { fixture ->
+            val name = "U1 Pro inline " + System.nanoTime().toString().takeLast(10)
+            try {
+                openPhoto(fixture)
+                flip()
+                workspace("Photo editing Pro")
+                rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Original photo · Image", substring = false)
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                workspace("Photo editing")
+                rule.onNodeWithText("Save current work", substring = false).performTouchInput { click(center) }
+                rule.onNodeWithText("Bring current work", substring = false).assertExists()
+                rule.onNode(hasSetTextAction()).performTextReplacement(name)
+                rule.onNodeWithText("Save current work", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Choose Options → New photo… to begin.", substring = false)
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                val saved = requireNotNull(ProStore.loadNamed(fixture.context, name))
+                assertNotNull(saved.content.linkedWork)
+                assertEquals(fixture.sources[0].toString(), saved.content.document.layers.single().uri)
+                assertTrue(saved.content.document.layers.single().edits.mirrored)
+                rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+            } finally {
+                ProStore.delete(fixture.context, name)
+            }
+        }
     }
 
     @Test fun canceledAndDuplicatePickerResultsCannotReplaceOrCancelANewerImport() {

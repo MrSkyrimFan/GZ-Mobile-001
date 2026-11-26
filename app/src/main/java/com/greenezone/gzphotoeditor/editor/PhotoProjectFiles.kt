@@ -87,7 +87,11 @@ internal object PhotoProjectFiles {
                 input, length ->
             if (length != row.byteCount) return@readPayload null
             val value = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            ProjectStore.decodeRecord(row.project.name, value, onDecode)
+            if (value.startsWith(NativeWorkCodec.NAMED_PREFIX)) {
+                val ref = NativeWorkCodec.namedManifest(JSONObject(value)) ?: return@readPayload null
+                onDecode?.invoke()
+                NativeWorkStore.readLinkedRegular(context, row.project.name, ref)
+            } else ProjectStore.decodeRecord(row.project.name, value, onDecode)
         }
         return current?.takeIf { it.version == row.project.version }?.content
     }

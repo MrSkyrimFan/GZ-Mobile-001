@@ -123,6 +123,7 @@ class ProImportedGeometryTest {
             rule.waitUntil(15_000) { current.layers.size == 2 }
             val imported = current
             assertEquals(40f, imported.layers.last().aspect, .0001f)
+            assertNotNull(imported.layers.last().sourcePlacement)
             assertEquals(1, ProHitMath.pick(imported, .5f, .5f, 400, 400))
             assertEquals(0, ProHitMath.pick(imported, .5f, .55f, 400, 400))
             val source = requireNotNull(ProMath.canvasToImageNormalized(imported.layers.last(), 400, 400,

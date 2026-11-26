@@ -47,7 +47,7 @@ class AndroidProLassoGestureTest {
     }
 
     private fun selectFreehand() {
-        click("Tools ▾")
+        rule.onNodeWithTag("workspace-tools").performClick()
         rule.onNodeWithText("Select & mask").performScrollTo().performClick()
         rule.onNodeWithText("Freehand").performScrollTo().performClick()
     }

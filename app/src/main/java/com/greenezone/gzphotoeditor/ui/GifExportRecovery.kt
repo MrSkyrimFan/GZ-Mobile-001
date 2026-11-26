@@ -91,7 +91,8 @@ internal fun rememberGifExport(
     video: Boolean,
     videoReaderOwner: Mutex? = null,
     onNotice: (String) -> Unit,
-    onSaved: (Uri, GifDocument) -> Unit
+    onSaved: (Uri, GifDocument) -> Unit,
+    initiallyShowRecovery: Boolean = true
 ): GifExportOperation {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -99,7 +100,7 @@ internal fun rememberGifExport(
     val latestSaved by rememberUpdatedState(onSaved)
     return remember(context, video, videoReaderOwner, scope) {
         GifExportOperation(context, scope, video, videoReaderOwner,
-            { latestNotice(it) }, { uri, document -> latestSaved(uri, document) })
+            { latestNotice(it) }, { uri, document -> latestSaved(uri, document) }, initiallyShowRecovery)
     }
 }
 
@@ -123,7 +124,8 @@ internal class GifExportOperation(
     private val video: Boolean,
     private val videoReaderOwner: Mutex?,
     private val onNotice: (String) -> Unit,
-    private val onSaved: (Uri, GifDocument) -> Unit
+    private val onSaved: (Uri, GifDocument) -> Unit,
+    initiallyShowRecovery: Boolean = true
 ) {
     private val journal = PendingExportJournal(context.filesDir)
     private val stages = GifExportStages(context.cacheDir)
@@ -142,7 +144,7 @@ internal class GifExportOperation(
         private set
     var launchId by mutableStateOf<String?>(null)
         private set
-    var recoveryOpen by mutableStateOf(request != null)
+    var recoveryOpen by mutableStateOf(initiallyShowRecovery && request != null)
     var recoveryFailure by mutableStateOf<String?>(null)
         private set
     var active by mutableStateOf(false)
@@ -172,6 +174,59 @@ internal class GifExportOperation(
             onNotice("Could not discard these edits safely. " + error.message.orEmpty())
             false
         }
+    }
+
+    fun deleteUnavailableReason(ownerId: String): String? = when {
+        committing -> "Wait for the GIF to finish copying to its destination."
+        cancellationRequested -> "Wait for GIF preparation to stop."
+        active && request?.let { (it.nativeOwnerId ?: it.id) == ownerId } != true ->
+            "Finish or cancel the other GIF export first."
+        else -> null
+    }
+
+    /** Settle owned work while retaining any completed stage and its export recipe. */
+    suspend fun stopForNativeDelete(ownerId: String): Boolean {
+        if (deleteUnavailableReason(ownerId) != null) return false
+        val visible = request
+        val owned = visible?.takeIf { (it.nativeOwnerId ?: it.id) == ownerId }
+        if (owned == null) return true
+        val wasActive = active
+        cancellationRequested = true
+        try {
+            if (wasActive) {
+                launchId = null
+                awaitPreparationStop(requestPreparationStop())
+            }
+            request = withContext(Dispatchers.IO) {
+                val current = readRequest()?.takeIf {
+                    it.id == owned.id && (it.nativeOwnerId ?: it.id) == ownerId
+                } ?: throw IOException("The retained GIF export changed.")
+                val settled = when (current.phase) {
+                    PendingExportPhase.PICKING, PendingExportPhase.PREPARING ->
+                        journal.failed(current) ?: throw IOException("The GIF request could not be settled.")
+                    else -> current
+                }
+                journal.suppressNativeRestore(settled, ownerId)
+                    ?: throw IOException("Local GIF recovery could not be updated.")
+            }
+            launchId = null
+            recoveryOpen = false
+            return true
+        } catch (canceled: CancellationException) {
+            throw canceled
+        } catch (_: Exception) {
+            request = readRequest() ?: visible
+            return false
+        } finally {
+            active = false
+            cancellationRequested = false
+        }
+    }
+
+    fun showRetainedExport(): Boolean {
+        if (request == null || active || cancellationRequested) return false
+        recoveryOpen = true
+        return true
     }
 
     fun start(recipe: PendingGifRecipe, operationId: Long? = null, nativeOwnerId: String? = null) {
@@ -252,10 +307,17 @@ internal class GifExportOperation(
         if (launchId == id) launchId = null
     }
 
-    fun launchFailed(expected: PendingExport, error: Exception) = fail(expected, error)
+    private fun canReceiveDestination(expected: PendingExport): Boolean =
+        !cancellationRequested && request?.let {
+            it.id == expected.id && it.phase == PendingExportPhase.PICKING
+        } == true
+
+    fun launchFailed(expected: PendingExport, error: Exception) {
+        if (canReceiveDestination(expected)) fail(expected, error)
+    }
 
     fun receive(expected: PendingExport, result: ActivityResult) {
-        if (cancellationRequested) return
+        if (!canReceiveDestination(expected)) return
         timing?.takeIf { it.id == expected.id }?.let { item ->
             item.pickerOpened?.let { item.add("pickerDwell", System.nanoTime() - it) }
             item.pickerOpened = null
@@ -330,21 +392,27 @@ internal class GifExportOperation(
         }
     }
 
+    private fun requestPreparationStop(): Job? {
+        timing?.cancelRequested = System.nanoTime()
+        uiAcknowledgement++
+        progress = "Stopping GIF preparation…"
+        return job.also { it?.cancel() }
+    }
+
+    private suspend fun awaitPreparationStop(stopping: Job?) {
+        // Keep active ownership and staging files until the decoder releases them.
+        stopping?.join()
+        timing?.cancelRequested?.let { timing?.add("cancelWorkerStop", System.nanoTime() - it) }
+        timing?.report("stopped")
+    }
+
     fun cancel() {
         if (committing || cancellationRequested) return
         val pending = request ?: return
         cancellationRequested = true
-        timing?.cancelRequested = System.nanoTime()
-        uiAcknowledgement++
-        progress = "Stopping GIF preparation…"
-        val stopping = job
-        stopping?.cancel()
+        val stopping = requestPreparationStop()
         scope.launch {
-            // Decoder/platform calls may return after cancellation was requested.
-            // Keep active ownership and the staging files until their worker releases them.
-            stopping?.join()
-            timing?.cancelRequested?.let { timing?.add("cancelWorkerStop", System.nanoTime() - it) }
-            timing?.report("stopped")
+            awaitPreparationStop(stopping)
             if (request?.id != pending.id) return@launch
             try {
                 if (!journal.discard(pending)) {
@@ -386,7 +454,7 @@ internal class GifExportOperation(
     }
 
     private fun fail(previous: PendingExport, error: Throwable) {
-        if (request?.id != previous.id) return
+        if (request?.id != previous.id || cancellationRequested) return
         request = try {
             journal.failed(previous) ?: readRequest()
         } catch (_: Exception) {

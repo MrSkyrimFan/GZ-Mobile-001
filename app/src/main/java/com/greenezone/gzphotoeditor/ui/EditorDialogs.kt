@@ -224,7 +224,9 @@ internal fun ProjectsDialog(
     onSelect: (NamedProjectRef) -> Unit,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    workingDrafts: List<Pair<String, String>> = emptyList(),
+    onOpenWorkingDraft: (String) -> Unit = {}
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -252,6 +254,12 @@ internal fun ProjectsDialog(
                         if (!item.readable) Text("Saved project unavailable", color = EditorMuted, fontSize = 12.sp)
                     }
                 }
+                if (workingDrafts.isNotEmpty()) {
+                    Text("Working drafts", color = EditorWhite)
+                    workingDrafts.forEach { (id, label) ->
+                        TextButton(enabled = enabled, onClick = { onOpenWorkingDraft(id) }) { Text(label) }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -265,7 +273,7 @@ internal fun ProjectsDialog(
                 TextButton(
                     enabled = enabled && projects.any { it.project == selectedProject },
                     onClick = onDelete
-                ) { Text("Delete", color = EditorMuted) }
+                ) { Text("Delete saved project", color = EditorMuted) }
                 TextButton(onClick = onDismiss) { Text("Close", color = EditorMuted) }
             }
         }

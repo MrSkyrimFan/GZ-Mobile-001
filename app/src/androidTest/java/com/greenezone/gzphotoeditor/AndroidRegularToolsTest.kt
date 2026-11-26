@@ -546,12 +546,12 @@ class AndroidRegularToolsTest {
                 rule.onNodeWithText("Text 1").assertIsDisplayed()
 
                 openLibrary()
-                rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog())).performClick()
+                rule.onNode(hasText("Delete saved project", substring = false) and hasAnyAncestor(isDialog())).performClick()
                 rule.onNodeWithText("Delete saved project?").assertIsDisplayed()
                 rule.onNodeWithText("Cancel").performClick()
                 assertEquals(original, ProjectStore.load(context).single { it.name == name }.document)
-                rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog())).performClick()
-                rule.onNodeWithText("Delete project").performClick()
+                rule.onNode(hasText("Delete saved project", substring = false) and hasAnyAncestor(isDialog())).performClick()
+                rule.onNodeWithText("Delete saved project", substring = false).performClick()
                 rule.waitUntil(15_000) { ProjectStore.load(context).none { it.name == name } }
                 assertTrue(ProjectStore.load(context).none { it.name == name })
                 assertNotNull(context.contentResolver.openInputStream(source)?.use { it.read() })
@@ -638,7 +638,7 @@ class AndroidRegularToolsTest {
         rule.onNodeWithText("Blur & cover").performClick()
         rule.onNodeWithText("+ Blur brush").performClick()
         val canvas = rule.onNodeWithContentDescription("Photo editing canvas. Tap to hide or show tools.")
-        canvas.performClick()
+        canvas.performTouchInput { click(center) }
         rule.onNodeWithTag("photo-tools").assertDoesNotExist()
 
         fun sample(): Int {

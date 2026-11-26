@@ -20,6 +20,24 @@ enum class ProBackground(val label: String, val argb: Int) {
     BLACK("Black", -0x1000000), WHITE("White", -1),
     TRANSPARENT("Transparent", 0)
 }
+/** Source-bound neutral pose, carried independently of authoring and layer order. */
+data class ProSourcePlacement(val id: String, val x: Float, val y: Float, val scale: Float) {
+    internal fun valid(): Boolean = id.length in 1..80 && x in 0f..1f && y in 0f..1f && scale in .1f..2f
+}
+
+data class ProCanvasSetup(
+    val aspect: ProAspect,
+    val background: ProBackground,
+    val sourceAspectRatio: Float?,
+    val canvasSize: ProPixelSize?
+) {
+    companion object {
+        fun from(document: ProDocument) = ProCanvasSetup(
+            document.aspect, document.background, document.sourceAspectRatio, document.canvasSize
+        )
+    }
+}
+
 data class ProLayer(
     val uri: String,
     val edits: EditDocument = EditDocument(),
@@ -37,14 +55,20 @@ data class ProLayer(
     val retouches: List<ProRetouchMark> = emptyList(),
     val effect: ProPixelEffect = ProPixelEffect.NONE,
     val effectAmount: Float = .5f,
-    val sourceSize: ProPixelSize? = null
-)
+    val sourceSize: ProPixelSize? = null,
+    val sourcePlacement: ProSourcePlacement? = null
+) {
+    val nativePlacementId: String? get() = sourcePlacement?.id
+}
+
 data class ProDocument(
     val layers: List<ProLayer> = emptyList(),
     val aspect: ProAspect = ProAspect.SQUARE,
     val background: ProBackground = ProBackground.WHITE,
     val sourceAspectRatio: Float? = null,
-    val canvasSize: ProPixelSize? = null
+    val canvasSize: ProPixelSize? = null,
+    val sourceCanvasSetup: ProCanvasSetup? = null,
+    val linkedFinishes: List<ProLinkedFinishRef> = emptyList()
 ) {
     val canvasAspectRatio: Float get() = canvasSize?.aspect ?: sourceAspectRatio ?: aspect.ratio
 }
@@ -96,7 +120,9 @@ data class ProHistoryEntry(
         if (active != null) {
             // Undoing a reorder retains the very same immutable layer object. If the
             // transaction replaced it (or opened a different project), use the saved slot.
-            val retainedIndex = document.layers.indexOfFirst { it === active }
+            val retainedIndex = document.layers.indexOfFirst {
+                it === active || (active.nativePlacementId != null && it.nativePlacementId == active.nativePlacementId)
+            }
             if (retainedIndex >= 0) return retainedIndex
         }
         return selectedLayer.coerceIn(0, document.layers.lastIndex.coerceAtLeast(0))
@@ -157,6 +183,7 @@ data class ProRect(val left: Float, val top: Float, val right: Float, val bottom
 
 object ProMath {
     const val MAX_LAYERS = 12
+    internal const val MAX_LINKED_FINISHES = 35
     const val MIN_SOURCE_ASPECT = 1f / 12_000f
     const val MAX_SOURCE_ASPECT = 12_000f
 
@@ -165,6 +192,10 @@ object ProMath {
         (document.sourceAspectRatio == null ||
             validSourceAspect(document.sourceAspectRatio)) &&
             (document.canvasSize == null || validSourceAspect(document.canvasSize.aspect)) &&
+            (document.sourceCanvasSetup?.sourceAspectRatio?.let(::validSourceAspect) != false) &&
+            (document.sourceCanvasSetup?.canvasSize?.aspect?.let(::validSourceAspect) != false) &&
+            document.linkedFinishes.size <= MAX_LINKED_FINISHES &&
+            document.layers.mapNotNull(ProLayer::nativePlacementId).let { it.size == it.toSet().size } &&
             document.layers.size in 1..MAX_LAYERS &&
             document.layers.all { item ->
                 val sourceValid = when (item.kind) {
@@ -179,6 +210,8 @@ object ProMath {
                     ProLayerKind.ADJUSTMENT -> item.uri.isEmpty()
                 }
                 sourceValid && (item.sourceSize == null || item.kind == ProLayerKind.IMAGE) &&
+                    (item.sourcePlacement == null ||
+                        (item.kind == ProLayerKind.IMAGE && item.sourcePlacement.valid())) &&
                     item.name.isNotBlank() && item.name.length <= 42 &&
                     item.x.isFinite() && item.y.isFinite() && item.x in 0f..1f &&
                     item.y in 0f..1f && item.scale.isFinite() &&

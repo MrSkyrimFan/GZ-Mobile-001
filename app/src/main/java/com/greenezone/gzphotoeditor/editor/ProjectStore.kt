@@ -6,7 +6,12 @@ import java.io.File
 import java.io.IOException
 import java.util.Base64
 
-data class SavedProject(val name: String, val image: Uri, val document: EditDocument)
+data class SavedProject(
+    val name: String,
+    val image: Uri,
+    val document: EditDocument,
+    val linkedWork: NativeManifestRef? = null
+)
 
 internal data class SavedPhotoProjectMetadata(
     val project: NamedProjectRef,
@@ -111,6 +116,23 @@ object ProjectStore {
         verifyIndex: (File, ByteArray, Long) -> Unit
     ): ProjectSaveResult = write(context, intent.requestedName, image, document, intent, verifyIndex)
 
+    internal fun saveLinkedNamed(
+        context: Context, intent: ProjectSaveIntent, image: Uri,
+        document: EditDocument, linkedWork: NativeManifestRef
+    ): ProjectSaveResult = write(context, intent.requestedName, image, document, intent,
+        NamedProjectIdentity::verify, linkedWork)
+
+    @Synchronized
+    internal fun namedManifests(context: Context): Set<NativeManifestRef>? = try {
+        val rows = PhotoProjectFiles.readIndex(context)
+        if (rows == null && PhotoProjectFiles.cutoverEstablished(context)) null
+        else rows.orEmpty().mapNotNullTo(mutableSetOf()) { row ->
+            if (!row.readable) null else row.generation?.let { generation ->
+                NativeWorkCodec.peekManifest(PhotoProjectFiles.payloadFile(context, generation))
+            }
+        }
+    } catch (_: Exception) { null }
+
     @Synchronized
     private fun write(
         context: Context,
@@ -118,7 +140,8 @@ object ProjectStore {
         image: Uri,
         document: EditDocument,
         intent: ProjectSaveIntent?,
-        verifyIndex: (File, ByteArray, Long) -> Unit
+        verifyIndex: (File, ByteArray, Long) -> Unit,
+        linkedWork: NativeManifestRef? = null
     ): ProjectSaveResult {
         if (image.scheme != "content")
             return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_DOCUMENT)
@@ -134,10 +157,12 @@ object ProjectStore {
             if (current == null && rows.size >= PhotoProjectFiles.LIMIT)
                 return ProjectSaveResult.Rejected(ProjectSaveFailure.FULL)
 
-            val value = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(image.toString().toByteArray(Charsets.UTF_8)) +
-                "\n" + EditDocumentCodec.encodeBounded(document)
-            val bytes = value.toByteArray(Charsets.UTF_8)
+            val bytes = linkedWork?.let(NativeWorkCodec::namedBytes) ?: run {
+                val value = Base64.getUrlEncoder().withoutPadding()
+                    .encodeToString(image.toString().toByteArray(Charsets.UTF_8)) +
+                    "\n" + EditDocumentCodec.encodeBounded(document)
+                value.toByteArray(Charsets.UTF_8)
+            }
             if (bytes.size.toLong() > PhotoProjectFiles.MAX_RECORD_BYTES)
                 return ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
             val version = NamedProjectIdentity.version(bytes)

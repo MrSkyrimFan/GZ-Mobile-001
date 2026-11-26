@@ -11,6 +11,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
@@ -157,8 +160,9 @@ class AndroidProDepartureContractTest {
     }
 
     @Test fun zeroLayerSetupCancelKeepsSetupAndDiscardRestoresEntry() {
-        mount(ProDocument())
-        rule.onNodeWithText("Transparent").performClick()
+        val neutralCanvas = ProDocument()
+        mount(neutralCanvas, ProWorkspaceSession(documentEstablished = true, resetDocument = neutralCanvas))
+        rule.onNodeWithText("Transparent").performScrollTo().performClick()
         rule.runOnIdle {
             assertEquals(ProBackground.TRANSPARENT, current.background)
             rule.activity.onBackPressedDispatcher.onBackPressed()
@@ -200,16 +204,22 @@ class AndroidProDepartureContractTest {
                 assertEquals(saved, current)
                 assertEquals(saved, ProStore.load(context, name))
             }
-            // This harness records departure without unmounting: the explicit reset
-            // still has a separate original baseline and cannot delete the named save.
+            // A no-source adjustment is authored content. Reset keeps its canvas,
+            // while Delete clears the working owner and leaves the named save intact.
             rule.onNodeWithText("Options").performClick()
-            rule.onNodeWithText("Delete current work…").performClick()
-            rule.onNodeWithText("Delete work").performClick()
-            rule.waitUntil(15_000) { current == initial }
+            rule.onNodeWithText("Reset all edits").performClick()
+            rule.waitUntil(15_000) { current.layers.isEmpty() }
             rule.runOnIdle {
-                assertEquals(initial, current)
+                assertTrue(currentSession.documentEstablished)
                 assertEquals(saved, ProStore.load(context, name))
             }
+            rule.onNodeWithContentDescription("Undo").performClick()
+            rule.runOnIdle { assertEquals(saved, current) }
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("Delete", substring = false).performClick()
+            rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog())).performClick()
+            rule.waitUntil(15_000) { current == ProDocument() && !currentSession.documentEstablished }
+            rule.runOnIdle { assertEquals(saved, ProStore.load(context, name)) }
         } finally { ProStore.delete(context, name) }
     }
 
@@ -225,7 +235,7 @@ class AndroidProDepartureContractTest {
             Triple("↓ Behind", listOf(edited, bottom, top), 0),
             Triple("↑ Above", listOf(bottom, top, edited), 2),
             Triple("Duplicate", listOf(bottom, edited, edited.copy(name = "Middle copy"), top), 2),
-            Triple("Delete layer", listOf(bottom, top), 1)
+            Triple("Remove layer", listOf(bottom, top), 1)
         )
         try {
             check(ProStore.save(context, name, clean))

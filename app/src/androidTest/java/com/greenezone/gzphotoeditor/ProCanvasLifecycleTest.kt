@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -49,8 +50,8 @@ class ProCanvasLifecycleTest {
             rule.waitUntil(20_000) {
                 runCatching { canvas.fetchSemanticsNode() }.isSuccess
             }
-            rule.onNodeWithText("Tools ▾").performClick()
-            rule.onNodeWithText("Brush").performScrollTo().performClick()
+            rule.onNodeWithTag("workspace-tools").performClick()
+            rule.onNodeWithText("Paint").performScrollTo().performClick()
             canvas.performTouchInput { click(center) }
             canvas.performTouchInput {
                 val length = minOf(width, height) * .1f

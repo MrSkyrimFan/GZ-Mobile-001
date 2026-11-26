@@ -1,6 +1,7 @@
 package com.greenezone.gzphotoeditor.editor
 
 import android.content.ContentResolver
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.Color
@@ -199,6 +200,72 @@ object ProRaster {
         cancel: (() -> Unit)? = null
     ): Bitmap = renderWithLoader(document, width, height, preview, cancel) { layer, edge, pixels ->
         decodeSource(resolver, layer, edge, pixels)
+    }
+
+    /** The requested dimensions belong to the native artboard. Finishes may change the output shape. */
+    internal fun renderOutput(
+        context: Context,
+        document: ProDocument,
+        baseSize: ProPixelSize,
+        preview: Boolean,
+        cancel: (() -> Unit)? = null
+    ): Bitmap {
+        val codec = NativeWorkCodec(NativeWorkFiles(context))
+        var bitmap = render(context.contentResolver, document, baseSize.width, baseSize.height, preview, cancel)
+        try {
+            for (reference in document.linkedFinishes) {
+                cancel?.invoke()
+                val prior = ProPixelSize(bitmap.width, bitmap.height)
+                val recipe = codec.finishRecipe(reference)
+                val size = finishGeometry(prior, reference, recipe)
+                val revised = ImagePipeline.render(bitmap, recipe, cancel)
+                if (revised !== bitmap) bitmap.recycle()
+                bitmap = revised
+                check(bitmap.width == size.width && bitmap.height == size.height)
+            }
+            return bitmap
+        } catch (problem: Throwable) {
+            bitmap.recycle()
+            throw problem
+        }
+    }
+
+    internal fun outputSize(context: Context, document: ProDocument, baseSize: ProPixelSize): ProPixelSize {
+        val codec = NativeWorkCodec(NativeWorkFiles(context))
+        return projectedSize(document, baseSize, codec::finishRecipe)
+    }
+
+    internal fun validateLinkedGeometry(document: ProDocument, recipe: (ProLinkedFinishRef) -> EditDocument) {
+        if (document.linkedFinishes.isNotEmpty()) {
+            projectedSize(document, ProMath.intendedCanvasSize(document), recipe)
+        }
+    }
+
+    private fun projectedSize(
+        document: ProDocument, baseSize: ProPixelSize, recipe: (ProLinkedFinishRef) -> EditDocument
+    ): ProPixelSize = document.linkedFinishes.fold(baseSize) { size, reference ->
+        finishGeometry(size, reference, recipe(reference))
+    }
+
+    private fun finishGeometry(
+        prior: ProPixelSize, reference: ProLinkedFinishRef, recipe: EditDocument
+    ): ProPixelSize {
+        require(sameGeometry(prior, reference.input)) {
+            "Canvas proportions changed. The linked Regular finish remains on its original canvas."
+        }
+        val plan = PhotoGeometryPlan(prior.width, prior.height, PhotoGeometry.from(recipe))
+        val next = ProPixelSize(plan.width, plan.height)
+        require(sameGeometry(next, reference.output)) {
+            "The linked Regular finish cannot be projected on this canvas."
+        }
+        return next
+    }
+
+    private fun sameGeometry(actual: ProPixelSize, original: ProPixelSize): Boolean {
+        val cross = kotlin.math.abs(actual.width.toLong() * original.height -
+            actual.height.toLong() * original.width)
+        // Up to two pixels from bounded raster sizing and normalized crop rounding.
+        return cross <= 2L * maxOf(original.width, original.height)
     }
 
     fun renderWithLoader(

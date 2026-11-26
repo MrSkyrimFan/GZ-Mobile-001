@@ -20,8 +20,8 @@ internal enum class ProSection(val title: String, val group: String) {
     LAYERS("Layers", "Composition"), MOVE("Transform", "Composition"),
     BLEND("Blend", "Composition"), CANVAS("Canvas", "Composition"),
     SELECT("Select & mask", "Selection and retouch"), RETOUCH("Clone & repair", "Selection and retouch"),
-    PAINT("Brush", "Create"), STYLE("Shapes", "Create"),
-    GRADE("Tone & color", "Adjust"), PIXEL("Layer effects", "Adjust")
+    PAINT("Paint", "Create"), STYLE("Vector shapes", "Create"),
+    GRADE("Adjustments", "Adjust"), PIXEL("Layer effects", "Adjust")
 }
 
 @Composable
@@ -34,7 +34,8 @@ internal fun ProToolChooser(selected: ProSection, onTool: (ProSection) -> Unit, 
                 tools.chunked(2).forEach { pair ->
                     Row(Modifier.fillMaxWidth()) {
                         pair.forEach { tool ->
-                            Box(Modifier.weight(1f).clickable { onTool(tool) }.padding(vertical = 12.dp)) {
+                            Box(Modifier.weight(1f).heightIn(min = 48.dp)
+                                .clickable { onTool(tool) }.padding(vertical = 12.dp)) {
                                 Text(tool.title, fontSize = 14.sp,
                                     color = if (tool == selected) EditorMint else EditorWhite)
                             }
@@ -49,15 +50,15 @@ internal fun ProToolChooser(selected: ProSection, onTool: (ProSection) -> Unit, 
 
 @Composable
 internal fun ProLayerStack(
-    document: ProDocument, selected: Int, onSelect: (Int) -> Unit,
-    onVisibility: (Int) -> Unit, onAdd: () -> Unit, onDismiss: () -> Unit
+    document: ProDocument, selected: Int, enabled: Boolean, onSelect: (Int) -> Unit,
+    onVisibility: (Int) -> Unit, onDismiss: () -> Unit
 ) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Layer stack") }, text = {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             document.layers.indices.reversed().forEach { index ->
                 val layer = document.layers[index]
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).clickable { onSelect(index) }.padding(vertical = 8.dp)) {
+                    Column(Modifier.weight(1f).clickable(enabled = enabled) { onSelect(index) }.padding(vertical = 8.dp)) {
                         Text(layer.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             fontWeight = FontWeight.SemiBold,
                             color = if (index == selected) EditorMint else EditorWhite)
@@ -65,14 +66,12 @@ internal fun ProLayerStack(
                             "${(100 * layer.opacity).toInt()}%", if (layer.mask != null) "Mask" else null)
                             .joinToString(" · "), fontSize = 11.sp, color = EditorMuted)
                     }
-                    TextButton(onClick = { onVisibility(index) }, modifier = Modifier.semantics {
+                    TextButton(onClick = { onVisibility(index) }, enabled = enabled, modifier = Modifier.semantics {
                         contentDescription = (if (layer.visible) "Hide " else "Show ") + layer.name
                     }) { Text(if (layer.visible) "Visible" else "Hidden", color = EditorMuted) }
                 }
                 HorizontalDivider()
             }
         }
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-       dismissButton = { TextButton(onClick = onAdd, enabled = document.layers.size <
-           com.greenezone.gzphotoeditor.editor.ProMath.MAX_LAYERS) { Text("+ Add layer") } })
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } })
 }

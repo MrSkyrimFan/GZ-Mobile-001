@@ -111,7 +111,7 @@ internal fun VideoGifScreenContent(
         onNotice = { notice = it }, onSaved = { uri, _ ->
             lastExport = uri
             notice = "GIF saved"
-        })
+        }, initiallyShowRecovery = session.offerExportRecoveryOnEntry)
     LaunchedEffect(gifExport.uiAcknowledgement) {
         if (gifExport.uiAcknowledgement > 0) {
             withFrameNanos { }
@@ -128,11 +128,20 @@ internal fun VideoGifScreenContent(
     val committingExport = gifExport.committing
     val custody = remember { GifDocumentCustody(document, session) }
     val departure = remember { GifDepartureGate(custody) }
+    val deletion = remember(custody, gifExport) { GifWorkDeletion(custody, gifExport) }
     var saveCapture by remember { mutableStateOf<GifSaveCapture?>(null) }
     var mediaPick by remember { mutableStateOf<GifMediaPickRequest?>(null) }
-    val enabled = !busy && !exporting && !departure.pending && saveCapture == null
     var history by remember { mutableStateOf(session.history) }
     val savedName = custody.savedName
+    val editingAvailable = !busy && !departure.pending && saveCapture == null && mediaPick == null &&
+        deletion.target == null && !deletion.working
+    val enabled = editingAvailable && !exporting
+    val deleteUnavailable = when {
+        clip == null && history.undo.isEmpty() && history.redo.isEmpty() && savedName == null ->
+            "No active GIF work to delete."
+        !editingAvailable -> "Wait for the current operation to finish."
+        else -> gifExport.deleteUnavailableReason(custody.identity.ownerId)
+    }
     var dragStart by remember { mutableStateOf<GifProjectSnapshot?>(null) }
     var dragLatest by remember { mutableStateOf<GifDocument?>(null) }
     var showMenu by remember { mutableStateOf(false) }
@@ -140,6 +149,7 @@ internal fun VideoGifScreenContent(
     var showSaved by remember { mutableStateOf(false) }
     var savedNames by remember { mutableStateOf(emptyList<String>()) }
     var collapsed by remember { mutableStateOf(session.videoCollapsed) }
+    var toolsMenuOpen by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(session.videoChromeVisible) }
 
     fun pauseAt(frame: Int) {
@@ -163,7 +173,8 @@ internal fun VideoGifScreenContent(
             history = history,
             savedName = custody.savedName,
             videoCollapsed = collapsed,
-            videoChromeVisible = chromeVisible
+            videoChromeVisible = chromeVisible,
+            offerExportRecoveryOnEntry = true
         ), history))
     }
 
@@ -234,7 +245,7 @@ internal fun VideoGifScreenContent(
         departure.beginSave()
     }
     fun requestCommand(action: () -> Unit) {
-        if (busy || exporting || saveCapture != null || departure.pending || mediaPick != null) return
+        if (!enabled) return
         finishSlide()
         pauseAt(position)
         departure.request(action)
@@ -301,8 +312,39 @@ internal fun VideoGifScreenContent(
         showSaved = true
     }
 
+    fun resetAllEdits() {
+        if (!enabled || custody.current.video == null) return
+        finishSlide()
+        pauseAt(position)
+        val next = custody.current.resetGifEdits()
+        if (next == null) notice = "The original source timing is unavailable. Your edits are unchanged."
+        else if (next != custody.current) commit(next, 0)
+    }
+
+    fun deleteWork() {
+        if (deleteUnavailable != null) return
+        finishSlide()
+        pauseAt(position)
+        deletion.request()
+    }
+
+    fun finishDelete() {
+        val empty = GifDocument()
+        history = GifUndoStack()
+        mediaPick = null
+        departure.cancel()
+        lastExport = null
+        chromeVisible = true
+        collapsed = false
+        toolsMenuOpen = false
+        tab = VideoGifTab.TIMELINE
+        applySnapshot(snapshot(empty, name = null).copy(identity = custody.fresh(empty)), 0)
+        persistVideoSession()
+        notice = "GIF work deleted."
+    }
+
     fun startExport() {
-        if (!enabled || !GifMath.valid(document)) return
+        if (!enabled || gifExport.showRetainedExport() || !GifMath.valid(document)) return
         pauseAt(position)
         gifExport.start(PendingGifRecipe(document, savedName, custody.identity.project),
             diagnosticOperation, custody.identity.ownerId)
@@ -328,6 +370,7 @@ internal fun VideoGifScreenContent(
     }
     fun requestBack() {
         if (showMenu) { showMenu = false; return }
+        if (toolsMenuOpen) { toolsMenuOpen = false; return }
         if (dragStart != null) {
             val before = requireNotNull(dragStart)
             applySnapshot(before, position)
@@ -352,26 +395,34 @@ internal fun VideoGifScreenContent(
     val slideEdits: (EditDocument) -> Unit = { slide(document.copy(edits = it)) }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080B10))
-        .statusBarsPadding().navigationBarsPadding()) {
+        .windowInsetsPadding(WindowInsets.safeDrawing)) {
         val deckHeight = maxHeight * .38f
         Column(Modifier.fillMaxSize()) {
             if (chromeVisible || clip == null) EditorWorkspaceHeader(
                 workspace = WorkspaceMode.GIF,
                 commands = listOf(
-                    WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "Open video…", enabled,
-                        if (enabled) null else "Finish the current operation first") { requestCommand(::chooseVideo) },
-                    WorkspaceCommand(WorkspaceCommandId.OPEN_SECONDARY_MEDIA, "Open GIF…", enabled,
-                        if (enabled) null else "Finish the current operation first") { requestCommand(::chooseGif) },
+                    WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "New / Open media…", enabled) {},
                     WorkspaceCommand(WorkspaceCommandId.OPEN_PROJECT, "Open project…", enabled,
                         if (enabled) null else "Finish the current operation first") { openProjects() },
                     WorkspaceCommand(WorkspaceCommandId.SAVE, "Save project", enabled && GifMath.valid(document),
                         if (!GifMath.valid(document)) "Open a supported source before saving" else null) { beginSave() },
                     WorkspaceCommand(WorkspaceCommandId.SAVE_AS, "Save project as…", enabled && GifMath.valid(document),
                         if (!GifMath.valid(document)) "Open a supported source before saving" else null) { beginSave(true) },
-                    WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export GIF…", enabled && GifMath.valid(document),
-                        if (!GifMath.valid(document)) "Open a supported source before exporting" else null, ::startExport),
+                    WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export GIF…",
+                        enabled && (GifMath.valid(document) || gifExport.request != null),
+                        if (!GifMath.valid(document) && gifExport.request == null)
+                            "Open a supported source before exporting." else null, ::startExport),
+                    WorkspaceCommand(WorkspaceCommandId.RESET, "Reset all edits", enabled && clip != null,
+                        if (clip == null) "Open a source to reset edits." else null, ::resetAllEdits),
+                    WorkspaceCommand(WorkspaceCommandId.DELETE, "Delete", deleteUnavailable == null,
+                        deleteUnavailable, ::deleteWork),
                     WorkspaceCommand(WorkspaceCommandId.HELP, "Help") { pauseAt(position); showHelp = true }
                 ),
+                mediaChoices = listOf(
+                    WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "Open video…", enabled) { requestCommand(::chooseVideo) },
+                    WorkspaceCommand(WorkspaceCommandId.OPEN_SECONDARY_MEDIA, "Open GIF…", enabled) { requestCommand(::chooseGif) }
+                ),
+                allowWhileBusy = if (deleteUnavailable == null) setOf(WorkspaceCommandId.DELETE) else emptySet(),
                 canUndo = enabled && history.undo.isNotEmpty(), canRedo = enabled && history.redo.isNotEmpty(),
                 onUndo = { restore(history.undo(snapshot())) }, onRedo = { restore(history.redo(snapshot())) },
                 onChooseWorkspace = ::requestSwitch, menuExpanded = showMenu,
@@ -390,7 +441,7 @@ internal fun VideoGifScreenContent(
                 }
             }
             if (clip == null) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Select one video to turn into a GIF", color = EditorWhite,
@@ -399,7 +450,7 @@ internal fun VideoGifScreenContent(
                     Text("© 2026 Greenezone Software LLC", color = EditorMuted, fontSize = 12.sp)
                 }
             } else {
-                if (busy || exporting) {
+                if (busy || exporting || deletion.working) {
                     // Suspend decoding, frame caches and thumbnail bitmaps while
                     // replacing the source or encoding output, particularly on
                     // low-memory Android 10 devices.
@@ -437,9 +488,6 @@ internal fun VideoGifScreenContent(
                                 playing = resume
                             },
                             label = { Text("Reverse") })
-                        TextButton(enabled = enabled, onClick = { collapsed = !collapsed }) {
-                            Text(if (collapsed) "Tools ▴" else "Hide ▾", color = EditorWhite)
-                        }
                     }
                     if (!collapsed) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp),
@@ -528,8 +576,24 @@ internal fun VideoGifScreenContent(
                     }
                 }
             }
+            if (chromeVisible || clip == null) Box(Modifier.fillMaxWidth().background(EditorSurface)) {
+                WorkspaceToolsBar(expanded = clip != null && !collapsed,
+                    onOpenTools = { toolsMenuOpen = true },
+                    onToggleExpanded = { collapsed = !collapsed },
+                    target = if (clip == null) "Open a source to edit" else tab.title,
+                    enabled = enabled && clip != null)
+                DropdownMenu(expanded = toolsMenuOpen, onDismissRequest = { toolsMenuOpen = false }) {
+                    VideoGifTab.entries.forEach { choice ->
+                        DropdownMenuItem(text = { Text(choice.title) }, onClick = {
+                            tab = choice
+                            collapsed = false
+                            toolsMenuOpen = false
+                        })
+                    }
+                }
+            }
         }
-        if (!enabled) Column(Modifier.align(Alignment.Center).background(EditorSurface).padding(14.dp),
+        if (busy || exporting) Column(Modifier.align(Alignment.Center).background(EditorSurface).padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(color = EditorMint)
             Text(if (exporting) gifExport.progress else "Opening source…", color = EditorWhite)
@@ -549,6 +613,15 @@ internal fun VideoGifScreenContent(
         }
     }
     GifExportRecovery(gifExport)
+    deletion.target?.let { expected ->
+        WorkspaceDeleteDialog(
+            message = "Delete this GIF work? Your source media and saved projects stay on your phone.",
+            onConfirm = { scope.launch { deletion.confirm(expected, ::finishDelete) } },
+            onCancel = deletion::cancel,
+            busy = deletion.working,
+            error = deletion.error
+        )
+    }
     if (showHelp) GifHelpDialog { showHelp = false }
     if (departure.dialogOpen) WorkspaceDepartureDialog(
         message = "Save the current GIF project before leaving these edits?",
@@ -567,7 +640,7 @@ internal fun VideoGifScreenContent(
     }
     if (showSaved) GifSavedProjectsDialog(
         names = savedNames,
-        enabled = !busy && !exporting && saveCapture == null,
+        enabled = enabled,
         onOpen = { name ->
             showSaved = false
             requestCommand {
@@ -589,13 +662,16 @@ internal fun VideoGifScreenContent(
             }
             }
         },
-        onDelete = { name ->
-            val saved = GifStore.loadNamed(context, name)
-            (saved != null && GifStore.deleteNamed(context, saved.project)).also { deleted ->
+        onIdentifyDelete = { name ->
+            withContext(Dispatchers.IO) { GifStore.loadNamed(context, name)?.project }
+        },
+        onDelete = { expected ->
+            val deleted = withContext(Dispatchers.IO) { GifStore.deleteNamed(context, expected) }
+            deleted.also {
                 if (deleted) {
                     finishSlide()
-                    custody.detach(name)
-                    history = history.withoutSavedProject(name)
+                    custody.detach(expected.name)
+                    history = history.withoutSavedProject(expected.name)
                     savedNames = GifStore.names(context)
                     persistVideoSession()
                 }

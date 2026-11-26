@@ -23,6 +23,8 @@ object CollageStore {
             put("version", VERSION)
             put("template", layout.template.name)
             put("aspect", layout.aspect.name)
+            put("creationTemplate", document.creationTemplate.name)
+            put("creationAspect", document.creationAspect.name)
             put("gap", layout.gap.toDouble())
             put("margin", layout.margin.toDouble())
             put("radius", layout.cornerRadius.toDouble())
@@ -75,19 +77,21 @@ object CollageStore {
                 val n = obj.optDouble(name, fallback.toDouble()).toFloat()
                 return if (n.isFinite()) n.coerceIn(low, high) else fallback
             }
+            val layout = CollageLayout(
+                template = enumValue(obj.optString("template"), CollageTemplate.GRID),
+                aspect = enumValue(obj.optString("aspect"), CollageAspect.SQUARE),
+                gap = number("gap", .012f, 0f, .08f),
+                margin = number("margin", .025f, 0f, .10f),
+                cornerRadius = number("radius", .015f, 0f, .10f),
+                border = number("border", 0f, 0f, .025f),
+                background = enumValue(obj.optString("background"), CollageBackground.BLACK),
+                cellMode = enumValue(obj.optString("mode"), CollageCellMode.FILL),
+                quality = enumValue(obj.optString("quality"), CollageQuality.HIGH)
+            )
             CollageDocument(
-                photos,
-                CollageLayout(
-                    template = enumValue(obj.optString("template"), CollageTemplate.GRID),
-                    aspect = enumValue(obj.optString("aspect"), CollageAspect.SQUARE),
-                    gap = number("gap", .012f, 0f, .08f),
-                    margin = number("margin", .025f, 0f, .10f),
-                    cornerRadius = number("radius", .015f, 0f, .10f),
-                    border = number("border", 0f, 0f, .025f),
-                    background = enumValue(obj.optString("background"), CollageBackground.BLACK),
-                    cellMode = enumValue(obj.optString("mode"), CollageCellMode.FILL),
-                    quality = enumValue(obj.optString("quality"), CollageQuality.HIGH)
-                )
+                photos, layout,
+                creationTemplate = enumValue(obj.optString("creationTemplate"), layout.template),
+                creationAspect = enumValue(obj.optString("creationAspect"), layout.aspect)
             )
         } catch (_: Exception) {
             null

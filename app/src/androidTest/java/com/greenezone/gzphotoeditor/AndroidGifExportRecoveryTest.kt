@@ -188,6 +188,9 @@ class AndroidGifExportRecoveryTest {
 
     private fun gifOption(label: String) {
         rule.onNodeWithText("Options").performClick()
+        if (label == "Open video…" || label == "Open GIF…" || label == "Add photos…") {
+            rule.onNodeWithText("New / Open media…").performClick()
+        }
         rule.onNodeWithText(label).performClick()
     }
 

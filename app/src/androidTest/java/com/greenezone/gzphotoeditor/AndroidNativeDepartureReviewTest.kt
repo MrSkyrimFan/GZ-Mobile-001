@@ -99,16 +99,16 @@ class AndroidNativeDepartureReviewTest {
 
     private fun deleteCurrentPro() {
         rule.onNodeWithText("Options").performClick()
-        rule.onNodeWithText("Delete current work…").performClick()
-        rule.onNodeWithText("Delete work").performClick()
+        rule.onNodeWithText("Delete", substring = false).performClick()
+        rule.onNodeWithText("Delete", substring = false).performClick()
     }
 
     private fun waitForProDelete() {
         // The document callback can precede the SideEffect that publishes session
         // ownership. Observe the completed UI operation before reading retainedPro.
         rule.waitUntil(15_000) {
-            currentPro == originalPro &&
-                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
+            currentPro == ProDocument() &&
+                rule.onAllNodesWithText("Delete current work?").fetchSemanticsNodes().isEmpty() &&
                 rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
                     .fetchSemanticsNodes().isNotEmpty()
         }
@@ -165,14 +165,14 @@ class AndroidNativeDepartureReviewTest {
         File(blocked, "obstruction").writeText("test-only")
         deleteCurrentPro()
         rule.waitUntil(15_000) {
-            rule.onAllNodesWithText("Could not record Discard. Your Pro work remains open.")
+            rule.onAllNodesWithText("Could not record Delete. Your Pro work remains open.")
                 .fetchSemanticsNodes().isNotEmpty()
         }
         assertEquals(editedPro, currentPro)
         assertEquals(0, departures)
         assertTrue(blocked.deleteRecursively())
         assertTrue(requireNotNull(PendingExportJournal(context.filesDir).read(ExportWorkspace.PRO)).restoreNativeDraft)
-        rule.onNodeWithText("Delete work").performClick()
+        rule.onNodeWithText("Delete", substring = false).performClick()
         waitForProDelete()
         val retained = requireNotNull(PendingExportJournal(context.filesDir).read(ExportWorkspace.PRO))
         assertEquals(pending.id, retained.id)

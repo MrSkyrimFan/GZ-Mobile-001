@@ -133,7 +133,7 @@ class AndroidGifProjectIdentityTest {
         photoSave()
         submitName("Alpha photos")
         assertEquals(first, GifStore.load(storage, "Alpha photos"))
-        rule.onNodeWithText("Photos").performScrollTo().performClick()
+        rule.onNode(hasText("Photos") and hasClickAction()).performScrollTo().performClick()
         photoOpen("Beta photos")
         waitPhotoColor(Color.BLUE)
 
@@ -195,6 +195,7 @@ class AndroidGifProjectIdentityTest {
 
         videoFile("Open project…")
         rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()
+        awaitText("Delete GIF project?")
         rule.onNodeWithText("Delete GIF project?").assertIsDisplayed()
         rule.onNodeWithText("Cancel").performClick()
         rule.onNodeWithText(obsoleteName).performScrollTo().performClick()
@@ -216,18 +217,21 @@ class AndroidGifProjectIdentityTest {
         val blocked = File(base.path + ".new")
         assertTrue(base.renameTo(backup))
         assertTrue(blocked.mkdir())
-        rule.onNodeWithText("Photos").performScrollTo().performClick()
+        rule.onNode(hasText("Photos") and hasClickAction()).performScrollTo().performClick()
         videoFile("Open project…")
-        fun deleteObsolete() {
+        fun requestDeleteObsolete() {
             rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()
-            rule.onNodeWithText("Delete").performClick()
         }
-        deleteObsolete()
+        requestDeleteObsolete()
+        awaitText("Could not delete this GIF project.")
         rule.onNodeWithText("Could not delete this GIF project.").assertIsDisplayed()
         assertTrue(backup.isFile)
         assertTrue(blocked.delete())
 
-        deleteObsolete()
+        requestDeleteObsolete()
+        awaitText("Delete GIF project?")
+        rule.onNodeWithText("Delete").performClick()
+        awaitText("Saved GIF projects")
         rule.onNodeWithText(obsoleteName).assertDoesNotExist()
         rule.onNodeWithText("Close").performClick()
         assertFalse(backup.exists())
@@ -344,6 +348,9 @@ class AndroidGifProjectIdentityTest {
 
     private fun videoFile(item: String) {
         rule.onNodeWithText("Options").performClick()
+        if (item == "Open video…" || item == "Open GIF…" || item == "Add photos…") {
+            rule.onNodeWithText("New / Open media…").performClick()
+        }
         rule.onNodeWithText(item).performClick()
     }
 
@@ -385,14 +392,41 @@ class AndroidGifProjectIdentityTest {
     }
 
     private fun waitPhotoColor(expected: Int) {
-        val preview = "Animated GIF frame preview"
-        rule.waitUntil(15_000) {
-            if (rule.onAllNodesWithContentDescription(preview).fetchSemanticsNodes().isEmpty()) {
-                false
-            } else {
-                val image = rule.onNodeWithContentDescription(preview).captureToImage().asAndroidBitmap()
-                image.getPixel(image.width / 2, image.height / 2) == expected
+        val description = "Animated GIF frame preview"
+        var observation = "preview node did not appear"
+        try {
+            rule.waitUntil(15_000) {
+                val frame = rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes()
+                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
+                val header = rule.onAllNodesWithTag("workspace-header").fetchSemanticsNodes()
+                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
+                val playback = rule.onAllNodes(hasText("▶ Play") and hasClickAction()).fetchSemanticsNodes()
+                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
+
+                // The square photo is fitted in a full-window node. Its screenshot also
+                // includes the header and the lower controls drawn over that window.
+                val halfSide = minOf(frame.width, frame.height) / 2
+                val top = maxOf(frame.center.y - halfSide, header.bottom)
+                val bottom = minOf(frame.center.y + halfSide, playback.top)
+                observation = "frame=$frame, header=$header, playback=$playback"
+                if (bottom - top < 8f) return@waitUntil false
+
+                val image = rule.onNodeWithContentDescription(description).captureToImage().asAndroidBitmap()
+                try {
+                    val x = image.width / 2
+                    val y = (((top + bottom) / 2 - frame.top) * image.height / frame.height).toInt()
+                    val pixels = (-2..2).flatMap { dy -> (-2..2).map { dx ->
+                        image.getPixel(x + dx, y + dy)
+                    } }.toSet()
+                    observation += ", capture=${image.width}×${image.height}, sample=($x,$y), " +
+                        "colors=${pixels.map { it.toUInt().toString(16) }}"
+                    pixels == setOf(expected)
+                } finally {
+                    image.recycle()
+                }
             }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("Expected rendered GIF color ${expected.toUInt().toString(16)}; $observation", timeout)
         }
     }
 }

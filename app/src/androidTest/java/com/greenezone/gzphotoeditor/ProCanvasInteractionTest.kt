@@ -45,15 +45,15 @@ class ProCanvasInteractionTest {
     }
 
     private fun tool(name: String) {
-        rule.onNodeWithText("Tools ▾").performClick()
+        rule.onNodeWithTag("workspace-tools").performClick()
         rule.onNodeWithText(name).performScrollTo().performClick()
     }
 
     @Test fun hiddenBrushDrawsAndPinchNeverPaintsOrRestoresTheControls() {
         open(ProDocument(listOf(ProLayer(uri = "", name = "Ink", kind = ProLayerKind.DRAWING))))
-        tool("Brush")
+        tool("Paint")
         canvas.performTouchInput { click(center) }
-        rule.onNodeWithText("Tools ▾").assertDoesNotExist()
+        rule.onNodeWithTag("workspace-tools").assertDoesNotExist()
         canvas.performTouchInput {
             val r = minOf(width, height) * .13f
             down(0, center - Offset(r, 0f))
@@ -65,7 +65,7 @@ class ProCanvasInteractionTest {
             up(1)
         }
         rule.runOnIdle { assertTrue(result.layers.single().edits.creative.strokes.isEmpty()) }
-        rule.onNodeWithText("Tools ▾").assertDoesNotExist()
+        rule.onNodeWithTag("workspace-tools").assertDoesNotExist()
         canvas.performTouchInput {
             val r = minOf(width, height) * .15f
             swipe(center - Offset(r, 0f), center + Offset(r, 0f))
@@ -82,7 +82,7 @@ class ProCanvasInteractionTest {
             val color = frame.toPixelMap()[frame.width / 2, frame.height / 2]
             color.green > color.red + .15f && color.green > color.blue
         }
-        rule.onNodeWithText("Tools ▾").assertDoesNotExist()
+        rule.onNodeWithTag("workspace-tools").assertDoesNotExist()
         canvas.performTouchInput { click(center) }
         rule.onNodeWithContentDescription("Undo").performClick()
         rule.runOnIdle { assertTrue(result.layers.single().edits.creative.strokes.isEmpty()) }
@@ -112,7 +112,7 @@ class ProCanvasInteractionTest {
                 mask = ProSelection(ProSelectionKind.RECTANGLE, width = .22f, height = .5f))
             val original = ProDocument(listOf(lower, upper))
             open(original)
-            tool("Brush")
+            tool("Paint")
             val startedAt = SystemClock.elapsedRealtime()
             canvas.performTouchInput {
                 val radius = minOf(width, height) * .36f
@@ -156,7 +156,7 @@ class ProCanvasInteractionTest {
             color = Color.BLUE, thickness = .075f)
         open(ProDocument(listOf(ProLayer(uri = "", name = "Ink", kind = ProLayerKind.DRAWING,
             edits = EditDocument(creative = CreativeDocument(strokes = listOf(ink)))))))
-        tool("Brush")
+        tool("Paint")
         rule.onNodeWithText("Eraser").performClick()
         rule.waitUntil(10_000) {
             val prior = canvas.captureToImage()
@@ -207,7 +207,7 @@ class ProCanvasInteractionTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "Long stroke " + System.nanoTime().toString().takeLast(10)
         open(ProDocument(listOf(ProLayer(uri = "", name = "Long ink", kind = ProLayerKind.DRAWING))))
-        tool("Brush")
+        tool("Paint")
         fun stageLongGesture() {
             canvas.performTouchInput {
                 val edge = minOf(width, height).toFloat()
@@ -308,7 +308,7 @@ class ProCanvasInteractionTest {
             canvas.performTouchInput { longClick(center + Offset(minOf(width, height) * .22f, 0f)) }
             rule.runOnIdle { assertTrue(result.layers.single().retouches.isEmpty()) }
             canvas.performTouchInput { longClick(center - Offset(minOf(width, height) * .22f, 0f)) }
-            rule.onNodeWithText("Tools ▾").assertDoesNotExist()
+            rule.onNodeWithTag("workspace-tools").assertDoesNotExist()
             rule.runOnIdle {
                 val mark = result.layers.single().retouches.single()
                 assertEquals(.72f, mark.sourceX, .025f)
