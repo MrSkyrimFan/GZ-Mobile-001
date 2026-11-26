@@ -322,7 +322,7 @@ class AndroidU1ProcessRecoveryTest {
         waitContent(hide)
         compose.onNodeWithContentDescription(hide, substring = false).performTouchInput { click() }
         waitContent("Show $OVERLAY_LAYER")
-        val changed = awaitActiveWork(store, "The layer edit after named Open was not acknowledged") {
+        val changed = awaitActiveWork(store, "The layer edit after named Open was not acknowledged for ${opened.id}") {
             it.mode == NativeWorkMode.PRO && it.id == opened.id &&
                 it.pro?.document?.layers?.any { layer -> layer.name == OVERLAY_LAYER && !layer.visible } == true
         }
@@ -441,9 +441,11 @@ class AndroidU1ProcessRecoveryTest {
         } finally {
             if (matched == null) {
                 val last = observed
+                val pro = last?.pro
+                val layer = pro?.document?.layers?.firstOrNull { it.name == OVERLAY_LAYER }
                 Log.i(TAG, "pending: $missing, mode=${last?.mode}, root=${last?.id}, " +
-                    "named=${last?.pro?.saveTarget?.savedRef?.name}")
-                Log.i(TAG, compose.onRoot().printToString())
+                    "named=${pro?.saveTarget?.savedRef?.name}, revision=${pro?.contentRevision}, " +
+                    "overlayVisible=${layer?.visible}")
             }
         }
         return requireNotNull(matched)

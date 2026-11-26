@@ -1587,11 +1587,15 @@ fun PhotoEditorScreen(
         }
     }
 
+    fun canCheckpointNativeWork(): Boolean =
+        nativeReady && switchRequest == null && !switchBusy && !busy && !exporting &&
+            !liveGesture && !painting
+
     LaunchedEffect(nativeActive?.ref?.id, workspaceNavigation.current, contentRevision,
-        proSession.contentRevision, activePhotoProject, proSession.saveTarget.savedRef, switchBusy) {
+        proSession.contentRevision, activePhotoProject, proSession.saveTarget.savedRef,
+        canCheckpointNativeWork()) {
         val previous = nativeActive ?: return@LaunchedEffect
-        if (!nativeReady || switchRequest != null || switchBusy || busy || exporting ||
-            liveGesture || painting) return@LaunchedEffect
+        if (!canCheckpointNativeWork()) return@LaunchedEffect
         val mode = when (workspaceNavigation.current) {
             WorkspaceMode.PHOTO -> NativeWorkMode.REGULAR
             WorkspaceMode.PRO -> NativeWorkMode.PRO
@@ -1599,31 +1603,46 @@ fun PhotoEditorScreen(
         }
         val current = captureNativeWork(mode)
         if (current.id != previous.ref.id || previous.state == current) return@LaunchedEffect
-        val expectedRegular = contentRevision
-        val expectedPro = proSession.contentRevision
-        val catalog = when (val loaded = nativeStore.recover()) {
-            is NativeWorkResult.Ok -> loaded.value
-            is NativeWorkResult.Failed -> { notice = nativeWorkMessage(loaded.reason); return@LaunchedEffect }
-        }
-        if (catalog.active?.ref?.id != current.id) return@LaunchedEffect
+
+        fun stillOwnsEdit(): Boolean = canCheckpointNativeWork() &&
+            workspaceNavigation.current == mode.workspace() && nativeActive?.ref?.id == current.id &&
+            captureNativeWork(mode) == current
+
         val prepared = when (val result = nativeStore.prepare(current)) {
             is NativeWorkResult.Ok -> result.value
             is NativeWorkResult.Failed -> {
-                notice = nativeWorkMessage(result.reason)
+                if (stillOwnsEdit()) notice = nativeWorkMessage(result.reason)
                 return@LaunchedEffect
             }
         }
-        if (switchRequest != null || expectedRegular != contentRevision ||
-            expectedPro != proSession.contentRevision || current.mode.workspace() != workspaceNavigation.current
-        ) return@LaunchedEffect
-        when (val result = nativeStore.acknowledge(catalog.revision, prepared)) {
-            is NativeWorkResult.Ok -> {
-                nativeCatalog = result.value
-                nativeActive = result.value.active?.let { NativeWorkLoaded(it.ref, prepared.state) }
+        try {
+            // A prior checkpoint can advance this root while its new generation is staged.
+            // Re-read on one stale revision while the exact completed edit still owns the route.
+            repeat(2) {
+                if (!stillOwnsEdit()) return@LaunchedEffect
+                val catalog = when (val loaded = nativeStore.recover()) {
+                    is NativeWorkResult.Ok -> loaded.value
+                    is NativeWorkResult.Failed -> {
+                        notice = nativeWorkMessage(loaded.reason)
+                        return@LaunchedEffect
+                    }
+                }
+                if (catalog.active?.ref?.id != current.id || !stillOwnsEdit()) return@LaunchedEffect
+                when (val result = nativeStore.acknowledge(catalog.revision, prepared)) {
+                    is NativeWorkResult.Ok -> {
+                        nativeCatalog = result.value
+                        nativeActive = result.value.active?.let { NativeWorkLoaded(it.ref, prepared.state) }
+                        return@LaunchedEffect
+                    }
+                    is NativeWorkResult.Failed -> if (result.reason != NativeWorkFailure.STALE) {
+                        if (stillOwnsEdit()) notice = nativeWorkMessage(result.reason)
+                        return@LaunchedEffect
+                    }
+                }
             }
-            is NativeWorkResult.Failed -> if (result.reason != NativeWorkFailure.STALE) {
-                notice = nativeWorkMessage(result.reason)
-            }
+            if (stillOwnsEdit()) notice = nativeWorkMessage(NativeWorkFailure.STALE)
+        } finally {
+            withContext(NonCancellable) { nativeStore.release(prepared) }
         }
     }
 
@@ -1899,6 +1918,7 @@ fun PhotoEditorScreen(
     val privacyRegionSelected = !compare && !busy && !exporting &&
         selectedTab == EditTab.PRIVACY && activePrivacy != null &&
         !activePrivacy.kind.usesBrush && zoom <= 1.001f
+    val controlsInsetCanvas = cropTab || selectedTab == EditTab.PRIVACY
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color(0xFF080B10)).clipToBounds(),
@@ -1906,14 +1926,14 @@ fun PhotoEditorScreen(
     ) {
         if (selectedImage != null) {
             val viewportInsets = when {
-                selectedTab != EditTab.CROP -> Modifier
+                !controlsInsetCanvas -> Modifier
                 chromeVisible -> with(LocalDensity.current) {
                     Modifier.padding(top = topChromeHeight.toDp(), bottom = bottomChromeHeight.toDp())
                 }
                 else -> Modifier.statusBarsPadding().navigationBarsPadding()
             }
-            // Fit the crop image, Before image, and gesture coordinates inside the
-            // same viewport so visible handles stay clear of the header and dock.
+            // Keep the crop and privacy previews and their hit targets in the same
+            // exposed area below the header and above the expanded dock.
             Box(Modifier.fillMaxSize().then(viewportInsets)) {
                 val stableCoordinates = previewState.beforeImage ?: selectedImage
                 Image(
@@ -2127,7 +2147,7 @@ fun PhotoEditorScreen(
 
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .then(if (selectedTab == EditTab.CROP) {
+                    .then(if (controlsInsetCanvas) {
                         Modifier.onSizeChanged { bottomChromeHeight = it.height }
                     } else Modifier)
                     .navigationBarsPadding()

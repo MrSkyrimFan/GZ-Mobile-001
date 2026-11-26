@@ -638,7 +638,7 @@ class AndroidRegularToolsTest {
         rule.onNodeWithText("Blur & cover").performClick()
         rule.onNodeWithText("+ Blur brush").performClick()
         val canvas = rule.onNodeWithContentDescription("Photo editing canvas. Tap to hide or show tools.")
-        canvas.performClick()
+        canvas.performTouchInput { click(center) }
         rule.onNodeWithTag("photo-tools").assertDoesNotExist()
 
         fun sample(): Int {

@@ -411,7 +411,7 @@ class AndroidRegularEraseInteractionTest {
     }
 
     private fun editSelectedTile() {
-        rule.onNodeWithText("Photos", substring = false).performClick()
+        rule.onNode(hasText("Photos") and hasClickAction()).performClick()
         rule.onNodeWithText("Photo 1", substring = false).performClick()
         rule.onNodeWithTag("collage-tile-actions").performScrollToNode(hasText("Edit selected"))
         rule.onNodeWithText("Edit selected", substring = false).performClick()

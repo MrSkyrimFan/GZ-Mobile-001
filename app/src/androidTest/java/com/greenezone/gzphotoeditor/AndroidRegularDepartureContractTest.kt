@@ -411,7 +411,7 @@ class AndroidRegularDepartureContractTest {
 
     @Test fun u1IdenticalDerivativeBytesDoNotReplayAnAlreadyLinkedRegularFinish() {
         withEditor(realBridgeRoot = true) { fixture ->
-            val name = "U1 identical derivative " + System.nanoTime().toString().takeLast(10)
+            val name = "U1 same PNG " + System.nanoTime().toString().takeLast(10)
             fun bringTo(label: String) {
                 workspace(label)
                 rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }

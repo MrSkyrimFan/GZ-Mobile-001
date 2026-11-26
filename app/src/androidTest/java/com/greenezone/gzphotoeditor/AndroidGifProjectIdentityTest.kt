@@ -133,7 +133,7 @@ class AndroidGifProjectIdentityTest {
         photoSave()
         submitName("Alpha photos")
         assertEquals(first, GifStore.load(storage, "Alpha photos"))
-        rule.onNodeWithText("Photos").performScrollTo().performClick()
+        rule.onNode(hasText("Photos") and hasClickAction()).performScrollTo().performClick()
         photoOpen("Beta photos")
         waitPhotoColor(Color.BLUE)
 
@@ -217,7 +217,7 @@ class AndroidGifProjectIdentityTest {
         val blocked = File(base.path + ".new")
         assertTrue(base.renameTo(backup))
         assertTrue(blocked.mkdir())
-        rule.onNodeWithText("Photos").performScrollTo().performClick()
+        rule.onNode(hasText("Photos") and hasClickAction()).performScrollTo().performClick()
         videoFile("Open project…")
         fun requestDeleteObsolete() {
             rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()

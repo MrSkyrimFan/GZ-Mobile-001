@@ -210,6 +210,9 @@ class AndroidRegularObjectGestureContractTest {
             node.performTouchInput { down(start); moveTo(held) }
             rule.waitForIdle()
             rule.mainClock.advanceTimeBy(80)
+            if (tool == "Blur & cover") {
+                rule.onNodeWithContentDescription("Back", substring = false).assertIsNotEnabled()
+            }
             back()
             node.performTouchInput { moveTo(late); up() }
             rule.waitForIdle()
