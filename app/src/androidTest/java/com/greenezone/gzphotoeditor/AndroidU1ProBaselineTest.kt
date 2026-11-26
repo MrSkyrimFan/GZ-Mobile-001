@@ -379,7 +379,7 @@ class AndroidU1ProBaselineTest {
         rule.setContent {
             var current by remember { mutableStateOf(initial) }
             var currentSession by remember { mutableStateOf(session) }
-            val picker = registry ?: LocalActivityResultRegistryOwner.current
+            val picker = registry ?: requireNotNull(LocalActivityResultRegistryOwner.current)
             CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
                 MaterialTheme(colorScheme = darkColorScheme()) {
                     ProWorkspaceScreenContent(
