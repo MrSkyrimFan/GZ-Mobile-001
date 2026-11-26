@@ -199,7 +199,8 @@ internal fun ProWorkspaceScreenContent(
     prepareOpenedNamedProject: (suspend (NamedProject<ProStore.SavedProject>) -> Boolean)? = null,
     onOpenedNamedProject: ((NamedProject<ProStore.SavedProject>, ProWorkspaceSession) -> Unit)? = null,
     workingDrafts: List<Pair<String, String>> = emptyList(),
-    onOpenWorkingDraft: ((String, ProDocument, ProWorkspaceSession) -> Unit)? = null
+    onOpenWorkingDraft: ((String, ProDocument, ProWorkspaceSession) -> Unit)? = null,
+    linkedDraftDirty: Boolean = false
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -819,7 +820,7 @@ internal fun ProWorkspaceScreenContent(
         val ref = saveTarget.savedRef
         val token = departure?.token ?: operationToken()
         if (!asCopy && ref != null) {
-            if (!workspaceSnapshot().isDirty(document) && departure == null) {
+            if (!linkedDraftDirty && !workspaceSnapshot().isDirty(document) && departure == null) {
                 notice = "Already saved."
                 return
             }
@@ -1468,6 +1469,7 @@ internal fun ProWorkspaceScreenContent(
     }
 
     val available = canEditDocument()
+    val hasUnsavedWork = linkedDraftDirty || workspaceSnapshot().isDirty(document)
     val hasWork = documentEstablished || resetDocument != null || document != ProDocument() ||
         history.undo.isNotEmpty() || history.redo.isNotEmpty()
     val operationUnavailable = "Finish the current operation first."
@@ -1490,10 +1492,10 @@ internal fun ProWorkspaceScreenContent(
                             if (!available) operationUnavailable else null, onInvoke = ::openProjects),
                         WorkspaceCommand(WorkspaceCommandId.SAVE, "Save project",
                             available && ProMath.valid(document) &&
-                                (saveTarget.savedRef == null || workspaceSnapshot().isDirty(document)),
+                                (saveTarget.savedRef == null || hasUnsavedWork),
                             when {
                                 !ProMath.valid(document) -> "Add a layer before saving this setup."
-                                saveTarget.savedRef != null && !workspaceSnapshot().isDirty(document) -> "Already saved."
+                                saveTarget.savedRef != null && !hasUnsavedWork -> "Already saved."
                                 !available -> "Finish the current operation first."
                                 else -> null
                             }) { startSave() },
@@ -1536,7 +1538,8 @@ internal fun ProWorkspaceScreenContent(
                     menuExpanded = showFile, onMenuExpandedChange = { showFile = it },
                     enabled = available, onBack = ::requestBack
                 )
-                if (notice.isNotBlank()) Text(notice, color = EditorMint, fontSize = 12.sp,
+                val status = notice.ifBlank { if (linkedDraftDirty) "Unsaved linked work" else "" }
+                if (status.isNotBlank()) Text(status, color = EditorMint, fontSize = 12.sp,
                     maxLines = 2, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
             }
             Box(Modifier.weight(1f).fillMaxWidth().clipToBounds(), contentAlignment = Alignment.Center) {

@@ -33,6 +33,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /** The external runner inserts a force-stop between seed and reopen. */
+@U1TargetedCheck
 @RunWith(AndroidJUnit4::class)
 class AndroidU1ProcessRecoveryTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -311,7 +312,17 @@ class AndroidU1ProcessRecoveryTest {
         do {
             val current = runBlocking {
                 val catalog = ok(store.recover())
-                catalog.active?.let { ok(store.load(it.ref)).state }
+                catalog.active?.let { selected ->
+                    when (val loaded = store.load(selected.ref)) {
+                        is NativeWorkResult.Ok -> loaded.value.state
+                        is NativeWorkResult.Failed -> {
+                            // The host may acknowledge the layer edit after this poll read the catalog.
+                            // Retry that exact revision race using the next authoritative catalog.
+                            if (loaded.reason != NativeWorkFailure.STALE) error("Native custody failed: ${loaded.reason}")
+                            null
+                        }
+                    }
+                }
             }
             if (current?.mode == NativeWorkMode.PRO &&
                 current.pro?.document?.layers?.any { it.name == OVERLAY_LAYER && !it.visible } == true)

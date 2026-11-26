@@ -301,6 +301,59 @@ class AndroidRegularDepartureContractTest {
         }
     }
 
+    @Test fun u1RegularSwitchSavesInlineAndThenOpensBlankPro() {
+        withEditor { fixture ->
+            val name = "U1 Regular inline"
+            openPhoto(fixture)
+            flip()
+            workspace("Photo editing Pro")
+            rule.onNodeWithText("Save current work", substring = false).performTouchInput { click(center) }
+            rule.onNodeWithText("Bring current work", substring = false).assertExists()
+            rule.onNode(hasSetTextAction()).performTextReplacement(name)
+            rule.onNodeWithText("Save current work", substring = false).performTouchInput { click(center) }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Open a photo or create a canvas from Options.", substring = false)
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+            val saved = requireNotNull(ProjectStore.loadNamed(fixture.context, name))
+            assertEquals(fixture.sources[0], saved.content.image)
+            assertTrue(saved.content.document.mirrored)
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+        }
+    }
+
+    @Test fun u1ProSwitchSavesTheLinkedWorkInlineAndThenOpensBlankRegular() {
+        withEditor(realBridgeRoot = true) { fixture ->
+            val name = "U1 Pro inline " + System.nanoTime().toString().takeLast(10)
+            try {
+                openPhoto(fixture)
+                flip()
+                workspace("Photo editing Pro")
+                rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Original photo · Image", substring = false)
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                workspace("Photo editing")
+                rule.onNodeWithText("Save current work", substring = false).performTouchInput { click(center) }
+                rule.onNodeWithText("Bring current work", substring = false).assertExists()
+                rule.onNode(hasSetTextAction()).performTextReplacement(name)
+                rule.onNodeWithText("Save current work", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Choose Options → New photo… to begin.", substring = false)
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+                val saved = requireNotNull(ProStore.loadNamed(fixture.context, name))
+                assertNotNull(saved.content.linkedWork)
+                assertEquals(fixture.sources[0].toString(), saved.content.document.layers.single().uri)
+                assertTrue(saved.content.document.layers.single().edits.mirrored)
+                rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+            } finally {
+                ProStore.delete(fixture.context, name)
+            }
+        }
+    }
+
     @Test fun canceledAndDuplicatePickerResultsCannotReplaceOrCancelANewerImport() {
         withEditor { fixture ->
             openPhoto(fixture)

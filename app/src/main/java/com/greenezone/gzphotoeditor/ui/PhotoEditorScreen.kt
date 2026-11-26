@@ -1779,6 +1779,11 @@ fun PhotoEditorScreen(
                 },
                 onRevokeWorkingSession = ::revokeWorkingOwner,
                 saveCapturedProject = ::saveCapturedPro,
+                linkedDraftDirty = nativeActive?.state?.let { active ->
+                    active.pro?.nativeOwnerKey() == proSession.nativeOwnerKey() &&
+                        active.regular?.ownerId == photoOwnerId &&
+                        (document != baselineDocument || sourceUri?.toString() != baselineUri)
+                } == true,
                 workingDrafts = workingDrafts(NativeWorkMode.PRO),
                 onOpenWorkingDraft = { id, captured, session ->
                     proDocument = captured

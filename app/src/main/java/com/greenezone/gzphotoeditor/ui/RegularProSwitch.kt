@@ -126,9 +126,11 @@ internal suspend fun prepareBring(
         selectedLayer = 0,
         saveTarget = saveTarget,
         nextWorkId = 1,
-        entry = initial.second,
+        // The import is the Pro entry, while Reset still uses retained source media.
+        // A dirty Regular companion remains dirty and is retained across ordinary Back.
+        entry = initial.first,
         reset = initial.second,
-        baselines = mapOf(0L to ProWorkBaseline(initial.second)),
+        baselines = mapOf(0L to ProWorkBaseline(initial.first)),
         history = ProHistory()
     )
     val link = (from.link ?: NativeWorkLink()).copy(ownedPlacementId = initial.third)
