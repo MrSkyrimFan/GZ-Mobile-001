@@ -63,8 +63,11 @@ internal suspend fun prepareBring(
             is NativeWorkResult.Failed -> return staged
         }
         onDerivative(derivative)
-        val prior = from.regular
-        val regular = prior?.takeIf { it.uri == derivative.uri } ?: NativeRegularState(
+        // Identical PNG bytes can represent different native Pro revisions. Only an exact
+        // derivative can retain a Regular recipe that has not already been folded into Pro.
+        val regular = from.regular?.takeIf {
+            it.uri == derivative.uri && from.link?.derivative == derivative
+        } ?: NativeRegularState(
             ownerId = UUID.randomUUID().toString(),
             sourceId = derivative.sha,
             sourceRevision = 0,

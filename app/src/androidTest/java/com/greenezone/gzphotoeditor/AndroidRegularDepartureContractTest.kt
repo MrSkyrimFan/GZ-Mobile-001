@@ -409,6 +409,57 @@ class AndroidRegularDepartureContractTest {
         }
     }
 
+    @Test fun u1IdenticalDerivativeBytesDoNotReplayAnAlreadyLinkedRegularFinish() {
+        withEditor(realBridgeRoot = true) { fixture ->
+            val name = "U1 identical derivative " + System.nanoTime().toString().takeLast(10)
+            fun bringTo(label: String) {
+                workspace(label)
+                rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+                if (label == "Photo editing") waitPhoto()
+                else rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Original photo · Image", substring = false)
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+            }
+
+            try {
+                // The solid-color source produces identical PNGs before and after the flip.
+                // Its editable native parent differs once the first Regular finish is linked.
+                openPhoto(fixture)
+                bringTo("Photo editing Pro")
+                bringTo("Photo editing")
+                flip()
+                bringTo("Photo editing Pro")
+                bringTo("Photo editing")
+                rule.onNodeWithContentDescription("Undo", substring = false).assertIsNotEnabled()
+                bringTo("Photo editing Pro")
+
+                options("Save project as…")
+                rule.onNode(hasSetTextAction()).performTextReplacement(name)
+                rule.onNodeWithText("Save", substring = false).performTouchInput { click(center) }
+                rule.waitUntil(15_000) {
+                    rule.onAllNodesWithText("Save Pro project", substring = false).fetchSemanticsNodes().isEmpty()
+                }
+                val saved = requireNotNull(ProStore.loadNamed(fixture.context, name))
+                val manifest = requireNotNull(saved.content.linkedWork)
+                val result = runBlocking {
+                    NativeWorkStore(fixture.context).loadNamed(manifest, saved.project)
+                } as NativeWorkResult.Ok<NativeWorkState>
+                val restored = result.value
+                val nativePro = requireNotNull(restored.pro).document
+                val regular = requireNotNull(restored.regular)
+                val derivative = requireNotNull(restored.link?.derivative)
+                val finish = nativePro.linkedFinishes.single()
+                assertEquals(finish.derivativeSha, derivative.sha)
+                assertNotEquals(finish.proParentSha, derivative.parent.sha)
+                assertTrue(NativeWorkCodec(NativeWorkFiles(fixture.context)).finishRecipe(finish).mirrored)
+                assertEquals(EditDocument(), regular.document)
+            } finally {
+                ProStore.delete(fixture.context, name)
+            }
+        }
+    }
+
     @Test fun u1RegularSwitchSavesInlineAndThenOpensBlankPro() {
         withEditor { fixture ->
             val name = "U1 Regular inline"
