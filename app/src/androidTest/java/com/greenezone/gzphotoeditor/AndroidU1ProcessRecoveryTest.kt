@@ -33,6 +33,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /** The external runner inserts a force-stop between seed and reopen. */
+@U1TargetedCheck
 @RunWith(AndroidJUnit4::class)
 class AndroidU1ProcessRecoveryTest {
     @get:Rule val compose = createEmptyComposeRule()

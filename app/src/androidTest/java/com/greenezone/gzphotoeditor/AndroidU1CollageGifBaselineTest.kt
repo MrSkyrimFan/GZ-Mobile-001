@@ -33,6 +33,7 @@ import java.io.File
 import java.nio.file.Files
 
 /** Real Options entry points against the qualified app before the U1 command change. */
+@U1TargetedCheck
 @RunWith(AndroidJUnit4::class)
 class AndroidU1CollageGifBaselineTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
