@@ -1,7 +1,7 @@
 # Workspace interaction and tool-ownership blueprint
 
-**Status:** Controlling workspace behavior. PR #46 engineering-qualifies U1, with the focused owner handset confirmation and wider family exits still open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
-Updated November 25, 2026 (America/Denver), following the [0.12.13 owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md).
+**Status:** Controlling workspace behavior. PR #46's qualification remains credited; the [November 26 independent review](coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) requires bounded native-tool activation and failed-Open cleanup corrections before a clean handset recommendation. [Active follow-up](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) precedes remaining R1.2; wider family and owner exits stay open.
+Updated November 26, 2026 (America/Denver), preserving the [0.12.13 owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and all existing interaction requirements.
 
 This is the detailed interaction contract under [PRODUCT_SPEC](PRODUCT_SPEC.md), not a second roadmap. [GZ_ENGINEERING_ROADMAP](GZ_ENGINEERING_ROADMAP.md) preserves all 77 families; [WORK_LEDGER](WORK_LEDGER.md) alone orders execution. Latest direct owner instructions control. Historical blueprints, CQ answers and receipts remain evidence except for the specifically superseded interaction clauses named below.
 
@@ -157,6 +157,16 @@ The minimum Regular-and-Pro durable checkpoint/lineage slice is brought forward 
 Capture source, destination, child exclusion and expected revisions once. Prepare/validate derived content and displaced-target custody before committing route or destructive disposition. Bind a single execution token to that captured intent. Repeated taps do not execute twice.
 
 Cancel, low storage, failed save/derivative/checkpoint, missing grants or a stale source/target keep work and route intact; an explicitly completed named Save remains accurately recorded. A stale successful save cannot declare a newer edit clean or authorize its departure. Late picker/render/save callbacks can clean up only their own resources. On actual process loss, restore the last acknowledged native generation without auto-confirming the pending switch or reapplying a partial gesture.
+
+### U1 review follow-up — native editing and preparation ownership
+
+These are enforcement details for the existing editable-round-trip and failure contracts, not new product scope.
+
+- Any actual entry point into a native Pro editing tool, including Layers shortcuts, uses the same guarded transition out of finished-output preview. The displayed selection/retouch instructions must match the active target and usable canvas. Keep the native parent and linked Regular finishes intact; tool selection alone creates no content history.
+- Every prepared native-work handle has an explicit owner until transfer or release. Failed source decode, stale/publication failure and cancellation, including acquisition/result delivery, release only the operation's own leases. Reference-aware collection still preserves named/active/draft/export roots; success and failure do not justify clearing global stages.
+- A completed inline named Save remains accurately acknowledged if its switch is canceled. Cancel keeps the route, and a stale save result cannot clean newer edits. The review's U1R-V1 item requires a controlled held-publication test before further impact claims or a production correction.
+
+The [finite follow-up](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) owns reproductions and file boundaries; [the ledger](WORK_LEDGER.md#next-engineering-action--u1-review-follow-up) alone orders execution.
 
 ## Pro Blend: usable property, truthful preview
 

@@ -1,12 +1,12 @@
 # GZ Editor Pro — complete product roadmap
 
-> **Current work — November 25, 2026.** [PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46) qualifies **0.12.14 Test / code 26 / phonetest.v26** for focused handset confirmation. Application merge **e6321322526521ace13a45c231b25bb08f91c565** and candidate each passed JVM/build/signing and **303/303 on API29 and API35**, with separate force-stop and new-process native recovery on each API. **Remaining R1.2 is the next engineering package.** B2 numerical and F03 matched-workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
+> **Current work — November 26, 2026.** PR #46 / **0.12.14 Test, code 26** remains the recorded engineering checkpoint at **e6321322526521ace13a45c231b25bb08f91c565**: candidate and merge passed JVM/build/signing, **303/303 on API29 and API35**, and separate new-process recovery. The [independent U1 review](coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) found two medium-severity defects in linked Pro tool activation and failed-Open staging cleanup. **Next: bounded U1 review follow-up, then remaining R1.2.** Hold a clean U1 handset recommendation until the follow-up qualifies. Prior passes remain credited; B2/F03, RV5 and all device/owner/release gates remain open. [Active dispatch](WORK_LEDGER.md#next-engineering-action--u1-review-follow-up).
 
-## Current sequence — remaining R1.2 after U1
+## Current sequence — U1 review follow-up, then remaining R1.2
 
 The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied 0.12.13 phone checks 1–5 and specifically opens Pro blend/input, tool ownership, common control positions, Delete/Reset and symmetric Regular↔Pro transfer. The [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) replaces the old conflicting interaction clauses while preserving source/history/cancel/child safety.
 
-**Remaining R1.2 follows the qualified U1 correction wave.** U1 includes the Regular/Pro durable draft and lineage slice needed by Bring. Complete the remaining recovery, history and custody scope, then the other R1 and R2–R11 children below. B2/F03 measurement and RV5 remain explicit. All 77 families and their required children remain in scope.
+**The bounded [U1 review follow-up](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) is next, followed by remaining R1.2.** Correct the two source-confirmed defects and dispose of the single held-save validation item; retain PR #46's actual qualification. U1 includes the Regular/Pro durable draft and lineage slice needed by Bring. Complete the remaining recovery, history and custody scope, then the other R1 and R2–R11 children below. B2/F03 measurement and RV5 remain explicit. All 77 families and their required children remain in scope.
 
 A1's 25/50 exchange is complete and its activation consumed. Frozen historical roadmaps and CQ answers retain evidence, not superseded execution rules. This remains the single active R0–R11 roadmap. The [ledger](WORK_LEDGER.md) owns exact dispatch and qualifications.
 
@@ -22,7 +22,7 @@ Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WO
 
 Qualified app **e6321322526521ace13a45c231b25bb08f91c565**, 0.12.14 Test/code26, passed 303/303 on each API at candidate and merge, plus JVM/build/signing and separate new-process recovery. Earlier R1.1/RV4 and PR #41 bounded repairs remain credited. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
-Earlier unmentioned supplied phone checks retain their owner-reported scope. U1 awaits focused handset confirmation. B2 preparation and response misses, F03 quantitative matched-workload evidence, RV5 provider stage/retry ownership, broader device/process-loss evidence, formal workspace locks and release remain open.
+Earlier unmentioned supplied phone checks retain their owner-reported scope. A clean U1 handset recommendation awaits its bounded review corrections; the focused owner confirmation remains open. B2 preparation and response misses, F03 quantitative matched-workload evidence, RV5 provider stage/retry ownership, broader device/process-loss evidence, formal workspace locks and release remain open.
 
 All 77 family IDs and required children below are retained. A minimal bridge checkpoint adapter does not complete S03/S06, all R1.2, Pro groups/compositor, or Photoshop/GIMP-level capability.
 
@@ -84,7 +84,7 @@ The original four defects passed that engineering exit in PR #29. The separately
 
 ### Qualified correction U1 — coherent workspace workflow
 
-U1 is a bounded correction within S01/S03/S04/S06/S08, P01/P07/P08/P10, C03 and Q01, not new families or a replacement roadmap.
+U1 is a bounded correction within S01/S03/S04/S06/S08, P01/P07/P08/P10, C03 and Q01, not new families or a replacement roadmap. PR #46's recorded exits are retained; the November 26 review adds the finite U1R-01/U1R-02 correction and U1R-V1 validation before remaining R1.2. Native selection/retouch entry coverage touches existing P05/P09 without completing those families.
 
 1. Reproduce O25-01 through actual Blend input; preserve all16 modes and demonstrate selected value/history/native reopen/export, including no-backdrop and busy states.
 2. Make Pro's layer/mask/vector/adjustment ownership explicit; remove the generic duplicated Regular development deck without removing professional paint/shapes/adjustments or legacy editability.
