@@ -32,6 +32,10 @@ internal class NativeWorkStore(context: Context) {
 
     fun hasRecoveryRecord(): Boolean = catalogFiles().any(File::exists)
 
+    /** Exact handles still protected in this store. Instrumentation uses this after operations settle. */
+    internal suspend fun outstandingStageLeasesForTest(): Int =
+        withContext(Dispatchers.IO) { mutex.withLock { stages[directoryKey]?.size ?: 0 } }
+
     suspend fun recover(): NativeWorkResult<NativeWorkCatalog> = locked {
         val current = readCatalog()
         if (coldFolders.add(directoryKey)) {
@@ -93,18 +97,32 @@ internal class NativeWorkStore(context: Context) {
         state.copy(id = newId(), regular = regular, pro = pro)
     }
 
-    suspend fun prepare(state: NativeWorkState): NativeWorkResult<NativeWorkPrepared> = locked {
-        val budget = Budget(10_000L, 128L * 1024 * 1024)
-        val current = readCatalog()
-        val prepared = try {
-            NativeWorkCodec(files, budget::check).encode(state)
-        } catch (full: NativeWorkLimit) {
-            collect(current, cold = false)
-            NativeWorkCodec(files, budget::check).encode(state)
+    suspend fun prepare(state: NativeWorkState): NativeWorkResult<NativeWorkPrepared> {
+        var undelivered: NativeWorkPrepared? = null
+        try {
+            val result = locked {
+                val budget = Budget(10_000L, 128L * 1024 * 1024)
+                val current = readCatalog()
+                val prepared = try {
+                    NativeWorkCodec(files, budget::check).encode(state)
+                } catch (full: NativeWorkLimit) {
+                    collect(current, cold = false)
+                    NativeWorkCodec(files, budget::check).encode(state)
+                }
+                budget.check()
+                undelivered = prepared
+                protect(prepared, "m:" + prepared.manifest.sha)
+                prepared
+            }
+            // A completed IO block can still lose its result to prompt cancellation
+            // before this caller resumes. Keep ownership until that handoff succeeds.
+            if (result is NativeWorkResult.Ok) undelivered = null
+            return result
+        } finally {
+            undelivered?.let { prepared ->
+                withContext(NonCancellable) { release(prepared) }
+            }
         }
-        budget.check()
-        protect(prepared, "m:" + prepared.manifest.sha)
-        prepared
     }
 
     /**

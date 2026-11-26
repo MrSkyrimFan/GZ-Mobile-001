@@ -21,6 +21,51 @@ These are existing-run/artifact inspections, not new app test executions. The tw
 
 **Dispatch:** complete U1R-01/U1R-02 and dispose of U1R-V1, independently review and qualify one coherent candidate/merge, then resume remaining R1.2. Do not recommend v26 as a clean corrected U1 build while those paths remain open. No app source, tests, build configuration or CI is changed by this documentation update; no APK is rebuilt and no suite rerun. All 77 rows and full child scope remain.
 
+### Owner relay and execution alignment
+
+Lance relayed the bounded review correction on November 26. Live main is `b2ecc80481d10ee47097037d6616199e50bf4be7` (PR #48), tree `90a0e96f00c6a054706a47fc4fb40e54f0ea3cd6`. The qualified PR #46 app `e6321322526521ace13a45c231b25bb08f91c565`, tree `e15ba826d15cfb42449461f2528718e9efca5819`, differs by twelve Markdown paths. The app, test, Gradle and CI inputs still match v26. The repository has one applicable root `AGENTS.md`. The actual Windows project directory and its ancestors contain no AGENTS file. The existing project routing cache `For Codex/START_HERE.md` now pins the follow-up at PR #48 and the live ledger. Its historical section is byte-preserved. Original intake, archives, and APKs stay outside the engineering workspace.
+
+Both pinned review and follow-up were read in full, along with the current project instructions, product specification, blueprint, ledger, roadmap, 77-row inventory, release gates, continuity and active owner phone report. The first bounded check runs new reproduction tests with the qualified v26 production behavior. Preserve the actual shortcut taps and mask/retouch mutation, failed and canceled Open lease counts, and held inline Save outcome before landing behavior changes.
+
+| Writer | Exact file ownership |
+| --- | --- |
+| Root integration | `PhotoEditorScreen.kt`, new `AndroidU1ReviewOpenTest.kt`, baseline test seam integration if required, build test identity, refs, receipts and canonical records. |
+| Pro reviewer/writer | `ProWorkspaceScreen.kt` and new `AndroidU1ReviewProShortcutsTest.kt`. After the held Save result, own any justified exact Pro-side acknowledgement. |
+| Custody reviewer/writer | `NativeWorkStore.kt` for the acquisition boundary and inspection seam, and new `AndroidU1ReviewLeaseTest.kt`. |
+| Held Save test writer | New `AndroidU1ReviewProSaveTest.kt`. Coordinate the controlled publication seam with the host writer. |
+
+The optional Collage wording item is deferred to keep the delivery focused. The next decisive result is the red baseline on API29/API35. The existing 303 case identities, numerical limits, inherited assertions, and process qualification remain required.
+
+Root also owns the narrow `RegularProSwitch.kt` prepared-photo lifetime dependency discovered during review. Its decode and privacy-preview bitmaps cross explicit dispatcher return boundaries before the host receives the prepared photo, so the Open cleanup must account for cancellation there as well. The bridge and rendering rules remain unchanged.
+
+[Focused v26 baseline 45906324931](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931) is pinned at `3fd93dc42493da44496c0e665d446858cf84e320`, tree `11f9211fc51d25a55364c8115400ed8f161bf802`. It adds only the new test cases, temporary test selection, an exact lease-count observer, and default-inert gates before actual inline publication and Open acknowledgement. The old U1 tool, save and acquisition outcome logic is unchanged. Full-suite selection and the separate force-stop lane stay unmodified on the engineering branch.
+
+
+[Unchanged-behavior baseline 45906324931](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931) passed Verify. Both APIs ran ten focused cases. Both physical Layers shortcuts reached the expected broken editing state: selection Apply stayed disabled after a real drag and retouch Reset source stayed disabled after a hold. Three real failed Regular named Opens retained one, two and three leases against a zero baseline, even though restoring source access let Open succeed. Cancellation after actual IO lease registration and before caller delivery retained exactly one lease. The exact-token control passed. Held inline Pro Save persisted the captured visible layer and kept the newer hidden layer live after Cancel, but ordinary Save still showed as enabled after Undo to the captured saved revision. This establishes U1R-V1 at runtime and confines the correction to save acknowledgement.
+
+Four other cases stopped in fixtures and receive no baseline claim: Pro needed the real ActivityResult registry under its isolated context. Three held-Open cases entered a raw blocking wait before Compose could start the pending action. The corrected fixtures use the real Activity registry and a Compose wait for the same exact publication gate. The corrected Open-only red run is pinned to `b262dc0b1aa34a6f6bc621752dcb4caf9ff6e801`.
+
+- API35 [raw receipt 15157858464](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931/artifacts/15157858464) · `sha256:1ae162ac22155083b1ed94487f21eb010f29f25d7291add8eceeed06f830bbe8`
+- API29 [raw receipt 15157614042](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931/artifacts/15157614042) · `sha256:d4f42740ab411806f757b0cd6c3ffa5c70633e9a77b52e2d14f9b12df6295f4a`
+
+The first corrected focused build ([45907209655](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907209655)) failed Kotlin compilation at the remembered Pro entry baseline. The saved session value is nullable while the current editor entry is non-null. The corrected consumer uses the same fallback as the ordinary save metadata installer.
+
+Independent exact-source review passed the Open lease, bitmap transfer and Save metadata ownership. A second scope found that a freshly activated native tool could use the old finished-output raster until asynchronous native rendering completed. This risk is reachable from the repaired shortcuts. Each preview mode now owns a separate remembered raster slot, so late finished rendering cannot enable native input or show finished geometry beneath native controls. Existing rendering and history rules remain. The custody review also recorded a preexisting Bring-only derivative/finish result-delivery concern for remaining R1.2. The reviewed Open paths use neither acquisition.
+
+[Corrected Open baseline 45907070523](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907070523) supplied the actual ActivityResult registry for Pro and synchronized the pending action with Compose. It keeps the old application behavior and the exact held-publication assertions.
+
+
+The corrected v26 Open baseline produced all five intended failures independently on both APIs. Repeated failed named Opens accumulated one, two and three leases in both Regular and Pro; the stale Regular named Open retained one lease; the stale and canceled working-draft Opens each retained both the active and displaced preparations. The exact route/content, named records, unrelated drafts and retry/source checks reached the lease assertion. Restoring source access succeeded in both named routes. These supersede only the initial harness-failed observations.
+- API29 [raw receipt 15159145281](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907070523/artifacts/15159145281) · `sha256:72611caa940b6565767f95df0efa081b86002ecd12804bfa25db55975f2d4494`
+- API35 [raw receipt 15158442140](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907070523/artifacts/15158442140) · `sha256:8da60006113808547b5942425f2ab8920259026af2ca50a7cced0a028417c671`
+
+The independent Pro source reviewer verified at `e813f7a91b54befa3d680e773dc278135a0d6ecf` that the mode-keyed bitmap and rendering states isolate late finished output from native input and preserve the matching preview dimensions. The reviewed Save consumer preserves the captured baseline and binds the exact prior target without replacing current content or reauthorizing a canceled switch.
+
+[Corrected focused run 45907591692](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907591692) passed Verify and the selected Android suite on API29 and API35. It exercises the two physical shortcut cases, all five failed/canceled/stale Open cases, acquisition cancellation and exact-token collection controls, and the held inline Save after Cancel. The scoped test selection remains on its disposable branch. The full application candidate restores the unchanged unfiltered runner and independent process lane.
+- API29 [raw receipt 15159365857](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907591692/artifacts/15159365857) · `sha256:94824ced112627274fd99dd90f533d8592d691c8c2b4ddd8bc3d5e1a75d59f34`
+- API35 [raw receipt 15158349089](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907591692/artifacts/15158349089) · `sha256:72760ac9c237cdf2c2ca64d4e7eb7ed6668967e386b3263244e0ba06bb04de9d`
+
+
 ### Documentation review receipt
 
 Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.

@@ -130,6 +130,13 @@ internal data class ProWorkspaceSession(
     val sourceRevision: Long = 0
 )
 
+internal data class ProInlineSaveAcknowledgement(
+    val ownerKey: String,
+    val previousTarget: NamedProjectRef?,
+    val capturedDocument: ProDocument,
+    val saved: NamedProjectRef
+)
+
 internal fun ProWorkspaceSession.nativeOwnerKey(): String =
     saveTarget.nativeOwnerId ?: (ownerId + "/" + saveTarget.workId)
 
@@ -200,7 +207,9 @@ internal fun ProWorkspaceScreenContent(
     onOpenedNamedProject: ((NamedProject<ProStore.SavedProject>, ProWorkspaceSession) -> Unit)? = null,
     workingDrafts: List<Pair<String, String>> = emptyList(),
     onOpenWorkingDraft: ((String, ProDocument, ProWorkspaceSession) -> Unit)? = null,
-    linkedDraftDirty: Boolean = false
+    linkedDraftDirty: Boolean = false,
+    inlineSaveAcknowledgement: ProInlineSaveAcknowledgement? = null,
+    onInlineSaveAcknowledged: (ProInlineSaveAcknowledgement) -> Unit = {}
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -269,8 +278,10 @@ internal fun ProWorkspaceScreenContent(
     val latestDocument by rememberUpdatedState(document)
     var showAdd by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
-    var preview by remember { mutableStateOf<Bitmap?>(null) }
-    var rendering by remember { mutableStateOf(false) }
+    val showingFinishedOutput = finishedOutput && document.linkedFinishes.isNotEmpty()
+    // Keep each mode's raster and pending render separate from the other mode's canvas.
+    var preview by remember(showingFinishedOutput) { mutableStateOf<Bitmap?>(null) }
+    var rendering by remember(showingFinishedOutput) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
@@ -939,7 +950,27 @@ internal fun ProWorkspaceScreenContent(
         }
     }
 
-    SideEffect { persistSession() }
+    // A tracked gesture still holds a history entry with the previous save target.
+    val inlineSaveReady = inlineSaveAcknowledgement != null && dragStart == null && sliderStart == null
+    SideEffect {
+        val acknowledgement = inlineSaveAcknowledgement
+        var settled = false
+        if (acknowledgement != null) {
+            val current = workspaceSnapshot()
+            val ownsSave = current.nativeOwnerKey() == acknowledgement.ownerKey &&
+                current.saveTarget.savedRef == acknowledgement.previousTarget
+            if (ownsSave && inlineSaveReady) {
+                val saved = current.saved(acknowledgement.capturedDocument, acknowledgement.saved)
+                saveTarget = saved.saveTarget
+                history = saved.history
+                baselines = saved.baselines
+                entryDocument = saved.entryDocument ?: entryDocument
+            }
+            settled = !ownsSave || inlineSaveReady
+        }
+        persistSession()
+        if (settled && acknowledgement != null) onInlineSaveAcknowledged(acknowledgement)
+    }
     DisposableEffect(ownerId) { onDispose { cancelGesture() } }
     BackHandler { requestBack() }
 
@@ -1373,7 +1404,6 @@ internal fun ProWorkspaceScreenContent(
         preview = null
         notice = "Source for image layer " + (missing.position + 1) + " is unavailable."
     }
-    val showingFinishedOutput = finishedOutput && document.linkedFinishes.isNotEmpty()
     LaunchedEffect(document, artboardSize, resolver, resetGeneration, showingFinishedOutput) {
         if (pristine && !showingFinishedOutput) {
             preview = null
@@ -1742,11 +1772,11 @@ internal fun ProWorkspaceScreenContent(
                                     horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                                     TextButton(onClick = { rename = active.name }) { Text("Rename") }
                                     if (active.kind == ProLayerKind.IMAGE) {
-                                        TextButton(onClick = {
-                                            section = ProSection.SELECT
+                                        TextButton(enabled = available, onClick = {
+                                            selectTool(ProSection.SELECT)
                                         }) { Text("Select / mask", color = EditorMint) }
-                                        TextButton(onClick = {
-                                            section = ProSection.RETOUCH
+                                        TextButton(enabled = available, onClick = {
+                                            selectTool(ProSection.RETOUCH)
                                         }) { Text("Clone / repair", color = EditorMint) }
                                         TextButton(enabled = available, onClick = {
                                             requestDeparture(ProDestination.ReplaceImage(selected, active))
