@@ -57,17 +57,18 @@ class AndroidRegularDepartureContractTest {
         }
     }
 
-    private class IsolatedContext(base: Context, val gate: SaveGate) : ContextWrapper(base) {
+    private class IsolatedContext(base: Context, val gate: SaveGate, private val realBridgeRoot: Boolean) : ContextWrapper(base) {
         private val suffix = ".b1-departure-" + System.nanoTime()
         private val directory = Files.createTempDirectory(base.cacheDir.toPath(), "b1-departure-").toFile()
         private val preferences = mutableSetOf<String>()
         override fun getDataDir(): File = directory
-        override fun getFilesDir(): File = directory
+        override fun getFilesDir(): File = if (realBridgeRoot) baseContext.filesDir else directory
         override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
             preferences += name + suffix
             return baseContext.getSharedPreferences(name + suffix, mode)
         }
         fun close() {
+            if (realBridgeRoot) File(baseContext.filesDir, "native-work-v1").deleteRecursively()
             preferences.forEach { baseContext.deleteSharedPreferences(it) }
             directory.deleteRecursively()
         }
@@ -102,10 +103,11 @@ class AndroidRegularDepartureContractTest {
     private fun withEditor(
         tile: Boolean = false,
         onChildWorkspace: (WorkspaceMode, CollagePhoto?) -> Unit = { _, _ -> },
+        realBridgeRoot: Boolean = false,
         test: (Fixture) -> Unit
     ) {
         val gate = SaveGate()
-        val context = IsolatedContext(rule.activity, gate)
+        val context = IsolatedContext(rule.activity, gate, realBridgeRoot)
         val resolver = context.contentResolver
         val sources = mutableListOf<Uri>()
         val mounted = mutableStateOf(true)
@@ -270,7 +272,9 @@ class AndroidRegularDepartureContractTest {
     }
 
     @Test fun u1RepeatedBringKeepsNativeLayersAndAddsNoNamedRecord() {
-        withEditor { fixture ->
+        withEditor(realBridgeRoot = true) { fixture ->
+            val namedPhotoBefore = requireNotNull(ProjectStore.listMetadata(fixture.context)).map { it.project }
+            val namedProBefore = ProStore.names(fixture.context)
             openPhoto(fixture)
             flip()
             workspace("Photo editing Pro")
@@ -292,8 +296,8 @@ class AndroidRegularDepartureContractTest {
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithText("Shape layer 2 · Shape", substring = false).fetchSemanticsNodes().isNotEmpty()
             }
-            assertTrue(requireNotNull(ProjectStore.listMetadata(fixture.context)).isEmpty())
-            assertTrue(ProStore.names(fixture.context).isEmpty())
+            assertEquals(namedPhotoBefore, requireNotNull(ProjectStore.listMetadata(fixture.context)).map { it.project })
+            assertEquals(namedProBefore, ProStore.names(fixture.context))
         }
     }
 

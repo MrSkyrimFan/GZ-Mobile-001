@@ -51,7 +51,7 @@ class PhotoFirstUiTest {
         rule.onNodeWithText("Video editing · Coming soon").assertExists()
         rule.onNodeWithText("Photo editing Pro").performClick()
         rule.waitUntil(15_000) {
-            rule.onAllNodesWithText("Select an image to edit").fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodesWithText("Open a photo or create a canvas from Options.").fetchSemanticsNodes().isNotEmpty()
         }
         rule.onNodeWithText("Options").performClick()
         rule.onNodeWithText("New / Open media…").performClick()

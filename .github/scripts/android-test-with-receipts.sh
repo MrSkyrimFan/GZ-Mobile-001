@@ -87,8 +87,22 @@ if [[ -n "${GZ_CI_HEAP_MIB:-}" ]]; then
   adb_ci shell input keyevent 82
 fi
 
+ordinary_status=0
 if gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest; then
   echo "Android instrumentation suite: PASS"
+else
+  ordinary_status=$?
+  echo "=== Failed Android test XML receipts (redacted to first 220 lines per file) ==="
+  while IFS= read -r -d '' file; do
+    echo "==== Test receipt: ${file} ===="
+    sed -n '1,220p' "$file"
+  done < <(find app/build/outputs/androidTest-results/connected -type f -name '*.xml' -print0 2>/dev/null)
+fi
+
+# Process recovery is an independent verification. A runtime failure above
+# must not discard this evidence when the exact instrumentation APK was built.
+if [[ -s app/build/outputs/apk/debug/app-debug.apk &&
+      -s app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk ]]; then
   apk="app/build/outputs/apk/debug/app-debug.apk"
   test_apk="app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
   aapt="${ANDROID_HOME}/build-tools/36.0.0/aapt"
@@ -112,12 +126,8 @@ if gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest; then
     fi
   done
   adb logcat -d -s GzU1Process:I | tee "$receipt_dir/u1-native-process-logcat.txt"
-else
-  result=$?
-  echo "=== Failed Android test XML receipts (redacted to first 220 lines per file) ==="
-  while IFS= read -r -d '' file; do
-    echo "==== Test receipt: ${file} ===="
-    sed -n '1,220p' "$file"
-  done < <(find app/build/outputs/androidTest-results/connected -type f -name '*.xml' -print0 2>/dev/null)
-  exit "$result"
+elif [[ "$ordinary_status" == 0 ]]; then
+  echo "Missing built APKs for process recovery" >&2
+  exit 1
 fi
+exit "$ordinary_status"

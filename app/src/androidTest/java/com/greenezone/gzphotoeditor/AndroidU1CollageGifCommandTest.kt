@@ -1,13 +1,17 @@
 package com.greenezone.gzphotoeditor
 
 import android.app.Activity
+import android.content.ContentProvider
+import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.database.Cursor
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -52,13 +56,17 @@ import com.greenezone.gzphotoeditor.ui.CollageWorkspaceSession
 import com.greenezone.gzphotoeditor.ui.GifMakerScreenContent
 import com.greenezone.gzphotoeditor.ui.GifWorkspaceSession
 import java.io.File
+import java.io.FileNotFoundException
 import java.nio.file.Files
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -297,6 +305,68 @@ class AndroidU1CollageGifCommandTest {
             }
         }
 
+    @Test fun gifDeleteIsDisabledDuringRealProviderCopyAndCopyFinishesWithStagedBytes() {
+        val source = animatedGif()
+        try {
+            isolated { storage, mounted ->
+                val imported = VideoGifSource.document(rule.activity, source)
+                val current = mutableStateOf(imported)
+                val session = mutableStateOf(GifWorkspaceSession())
+                val picker = DelayedPicker()
+                val destination = HeldGifDestination(rule.activity.contentResolver, File(storage, "held.gif"))
+                val originalBytes = bytes(source)
+                val sentinel = byteArrayOf(11, 22, 33)
+                destination.file.writeBytes(sentinel)
+                val journal = PendingExportJournal(storage)
+                rule.setContent {
+                    if (mounted.value) Workspace(storage, picker, destination.resolver) {
+                        GifMakerScreenContent(current.value, { current.value = it }, {}, {},
+                            session.value, { session.value = it })
+                    }
+                }
+
+                try {
+                    option("export")
+                    rule.waitUntil(25_000) { picker.exportCodes.size == 1 }
+                    val request = requireNotNull(journal.read(ExportWorkspace.GIF))
+                    assertEquals(PendingExportPhase.PICKING, request.phase)
+                    val stage = File(storage, "gz-gif-export/" + request.id + ".gif")
+                    val stagedBytes = stage.readBytes()
+                    assertTrue(stagedBytes.size > sentinel.size)
+                    rule.runOnIdle { picker.deliver(picker.exportCodes.single(), destination.uri) }
+                    rule.waitUntil(15_000) { destination.entered.count == 0L }
+                    val copying = requireNotNull(journal.read(ExportWorkspace.GIF))
+                    assertEquals(request.id, copying.id)
+                    assertEquals(PendingExportPhase.COPYING, copying.phase)
+                    assertEquals(destination.uri.toString(), copying.destination)
+                    assertArrayEquals(sentinel, destination.file.readBytes())
+
+                    rule.onNodeWithTag("workspace-options").performTouchInput { click() }
+                    val delete = rule.onNodeWithTag("workspace-command-delete").performScrollTo()
+                    delete.assertIsDisplayed().assertIsNotEnabled()
+                    rule.onNodeWithText("Wait for the GIF to finish copying to its destination.").assertIsDisplayed()
+                    delete.performTouchInput { click() }
+                    rule.onNodeWithText("Delete current work?").assertDoesNotExist()
+                    rule.onNodeWithText("GIF saved").assertDoesNotExist()
+                    assertEquals(imported, current.value)
+                    assertArrayEquals(sentinel, destination.file.readBytes())
+
+                    destination.release.countDown()
+                    waitText("GIF saved")
+                    assertNull(journal.read(ExportWorkspace.GIF))
+                    assertFalse(stage.exists())
+                    assertArrayEquals(stagedBytes, destination.file.readBytes())
+                    assertArrayEquals(originalBytes, bytes(source))
+                    assertEquals(imported, current.value)
+                } finally {
+                    destination.release.countDown()
+                }
+            }
+        } finally {
+            rule.activity.contentResolver.delete(source, null, null)
+        }
+    }
+
     private fun collage(source: Uri): Pair<CollageDocument, CollageDocument> {
         val tiles = listOf(CollagePhoto(source.toString(), id = "left-tile"),
             CollagePhoto(source.toString(), id = "right-tile"))
@@ -358,19 +428,26 @@ class AndroidU1CollageGifCommandTest {
     }
 
     @Composable
-    private fun Workspace(storage: File, picker: DelayedPicker? = null, content: @Composable () -> Unit) {
+    private fun Workspace(
+        storage: File,
+        picker: DelayedPicker? = null,
+        resolver: ContentResolver? = null,
+        content: @Composable () -> Unit
+    ) {
         val base = LocalContext.current
-        val context = remember(base, storage) { storageContext(base, storage) }
+        val context = remember(base, storage, resolver) { storageContext(base, storage, resolver) }
         val registry = picker ?: requireNotNull(LocalActivityResultRegistryOwner.current)
         CompositionLocalProvider(LocalContext provides context, LocalActivityResultRegistryOwner provides registry) {
             MaterialTheme(colorScheme = darkColorScheme(), content = content)
         }
     }
 
-    private fun storageContext(base: Context, storage: File): Context = object : ContextWrapper(base) {
-        override fun getFilesDir(): File = storage
-        override fun getCacheDir(): File = storage
-    }
+    private fun storageContext(base: Context, storage: File, resolver: ContentResolver? = null): Context =
+        object : ContextWrapper(base) {
+            override fun getFilesDir(): File = storage
+            override fun getCacheDir(): File = storage
+            override fun getContentResolver(): ContentResolver = resolver ?: base.contentResolver
+        }
 
     private fun bytes(uri: Uri) =
         requireNotNull(rule.activity.contentResolver.openInputStream(uri)).use { it.readBytes() }
@@ -400,6 +477,38 @@ class AndroidU1CollageGifCommandTest {
             resolver.delete(source, null, null)
             throw failure
         }
+    }
+
+    /** Pause the real controller at its destination open, after it has recorded COPYING. */
+    private class HeldGifDestination(private val media: ContentResolver, val file: File) : ContentProvider() {
+        val uri: Uri = Uri.parse("content://gz-u1-test/held.gif")
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val resolver: ContentResolver = ContentResolver.wrap(this)
+
+        override fun onCreate() = true
+
+        override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
+            if (uri != this.uri) return media.openFileDescriptor(uri, mode)
+            check(mode == "wt")
+            entered.countDown()
+            if (!release.await(30, TimeUnit.SECONDS)) throw FileNotFoundException("Test copy was not released")
+            return ParcelFileDescriptor.open(file,
+                ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_TRUNCATE)
+        }
+
+        override fun getType(uri: Uri): String? = if (uri == this.uri) "image/gif" else media.getType(uri)
+
+        override fun query(
+            uri: Uri, projection: Array<out String>?, selection: String?,
+            selectionArgs: Array<out String>?, sortOrder: String?
+        ): Cursor? = media.query(uri, projection, selection, selectionArgs, sortOrder)
+
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = throw UnsupportedOperationException()
+        override fun update(uri: Uri, values: ContentValues?, selection: String?,
+            selectionArgs: Array<out String>?): Int = throw UnsupportedOperationException()
+        override fun delete(uri: Uri, selection: String?,
+            selectionArgs: Array<out String>?): Int = throw UnsupportedOperationException()
     }
 
     private class DelayedPicker : ActivityResultRegistryOwner {

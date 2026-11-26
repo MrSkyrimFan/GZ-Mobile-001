@@ -134,7 +134,10 @@ class AndroidExportRecoveryTest {
             rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
-            rule.onNodeWithText("Select an image to edit").assertIsDisplayed()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Open a photo or create a canvas from Options.")
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
             rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
             rule.onNodeWithText("Choose Options → New photo… to begin.").assertIsDisplayed()
             rule.waitForIdle()

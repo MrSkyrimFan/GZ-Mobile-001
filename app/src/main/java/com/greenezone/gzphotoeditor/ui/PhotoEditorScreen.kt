@@ -1209,6 +1209,11 @@ fun PhotoEditorScreen(
         val request = RegularProSwitchRequest(source, destination,
             target.takeIf { targetHasWork && it.id != source.id }, photoOwnerId, contentRevision,
             proSession.ownerId, proSession.contentRevision)
+        if (!request.hasWork && request.displaced == null && nativeActive == null &&
+            nativeCatalog?.route == null) {
+            workspaceNavigation = workspaceNavigation.open(destination.workspace())
+            return
+        }
         switchRequest = request
         if (!request.hasWork) launchNativeSwitch(request, bring = false)
     }

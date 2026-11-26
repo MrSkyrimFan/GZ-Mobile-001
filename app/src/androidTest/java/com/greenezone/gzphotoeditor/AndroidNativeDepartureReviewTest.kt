@@ -140,7 +140,7 @@ class AndroidNativeDepartureReviewTest {
         // the parent's next composition. Observe that committed composition.
         rule.runOnIdle {
             assertEquals(1, departures)
-            assertEquals(ProDocument(), currentPro)
+            assertEquals(originalPro, currentPro)
         }
         val retained = requireNotNull(PendingExportJournal(context.filesDir).read(ExportWorkspace.PRO))
         assertEquals(pending.recipe, retained.recipe)

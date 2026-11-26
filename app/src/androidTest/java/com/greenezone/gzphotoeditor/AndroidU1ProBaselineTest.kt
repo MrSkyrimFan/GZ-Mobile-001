@@ -61,6 +61,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /** Actual pointer coverage for the owner-reported Pro paths. */
+@U1TargetedCheck
 @RunWith(AndroidJUnit4::class)
 class AndroidU1ProBaselineTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
@@ -279,7 +280,7 @@ class AndroidU1ProBaselineTest {
 
         tool("Layers")
         tapText("+ Add layer", scroll = true)
-        tapText("Shape layer", scroll = true)
+        tapText("Shape layer")
         val shapeLayer = rule.runOnIdle {
             assertEquals(ProLayerKind.SHAPE, document.layers.last().kind)
             assertEquals(1, document.layers.last().edits.creative.shapes.size)
@@ -288,7 +289,7 @@ class AndroidU1ProBaselineTest {
 
         tool("Layers")
         tapText("+ Add layer", scroll = true)
-        tapText("Adjustment layer", scroll = true)
+        tapText("Adjustment layer")
         rule.runOnIdle {
             assertEquals(ProLayerKind.ADJUSTMENT, document.layers.last().kind)
             assertEquals(ProPixelEffect.NONE, document.layers.last().effect)
