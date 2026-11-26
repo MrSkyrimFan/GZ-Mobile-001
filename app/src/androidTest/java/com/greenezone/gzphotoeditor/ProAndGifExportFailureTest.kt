@@ -87,6 +87,7 @@ class ProAndGifExportFailureTest {
         }
     }
 
+    @U1FinalProbe
     @Test fun unreadableProLayerPreservesDestination() = verify(
         workspace = ExportWorkspace.PRO,
         content = { source -> ProWorkspaceScreen(ProDocument(listOf(ProLayer(uri = source.toString()))), {}, {}, {}) },

@@ -479,6 +479,7 @@ class AndroidRegularEraseInteractionTest {
         }
     }
 
+    @U1FinalProbe
     @Test fun selectedTileEraseAndCanceledGesturesKeepSiblingThroughParentReopenAndPng() = fixture(collage = true) {
         val originalParent = rule.runOnIdle { observedCollage }
         drawLongLine()

@@ -88,7 +88,7 @@ if [[ -n "${GZ_CI_HEAP_MIB:-}" ]]; then
 fi
 
 ordinary_status=0
-if gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest; then
+if gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.annotation=com.greenezone.gzphotoeditor.U1FinalProbe'; then
   echo "Android instrumentation suite: PASS"
 else
   ordinary_status=$?

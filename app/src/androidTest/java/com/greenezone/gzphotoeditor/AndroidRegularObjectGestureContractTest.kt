@@ -228,6 +228,7 @@ class AndroidRegularObjectGestureContractTest {
             ShapeOverlay(width = .5f, height = .5f, filled = true)
         ))), "Shapes")
 
+    @U1FinalProbe
     @Test fun heldPrivacyRegionBackThenLateMoveAndUpRestoresExactDocumentWithoutHistory() =
         canceledByBack(EditDocument(privacy = listOf(
             PrivacyEdit(kind = PrivacyKind.BLACK_BAR, width = .5f, height = .5f)

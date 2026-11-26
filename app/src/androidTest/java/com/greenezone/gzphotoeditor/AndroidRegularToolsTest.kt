@@ -633,6 +633,7 @@ class AndroidRegularToolsTest {
         }
     }
 
+    @U1FinalProbe
     @Test fun blurShowsRealPixelsDuringTheStrokeWithTheControlsHidden() = withRegularPhoto {
         rule.onNodeWithTag("photo-tools").performScrollToNode(hasText("Blur & cover"))
         rule.onNodeWithText("Blur & cover").performClick()

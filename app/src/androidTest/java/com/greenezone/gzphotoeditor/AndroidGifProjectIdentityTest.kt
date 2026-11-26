@@ -121,6 +121,7 @@ class AndroidGifProjectIdentityTest {
         assertEquals(editedSecond, current)
     }
 
+    @U1FinalProbe
     @Test fun photoRecipesKeepTheirPixelsAndTimingAcrossSaveAndFreshOpen() = withProjects { storage ->
         val red = photo("gz-project-red.png", Color.RED)
         val blue = photo("gz-project-blue.png", Color.BLUE)
