@@ -40,6 +40,7 @@ class AndroidU1ProcessRecoveryTest {
     private val target: Context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val receipt: File get() = File(target.filesDir, "u1-process-test-receipt.json")
 
+    @U1FinalProbe
     @Test fun verifyNativeRecovery() {
         when (val phase = InstrumentationRegistry.getArguments().getString("u1ProcessPhase")) {
             null, "ordinary" -> runBlocking { verifyIsolatedStore() }

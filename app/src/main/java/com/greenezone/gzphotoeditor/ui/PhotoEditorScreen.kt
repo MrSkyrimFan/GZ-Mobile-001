@@ -1594,6 +1594,9 @@ fun PhotoEditorScreen(
     LaunchedEffect(nativeActive?.ref?.id, workspaceNavigation.current, contentRevision,
         proSession.contentRevision, proSession.selectedLayer, activePhotoProject,
         proSession.saveTarget.savedRef, canCheckpointNativeWork()) {
+        android.util.Log.i("GzU1Process", "checkpoint observed route=$workspaceNavigation " +
+            "proRev=${proSession.contentRevision} selection=${proSession.selectedLayer} " +
+            "allowed=${canCheckpointNativeWork()} host=${nativeActive?.ref?.id}")
         val previous = nativeActive ?: return@LaunchedEffect
         if (!canCheckpointNativeWork()) return@LaunchedEffect
         val mode = when (workspaceNavigation.current) {
@@ -1602,7 +1605,10 @@ fun PhotoEditorScreen(
             else -> return@LaunchedEffect
         }
         val current = captureNativeWork(mode)
-        if (current.id != previous.ref.id || previous.state == current) return@LaunchedEffect
+        if (current.id != previous.ref.id || previous.state == current) {
+            android.util.Log.i("GzU1Process", "checkpoint skip id=${current.id} previous=${previous.ref.id} equal=${previous.state == current}")
+            return@LaunchedEffect
+        }
 
         fun stillOwnsEdit(): Boolean = canCheckpointNativeWork() &&
             workspaceNavigation.current == mode.workspace() && nativeActive?.ref?.id == current.id &&
@@ -1611,6 +1617,7 @@ fun PhotoEditorScreen(
         val prepared = when (val result = nativeStore.prepare(current)) {
             is NativeWorkResult.Ok -> result.value
             is NativeWorkResult.Failed -> {
+                android.util.Log.i("GzU1Process", "checkpoint prepare failed ${result.reason}")
                 if (stillOwnsEdit()) notice = nativeWorkMessage(result.reason)
                 return@LaunchedEffect
             }
@@ -1619,7 +1626,10 @@ fun PhotoEditorScreen(
             // A prior checkpoint can advance this root while its new generation is staged.
             // Re-read on one stale revision while the exact completed edit still owns the route.
             repeat(2) {
-                if (!stillOwnsEdit()) return@LaunchedEffect
+                if (!stillOwnsEdit()) {
+                    android.util.Log.i("GzU1Process", "checkpoint abandoned before recover ${current.id}")
+                    return@LaunchedEffect
+                }
                 val catalog = when (val loaded = nativeStore.recover()) {
                     is NativeWorkResult.Ok -> loaded.value
                     is NativeWorkResult.Failed -> {
@@ -1627,8 +1637,15 @@ fun PhotoEditorScreen(
                         return@LaunchedEffect
                     }
                 }
-                if (catalog.active?.ref?.id != current.id || !stillOwnsEdit()) return@LaunchedEffect
-                when (val result = nativeStore.acknowledge(catalog.revision, prepared)) {
+                if (catalog.active?.ref?.id != current.id || !stillOwnsEdit()) {
+                    android.util.Log.i("GzU1Process", "checkpoint abandoned before commit durable=${catalog.active?.ref?.id} wanted=${current.id}")
+                    return@LaunchedEffect
+                }
+                val recorded = nativeStore.acknowledge(catalog.revision, prepared)
+                android.util.Log.i("GzU1Process", "checkpoint result for ${current.id} " +
+                    "proRev=${current.pro?.contentRevision} ok=${recorded is NativeWorkResult.Ok} " +
+                    "reason=${(recorded as? NativeWorkResult.Failed)?.reason}")
+                when (val result = recorded) {
                     is NativeWorkResult.Ok -> {
                         nativeCatalog = result.value
                         nativeActive = result.value.active?.let { NativeWorkLoaded(it.ref, prepared.state) }
