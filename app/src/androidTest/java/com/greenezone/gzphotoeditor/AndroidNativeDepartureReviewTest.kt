@@ -31,6 +31,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
 /** Regressions for the bounded post-integration native departure review. */
+@U1TargetedCheck
 @RunWith(AndroidJUnit4::class)
 class AndroidNativeDepartureReviewTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()

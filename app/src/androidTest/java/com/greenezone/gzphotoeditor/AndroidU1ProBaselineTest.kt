@@ -61,6 +61,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /** Actual pointer coverage for the owner-reported Pro paths. */
+@U1TargetedCheck
 @RunWith(AndroidJUnit4::class)
 class AndroidU1ProBaselineTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()

@@ -40,6 +40,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Delivers native results and IO completions after their originating user intent was canceled. */
+@U1TargetedCheck
 @RunWith(AndroidJUnit4::class)
 class AndroidRegularDepartureContractTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
