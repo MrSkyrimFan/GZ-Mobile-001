@@ -1,6 +1,31 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 25, 2026.** [PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46) qualifies **0.12.14 Test / code 26 / phonetest.v26** for focused handset confirmation. Application merge **e6321322526521ace13a45c231b25bb08f91c565** and candidate each passed JVM/build/signing and **303/303 on API29 and API35**, with separate force-stop and new-process native recovery on each API. **Remaining R1.2 is the next engineering package.** B2 numerical and F03 matched-workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
+> **Current work — November 26, 2026.** PR #46 / **0.12.14 Test, code 26** remains the recorded engineering checkpoint at **e6321322526521ace13a45c231b25bb08f91c565**: candidate and merge passed JVM/build/signing, **303/303 on API29 and API35**, and separate new-process recovery. The [independent U1 review](coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) found two medium-severity defects in linked Pro tool activation and failed-Open staging cleanup. **Next: bounded U1 review follow-up, then remaining R1.2.** Hold a clean U1 handset recommendation until the follow-up qualifies. Prior passes remain credited; B2/F03, RV5 and all device/owner/release gates remain open. [Active dispatch](WORK_LEDGER.md#next-engineering-action--u1-review-follow-up).
+
+## U1 independent review — corrections required
+
+November 26, 2026. The owner's review-to-repository-to-Codex workflow authorizes this documentation-only follow-up. Review intake main exactly matched PR #47 e6f5a7b8cd499547c014e45124d1c26be7277661; its ten-path delta from app merge e6321322526521ace13a45c231b25bb08f91c565 is Markdown only.
+
+[Complete independent review](coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) · [Finite Codex correction handoff](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md).
+
+| ID | Finding / disposition | Next decisive check |
+| --- | --- | --- |
+| U1R-01 / P2 | Source-confirmed: Pro Layers shortcuts change section without leaving finished-output preview; selection/retouch gestures remain disabled after linked return or Open | Actual shortcut taps, mask/retouch mutation, retained linked finish/target/history and saved/output result |
+| U1R-02 / P2 | Source-confirmed: failed native named/draft Open abandons prepared handles retaining full state/history and protected manifests | Repeated unreadable-source UI Opens and failed/canceled publication return outstanding leases to baseline, preserving current work and named/draft/retry assets |
+| U1R-V1 / P3 validation | Canceled inline Pro Save may lose acknowledged target/baseline in same-owner remembered child state; runtime impact not established | One held-publication Cancel/success test; fix only if reproduced, retain newer edits dirty |
+| U1R-N1 / P3 optional | Collage contextual Remove label should read Remove photo; actual selected-tile behavior is correct | Wording-only change may accompany follow-up; no independent delivery hold |
+
+The root review and three independent source scopes preserve positive blend, command, Collage/GIF, repeated mixed-save and new-process findings. Root downloaded final candidate/merge receipts: four 303-unique-case XML suites, zero failures/errors/skips, all 279 prior identities retained, 24 added. ZIP hashes, real PID changes, both named UI Opens and durable native edits match recorded evidence. Candidate/application trees match. R1.1 raw timing/decode observations remain within pinned limits. The actual 34,374,380-byte v26 APK matches f2ce7fbd2b3c69c107749ba9a419f389a673a1098a8cc22979c9d860b72ac7ee; binary manifest, v2 signature and APK content digest were independently checked.
+
+These are existing-run/artifact inspections, not new app test executions. The two defects are source-confirmed, not claimed newly executed handset reproductions or observed data loss/OOM. Full-workspace large-text/landscape/TalkBack, B2/F03 and RV5 retain their stated gaps. Detailed exact code/receipt references and limits are in the review.
+
+**Dispatch:** complete U1R-01/U1R-02 and dispose of U1R-V1, independently review and qualify one coherent candidate/merge, then resume remaining R1.2. Do not recommend v26 as a clean corrected U1 build while those paths remain open. No app source, tests, build configuration or CI is changed by this documentation update; no APK is rebuilt and no suite rerun. All 77 rows and full child scope remain.
+
+### Documentation review receipt
+
+Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.
+
+Root read back all eleven changed Markdown files from GitHub, checked new relative file links and compared the complete changed-path inventory. All 77 matrix rows are unchanged; the roadmap from R1 through its end retains the complete prior text. No application inputs changed. The PR review records the exact final documentation head and disposition before verified merge.
 
 ## U1 owner relay and execution alignment
 
@@ -156,7 +181,7 @@ B2 measured targets, F03 workload evidence, RV5, remaining R1.2/R1 and all later
 
 The [0.12.13 owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied phone instructions 1–5. O25-01–O25-06 authorize specific blend/input, Pro tool-ownership, shared-control, Delete/Reset and bidirectional transfer corrections. [PRODUCT_SPEC](PRODUCT_SPEC.md) and [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md) replace conflicting old interaction rules. PR #45 recorded this alignment. PR #46 implements the scoped correction.
 
-**Status: U1 engineering-qualified.** Candidate and exact app merge passed all required JVM, build, signing, full Android and genuine new-process checks. Handset confirmation remains open. The earlier independent contract review and exact preflight are preserved above. This wave retains all 77 capability IDs and every remaining roadmap child.
+**Recorded PR #46 status: U1 engineering-qualified for its exercised paths.** Candidate and exact app merge passed all required JVM, build, signing, full Android and genuine new-process checks. The November 26 independent review above requires a bounded follow-up before a clean handset recommendation; handset confirmation remains open. The earlier independent contract review and exact preflight are preserved above. This wave retains all 77 capability IDs and every remaining roadmap child.
 
 | Slice | Observable exit and owner boundary | Dependency / disposition |
 | --- | --- | --- |
@@ -247,7 +272,7 @@ Lance relayed the [complete GPT-6 Pro review](coordination/GPT_6_PRO_INDEPENDENT
 
 **Execution and exit:** integration owns refs, scope, and active records. First run the new reproductions against existing production, preserve exact outcomes and correct diagnosed fixture failures without weakening assertions. Land one coherent corrected candidate with independent review, full JVM/API29/API35/build/signing and the full 258-case inherited coverage plus targeted additions. Qualify the exact merge and artifact before new delivery. Keep diagnosis, runtime and handset results explicit.
 
-**Next ordered work is R1.2.** RV5 stays in R1 export recovery. B2/F03 retain the 10-second and 50 percent targets, earlier 257 ms miss, matched-sample and actual handset gaps. Missing owner GIF data holds that specific reproduction and closure.
+**Historical next action at the PR #41 checkpoint: R1.2.** RV5 stays in R1 export recovery. B2/F03 retain the 10-second and 50 percent targets, earlier 257 ms miss, matched-sample and actual handset gaps. Missing owner GIF data holds that specific reproduction and closure.
 
 ## Completed task A1 — ChatGPT / Codex alignment
 
@@ -269,7 +294,7 @@ The final response supplies the actual merged Stage 3 commit/PR. The resume inst
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next engineering package is U1: coherent workspace workflow.** The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) select working Pro blend controls, distinct photographic/layered workflows, common control anchors, Delete versus Reset and one four-choice Regular↔Pro switch. Bring requires a minimum durable Regular/Pro working-session and native-lineage slice from R1.2/S06. Remaining R1.2/R1 and every R2–R11 child remain required. R1.1/RV4 qualification, all 77 families, four locks before Video, all-five acceptance before final bilingual onboarding and app plus website before Console are retained.
+**Historical next action after the 0.12.13 owner report: U1 coherent workspace workflow.** The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) select working Pro blend controls, distinct photographic/layered workflows, common control anchors, Delete versus Reset and one four-choice Regular↔Pro switch. Bring requires a minimum durable Regular/Pro working-session and native-lineage slice from R1.2/S06. Remaining R1.2/R1 and every R2–R11 child remain required. R1.1/RV4 qualification, all 77 families, four locks before Video, all-five acceptance before final bilingual onboarding and app plus website before Console are retained.
 
 The following scope/assignment and dated execution notes preserve the B1 evidence chain. The current result is the qualification summary above; old failing candidates are historical evidence, not reopened work.
 
@@ -410,7 +435,7 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 | Order | Package / completion target | Prerequisite and current disposition |
 | --- | --- | --- |
-| U1 | Named owner workspace corrections: blend, tool roles, common controls, Delete/Reset and four-choice live exchange | Engineering-qualified in PR #46. Focused handset confirmation open. Minimum Regular/Pro R1.2/S03/S06 custody credited. |
+| U1 | Named owner workspace corrections: blend, tool roles, common controls, Delete/Reset and four-choice live exchange | PR #46 qualification credited. U1R-01/U1R-02 and U1R-V1 disposition are the immediate bounded follow-up; clean handset recommendation held. Minimum Regular/Pro R1.2/S03/S06 custody credited. |
 | R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, live/saved repeated exchange and portable bundles | R1.1 qualified; next finish remaining R1.2/all-workspace recovery and other R1 children, including RV5. B2/F03 stays independent; S01–S08 remain open/partial |
 | R2 | Pro layer tree/groups/clipping and memory-bounded reference compositor | R1 contracts; preserve legacy pixels |
 | R3 | Full Pro selection, paint, retouch, shapes, transforms, effects and declared interchange | R2 foundation |
@@ -425,9 +450,13 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next engineering action — remaining R1.2
+## Next engineering action — U1 review follow-up
 
-Use the qualified U1 implementation and independent review evidence to verify any new blocking defect first. Continue the remaining R1.2 package within the existing Stage 3 native durability contract.
+Execute [CODEX_U1_FOLLOWUP_2026-11-26.md](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) against current authorized main. Assign one writer per host/Pro/storage/test file, reproduce the two named source-confirmed paths, correct their tool-transition/resource ownership, and dispose of the one held-save validation item. Preserve all 303 case identities and meaningful assertions, pinned budgets and actual new-process verification. Independently review the correction, qualify final candidate and exact application merge, and deliver one corrected APK plus a focused owner script. No new full audit, question cycle or architecture rewrite.
+
+## Following engineering action — remaining R1.2
+
+After the bounded U1 follow-up, continue remaining R1.2 within the existing Stage 3 native durability contract. Pending independent phone observations hold only their affected acceptance; do not recreate a global idle gate.
 
 The U1 receipt records the acknowledged Regular/Pro minimum. Reuse it where appropriate and verify the remaining workspace-specific custody, child and recovery properties against the active contract.
 
