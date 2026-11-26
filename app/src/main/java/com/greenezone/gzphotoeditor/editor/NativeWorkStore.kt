@@ -10,6 +10,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.FilterOutputStream
 import java.io.IOException
+import java.util.IdentityHashMap
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -71,7 +72,7 @@ internal class NativeWorkStore(context: Context) {
         if (currentManifest != manifest) throw StaleWork()
         val regular = state.regular?.let {
             it.copy(ownerId = newId(), savedRef = if (photo) namedRef else it.savedRef,
-                clean = if (photo) it.document else it.clean)
+                clean = if (photo || state.link != null) it.document else it.clean)
         }
         val pro = state.pro?.let { old ->
             val owner = newId()
@@ -84,9 +85,9 @@ internal class NativeWorkStore(context: Context) {
             val history = ProHistory(old.history.undo.map(::entry), old.history.redo.map(::entry))
             old.copy(ownerId = owner, saveTarget = active,
                 history = if (photo) history else history.bindSavedProject(active),
-                baselines = if (photo) old.baselines else old.baselines + (active.workId to
+                baselines = if (!photo || state.link != null) old.baselines + (active.workId to
                     ProWorkBaseline(old.baselines[active.workId]?.entryDocument ?: old.entry ?: old.document,
-                        old.document)))
+                        old.document)) else old.baselines)
         }
         budget.check()
         state.copy(id = newId(), regular = regular, pro = pro)
@@ -102,7 +103,7 @@ internal class NativeWorkStore(context: Context) {
             NativeWorkCodec(files, budget::check).encode(state)
         }
         budget.check()
-        protect("m", prepared.manifest.sha)
+        protect(prepared, "m:" + prepared.manifest.sha)
         prepared
     }
 
@@ -134,7 +135,8 @@ internal class NativeWorkStore(context: Context) {
         val next = Catalog(revision, activeRow, drafts, current.retired, route)
         budget.check()
         publish(next)
-        runCatching { committed(activeRow, displacedRow) }
+        active?.let { staged().remove(it) }
+        displaced?.let { staged().remove(it) }
         next.public
     }
 
@@ -156,6 +158,9 @@ internal class NativeWorkStore(context: Context) {
                     val source = NativeWorkCodec(files).open(prepared.manifest)
                     require(source.getString("id") == state.id && source.getString("mode") == state.mode.name)
                     verifyReachable(source)
+                    state.pro?.document?.let { document ->
+                        ProRaster.validateLinkedGeometry(document, NativeWorkCodec(files)::finishRecipe)
+                    }
                     when (state.mode) {
                         NativeWorkMode.REGULAR -> {
                             val photo = requireNotNull(state.regular)
@@ -192,14 +197,16 @@ internal class NativeWorkStore(context: Context) {
                 NativeWorkCodec.checkBridgeSize(size)
                 val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                 if (size.pixelCount > GeometryMath.safeExportPixels(manager.memoryClass)) throw NativeWorkLimit()
+                val rendering = Any()
                 val parent = mutex.withLock {
                     val codec = NativeWorkCodec(files)
                     val owned = codec.pro(document)
-                    protect("r", owned.sha)
+                    protect(rendering, "r:" + owned.sha)
                     owned
                 }
-                val stage = files.newDerivativeStage()
+                var temporary: File? = null
                 try {
+                    val stage = files.newDerivativeStage().also { temporary = it }
                     val bitmap = ProRaster.renderOutput(context, document, size, preview = false) {
                         job.ensureActive()
                         budget.check()
@@ -246,11 +253,12 @@ internal class NativeWorkStore(context: Context) {
                             }
                         }
                         files.publish(stage, output, bytes, sha, NativeWorkFiles.MAX_DERIVATIVE_BYTES)
-                        protect("d", sha)
                         NativeDerivativeRef(files.derivativeUri(sha), frame, sha, parent, bytes, alpha)
+                            .also { protect(it, "d:" + sha, "r:" + parent.sha) }
                     }
                 } finally {
-                    stage.delete()
+                    temporary?.delete()
+                    withContext(NonCancellable) { mutex.withLock { staged().remove(rendering) } }
                 }
             }
         }
@@ -266,13 +274,17 @@ internal class NativeWorkStore(context: Context) {
         val output = ProPixelSize(shape.width, shape.height)
         NativeWorkCodec.checkBridgeSize(output)
         val revision = codec.regular(recipe)
-        protect("r", revision.sha)
         ProLinkedFinishRef(revision.sha, derivative.size, output, derivative.parent.sha, derivative.sha)
+            .also { protect(it, "r:" + revision.sha, "r:" + derivative.parent.sha, "d:" + derivative.sha) }
     }
 
-    /** Explicit cancellation can release a prepared manifest without affecting published work. */
-    suspend fun release(prepared: NativeWorkPrepared) {
-        locked { staged().remove("m:" + prepared.manifest.sha) }
+    /** Release only the original staged handle. Published roots and other handles still retain their data. */
+    suspend fun release(prepared: NativeWorkPrepared) = releaseStage(prepared)
+    suspend fun release(derivative: NativeDerivativeRef) = releaseStage(derivative)
+    suspend fun release(finish: ProLinkedFinishRef) = releaseStage(finish)
+
+    private suspend fun releaseStage(token: Any) {
+        withContext(NonCancellable + Dispatchers.IO) { mutex.withLock { staged().remove(token) } }
     }
 
     private data class Row(
@@ -397,16 +409,6 @@ internal class NativeWorkStore(context: Context) {
         }
     }
 
-    private fun committed(vararg rows: Row?) {
-        val codec = NativeWorkCodec(files)
-        rows.filterNotNull().forEach { row ->
-            val body = codec.open(row.manifest)
-            staged().remove("m:" + row.manifest.sha)
-            strings(body.getJSONArray("records")).forEach { staged().remove("r:$it") }
-            strings(body.getJSONArray("derivatives")).forEach { staged().remove("d:$it") }
-        }
-    }
-
     private fun collect(catalog: Catalog, cold: Boolean) {
         // An independently retryable export may still reference a linked source or finish.
         // Leave it and its assets alone even when Delete removed its editing root.
@@ -418,7 +420,7 @@ internal class NativeWorkStore(context: Context) {
             }) return
         val namedPhoto = ProjectStore.namedManifests(context) ?: return
         val namedPro = ProStore.namedManifests(context) ?: return
-        val staged = staged()
+        val staged = staged().values.flatten().toSet()
         val manifests = (namedPhoto + namedPro + listOfNotNull(catalog.active?.manifest) +
             catalog.drafts.map(Row::manifest) + staged.filter { it.startsWith("m:") }
                 .map { NativeManifestRef(it.substring(2)) }).toSet()
@@ -433,8 +435,12 @@ internal class NativeWorkStore(context: Context) {
         files.collect(manifests.mapTo(mutableSetOf(), NativeManifestRef::sha), records, derivatives, cold)
     }
 
-    private fun staged(): MutableSet<String> = stages.getOrPut(directoryKey) { mutableSetOf() }
-    private fun protect(kind: String, sha: String) { staged() += "$kind:$sha" }
+    private fun staged(): IdentityHashMap<Any, Set<String>> =
+        stages.getOrPut(directoryKey) { IdentityHashMap() }
+
+    private fun protect(token: Any, vararg assets: String) {
+        staged()[token] = assets.toSet()
+    }
 
     private fun nextRevision(revision: Long): Long =
         if (revision == Long.MAX_VALUE) throw NativeWorkLimit() else revision + 1
@@ -503,7 +509,7 @@ internal class NativeWorkStore(context: Context) {
     companion object {
         private val mutex = Mutex()
         private val coldFolders = mutableSetOf<String>()
-        private val stages = mutableMapOf<String, MutableSet<String>>()
+        private val stages = mutableMapOf<String, IdentityHashMap<Any, Set<String>>>()
 
         private fun newId() = UUID.randomUUID().toString()
         private fun managedUse() = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }

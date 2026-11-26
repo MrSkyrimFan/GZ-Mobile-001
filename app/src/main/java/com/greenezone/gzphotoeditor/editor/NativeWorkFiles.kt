@@ -150,7 +150,9 @@ internal class NativeWorkFiles(private val context: Context) {
         }
 
         fun syncDirectory(file: File) {
-            val descriptor = Os.open(file.path, OsConstants.O_RDONLY or OsConstants.O_DIRECTORY, 0)
+            if (!Files.isDirectory(file.toPath(), LinkOption.NOFOLLOW_LINKS))
+                throw IOException("Native work publication directory is unavailable")
+            val descriptor = Os.open(file.path, OsConstants.O_RDONLY, 0)
             try { Os.fsync(descriptor) } finally { Os.close(descriptor) }
         }
 

@@ -855,7 +855,8 @@ internal fun ProWorkspaceScreenContent(
         project: NamedProjectRef? = null,
         replacementOnly: Boolean = false,
         preparedSelection: Int? = null,
-        openedNamedProject: NamedProject<ProStore.SavedProject>? = null
+        openedNamedProject: NamedProject<ProStore.SavedProject>? = null,
+        priorRecoverySuperseded: Boolean = false
     ) {
         if (pendingDeparture?.token?.operationId != request.token.operationId ||
             !owns(request.token) || latestDocument != request.document) {
@@ -863,7 +864,7 @@ internal fun ProWorkspaceScreenContent(
             notice = "The work changed. The pending action was canceled."
             return
         }
-        if (request.discard) {
+        if (request.discard && !priorRecoverySuperseded) {
             val wasBusy = busy
             busy = true
             val recorded = try { revokeNativeRestoration(request.session.nativeOwnerKey()) }
@@ -1126,8 +1127,12 @@ internal fun ProWorkspaceScreenContent(
                             openError = "Could not reopen the project's working history. Current work kept."
                             showProjects = true
                         } else {
-                            finishDeparture(request, loaded.content.document, loaded.content.resetDocument,
-                                loaded.project, openedNamedProject = loaded)
+                            finishDeparture(
+                                request, loaded.content.document, loaded.content.resetDocument,
+                                loaded.project, openedNamedProject = loaded,
+                                priorRecoverySuperseded = loaded.content.linkedWork != null &&
+                                    prepareOpenedNamedProject != null
+                            )
                         }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
@@ -1381,7 +1386,7 @@ internal fun ProWorkspaceScreenContent(
             val bitmap = withContext(Dispatchers.Default) {
                 val job = currentCoroutineContext()
                 val rendered = if (showingFinishedOutput) {
-                    ProRaster.renderOutput(context, document, artboardSize, preview = true) { job.ensureActive() }
+                    ProRaster.renderOutput(context, document, ProPixelSize(w, h), preview = true) { job.ensureActive() }
                 } else {
                     ProRaster.render(resolver, document, w, h, true) { job.ensureActive() }
                 }
@@ -1555,7 +1560,7 @@ internal fun ProWorkspaceScreenContent(
                     val canEdit = available && !showingFinishedOutput && (pristine || bitmap != null ||
                         document.layers.none { it.kind == ProLayerKind.IMAGE && it.visible })
                     val displaySize = if (showingFinishedOutput && bitmap != null) {
-                        ProPixelSize(bitmap.width, bitmap.height)
+                        bitmap.width to bitmap.height
                     } else artboardSize
                     ProCanvasSurface(live ?: bitmap, displaySize, document.background.argb,
                         section, active.takeUnless { showingFinishedOutput }, viewport, chrome, canEdit,
@@ -1713,6 +1718,11 @@ internal fun ProWorkspaceScreenContent(
                         }
                         if (section == ProSection.CANVAS || active == null) {
                             ProCanvasProperties(document, available) { updated ->
+                                if (document.linkedFinishes.isNotEmpty() &&
+                                    updated.canvasAspectRatio != document.canvasAspectRatio) {
+                                    notice = "Canvas proportions are kept with linked Regular edits."
+                                    return@ProCanvasProperties
+                                }
                                 val creating = document.layers.isEmpty() &&
                                     (history.undo + history.redo).none { it.document.layers.isNotEmpty() }
                                 commit(if (creating) updated.copy(sourceCanvasSetup = ProCanvasSetup.from(updated))

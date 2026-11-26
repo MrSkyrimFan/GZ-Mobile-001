@@ -33,6 +33,8 @@ import com.greenezone.gzphotoeditor.editor.CreativeDocument
 import com.greenezone.gzphotoeditor.editor.EditDocument
 import com.greenezone.gzphotoeditor.editor.ExportWorkspace
 import com.greenezone.gzphotoeditor.editor.NamedProjectRef
+import com.greenezone.gzphotoeditor.editor.NativeWorkResult
+import com.greenezone.gzphotoeditor.editor.NativeWorkStore
 import com.greenezone.gzphotoeditor.editor.PendingExportJournal
 import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProBlend
@@ -53,6 +55,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import kotlin.math.abs
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -303,6 +306,36 @@ class AndroidU1ProBaselineTest {
             assertEquals(listOf(vector, painted, shapeLayer), document.layers.dropLast(1))
             assertEquals(ProPixelEffect.GRAYSCALE, document.layers.last().effect)
             assertNotNull(document.layers.last().mask)
+        }
+    }
+
+    @Test fun linkedRegularFinishKeepsItsArtboardWhenAnotherAspectIsTapped() {
+        val initial = ProDocument(listOf(shape("Bridge shape")), canvasSize = ProPixelSize(48, 48))
+        val store = NativeWorkStore(context)
+        val linked = runBlocking {
+            val derivative = when (val staged = store.stageDerivative(initial)) {
+                is NativeWorkResult.Ok -> staged.value
+                is NativeWorkResult.Failed -> error("Could not stage the bridge fixture: " + staged.reason)
+            }
+            val finish = when (val staged = store.stageFinish(initial, derivative, EditDocument(mirrored = true))) {
+                is NativeWorkResult.Ok -> staged.value
+                is NativeWorkResult.Failed -> error("Could not stage the Regular finish: " + staged.reason)
+            }
+            initial.copy(linkedFinishes = listOf(finish))
+        }
+        open(linked)
+        tool("Canvas")
+        tapText("Portrait 4:5", scroll = true)
+        rule.onNodeWithText("Canvas proportions are kept with linked Regular edits.").assertIsDisplayed()
+        rule.runOnIdle {
+            assertEquals(linked, document)
+            assertTrue(session.history.undo.isEmpty())
+            assertTrue(session.history.redo.isEmpty())
+        }
+        tapText("Black", scroll = true)
+        rule.runOnIdle {
+            assertEquals(linked.copy(background = ProBackground.BLACK), document)
+            assertEquals(1, session.history.undo.size)
         }
     }
 

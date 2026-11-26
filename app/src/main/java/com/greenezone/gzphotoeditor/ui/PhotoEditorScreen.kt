@@ -104,6 +104,21 @@ import com.greenezone.gzphotoeditor.editor.ProjectSaveFailure
 import com.greenezone.gzphotoeditor.editor.ProStore
 import com.greenezone.gzphotoeditor.editor.ProSaveTarget
 import com.greenezone.gzphotoeditor.editor.ProjectStore
+import com.greenezone.gzphotoeditor.editor.NativeWorkStore
+import com.greenezone.gzphotoeditor.editor.NativeWorkCatalog
+import com.greenezone.gzphotoeditor.editor.NativeWorkLoaded
+import com.greenezone.gzphotoeditor.editor.NativeWorkMode
+import com.greenezone.gzphotoeditor.editor.NativeWorkState
+import com.greenezone.gzphotoeditor.editor.NativeRegularState
+import com.greenezone.gzphotoeditor.editor.NativeProState
+import com.greenezone.gzphotoeditor.editor.NativeWorkResult
+import com.greenezone.gzphotoeditor.editor.NativeWorkFailure
+import com.greenezone.gzphotoeditor.editor.NativeWorkPrepared
+import com.greenezone.gzphotoeditor.editor.NativeWorkRef
+import com.greenezone.gzphotoeditor.editor.NativeManifestRef
+import com.greenezone.gzphotoeditor.editor.NativeDerivativeRef
+import com.greenezone.gzphotoeditor.editor.ProLinkedFinishRef
+import com.greenezone.gzphotoeditor.editor.ProWorkBaseline
 import com.greenezone.gzphotoeditor.editor.PrivacyEdit
 import com.greenezone.gzphotoeditor.editor.PrivacyKind
 import com.greenezone.gzphotoeditor.editor.PhotoGeometry
@@ -116,6 +131,7 @@ import com.greenezone.gzphotoeditor.editor.SavedLooks
 import com.greenezone.gzphotoeditor.editor.SavedPhotoProjectMetadata
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -477,7 +493,12 @@ fun PhotoEditorScreen(
             val currentUri = sourceUri ?: return false
             return currentUri.toString() != tileEntry.uri || document != tileEntry.edits
         }
-        return sourceUri?.toString() != baselineUri || document != baselineDocument
+        val hasLinkedProChanges = nativeActive?.state?.let { active ->
+            active.regular?.ownerId == photoOwnerId &&
+                active.pro?.nativeOwnerKey() == proSession.nativeOwnerKey() &&
+                proSession.isDirty(proDocument)
+        } == true
+        return sourceUri?.toString() != baselineUri || document != baselineDocument || hasLinkedProChanges
     }
 
     fun requestPhotoReplacement(candidate: PhotoReplacement) {
@@ -981,11 +1002,11 @@ fun PhotoEditorScreen(
         val current = nativeActive?.state?.takeIf {
             when (mode) {
                 NativeWorkMode.REGULAR -> regular != null && it.regular?.ownerId == regular.ownerId
-                NativeWorkMode.PRO -> pro != null && it.pro?.ownerId == pro.ownerId
+                NativeWorkMode.PRO -> pro != null && it.pro?.nativeOwnerKey() == pro.nativeOwnerKey()
             }
         }
         val activeRegular = regular?.takeIf { mode == NativeWorkMode.REGULAR || current?.regular?.ownerId == it.ownerId }
-        val activePro = pro?.takeIf { mode == NativeWorkMode.PRO || current?.pro?.ownerId == it.ownerId }
+        val activePro = pro?.takeIf { mode == NativeWorkMode.PRO || current?.pro?.nativeOwnerKey() == it.nativeOwnerKey() }
         return NativeWorkState(
             id = current?.id ?: activeRegular?.ownerId ?: activePro?.ownerId ?: UUID.randomUUID().toString(),
             mode = mode, regular = activeRegular, pro = activePro, link = current?.link
@@ -1023,6 +1044,21 @@ fun PhotoEditorScreen(
         )
     }
 
+    fun markLinkedProClean(expected: NativeProState?) {
+        if (expected == null || expected.nativeOwnerKey() != proSession.nativeOwnerKey() ||
+            expected.contentRevision != proSession.contentRevision || proDocument != expected.document) return
+        val work = proSession.saveTarget.workId
+        val entry = proSession.baselines[work]?.entryDocument ?: proSession.entryDocument ?: proDocument
+        proSession = proSession.copy(baselines = proSession.baselines + (work to ProWorkBaseline(entry, proDocument)))
+    }
+
+    fun markLinkedRegularClean(expected: NativeRegularState?) {
+        if (expected == null || expected.ownerId != photoOwnerId ||
+            expected.contentRevision != contentRevision || expected.document != document) return
+        baselineUri = expected.uri.toString()
+        baselineDocument = expected.document
+    }
+
     fun clearSwitchRequest() {
         switchRequest = null
         switchName = null
@@ -1042,6 +1078,9 @@ fun PhotoEditorScreen(
         switchError = null
         scope.launch {
             var preparedPhoto: PreparedRegularPhoto? = null
+            var stagedDerivative: NativeDerivativeRef? = null
+            var stagedFinish: ProLinkedFinishRef? = null
+            val stagedManifests = mutableListOf<NativeWorkPrepared>()
             try {
                 val catalog = when (val recovered = nativeStore.recover()) {
                     is NativeWorkResult.Ok -> recovered.value
@@ -1050,7 +1089,8 @@ fun PhotoEditorScreen(
                         return@launch
                     }
                 }
-                val staged = if (bring) when (val result = prepareBring(nativeStore, resolver, request.source)) {
+                val staged = if (bring) when (val result = prepareBring(nativeStore, resolver, request.source,
+                    onDerivative = { stagedDerivative = it }, onFinish = { stagedFinish = it })) {
                     is NativeWorkResult.Ok -> result.value
                     is NativeWorkResult.Failed -> {
                         switchError = nativeWorkMessage(result.reason)
@@ -1060,7 +1100,7 @@ fun PhotoEditorScreen(
                 preparedPhoto = staged?.let { prepareNativePhoto(it) }
                 val displaced = request.displaced?.let { snapshot ->
                     when (val result = nativeStore.prepare(snapshot)) {
-                        is NativeWorkResult.Ok -> result.value
+                        is NativeWorkResult.Ok -> result.value.also { stagedManifests += it }
                         is NativeWorkResult.Failed -> {
                             switchError = nativeWorkMessage(result.reason)
                             return@launch
@@ -1069,7 +1109,7 @@ fun PhotoEditorScreen(
                 }
                 val next = staged?.let { snapshot ->
                     when (val result = nativeStore.prepare(snapshot)) {
-                        is NativeWorkResult.Ok -> result.value
+                        is NativeWorkResult.Ok -> result.value.also { stagedManifests += it }
                         is NativeWorkResult.Failed -> {
                             switchError = nativeWorkMessage(result.reason)
                             return@launch
@@ -1079,7 +1119,10 @@ fun PhotoEditorScreen(
                 if (!switchOwned(request)) return@launch
                 if (save != null) {
                     val saved = when (val result = nativeStore.prepare(request.source)) {
-                        is NativeWorkResult.Ok -> nativeStore.saveNamed(save, result.value)
+                        is NativeWorkResult.Ok -> {
+                            stagedManifests += result.value
+                            nativeStore.saveNamed(save, result.value)
+                        }
                         is NativeWorkResult.Failed -> ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)
                     }
                     when (saved) {
@@ -1090,8 +1133,10 @@ fun PhotoEditorScreen(
                                 activePhotoProject = saved.project
                                 baselineUri = request.source.regular?.uri?.toString()
                                 baselineDocument = requireNotNull(request.source.regular).document
+                                markLinkedProClean(request.source.pro)
                             } else if (request.source.mode == NativeWorkMode.PRO && proSession.ownerId == request.proOwner) {
                                 request.source.pro?.let { proSession = proSession.saved(it.document, saved.project) }
+                                markLinkedRegularClean(request.source.regular)
                             }
                         }
                         is ProjectSaveResult.Exists -> {
@@ -1134,9 +1179,17 @@ fun PhotoEditorScreen(
                 if (switchOwned(request)) switchError = "Could not prepare the other workspace. Current work is still open."
             } finally {
                 preparedPhoto?.discard()
-                if (switchRequest == null) switchError = null
-                switchCommitting = false
-                switchBusy = false
+                try {
+                    withContext(NonCancellable) {
+                        stagedManifests.forEach { nativeStore.release(it) }
+                        stagedFinish?.let { nativeStore.release(it) }
+                        stagedDerivative?.let { nativeStore.release(it) }
+                    }
+                } finally {
+                    if (switchRequest == null) switchError = null
+                    switchCommitting = false
+                    switchBusy = false
+                }
             }
         }
     }
@@ -1315,26 +1368,32 @@ fun PhotoEditorScreen(
         captured: ProDocument,
         session: ProWorkspaceSession
     ): ProjectSaveResult {
-        val linked = withContext(Dispatchers.Main.immediate) {
-            val previous = nativeActive?.state?.takeIf { it.pro?.ownerId == session.ownerId }
-            previous?.let {
-                val state = captureNativeWork(NativeWorkMode.PRO)
-                state.pro?.takeIf { current ->
-                    current.ownerId == session.ownerId && current.contentRevision == session.contentRevision
-                }?.let { current ->
-                    state.copy(pro = current.copy(document = captured, reset = session.resetDocument,
-                        selectedLayer = session.selectedLayer, saveTarget = session.saveTarget,
-                        baselines = session.baselines, history = session.history))
-                }
+        val (managed, linked) = withContext(Dispatchers.Main.immediate) {
+            val previous = nativeActive?.state?.takeIf {
+                it.pro?.nativeOwnerKey() == session.nativeOwnerKey()
             }
+            val state = previous?.let { captureNativeWork(NativeWorkMode.PRO) }
+            val expected = state?.pro?.takeIf {
+                it.nativeOwnerKey() == session.nativeOwnerKey() &&
+                    it.contentRevision == session.contentRevision && it.document == captured
+            }
+            (previous != null) to if (expected == null) null else checkNotNull(state).copy(
+                pro = expected.copy(reset = session.resetDocument, selectedLayer = session.selectedLayer,
+                    saveTarget = session.saveTarget, baselines = session.baselines, history = session.history))
         }
-        if (linked == null) return withContext(Dispatchers.IO) {
+        if (!managed) return withContext(Dispatchers.IO) {
             ProStore.saveNamed(context, intent, captured, session.resetDocument)
         }
-        return when (val prepared = nativeStore.prepare(linked)) {
-            is NativeWorkResult.Ok -> nativeStore.saveNamed(intent, prepared.value)
+        if (linked == null) return ProjectSaveResult.Rejected(ProjectSaveFailure.TARGET_CHANGED)
+        val saved = when (val prepared = nativeStore.prepare(linked)) {
+            is NativeWorkResult.Ok -> try { nativeStore.saveNamed(intent, prepared.value) }
+                finally { nativeStore.release(prepared.value) }
             is NativeWorkResult.Failed -> ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)
         }
+        if (saved is ProjectSaveResult.Saved) withContext(Dispatchers.Main.immediate) {
+            markLinkedRegularClean(linked.regular)
+        }
+        return saved
     }
 
     continueDeparture = continuation@{
@@ -1426,7 +1485,8 @@ fun PhotoEditorScreen(
             val result = if (linked == null) withContext(Dispatchers.IO) {
                 savePhotoProject(context, intent, uri, capturedDocument)
             } else when (val prepared = nativeStore.prepare(linked)) {
-                is NativeWorkResult.Ok -> nativeStore.saveNamed(intent, prepared.value)
+                is NativeWorkResult.Ok -> try { nativeStore.saveNamed(intent, prepared.value) }
+                    finally { nativeStore.release(prepared.value) }
                 is NativeWorkResult.Failed -> ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)
             }
             busy = false
@@ -1438,6 +1498,7 @@ fun PhotoEditorScreen(
                     // tileEntryBaseline: standalone Save does not Apply a tile.
                     baselineUri = uri.toString()
                     baselineDocument = capturedDocument
+                    markLinkedProClean(linked?.pro)
                     if (photoUiEpoch != capturedUiEpoch) return@launch
                     showSaveProject = false
                     photoCollision = null
@@ -1698,45 +1759,80 @@ fun PhotoEditorScreen(
     }
 
     if (workspaceNavigation.current == WorkspaceMode.PRO) {
-        ProWorkspaceScreenContent(
-            document = proDocument,
-            onDocument = { proDocument = it },
-            onBack = ::leaveWorkspace,
-            onSwitch = ::chooseWorkspace,
-            session = proSession,
-            onSession = { proSession = it },
-            onRequestRegularTransfer = { captured, session ->
-                proDocument = captured
-                proSession = session
-                requestNativeSwitch(NativeWorkMode.REGULAR)
-            },
-            onRevokeWorkingSession = ::revokeWorkingOwner,
-            saveCapturedProject = ::saveCapturedPro,
-            workingDrafts = workingDrafts(NativeWorkMode.PRO),
-            onOpenWorkingDraft = { id, captured, session ->
-                proDocument = captured
-                proSession = session
-                openWorkingDraft(id, NativeWorkMode.PRO)
-            },
-            prepareOpenedNamedProject = { loaded ->
-                stagedNamedPro?.photo?.discard()
-                stagedNamedPro = loaded.content.linkedWork?.let { prepareNamedWorkspace(it, loaded.project) }
-                loaded.content.linkedWork == null || stagedNamedPro != null
-            },
-            onOpenedNamedProject = { loaded, session ->
-                val staged = stagedNamedPro?.takeIf { it.ref == loaded.project }
-                stagedNamedPro = null
-                if (staged != null) scope.launch {
-                    var photo = staged.photo
-                    try {
-                        if (publishPreparedWork(staged.work, photo, NativeWorkMode.PRO, stillOwned = {
-                                workspaceNavigation.current == WorkspaceMode.PRO &&
-                                    proSession.ownerId == session.ownerId && proSession.saveTarget.savedRef == staged.ref
-                            })) photo = null
-                    } finally { photo?.discard() }
+        key(proSession.ownerId) {
+            ProWorkspaceScreenContent(
+                document = proDocument,
+                onDocument = { proDocument = it },
+                onBack = ::leaveWorkspace,
+                onSwitch = ::chooseWorkspace,
+                session = proSession,
+                onSession = { proSession = it },
+                onRequestRegularTransfer = { captured, session ->
+                    proDocument = captured
+                    proSession = session
+                    requestNativeSwitch(NativeWorkMode.REGULAR)
+                },
+                onRevokeWorkingSession = ::revokeWorkingOwner,
+                saveCapturedProject = ::saveCapturedPro,
+                workingDrafts = workingDrafts(NativeWorkMode.PRO),
+                onOpenWorkingDraft = { id, captured, session ->
+                    proDocument = captured
+                    proSession = session
+                    openWorkingDraft(id, NativeWorkMode.PRO)
+                },
+                prepareOpenedNamedProject = { loaded ->
+                    stagedNamedPro?.photo?.discard()
+                    stagedNamedPro = null
+                    val manifest = loaded.content.linkedWork
+                    if (manifest == null) true else {
+                        val owner = proSession.nativeOwnerKey()
+                        val revision = proSession.contentRevision
+                        val catalog = when (val current = nativeStore.recover()) {
+                            is NativeWorkResult.Ok -> current.value
+                            is NativeWorkResult.Failed -> null
+                        }
+                        val staged = if (catalog != null) prepareNamedWorkspace(manifest, loaded.project) else null
+                        if (catalog == null || staged == null) false
+                        else {
+                            var transferred = false
+                            try {
+                                if (workspaceNavigation.current != WorkspaceMode.PRO ||
+                                    proSession.nativeOwnerKey() != owner ||
+                                    proSession.contentRevision != revision) false
+                                else when (val result = nativeStore.acknowledge(
+                                    catalog.revision, staged.work, route = NativeWorkMode.PRO
+                                )) {
+                                    is NativeWorkResult.Failed -> {
+                                        nativeOpenError = nativeWorkMessage(result.reason)
+                                        false
+                                    }
+                                    is NativeWorkResult.Ok -> {
+                                        stagedNamedPro = staged.copy(catalog = result.value)
+                                        transferred = true
+                                        true
+                                    }
+                                }
+                            } finally {
+                                if (!transferred) {
+                                    staged.photo?.discard()
+                                    nativeStore.release(staged.work)
+                                }
+                            }
+                        }
+                    }
+                },
+                onOpenedNamedProject = { loaded, _ ->
+                    val staged = stagedNamedPro?.takeIf { it.ref == loaded.project }
+                    stagedNamedPro = null
+                    val catalog = staged?.catalog
+                    if (staged != null && catalog != null) {
+                        nativeCatalog = catalog
+                        nativeActive = catalog.active?.let { NativeWorkLoaded(it.ref, staged.work.state) }
+                        applyNativeWork(staged.work.state, staged.photo)
+                    }
                 }
-            }
-        )
+            )
+        }
         return
     }
     if (workspaceNavigation.current == WorkspaceMode.GIF) {

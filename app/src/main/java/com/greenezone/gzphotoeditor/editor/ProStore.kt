@@ -392,7 +392,7 @@ object ProStore {
     @Synchronized private fun writeProject(context: Context, name: String, document: ProDocument,
         resetDocument: ProDocument?, replaceName: String?, replaceAny: Boolean,
         intent: ProjectSaveIntent?, linkedWork: NativeManifestRef? = null): ProjectSaveResult {
-        if (!ProMath.valid(document) ||
+        if (!ProMath.valid(document) || (linkedWork == null && document.linkedFinishes.isNotEmpty()) ||
             (resetDocument != null && resetDocument.layers.isNotEmpty() && !ProMath.valid(resetDocument)))
             return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_DOCUMENT)
         if (intent?.expectedProject?.kind?.let { it != ProjectKind.PRO } == true)

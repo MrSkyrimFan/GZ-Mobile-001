@@ -52,7 +52,9 @@ internal suspend fun prepareRegularPhoto(
 internal suspend fun prepareBring(
     store: NativeWorkStore,
     resolver: ContentResolver,
-    from: NativeWorkState
+    from: NativeWorkState,
+    onDerivative: (NativeDerivativeRef) -> Unit,
+    onFinish: (ProLinkedFinishRef) -> Unit
 ): NativeWorkResult<NativeWorkState> {
     if (from.mode == NativeWorkMode.PRO) {
         val pro = from.pro ?: return NativeWorkResult.Failed(NativeWorkFailure.UNAVAILABLE)
@@ -60,6 +62,7 @@ internal suspend fun prepareBring(
             is NativeWorkResult.Ok -> staged.value
             is NativeWorkResult.Failed -> return staged
         }
+        onDerivative(derivative)
         val prior = from.regular
         val regular = prior?.takeIf { it.uri == derivative.uri } ?: NativeRegularState(
             ownerId = UUID.randomUUID().toString(),
@@ -89,6 +92,7 @@ internal suspend fun prepareBring(
                 is NativeWorkResult.Ok -> staged.value
                 is NativeWorkResult.Failed -> return staged
             }
+            onFinish(finish)
             // The active Regular finish is now a native revision in Pro. A later
             // unedited return has a new neutral Regular recipe over its rendering.
             val updated = pro.document.copy(linkedFinishes = pro.document.linkedFinishes + finish)
@@ -158,5 +162,9 @@ internal fun nativeWorkMessage(reason: NativeWorkFailure): String = when (reason
 internal data class PreparedNamedWorkspace(
     val ref: NamedProjectRef,
     val work: NativeWorkPrepared,
-    val photo: PreparedRegularPhoto?
+    val photo: PreparedRegularPhoto?,
+    val catalog: NativeWorkCatalog? = null
 )
+
+internal fun NativeProState.nativeOwnerKey(): String =
+    saveTarget.nativeOwnerId ?: (ownerId + "/" + saveTarget.workId)

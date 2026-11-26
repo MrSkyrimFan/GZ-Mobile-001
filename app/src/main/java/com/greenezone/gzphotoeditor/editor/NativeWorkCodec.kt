@@ -234,6 +234,7 @@ internal class NativeWorkCodec(
         checkBudget()
         document.layers.filter { it.kind == ProLayerKind.IMAGE }.forEach { keepSource(sourceUri(it.uri)) }
         document.linkedFinishes.forEach(::keepFinish)
+        ProRaster.validateLinkedGeometry(document, ::finishRecipe)
         val encoded = if (document.layers.isEmpty()) emptyPro(document).toString() else ProStore.encode(document)
         write(NativeWorkMode.PRO, encoded.toByteArray(Charsets.UTF_8))
     }
@@ -249,6 +250,7 @@ internal class NativeWorkCodec(
         val value = if (source.startsWith("{\"empty\":true")) decodeEmptyPro(JSONObject(source))
             else ProStore.decode(source) ?: throw NativeWorkUnavailable()
         value.linkedFinishes.forEach(::keepFinish)
+        ProRaster.validateLinkedGeometry(value, ::finishRecipe)
         value
     }
 

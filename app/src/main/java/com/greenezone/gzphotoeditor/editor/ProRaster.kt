@@ -232,9 +232,19 @@ object ProRaster {
 
     internal fun outputSize(context: Context, document: ProDocument, baseSize: ProPixelSize): ProPixelSize {
         val codec = NativeWorkCodec(NativeWorkFiles(context))
-        return document.linkedFinishes.fold(baseSize) { size, reference ->
-            finishGeometry(size, reference, codec.finishRecipe(reference))
+        return projectedSize(document, baseSize, codec::finishRecipe)
+    }
+
+    internal fun validateLinkedGeometry(document: ProDocument, recipe: (ProLinkedFinishRef) -> EditDocument) {
+        if (document.linkedFinishes.isNotEmpty()) {
+            projectedSize(document, ProMath.intendedCanvasSize(document), recipe)
         }
+    }
+
+    private fun projectedSize(
+        document: ProDocument, baseSize: ProPixelSize, recipe: (ProLinkedFinishRef) -> EditDocument
+    ): ProPixelSize = document.linkedFinishes.fold(baseSize) { size, reference ->
+        finishGeometry(size, reference, recipe(reference))
     }
 
     private fun finishGeometry(
