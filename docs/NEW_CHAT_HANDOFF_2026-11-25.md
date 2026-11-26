@@ -1,4 +1,6 @@
-# GZ Editor Pro — GPT-6.2 Sol Ultra successor handoff
+# Completed November 25 successor handoff — historical custody
+
+> **Completed historical handoff.** Its onboarding/read-only/idle instructions were consumed. The later 0.12.13 owner report and [current U1 handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md), [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md), root AGENTS.md and active ledger now govern work. Preserve the body below as dated evidence; do not reactivate its old baseline or hold.
 
 Date: November 25, 2026, America/Denver. This is the current custody and resume route. It supplements the single work ledger and roadmap; it does not create a competing plan.
 
