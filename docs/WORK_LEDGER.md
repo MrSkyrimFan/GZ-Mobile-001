@@ -6,7 +6,7 @@
 
 The [0.12.13 owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied phone instructions 1–5. O25-01–O25-06 authorize specific blend/input, Pro tool-ownership, shared-control, Delete/Reset and bidirectional transfer corrections. [PRODUCT_SPEC](PRODUCT_SPEC.md) and [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md) replace conflicting old interaction rules. This docs-only reconciliation does not implement the fixes or change the qualified APK.
 
-**Status: Blueprint reconciled — ready for owner to relay Codex U1 prompt.** The next decisive action is the exact-baseline reproduction and project-instruction alignment in the [finite Codex handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md). No new 25/50 cycle or full historical audit.
+**Status: Blueprint reconciled — ready for owner to relay Codex U1 prompt.** Three independent documentation-review scopes approved the clarified behavioral contract at **9514b574a859ef547ec4a854cb23806cf24e0df8**. They checked blend/tool roles, navigation/custody, and full product/instruction scope; their exact findings/dispositions and pinned reads are in the handoff. All77 IDs and R2–R11 child scope remain; only Markdown changes, with no app build/test rerun. The next decisive action is the exact-baseline reproduction and project-instruction alignment in the [finite Codex handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md). No new 25/50 cycle or full historical audit.
 
 | Slice | Observable exit and owner boundary | Dependency / disposition |
 | --- | --- | --- |

@@ -16,9 +16,36 @@ This handoff answers the latest 0.12.13 phone report. It is not another intake, 
 | Existing qualification | Candidate and merge each passed JVM/build/signing and **279/279 per API29/API35**, all265 inherited cases plus14. [Full receipt and preserved failures](../WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4) |
 | Merged run/artifact | [Run 45720375226](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45720375226), [artifact 15073420431](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45720375226/artifacts/15073420431) |
 | APK identity | 33,833,013 bytes; SHA-256 **338da238fca3ace52006bbcf9ac177302c8ccd2265bef1c2f73946a9ffbcef15**; recorded v2 signer in ledger |
-| U1 contract snapshot | The canonical documents in this documentation change; exact reviewed commit links are recorded below before merge/delivery. No app/test/build/CI inputs change in this handoff. |
+| Reviewed U1 contract | **9514b574a859ef547ec4a854cb23806cf24e0df8**, incorporating independent document-review clarifications; exact canonical links below. The final handoff adds pins/receipts only. No app/test/build/CI inputs change. |
 
 Compare live main with these refs before implementation. Preserve newer authorized work, inspect its actual diff and update only the necessary baseline receipt. A later documentation-only merge does not replace the qualified application identity. Do not download/rebuild the old APK or rerun its completed suites merely to re-establish these documented facts.
+
+## Reviewed committed contract and review receipt
+
+Use this final handoff revision from the owner's relay. The reviewed behavioral contract is frozen at **9514b574a859ef547ec4a854cb23806cf24e0df8**; compare newer live main and preserve newer authorized work rather than blindly resetting it.
+
+| Governing document | Exact reviewed reference |
+| --- | --- |
+| Project operating instructions | [AGENTS.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/AGENTS.md) |
+| Owner report and pinned source findings | [OWNER_PHONE_FEEDBACK_2026-11-25_V25.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/docs/coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) |
+| Product requirements | [PRODUCT_SPEC.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/docs/PRODUCT_SPEC.md) |
+| Detailed interaction/tool contract | [WORKSPACE_UX_BLUEPRINT.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/docs/WORKSPACE_UX_BLUEPRINT.md) |
+| Full single roadmap | [GZ_ENGINEERING_ROADMAP.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/docs/GZ_ENGINEERING_ROADMAP.md) |
+| All77 families and required exits | [CAPABILITY_MATRIX.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/docs/CAPABILITY_MATRIX.md) |
+| Selected work and inherited evidence | [WORK_LEDGER.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/docs/WORK_LEDGER.md) |
+| Qualification and owner gates | [RELEASE_GATE.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/docs/RELEASE_GATE.md) |
+| Continuity/custody | [CONTINUITY.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/docs/CONTINUITY.md) |
+| Repository entry point | [README.md](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/9514b574a859ef547ec4a854cb23806cf24e0df8/README.md) |
+
+Three independent documentation-review scopes read the complete new blueprint/handoff and their relevant canonical/source material at 1441b791cda772d21d7edc492f0611e9a4a86a63, then verified the correction delta at **9514b574a859ef547ec4a854cb23806cf24e0df8**:
+
+| Review scope | Result and disposition |
+| --- | --- |
+| Pro blend/input, source accuracy, tool roles and test exits | Approved; clarified that U1 paints an identified paint layer. Mask painting remains required later R3/P05/P08, without a fake current control. |
+| Navigation, native lineage, Delete/Reset, child/GIF ownership and minimal custody | Approved after precise Reset membership including loaded legacy authoring, acknowledged-only Working drafts and explicit ordinary-versus-transfer zero-layer behavior. |
+| Product requirements, all77 families/child scope, instructions and evidence/gates | Approved; independently confirmed identical ordered77 IDs and byte-identical R2–R11 child body, with full R1 obligations retained. Historical status wording was clarified. |
+
+Root also read back every changed file from GitHub, verified relative file-link targets, checked all77 unique IDs and later-roadmap preservation, and compared repository trees: only twelve Markdown files changed, no source/test/build/CI files removed or modified. These are documentation checks. They do not reproduce the handset failure, qualify a new application or replace Codex's implementation review and later owner acceptance.
 
 ## Required current reads
 
