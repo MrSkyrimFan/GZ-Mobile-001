@@ -73,7 +73,7 @@ class ProToolOwnershipTest {
     }
 
     private fun tool(name: String) {
-        rule.onNodeWithText("Tools ▾").performClick()
+        rule.onNodeWithTag("workspace-tools").performClick()
         rule.onNodeWithText(name).performScrollTo().performClick()
     }
 
@@ -88,7 +88,7 @@ class ProToolOwnershipTest {
         }
         rule.onNodeWithText("Apply layer mask").assertIsEnabled()
         tool("Layers")
-        rule.onNodeWithText("Delete layer").performScrollTo().performClick()
+        rule.onNodeWithText("Remove layer").performScrollTo().performClick()
         tool("Select & mask")
         rule.onNodeWithText("Second adjustment · Adjustment").assertIsDisplayed()
         rule.onNodeWithText("Apply layer mask").assertIsNotEnabled()

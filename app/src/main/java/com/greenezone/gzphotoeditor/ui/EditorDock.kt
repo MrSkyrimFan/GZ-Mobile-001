@@ -436,7 +436,7 @@ private fun MixerDeck(
 }
 
 @Composable
-private fun CurveDeck(
+internal fun CurveDeck(
     document: EditDocument,
     enabled: Boolean,
     onCommit: (EditDocument) -> Unit,

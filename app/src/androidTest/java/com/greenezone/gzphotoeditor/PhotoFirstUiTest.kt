@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -28,12 +29,17 @@ import com.greenezone.gzphotoeditor.ui.ExportDialog
 import com.greenezone.gzphotoeditor.ui.PhotoEditorScreen
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PhotoFirstUiTest {
+    @After fun removeWorkingSessionFixture() {
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        java.io.File(context.filesDir, "native-work-v1").deleteRecursively()
+    }
     @get:Rule val rule = createComposeRule()
 
     @Test fun workspaceMenuSeparatesModesAndKeepsVideoDisabled() {
@@ -44,8 +50,11 @@ class PhotoFirstUiTest {
         rule.onNodeWithText("GIF maker").assertExists()
         rule.onNodeWithText("Video editing · Coming soon").assertExists()
         rule.onNodeWithText("Photo editing Pro").performClick()
-        rule.onNodeWithText("Select an image to edit").assertExists()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Select an image to edit").fetchSemanticsNodes().isNotEmpty()
+        }
         rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("New / Open media…").performClick()
         rule.onNodeWithText("Open photo as new document…").assertExists()
     }
 
@@ -66,11 +75,11 @@ class PhotoFirstUiTest {
             }
         }
         rule.onNodeWithText("+ Add layer").performClick()
-        rule.onNodeWithText("Draw / Brush").performClick()
+        rule.onNodeWithText("Paint layer", substring = false).performClick()
         rule.onNodeWithText("+ Add layer").performClick()
         rule.onNodeWithText("Words / Text").assertDoesNotExist()
-        rule.onNodeWithText("Shape").performClick()
-        rule.onNodeWithText("Shapes ▴").assertIsDisplayed()
+        rule.onNodeWithText("Shape layer", substring = false).performClick()
+        rule.onNodeWithText("Vector shapes", substring = false).assertIsDisplayed()
         rule.runOnIdle {
             assertEquals(2, lastDocument.layers.size)
             assertEquals(com.greenezone.gzphotoeditor.editor.ProLayerKind.DRAWING,
@@ -109,7 +118,7 @@ class PhotoFirstUiTest {
                 )
             }
         }
-        rule.onNodeWithText("Tools ▾").performClick()
+        rule.onNodeWithTag("workspace-tools").performClick()
         rule.onNodeWithText("Select & mask").assertExists()
         rule.onNodeWithText("Clone & repair").assertExists()
         rule.onNodeWithText("Transform").performClick()
@@ -137,8 +146,9 @@ class PhotoFirstUiTest {
         }
         rule.onNodeWithText("Select one video to turn into a GIF").assertIsDisplayed()
         rule.onNodeWithText("Options").performClick()
-        rule.onNodeWithText("Open video…").assertIsDisplayed()
         rule.onNodeWithText("Open project…").assertExists()
+        rule.onNodeWithText("New / Open media…").performClick()
+        rule.onNodeWithText("Open video…").assertIsDisplayed()
         rule.onNodeWithText("Instead: animate multiple photos").assertDoesNotExist()
     }
 

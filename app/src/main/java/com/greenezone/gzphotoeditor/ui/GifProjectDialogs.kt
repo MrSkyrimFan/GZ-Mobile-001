@@ -146,15 +146,19 @@ internal fun GifSavedProjectsDialog(
     names: List<String>,
     enabled: Boolean,
     onOpen: (String) -> Unit,
-    onDelete: (String) -> Boolean,
+    onIdentifyDelete: suspend (String) -> NamedProjectRef?,
+    onDelete: suspend (NamedProjectRef) -> Boolean,
     onDismiss: () -> Unit
 ) {
-    var deleteName by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    var deleteTarget by remember { mutableStateOf<NamedProjectRef?>(null) }
     var deleteFailed by remember { mutableStateOf(false) }
-    val pending = deleteName
+    var working by remember { mutableStateOf(false) }
+    val interactive = enabled && !working
+    val pending = deleteTarget
     if (pending == null) {
         AlertDialog(
-            onDismissRequest = { if (enabled) onDismiss() },
+            onDismissRequest = { if (interactive) onDismiss() },
             title = { Text("Saved GIF projects") },
             text = {
                 Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
@@ -164,38 +168,55 @@ internal fun GifSavedProjectsDialog(
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             TextButton(
                                 modifier = Modifier.weight(1f),
-                                enabled = enabled,
+                                enabled = interactive,
                                 onClick = { onOpen(name) }
                             ) { Text(name, color = EditorMint) }
                             TextButton(
                                 modifier = Modifier.semantics { contentDescription = "Delete $name" },
-                                enabled = enabled,
+                                enabled = interactive,
                                 onClick = {
                                     deleteFailed = false
-                                    deleteName = name
+                                    working = true
+                                    scope.launch {
+                                        try {
+                                            deleteTarget = onIdentifyDelete(name)
+                                            deleteFailed = deleteTarget == null
+                                        } finally {
+                                            working = false
+                                        }
+                                    }
                                 }
-                            ) { Text("Delete", color = EditorMuted) }
+                            ) { Text("Delete saved project", color = EditorMuted) }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(enabled = enabled, onClick = onDismiss) { Text("Close") }
+                TextButton(enabled = interactive, onClick = onDismiss) { Text("Close") }
             }
         )
     } else {
         AlertDialog(
-            onDismissRequest = { deleteName = null },
+            onDismissRequest = { if (interactive) deleteTarget = null },
             title = { Text("Delete GIF project?") },
-            text = { Text("Delete “$pending”? Your source media and current edits stay available.") },
+            text = { Text("Delete “${pending.name}”? Your source media and current edits stay available.") },
             confirmButton = {
-                TextButton(onClick = {
-                    deleteFailed = !onDelete(pending)
-                    deleteName = null
+                TextButton(enabled = interactive, onClick = {
+                    working = true
+                    scope.launch {
+                        try {
+                            deleteFailed = !onDelete(pending)
+                            deleteTarget = null
+                        } finally {
+                            working = false
+                        }
+                    }
                 }) { Text("Delete", color = EditorMint) }
             },
             dismissButton = {
-                TextButton(onClick = { deleteName = null }) { Text("Cancel", color = EditorMuted) }
+                TextButton(enabled = interactive, onClick = { deleteTarget = null }) {
+                    Text("Cancel", color = EditorMuted)
+                }
             }
         )
     }

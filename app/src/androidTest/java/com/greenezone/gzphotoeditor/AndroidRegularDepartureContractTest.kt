@@ -235,6 +235,68 @@ class AndroidRegularDepartureContractTest {
         return requireNotNull(ProjectStore.loadNamed(fixture.context, name))
     }
 
+    @Test fun u1RegularToProOffersOneFourChoiceSurfaceAndCancelKeepsTheEdit() {
+        withEditor { fixture ->
+            openPhoto(fixture)
+            flip()
+            rule.onNodeWithContentDescription("Choose editing workspace").performTouchInput { click(center) }
+            rule.onNodeWithText("Photo editing Pro", substring = false).performTouchInput { click(center) }
+
+            val dialog = hasAnyAncestor(isDialog())
+            rule.onNode(hasText("Bring current work", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Discard", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Save current work", substring = false) and dialog).assertIsDisplayed()
+            rule.onNode(hasText("Cancel", substring = false) and dialog).performTouchInput { click(center) }
+            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+        }
+    }
+
+    @Test fun u1RegularOptionsSeparateDeleteFromResetAndKeepNamedProject() {
+        withEditor { fixture ->
+            openPhoto(fixture)
+            val earlier = saveAs(fixture, "Retained before delete")
+            flip()
+            rule.onNodeWithTag("workspace-options").performTouchInput { click(center) }
+            rule.onNodeWithTag("workspace-command-reset").assertIsEnabled()
+            rule.onNodeWithTag("workspace-command-delete").assertIsEnabled()
+                .performTouchInput { click(center) }
+            rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog()))
+                .performTouchInput { click(center) }
+            rule.onNodeWithTag("photo-tools").assertDoesNotExist()
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+            assertEquals(earlier, ProjectStore.loadNamed(fixture.context, "Retained before delete"))
+        }
+    }
+
+    @Test fun u1RepeatedBringKeepsNativeLayersAndAddsNoNamedRecord() {
+        withEditor { fixture ->
+            openPhoto(fixture)
+            flip()
+            workspace("Photo editing Pro")
+            rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Original photo", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("+ Add layer", substring = false).performTouchInput { click(center) }
+            rule.onNodeWithText("Shape layer", substring = false).performTouchInput { click(center) }
+            rule.onNodeWithText("Shape layer 2 · Shape", substring = false).assertIsDisplayed()
+
+            workspace("Photo editing")
+            rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+            waitPhoto()
+            flip()
+
+            workspace("Photo editing Pro")
+            rule.onNodeWithText("Bring current work", substring = false).performTouchInput { click(center) }
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Shape layer 2 · Shape", substring = false).fetchSemanticsNodes().isNotEmpty()
+            }
+            assertTrue(requireNotNull(ProjectStore.listMetadata(fixture.context)).isEmpty())
+            assertTrue(ProStore.names(fixture.context).isEmpty())
+        }
+    }
+
     @Test fun canceledAndDuplicatePickerResultsCannotReplaceOrCancelANewerImport() {
         withEditor { fixture ->
             openPhoto(fixture)

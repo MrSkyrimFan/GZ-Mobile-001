@@ -75,6 +75,7 @@ class AndroidBackNavigationTest {
 
     @After fun removeSavedDepartureFixtures() {
         val context = instrumentation.targetContext
+        java.io.File(context.filesDir, "native-work-v1").deleteRecursively()
         savedFixtures.forEach { (kind, name) ->
             when (kind) {
                 "photo" -> ProjectStore.delete(context, name)
@@ -87,6 +88,9 @@ class AndroidBackNavigationTest {
 
     private fun command(label: String) {
         rule.onNodeWithText("Options").performClick()
+        if (label == "Open video…" || label == "Open GIF…") {
+            rule.onNodeWithText("New / Open media…").performClick()
+        }
         rule.onNodeWithText(label).performClick()
     }
 
@@ -266,14 +270,11 @@ class AndroidBackNavigationTest {
     private fun requestProHandoff() {
         rule.onNodeWithContentDescription("Choose editing workspace").performClick()
         rule.onNodeWithText("Photo editing Pro").performClick()
-        if (rule.onAllNodesWithText("Unsaved changes").fetchSemanticsNodes().isNotEmpty()) {
-            saveDeparture("photo")
-        }
-        rule.onNodeWithText("Bring this photo into Pro?").assertIsDisplayed()
+        rule.onNodeWithText("Bring current work", substring = false).assertIsDisplayed()
     }
 
     private fun acceptProHandoff() {
-        rule.onNodeWithText("Yes, bring photo").performClick()
+        rule.onNodeWithText("Bring current work", substring = false).performClick()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Photo Pro ▾").fetchSemanticsNodes().isNotEmpty()
         }
@@ -402,11 +403,11 @@ class AndroidBackNavigationTest {
         rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
 
         rule.onNodeWithText("+ Add layer").performClick()
-        rule.onNodeWithText("Shape").performClick()
-        rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
-        rule.onNodeWithText("Tools ▾").performClick()
+        rule.onNodeWithText("Shape layer", substring = false).performClick()
+        rule.onNodeWithText("Shape layer 2 · Shape").assertIsDisplayed()
+        rule.onNodeWithTag("workspace-tools").performClick()
         rule.onNodeWithText("Transform").performClick()
-        rule.onNodeWithText("Transform ▴").assertIsDisplayed()
+        rule.onNodeWithText("Transform", substring = false).assertIsDisplayed()
         rule.onNodeWithContentDescription("Undo").assertIsEnabled()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithContentDescription("Pro editable composition")
@@ -441,8 +442,8 @@ class AndroidBackNavigationTest {
 
         pressBackThroughDispatcher()
         rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
-        rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
-        rule.onNodeWithText("Transform ▴").assertIsDisplayed()
+        rule.onNodeWithText("Shape layer 2 · Shape").assertIsDisplayed()
+        rule.onNodeWithText("Transform", substring = false).assertIsDisplayed()
         rule.onNodeWithContentDescription("Undo").assertIsEnabled()
         assertEquals(
             proViewport,
@@ -454,7 +455,7 @@ class AndroidBackNavigationTest {
         rule.onNodeWithContentDescription("Redo").performClick()
         rule.onNodeWithText("Stack (2)").assertIsDisplayed()
         rule.onNodeWithText("Stack (2)").performClick()
-        rule.onNodeWithText("Shape 2").assertIsDisplayed()
+        rule.onNodeWithText("Shape layer 2").assertIsDisplayed()
         rule.onNodeWithText("Done").performClick()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithText("Layer stack").fetchSemanticsNodes().isEmpty()
@@ -720,7 +721,9 @@ class AndroidBackNavigationTest {
 
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
-            rule.onNodeWithText("Select an image to edit").assertIsDisplayed()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Select an image to edit").fetchSemanticsNodes().isNotEmpty()
+            }
             pressBackThroughDispatcher()
             rule.onNodeWithText("Photo ▾").assertIsDisplayed()
 
@@ -742,24 +745,40 @@ class AndroidBackNavigationTest {
 
     @Test fun declinedHandoffOpensBlankProAndExplicitRegularSwitchRestoresTheDraft() =
         withLoadedRegular { uri, original ->
+            val name = "before-discard-" + System.nanoTime().toString().takeLast(12)
+            val context = instrumentation.targetContext
+            assertTrue(ProjectStore.save(context, name, uri, EditDocument()))
+            savedFixtures += "photo" to name
+
             rule.onNodeWithText("Golden").performClick()
             requestProHandoff()
-            rule.onNodeWithText("Cancel").performClick()
-            rule.onNodeWithText("Bring this photo into Pro?").assertDoesNotExist()
-            rule.onNodeWithTag("photo-tools").assertIsDisplayed()
-
-            requestProHandoff()
-            rule.onNodeWithText("No, start blank").performClick()
-            rule.onNodeWithText("Select an image to edit").assertIsDisplayed()
-            rule.onNodeWithText("Original photo", substring = true).assertDoesNotExist()
-            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
-            rule.onNodeWithText("Photo editing").performClick()
+            rule.onNodeWithText("Cancel", substring = false).performClick()
+            rule.onNodeWithText("Bring current work", substring = false).assertDoesNotExist()
             rule.onNodeWithTag("photo-tools").assertIsDisplayed()
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
-            rule.onNodeWithContentDescription("Undo").performClick()
-            pressBackThroughDispatcher()
-            rule.onNodeWithText("Unsaved changes").assertIsDisplayed()
-            rule.onNodeWithText("Cancel").performClick()
+
+            requestProHandoff()
+            rule.onNodeWithText("Discard", substring = false).performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Select an image to edit", substring = false)
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("Original photo", substring = true).assertDoesNotExist()
+            rule.onNodeWithContentDescription("Choose editing workspace").performClick()
+            rule.onNodeWithText("Photo editing", substring = false).performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Photo ▾", substring = false).fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithTag("photo-tools").assertDoesNotExist()
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+            assertEquals(EditDocument(), requireNotNull(ProjectStore.loadNamed(context, name)).content.document)
+
+            command("Open project…")
+            rule.waitUntil(15_000) { rule.onAllNodesWithText(name, substring = false).fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithText(name, substring = false).performClick()
+            rule.onNodeWithText("Open project", substring = false).performClick()
+            rule.waitUntil(15_000) { rule.onAllNodesWithTag("photo-tools").fetchSemanticsNodes().isNotEmpty() }
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
             assertArrayEquals(original, resolver.openInputStream(uri)!!.use { it.readBytes() })
         }
 

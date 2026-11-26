@@ -29,12 +29,26 @@ object ProStore {
     private const val MAX_SAVED = 12
     private const val DIR = "gz_pro_projects"
     private val whitespace = Regex("\\s+")
-    private class ProjectTooLarge : IllegalArgumentException()
+    internal class ProjectTooLarge : IllegalArgumentException()
 
     private fun projectReadLimit(): Long =
         (Runtime.getRuntime().maxMemory() / 8L).coerceAtMost(MAX_PROJECT_BYTES.toLong())
 
     private fun ProPixelSize.toJson(): JSONObject = JSONObject().put("width", width).put("height", height)
+
+    private fun ProCanvasSetup.toJson(): JSONObject = JSONObject()
+        .put("aspect", aspect.name).put("background", background.name).apply {
+            sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
+            canvasSize?.let { put("canvasSize", it.toJson()) }
+        }
+
+    private fun JSONObject.canvasSetup(): ProCanvasSetup? = optJSONObject("sourceCanvasSetup")?.let {
+        ProCanvasSetup(value(it.getString("aspect"), ProAspect.SQUARE),
+            value(it.getString("background"), ProBackground.WHITE),
+            if (it.has("sourceAspectRatio")) it.getDouble("sourceAspectRatio").toFloat().also { v ->
+                require(ProMath.validSourceAspect(v))
+            } else null, it.pixelSize("canvasSize"))
+    }
 
     private fun JSONObject.pixelSize(key: String): ProPixelSize? = optJSONObject(key)?.let {
         ProPixelSize(it.getInt("width"), it.getInt("height"))
@@ -52,6 +66,10 @@ object ProStore {
                 put("visible", layer.visible); put("blend", layer.blend.name)
                 put("kind", layer.kind.name); put("aspect", layer.aspect.toDouble())
                 layer.sourceSize?.let { put("sourceSize", it.toJson()) }
+                layer.sourcePlacement?.let {
+                    put("sourcePlacement", JSONObject().put("id", it.id).put("x", it.x.toDouble())
+                        .put("y", it.y.toDouble()).put("scale", it.scale.toDouble()))
+                }
                 put("rotate", layer.rotationDegrees.toDouble())
                 put("effect", layer.effect.name); put("effectAmount", layer.effectAmount.toDouble())
                 layer.mask?.let { mask ->
@@ -118,6 +136,12 @@ object ProStore {
             put("aspect", document.aspect.name)
             document.sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
             document.canvasSize?.let { put("canvasSize", it.toJson()) }
+            document.sourceCanvasSetup?.let { put("sourceCanvasSetup", it.toJson()) }
+            if (document.linkedFinishes.isNotEmpty()) {
+                put("linkedFinishes", JSONArray().also { items ->
+                    document.linkedFinishes.forEach { items.put(NativeWorkCodec.encodeFinish(it)) }
+                })
+            }
             put("background", document.background.name)
             put("layers", layers)
         }.toString().also {
@@ -215,7 +239,11 @@ object ProStore {
                     mask = mask, retouches = retouches,
                     effect = value(o.optString("effect", ""), ProPixelEffect.NONE),
                     effectAmount = unit(o, "effectAmount", .5, 0f, 1f),
-                    sourceSize = if (version >= 7) o.pixelSize("sourceSize") else null
+                    sourceSize = if (version >= 7) o.pixelSize("sourceSize") else null,
+                    sourcePlacement = o.optJSONObject("sourcePlacement")?.let {
+                        ProSourcePlacement(it.getString("id"), it.getDouble("x").toFloat(),
+                            it.getDouble("y").toFloat(), it.getDouble("scale").toFloat())
+                    }
                 )
             }
             val sourceAspectRatio = if (version >= 6 && obj.has("sourceAspectRatio")) {
@@ -225,12 +253,21 @@ object ProStore {
                 value(obj.optString("aspect", ""), ProAspect.SQUARE),
                 value(obj.optString("background", ""), ProBackground.WHITE),
                 sourceAspectRatio,
-                if (version >= 7) obj.pixelSize("canvasSize") else null)
+                if (version >= 7) obj.pixelSize("canvasSize") else null,
+                obj.canvasSetup(),
+                obj.optJSONArray("linkedFinishes")?.let { items ->
+                    require(items.length() <= ProMath.MAX_LINKED_FINISHES)
+                    List(items.length()) { NativeWorkCodec.decodeFinish(items.getJSONObject(it)) }
+                }.orEmpty())
                 .takeIf { ProMath.valid(it) }
         } catch (_: Exception) { null }
     }
 
-    data class SavedProject(val document: ProDocument, val resetDocument: ProDocument)
+    data class SavedProject(
+        val document: ProDocument,
+        val resetDocument: ProDocument,
+        val linkedWork: NativeManifestRef? = null
+    )
 
     internal fun encodeProject(document: ProDocument, resetDocument: ProDocument?): ByteArray {
         val encoded = encode(document)
@@ -242,6 +279,7 @@ object ProStore {
                 put("background", resetDocument.background.name)
                 resetDocument.sourceAspectRatio?.let { put("sourceAspectRatio", it.toDouble()) }
                 resetDocument.canvasSize?.let { put("canvasSize", it.toJson()) }
+                resetDocument.sourceCanvasSetup?.let { put("sourceCanvasSetup", it.toJson()) }
             }
         } else JSONObject(encode(resetDocument))
         // The optional field leaves the existing root document and codec version intact.
@@ -270,7 +308,8 @@ object ProStore {
                     background = value(it.optString("background"), ProBackground.WHITE),
                     sourceAspectRatio = it.optDouble("sourceAspectRatio").toFloat()
                         .takeIf(ProMath::validSourceAspect),
-                    canvasSize = runCatching { it.pixelSize("canvasSize") }.getOrNull()
+                    canvasSize = runCatching { it.pixelSize("canvasSize") }.getOrNull(),
+                    sourceCanvasSetup = it.canvasSetup()
                 )
             } else decode(it, recoverLegacyRecipe = true)
         }
@@ -344,9 +383,15 @@ object ProStore {
         document: ProDocument, resetDocument: ProDocument? = null): ProjectSaveResult =
         writeProject(context, intent.requestedName, document, resetDocument, null, true, intent)
 
+    internal fun saveLinkedNamed(
+        context: Context, intent: ProjectSaveIntent, document: ProDocument,
+        resetDocument: ProDocument?, linkedWork: NativeManifestRef
+    ): ProjectSaveResult =
+        writeProject(context, intent.requestedName, document, resetDocument, null, true, intent, linkedWork)
+
     @Synchronized private fun writeProject(context: Context, name: String, document: ProDocument,
         resetDocument: ProDocument?, replaceName: String?, replaceAny: Boolean,
-        intent: ProjectSaveIntent?): ProjectSaveResult {
+        intent: ProjectSaveIntent?, linkedWork: NativeManifestRef? = null): ProjectSaveResult {
         if (!ProMath.valid(document) ||
             (resetDocument != null && resetDocument.layers.isNotEmpty() && !ProMath.valid(resetDocument)))
             return ProjectSaveResult.Rejected(ProjectSaveFailure.INVALID_DOCUMENT)
@@ -366,9 +411,10 @@ object ProStore {
                 return ProjectSaveResult.Exists(current)
             if (!exists && names(context).size >= MAX_SAVED)
                 return ProjectSaveResult.Rejected(ProjectSaveFailure.FULL)
-            val payload = encodeProject(document, resetDocument)
-            if (payload.size.toLong() > projectReadLimit())
+            val nativePayload = encodeProject(document, resetDocument)
+            if (nativePayload.size.toLong() > projectReadLimit())
                 return ProjectSaveResult.Rejected(ProjectSaveFailure.TOO_LARGE)
+            val payload = linkedWork?.let(NativeWorkCodec::namedBytes) ?: nativePayload
             val identity = current?.id ?: NamedProjectIdentity.reserve(context, ProjectKind.PRO,
                 target.name, payloadExists = false)
             val version = NamedProjectIdentity.publish(target.base, payload, projectReadLimit())
@@ -385,7 +431,9 @@ object ProStore {
     @Synchronized fun loadNamed(context: Context, name: String): NamedProject<SavedProject>? = try {
         val target = projectPath(context, name)
         if (target == null) null else {
-            NamedProjectIdentity.readPayload(target.base, projectReadLimit(), ::readProject)?.let { loaded ->
+            NamedProjectIdentity.readPayload(target.base, projectReadLimit()) { input, length ->
+                readProject(context, input, length)
+            }?.let { loaded ->
                 NamedProject(NamedProjectIdentity.reference(context, ProjectKind.PRO,
                     target.name, loaded.version), loaded.content)
             }
@@ -475,7 +523,7 @@ object ProStore {
             atomic.openRead().use { input ->
                 val length = input.channel.size()
                 if (length !in 1L..projectReadLimit()) return null
-                readProject(input, length)
+                readProject(context, input, length)
             }
         } catch (_: OutOfMemoryError) {
             null
@@ -489,7 +537,7 @@ object ProStore {
      * builder around each escaped recipe and can transiently need several times
      * the file budget even though the recipe itself is readable.
      */
-    private fun readProject(input: InputStream, length: Long): SavedProject? {
+    private fun readProject(context: Context, input: InputStream, length: Long): SavedProject? {
         val bounded = object : FilterInputStream(input) {
             private var remaining = length
             override fun read(): Int {
@@ -519,9 +567,23 @@ object ProStore {
         return JsonReader(counted).use { reader ->
             val json = readProjectValue(reader, 0) as? JSONObject ?: return null
             if (reader.peek() != JsonToken.END_DOCUMENT) return null
+            if (json.has(NativeWorkCodec.NAMED_TAG)) {
+                val manifest = NativeWorkCodec.namedManifest(json) ?: return null
+                return NativeWorkStore.readLinkedPro(context, manifest)
+            }
             decodeProject(json, chars)
         }
     }
+
+    @Synchronized
+    internal fun namedManifests(context: Context): Set<NativeManifestRef>? = try {
+        names(context).mapNotNullTo(mutableSetOf()) { name ->
+            val path = projectPath(context, name) ?: throw IOException("Invalid Pro project path")
+            if (NamedProjectIdentity.hasPendingPublication(path.base) || path.backup.exists())
+                throw IOException("Unresolved Pro project publication")
+            NativeWorkCodec.peekManifest(path.base)
+        }
+    } catch (_: Exception) { null }
 
     private fun readProjectValue(reader: JsonReader, depth: Int): Any {
         // Our layer/mask/reset schema is shallow; malformed input must not recurse

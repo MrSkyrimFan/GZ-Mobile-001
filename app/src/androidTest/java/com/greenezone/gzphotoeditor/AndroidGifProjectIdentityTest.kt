@@ -195,6 +195,7 @@ class AndroidGifProjectIdentityTest {
 
         videoFile("Open project…")
         rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()
+        awaitText("Delete GIF project?")
         rule.onNodeWithText("Delete GIF project?").assertIsDisplayed()
         rule.onNodeWithText("Cancel").performClick()
         rule.onNodeWithText(obsoleteName).performScrollTo().performClick()
@@ -218,16 +219,19 @@ class AndroidGifProjectIdentityTest {
         assertTrue(blocked.mkdir())
         rule.onNodeWithText("Photos").performScrollTo().performClick()
         videoFile("Open project…")
-        fun deleteObsolete() {
+        fun requestDeleteObsolete() {
             rule.onNodeWithContentDescription("Delete $obsoleteName").performScrollTo().performClick()
-            rule.onNodeWithText("Delete").performClick()
         }
-        deleteObsolete()
+        requestDeleteObsolete()
+        awaitText("Could not delete this GIF project.")
         rule.onNodeWithText("Could not delete this GIF project.").assertIsDisplayed()
         assertTrue(backup.isFile)
         assertTrue(blocked.delete())
 
-        deleteObsolete()
+        requestDeleteObsolete()
+        awaitText("Delete GIF project?")
+        rule.onNodeWithText("Delete").performClick()
+        awaitText("Saved GIF projects")
         rule.onNodeWithText(obsoleteName).assertDoesNotExist()
         rule.onNodeWithText("Close").performClick()
         assertFalse(backup.exists())
@@ -344,6 +348,9 @@ class AndroidGifProjectIdentityTest {
 
     private fun videoFile(item: String) {
         rule.onNodeWithText("Options").performClick()
+        if (item == "Open video…" || item == "Open GIF…" || item == "Add photos…") {
+            rule.onNodeWithText("New / Open media…").performClick()
+        }
         rule.onNodeWithText(item).performClick()
     }
 

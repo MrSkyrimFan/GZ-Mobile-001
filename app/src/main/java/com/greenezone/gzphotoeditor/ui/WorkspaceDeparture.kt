@@ -94,7 +94,8 @@ internal data class WorkspaceTransferPresentation(
     val name: String? = null,
     val collisionName: String? = null,
     val error: String? = null,
-    val working: Boolean = false
+    val working: Boolean = false,
+    val cancelEnabled: Boolean = true
 )
 
 @Composable
@@ -108,7 +109,7 @@ internal fun WorkspaceTransferDialog(
     onReplace: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = onCancel,
+        onDismissRequest = { if (state.cancelEnabled) onCancel() },
         title = { Text("Switch to " + state.destination.label + "?") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -137,6 +138,6 @@ internal fun WorkspaceTransferDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
+        confirmButton = { TextButton(enabled = state.cancelEnabled, onClick = onCancel) { Text("Cancel") } }
     )
 }

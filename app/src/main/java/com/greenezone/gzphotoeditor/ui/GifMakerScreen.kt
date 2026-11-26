@@ -16,20 +16,28 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -116,7 +124,9 @@ internal data class GifWorkspaceSession(
     val identity: GifDocumentIdentity? = null,
     val identities: Map<String, GifDocumentIdentity> = emptyMap(),
     val photoChromeVisible: Boolean = true,
-    val videoChromeVisible: Boolean = true
+    val videoChromeVisible: Boolean = true,
+    val photoToolsExpanded: Boolean = true,
+    val offerExportRecoveryOnEntry: Boolean = true
 )
 
 /** Native save state is outside Undo: undoing an edit cannot undo a completed publication. */
@@ -171,6 +181,61 @@ internal class GifDocumentCustody(initial: GifDocument, session: GifWorkspaceSes
         val retainedIds = (history.undo + history.redo).mapNotNull { it.identity?.ownerId }.toSet() + identity.ownerId
         identities = identities.filterKeys { it in retainedIds }
         return session.copy(identity = identity, identities = identities, savedName = savedName)
+    }
+}
+
+internal fun GifDocument.resetGifEdits(): GifDocument? {
+    val clip = video ?: return GifDocument(frames = frames)
+    val sourceClip = clip.copy(startMs = 0, endMs = clip.durationMs, fps = 0,
+        speedPercent = 100, reverse = false)
+    if (!GifVideoMath.valid(sourceClip)) return null
+    return GifDocument(video = sourceClip, forever = sourceClip.loopCount == 0,
+        repeatCount = sourceClip.loopCount.takeIf { it > 0 })
+}
+
+internal class GifWorkDeletion(
+    private val custody: GifDocumentCustody,
+    private val export: GifExportOperation
+) {
+    var target by mutableStateOf<WorkspaceOperationToken?>(null)
+        private set
+    var working by mutableStateOf(false)
+        private set
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    fun request() {
+        if (target != null || export.deleteUnavailableReason(custody.identity.ownerId) != null) return
+        error = null
+        target = custody.token()
+    }
+
+    fun cancel() {
+        if (!working) target = null
+    }
+
+    suspend fun confirm(expected: WorkspaceOperationToken, onDeleted: () -> Unit) {
+        if (working || target != expected) return
+        if (!custody.matches(expected)) {
+            error = "The GIF work changed. Cancel and choose Delete again."
+            return
+        }
+        working = true
+        try {
+            when {
+                !export.stopForNativeDelete(expected.ownerId) ->
+                    error = export.deleteUnavailableReason(expected.ownerId)
+                        ?: "Could not update local GIF recovery. Try Delete again."
+                !custody.matches(expected) ->
+                    error = "The GIF work changed. Cancel and choose Delete again."
+                else -> {
+                    target = null
+                    onDeleted()
+                }
+            }
+        } finally {
+            working = false
+        }
     }
 }
 
@@ -348,10 +413,13 @@ internal fun GifMakerScreenContent(
     var history by remember { mutableStateOf(session.history) }
     val custody = remember { GifDocumentCustody(document, session) }
     val departure = remember { GifDepartureGate(custody) }
+    val deletion = remember(custody, gifExport) { GifWorkDeletion(custody, gifExport) }
     val savedName = custody.savedName
     var saveCapture by remember { mutableStateOf<GifSaveCapture?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(session.photoChromeVisible) }
+    var toolsExpanded by remember { mutableStateOf(session.photoToolsExpanded) }
+    var toolsMenuOpen by remember { mutableStateOf(false) }
     var mediaPick by remember { mutableStateOf<GifMediaPickRequest?>(null) }
     var timingStart by remember { mutableStateOf<GifProjectSnapshot?>(null) }
     var timingLatest by remember { mutableStateOf<GifDocument?>(null) }
@@ -359,7 +427,15 @@ internal fun GifMakerScreenContent(
     var projectsOpen by remember { mutableStateOf(false) }
     var openingProject by remember { mutableStateOf(false) }
     var savedNames by remember { mutableStateOf<List<String>>(emptyList()) }
-    val enabled = !exporting && !openingProject && saveCapture == null && !departure.pending && mediaPick == null
+    val editingAvailable = !openingProject && saveCapture == null && !departure.pending &&
+        mediaPick == null && deletion.target == null && !deletion.working
+    val enabled = !exporting && editingAvailable
+    val deleteUnavailable = when {
+        document.frames.isEmpty() && history.undo.isEmpty() && history.redo.isEmpty() && savedName == null ->
+            "No active GIF work to delete."
+        !editingAvailable -> "Wait for the current operation to finish."
+        else -> gifExport.deleteUnavailableReason(custody.identity.ownerId)
+    }
 
     fun snapshot(
         current: GifDocument = custody.current,
@@ -374,7 +450,8 @@ internal fun GifMakerScreenContent(
             photoIndex = index.coerceIn(0, document.frames.lastIndex.coerceAtLeast(0)),
             history = history,
             savedName = custody.savedName,
-            photoChromeVisible = chromeVisible
+            photoChromeVisible = chromeVisible,
+            photoToolsExpanded = toolsExpanded
         ), history))
     }
 
@@ -444,7 +521,7 @@ internal fun GifMakerScreenContent(
         departure.beginSave()
     }
     fun requestCommand(action: () -> Unit) {
-        if (exporting || openingProject || saveCapture != null || departure.pending || mediaPick != null) return
+        if (!enabled) return
         playing = false
         finishPhotoTiming()
         departure.request(action)
@@ -458,6 +535,7 @@ internal fun GifMakerScreenContent(
     }
     fun requestPhotoBack() {
         if (menuExpanded) { menuExpanded = false; return }
+        if (toolsMenuOpen) { toolsMenuOpen = false; return }
         if (timingStart != null) { applySnapshot(requireNotNull(timingStart)); return }
         if (exporting) { notice = "Finish or cancel the GIF export before leaving."; return }
         requestCommand { leave(onBack) }
@@ -491,17 +569,36 @@ internal fun GifMakerScreenContent(
     fun chooseVideo() { mediaPick = GifMediaPickRequest(departure.saveToken(), GifMediaPickKind.VIDEO) }
     fun chooseGif() { mediaPick = GifMediaPickRequest(departure.saveToken(), GifMediaPickKind.GIF) }
     fun openProjects() { savedNames = GifStore.names(context); projectsOpen = true }
-    fun newGif() {
-        departure.complete(::discardWorking) {
-            val fresh = GifDocument()
-            commit(fresh, null, custody.fresh(fresh))
-            index = 0
-            chromeVisible = true
-            persistPhotoSession()
-        }
+    fun resetAllEdits() {
+        if (!enabled || custody.current.frames.isEmpty()) return
+        playing = false
+        finishPhotoTiming()
+        val next = custody.current.resetGifEdits()
+        if (next != null && next != custody.current) commit(next)
+    }
+
+    fun deleteWork() {
+        if (deleteUnavailable != null) return
+        playing = false
+        finishPhotoTiming()
+        deletion.request()
+    }
+
+    fun finishDelete() {
+        val empty = GifDocument()
+        history = GifUndoStack()
+        val fresh = GifProjectSnapshot(empty, null, GifWorkspaceRoute.VIDEO, custody.fresh(empty))
+        custody.restore(fresh)
+        mediaPick = null
+        departure.cancel()
+        onDocument(empty)
+        onSession(custody.retain(GifWorkspaceSession(route = GifWorkspaceRoute.VIDEO,
+            offerExportRecoveryOnEntry = false), history))
+        photoSequenceOnly = false
     }
 
     fun startExport() {
+        if (gifExport.showRetainedExport()) return
         if (!GifMath.valid(document)) {
             notice = "Choose at least two photos before exporting."
             return
@@ -552,7 +649,9 @@ internal fun GifMakerScreenContent(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF080B10)), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF080B10)),
+        contentAlignment = Alignment.Center) {
+        val deckHeight = maxHeight * .38f
         if (preview != null) {
             Image(bitmap = preview!!.asImageBitmap(),
                 contentDescription = "Animated GIF frame preview",
@@ -575,135 +674,165 @@ internal fun GifMakerScreenContent(
         }
 
         if (chromeVisible || document.frames.isEmpty()) Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
-            .background(Color(0xEA121820)).statusBarsPadding()) {
+            .background(Color(0xEA121820)).windowInsetsPadding(
+                WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
             EditorWorkspaceHeader(
                 workspace = WorkspaceMode.GIF,
                 commands = listOf(
-                    WorkspaceCommand(WorkspaceCommandId.NEW, "New GIF…", enabled,
-                        if (enabled) null else "Finish the current operation first") { requestCommand(::newGif) },
-                    WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "Open video…", enabled,
-                        if (enabled) null else "Finish the current operation first") { requestCommand(::chooseVideo) },
-                    WorkspaceCommand(WorkspaceCommandId.OPEN_SECONDARY_MEDIA, "Open GIF…", enabled,
-                        if (enabled) null else "Finish the current operation first") { requestCommand(::chooseGif) },
-                    WorkspaceCommand(WorkspaceCommandId.ADD_PHOTOS, "Add photos…", enabled && document.frames.size < GifMath.MAX_FRAMES,
-                        if (document.frames.size >= GifMath.MAX_FRAMES) "Twenty photos maximum" else null, ::importPhotos),
+                    WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "New / Open media…", enabled) {},
                     WorkspaceCommand(WorkspaceCommandId.OPEN_PROJECT, "Open project…", enabled,
                         if (enabled) null else "Finish the current operation first") { openProjects() },
                     WorkspaceCommand(WorkspaceCommandId.SAVE, "Save project", enabled && GifMath.valid(document),
                         if (!GifMath.valid(document)) "Choose at least two photos before saving" else null) { beginSave() },
                     WorkspaceCommand(WorkspaceCommandId.SAVE_AS, "Save project as…", enabled && GifMath.valid(document),
                         if (!GifMath.valid(document)) "Choose at least two photos before saving" else null) { beginSave(true) },
-                    WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export GIF…", enabled && GifMath.valid(document),
-                        if (!GifMath.valid(document)) "Choose at least two photos before exporting" else null, ::startExport),
+                    WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export GIF…",
+                        enabled && (GifMath.valid(document) || gifExport.request != null),
+                        if (!GifMath.valid(document) && gifExport.request == null)
+                            "Choose at least two photos before exporting." else null, ::startExport),
+                    WorkspaceCommand(WorkspaceCommandId.RESET, "Reset all edits", enabled && document.frames.isNotEmpty(),
+                        if (document.frames.isEmpty()) "Add photos to reset edits." else null, ::resetAllEdits),
+                    WorkspaceCommand(WorkspaceCommandId.DELETE, "Delete", deleteUnavailable == null,
+                        deleteUnavailable, ::deleteWork),
                     WorkspaceCommand(WorkspaceCommandId.HELP, "Help") { playing = false; helpOpen = true }
                 ),
+                mediaChoices = listOf(
+                    WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "Open video…", enabled) { requestCommand(::chooseVideo) },
+                    WorkspaceCommand(WorkspaceCommandId.OPEN_SECONDARY_MEDIA, "Open GIF…", enabled) { requestCommand(::chooseGif) },
+                    WorkspaceCommand(WorkspaceCommandId.ADD_PHOTOS, "Add photos…",
+                        enabled && document.frames.size < GifMath.MAX_FRAMES,
+                        if (document.frames.size >= GifMath.MAX_FRAMES) "Twenty photos maximum." else null, ::importPhotos)
+                ),
+                allowWhileBusy = if (deleteUnavailable == null) setOf(WorkspaceCommandId.DELETE) else emptySet(),
                 canUndo = enabled && history.undo.isNotEmpty(), canRedo = enabled && history.redo.isNotEmpty(),
                 onUndo = { restore(history.undo(snapshot())) }, onRedo = { restore(history.redo(snapshot())) },
                 onChooseWorkspace = ::requestSwitch, menuExpanded = menuExpanded,
                 onMenuExpandedChange = { menuExpanded = it }, enabled = enabled, onBack = ::requestPhotoBack)
-            TextButton(enabled = enabled && document.frames.size >= 2, onClick = { playing = !playing }) {
-                Text(if (playing) "Pause" else "▶ Play", color = EditorMint)
-            }
-
             if (notice.isNotBlank()) Text(notice, color = EditorMuted, fontSize = 12.sp,
                 modifier = Modifier.padding(start = 9.dp, bottom = 5.dp), maxLines = 2)
         }
 
-        if (chromeVisible && document.frames.isNotEmpty()) {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .background(EditorSurface).navigationBarsPadding().padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Row(Modifier.horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    GifTool.entries.forEach { option ->
-                        DockChip(option.label, tool == option, enabled = enabled) { tool = option }
+        if (chromeVisible || document.frames.isEmpty()) {
+            val hasPhotos = document.frames.isNotEmpty()
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(EditorSurface)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(
+                    WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)),
+                verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                if (hasPhotos) TextButton(enabled = enabled && document.frames.size >= 2,
+                    onClick = { playing = !playing }, modifier = Modifier.padding(start = 6.dp)) {
+                    Text(if (playing) "Pause" else "▶ Play", color = EditorMint)
+                }
+                if (hasPhotos && toolsExpanded) Column(Modifier.fillMaxWidth()
+                    .heightIn(max = deckHeight).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        GifTool.entries.forEach { option ->
+                            DockChip(option.label, tool == option, enabled = enabled) { tool = option }
+                        }
+                    }
+                    when (tool) {
+                        GifTool.FRAMES -> {
+                            Row(Modifier.horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                document.frames.forEachIndexed { n, _ ->
+                                    DockChip("Photo " + (n + 1), n == index, enabled = enabled) {
+                                        playing = false; index = n
+                                    }
+                                }
+                            }
+                            Row(Modifier.horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                TextButton(enabled = index > 0 && enabled, onClick = {
+                                    playing = false
+                                    commit(document.copy(frames = GifMath.move(document.frames, index, index - 1)))
+                                    index--
+                                }) { Text("← Earlier", color = EditorWhite) }
+                                TextButton(enabled = index < document.frames.lastIndex && enabled,
+                                    onClick = {
+                                        playing = false
+                                        commit(document.copy(frames = GifMath.move(document.frames, index, index + 1)))
+                                        index++
+                                    }) { Text("Later →", color = EditorWhite) }
+                                TextButton(enabled = enabled, onClick = {
+                                    playing = false
+                                    commit(document.copy(frames = document.frames.filterIndexed { i, _ -> i != index }))
+                                }) { Text("Remove photo", color = Color(0xFFFFA2A2)) }
+                            }
+                        }
+                        GifTool.TIMING -> {
+                            Text("Frame duration: " + document.delayMs + " ms", color = EditorWhite,
+                                modifier = Modifier.padding(start = 16.dp), fontSize = 13.sp)
+                            Slider(value = document.delayMs.toFloat(), valueRange = 100f..1500f,
+                                enabled = enabled,
+                                onValueChange = { next ->
+                                    if (timingStart == null) timingStart = snapshot()
+                                    val changed = document.copy(
+                                        delayMs = (next.toInt() / 10) * 10
+                                    )
+                                    timingLatest = changed
+                                    custody.record(changed)
+                                    onDocument(changed)
+                                },
+                                onValueChangeFinished = ::finishPhotoTiming,
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(horizontal = 14.dp)
+                                    .semantics {
+                                        contentDescription = "Photo GIF frame duration"
+                                    })
+                            Row(Modifier.padding(start = 10.dp)) {
+                                DockChip("Loop forever", document.forever, enabled = enabled) {
+                                    commit(document.copy(forever = true))
+                                }
+                                DockChip("Play once", !document.forever, enabled = enabled) {
+                                    commit(document.copy(forever = false))
+                                }
+                            }
+                        }
+                        GifTool.SIZE -> {
+                            Row(Modifier.horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                GifSize.entries.filter { it != GifSize.SOURCE }.forEach {
+                                    DockChip(it.label, document.size == it, enabled = enabled) {
+                                        commit(document.copy(size = it))
+                                    }
+                                }
+                            }
+                            Row(Modifier.horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                GifAspect.entries.filter { it != GifAspect.SOURCE }.forEach {
+                                    DockChip(it.label, document.aspect == it, enabled = enabled) {
+                                        commit(document.copy(aspect = it))
+                                    }
+                                }
+                            }
+                            Row(Modifier.horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                GifFit.entries.forEach {
+                                    DockChip(it.label, document.fit == it, enabled = enabled) {
+                                        commit(document.copy(fit = it))
+                                    }
+                                }
+                            }
+                        }
+
                     }
                 }
-                when (tool) {
-                    GifTool.FRAMES -> {
-                        Row(Modifier.horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            document.frames.forEachIndexed { n, _ ->
-                                DockChip("Photo " + (n + 1), n == index, enabled = enabled) {
-                                    playing = false; index = n
-                                }
-                            }
-                        }
-                        Row(Modifier.horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            TextButton(enabled = index > 0 && enabled, onClick = {
-                                playing = false
-                                commit(document.copy(frames = GifMath.move(document.frames, index, index - 1)))
-                                index--
-                            }) { Text("← Earlier", color = EditorWhite) }
-                            TextButton(enabled = index < document.frames.lastIndex && enabled,
-                                onClick = {
-                                    playing = false
-                                    commit(document.copy(frames = GifMath.move(document.frames, index, index + 1)))
-                                    index++
-                                }) { Text("Later →", color = EditorWhite) }
-                            TextButton(enabled = enabled, onClick = {
-                                playing = false
-                                commit(document.copy(frames = document.frames.filterIndexed { i, _ -> i != index }))
-                            }) { Text("Remove photo", color = Color(0xFFFFA2A2)) }
+                Box {
+                    WorkspaceToolsBar(expanded = hasPhotos && toolsExpanded,
+                        onOpenTools = { toolsMenuOpen = true },
+                        onToggleExpanded = { toolsExpanded = !toolsExpanded },
+                        target = if (hasPhotos) tool.label else "Add photos to edit",
+                        enabled = enabled && hasPhotos)
+                    DropdownMenu(expanded = toolsMenuOpen, onDismissRequest = { toolsMenuOpen = false }) {
+                        GifTool.entries.forEach { choice ->
+                            DropdownMenuItem(text = { Text(choice.label) }, onClick = {
+                                tool = choice
+                                toolsExpanded = true
+                                toolsMenuOpen = false
+                            })
                         }
                     }
-                    GifTool.TIMING -> {
-                        Text("Frame duration: " + document.delayMs + " ms", color = EditorWhite,
-                            modifier = Modifier.padding(start = 16.dp), fontSize = 13.sp)
-                        Slider(value = document.delayMs.toFloat(), valueRange = 100f..1500f,
-                            enabled = enabled,
-                            onValueChange = { next ->
-                                if (timingStart == null) timingStart = snapshot()
-                                val changed = document.copy(
-                                    delayMs = (next.toInt() / 10) * 10
-                                )
-                                timingLatest = changed
-                                custody.record(changed)
-                                onDocument(changed)
-                            },
-                            onValueChangeFinished = ::finishPhotoTiming,
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(horizontal = 14.dp)
-                                .semantics {
-                                    contentDescription = "Photo GIF frame duration"
-                                })
-                        Row(Modifier.padding(start = 10.dp)) {
-                            DockChip("Loop forever", document.forever, enabled = enabled) {
-                                commit(document.copy(forever = true))
-                            }
-                            DockChip("Play once", !document.forever, enabled = enabled) {
-                                commit(document.copy(forever = false))
-                            }
-                        }
-                    }
-                    GifTool.SIZE -> {
-                        Row(Modifier.horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GifSize.entries.filter { it != GifSize.SOURCE }.forEach {
-                                DockChip(it.label, document.size == it, enabled = enabled) {
-                                    commit(document.copy(size = it))
-                                }
-                            }
-                        }
-                        Row(Modifier.horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GifAspect.entries.filter { it != GifAspect.SOURCE }.forEach {
-                                DockChip(it.label, document.aspect == it, enabled = enabled) {
-                                    commit(document.copy(aspect = it))
-                                }
-                            }
-                        }
-                        Row(Modifier.horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GifFit.entries.forEach {
-                                DockChip(it.label, document.fit == it, enabled = enabled) {
-                                    commit(document.copy(fit = it))
-                                }
-                            }
-                        }
-                    }
-
                 }
             }
         }
@@ -732,6 +861,15 @@ internal fun GifMakerScreenContent(
         }
     }
     GifExportRecovery(gifExport)
+    deletion.target?.let { expected ->
+        WorkspaceDeleteDialog(
+            message = "Delete this GIF work? Your source media and saved projects stay on your phone.",
+            onConfirm = { scope.launch { deletion.confirm(expected, ::finishDelete) } },
+            onCancel = deletion::cancel,
+            busy = deletion.working,
+            error = deletion.error
+        )
+    }
     if (helpOpen) GifHelpDialog { helpOpen = false }
     if (departure.dialogOpen) WorkspaceDepartureDialog(
         message = "Save the current photo GIF project before leaving these edits?",
@@ -750,7 +888,7 @@ internal fun GifMakerScreenContent(
     }
     if (projectsOpen) GifSavedProjectsDialog(
         names = savedNames,
-        enabled = !openingProject,
+        enabled = enabled,
         onOpen = { name ->
             projectsOpen = false
             requestCommand {
@@ -773,13 +911,16 @@ internal fun GifMakerScreenContent(
             }
             }
         },
-        onDelete = { name ->
-            val saved = GifStore.loadNamed(context, name)
-            (saved != null && GifStore.deleteNamed(context, saved.project)).also { deleted ->
+        onIdentifyDelete = { name ->
+            withContext(Dispatchers.IO) { GifStore.loadNamed(context, name)?.project }
+        },
+        onDelete = { expected ->
+            val deleted = withContext(Dispatchers.IO) { GifStore.deleteNamed(context, expected) }
+            deleted.also {
                 if (deleted) {
                     finishPhotoTiming()
-                    custody.detach(name)
-                    history = history.withoutSavedProject(name)
+                    custody.detach(expected.name)
+                    history = history.withoutSavedProject(expected.name)
                     savedNames = GifStore.names(context)
                     persistPhotoSession()
                 }

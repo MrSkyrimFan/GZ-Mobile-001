@@ -167,9 +167,21 @@ class ProNamedSaveTest {
             waitForDialogToClose("Save Pro project")
             assertProject(nameC, b, Color.BLUE)
 
+            val savedCopy = requireNotNull(ProStore.loadNamed(context, nameC)).project
             switchTo("Photo editing")
+            click("Discard")
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Photo ▾", substring = false).fetchSemanticsNodes().isNotEmpty() &&
+                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
+                        .fetchSemanticsNodes().isNotEmpty()
+            }
             switchTo("Photo editing Pro")
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Photo Pro ▾", substring = false).fetchSemanticsNodes().isNotEmpty()
+            }
+            openProject(nameC)
             assertSaveTarget(nameC)
+            assertEquals(savedCopy, ProStore.loadNamed(context, nameC)?.project)
 
             openSaveAs()
             saveAs("Red $suffix")

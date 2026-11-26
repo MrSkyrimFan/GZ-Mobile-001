@@ -2,18 +2,37 @@ package com.greenezone.gzphotoeditor.ui
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.greenezone.gzphotoeditor.editor.ProAspect
+import com.greenezone.gzphotoeditor.editor.ProBackground
+import com.greenezone.gzphotoeditor.editor.ProBlend
+import com.greenezone.gzphotoeditor.editor.ProDocument
+import com.greenezone.gzphotoeditor.editor.ProMath
 import com.greenezone.gzphotoeditor.editor.ProLayer
 import com.greenezone.gzphotoeditor.editor.ProLayerKind
 import com.greenezone.gzphotoeditor.editor.ProPixelEffect
@@ -135,24 +154,27 @@ internal fun ProRetouchPanel(
 internal fun ProPixelEffectPanel(
     layer: ProLayer,
     canAdd: Boolean,
+    enabled: Boolean,
     onAdd: () -> Unit,
     onEffect: (ProPixelEffect) -> Unit,
     onAmount: (Float) -> Unit,
     onAmountDone: () -> Unit
 ) {
     if (layer.kind != ProLayerKind.ADJUSTMENT) {
-        TextButton(enabled = canAdd, onClick = onAdd) {
-            Text("+ Add a compositing effect layer", color = EditorMint)
+        TextButton(enabled = canAdd && enabled, onClick = onAdd) {
+            Text("Add adjustment layer", color = EditorMint)
         }
         return
     }
-    Text("Independent layer effect. Change its order to affect underlying layers.",
+    Text(if (layer.mask == null) "Applies to the visible composition below this layer."
+        else "Applies to the masked area of the composition below.",
         color = EditorMuted, fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 13.dp))
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
         .padding(horizontal = 9.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         ProPixelEffect.entries.forEach { effect ->
-            DockChip(effect.label, layer.effect == effect) { onEffect(effect) }
+            val label = if (effect == ProPixelEffect.GRAYSCALE) "Black & white" else effect.label
+            DockChip(label, layer.effect == effect, enabled = enabled) { onEffect(effect) }
         }
     }
     if (layer.effect == ProPixelEffect.THRESHOLD ||
@@ -160,7 +182,87 @@ internal fun ProPixelEffectPanel(
         Text("Effect amount", color = EditorMuted, fontSize = 11.sp,
             modifier = Modifier.padding(start = 14.dp))
         Slider(value = layer.effectAmount.coerceIn(0f, 1f), valueRange = 0f..1f,
-            onValueChange = onAmount, onValueChangeFinished = onAmountDone,
+            enabled = enabled, onValueChange = onAmount, onValueChangeFinished = onAmountDone,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+    }
+}
+
+/** The selected layer owns its blend property even when it contributes no visible pixels. */
+@Composable
+internal fun ProBlendPanel(
+    layer: ProLayer,
+    backdrop: String,
+    guidance: String,
+    enabled: Boolean,
+    onMode: (ProBlend) -> Unit,
+    onOpacity: (Float) -> Unit,
+    onOpacityDone: () -> Unit
+) {
+    var choicesOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(enabled) {
+        if (!enabled) choicesOpen = false
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 13.dp)) {
+        Text(backdrop, color = EditorWhite, fontSize = 12.sp)
+        Text(guidance, color = EditorMuted, fontSize = 12.sp)
+        if (!enabled) {
+            Text("Finish the current operation to change this layer.", color = EditorMuted, fontSize = 12.sp)
+        }
+        Box {
+            TextButton(
+                onClick = { choicesOpen = true },
+                enabled = enabled,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) { Text("Blend mode: " + layer.blend.label) }
+            DropdownMenu(
+                expanded = choicesOpen && enabled,
+                onDismissRequest = { choicesOpen = false },
+                modifier = Modifier.heightIn(max = 320.dp).widthIn(min = 176.dp).testTag("pro-blend-menu")
+            ) {
+                ProBlend.entries.forEach { mode ->
+                    val active = mode == layer.blend
+                    DropdownMenuItem(
+                        text = { Text(mode.label, color = if (active) EditorMint else EditorWhite) },
+                        modifier = Modifier.heightIn(min = 48.dp).semantics { selected = active },
+                        onClick = {
+                            choicesOpen = false
+                            onMode(mode)
+                        }
+                    )
+                }
+            }
+        }
+        TextButton(
+            onClick = { onMode(ProBlend.NORMAL) },
+            enabled = enabled && layer.blend != ProBlend.NORMAL,
+            modifier = Modifier.heightIn(min = 48.dp)
+        ) { Text("Restore Normal") }
+        Text("Opacity · " + (layer.opacity * 100).toInt() + "%",
+            color = EditorMuted, fontSize = 12.sp)
+        Slider(value = layer.opacity, enabled = enabled, onValueChange = onOpacity,
+            onValueChangeFinished = onOpacityDone, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+internal fun ProCanvasProperties(document: ProDocument, enabled: Boolean, onEdit: (ProDocument) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        if (document.sourceAspectRatio != null) {
+            Text("Source aspect", color = EditorMint, modifier = Modifier.align(Alignment.CenterVertically))
+        }
+        ProAspect.entries.forEach { aspect ->
+            DockChip(aspect.label, document.sourceAspectRatio == null && document.aspect == aspect, enabled) {
+                onEdit(ProMath.withAspect(document, aspect))
+            }
+        }
+    }
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        ProBackground.entries.forEach { background ->
+            DockChip(background.label, document.background == background, enabled) {
+                onEdit(document.copy(background = background))
+            }
+        }
     }
 }

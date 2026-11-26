@@ -319,6 +319,8 @@ internal fun CollageWorkspaceScreenContent(
     var exportRecoveryError by remember { mutableStateOf<String?>(null) }
 
     fun busy() = exporting || loadingProject || preparingSources || writingProject || deletingWork
+    fun hasCurrentWork() = latestDocument.photos.isNotEmpty() || savedProject != null ||
+        history.undo.isNotEmpty() || history.redo.isNotEmpty()
     fun baseline() = if (savedProject != null) savedDocument else entryDocument
     fun baselineHistory() = (if (savedProject != null) savedHistory else entryHistory).copy(redo = emptyList())
     fun dirty(value: CollageDocument = latestDocument) = value != baseline()
@@ -539,7 +541,7 @@ internal fun CollageWorkspaceScreenContent(
 
     fun requestDeleteWork(child: CollageTileEntry? = null) {
         if (busy() || pendingDeparture != null || saveAttempt != null || deleteWorkRequest != null ||
-            latestDocument.photos.isEmpty() || child != editingTile || cancelLayout()) return
+            !hasCurrentWork() || child != editingTile || cancelLayout()) return
         val request = CollageDeleteRequest(WorkspaceOperationToken(documentId, contentRevision),
             latestDocument, child)
         if (!validDelete(request)) return
@@ -602,6 +604,7 @@ internal fun CollageWorkspaceScreenContent(
 
     fun requestBack() {
         if (menuExpanded) { menuExpanded = false; return }
+        if (toolsMenuOpen) { toolsMenuOpen = false; return }
         if (cancelLayout()) return
         if (!toolsVisible && latestDocument.photos.isNotEmpty()) { toolsVisible = true; return }
         if (busy()) { notice = "Finish the current operation before leaving."; return }
@@ -1140,8 +1143,8 @@ internal fun CollageWorkspaceScreenContent(
                     },
                     WorkspaceCommand(WorkspaceCommandId.RESET, "Reset all edits", !busy() && canSave,
                         if (!canSave) "Add photos to reset edits." else null, ::resetAllEdits),
-                    WorkspaceCommand(WorkspaceCommandId.DELETE, "Delete", !busy() && canSave,
-                        if (!canSave) "No active collage to delete." else null) { requestDeleteWork() },
+                    WorkspaceCommand(WorkspaceCommandId.DELETE, "Delete", !busy() && hasCurrentWork(),
+                        if (!hasCurrentWork()) "No active collage to delete." else null) { requestDeleteWork() },
                     WorkspaceCommand(WorkspaceCommandId.HELP, "Help", !busy()) { showHelp = true }
                 )
                 Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().windowInsetsPadding(

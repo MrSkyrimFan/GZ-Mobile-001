@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -27,9 +26,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,7 +60,6 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.greenezone.gzphotoeditor.editor.*
@@ -81,8 +80,7 @@ private data class ProBrushFrame(val draftId: Long, val bitmap: Bitmap)
 private data class ProSaveRequest(
     val name: String,
     val document: ProDocument,
-    val reset: ProDocument?,
-    val target: ProSaveTarget,
+    val session: ProWorkspaceSession,
     val token: WorkspaceOperationToken,
     val intent: ProjectSaveIntent
 )
@@ -194,7 +192,14 @@ internal fun ProWorkspaceScreenContent(
     onBack: () -> Unit,
     onSwitch: (WorkspaceMode) -> Unit,
     session: ProWorkspaceSession,
-    onSession: (ProWorkspaceSession) -> Unit
+    onSession: (ProWorkspaceSession) -> Unit,
+    onRequestRegularTransfer: ((ProDocument, ProWorkspaceSession) -> Unit)? = null,
+    onRevokeWorkingSession: (suspend (String) -> Boolean)? = null,
+    saveCapturedProject: (suspend (ProjectSaveIntent, ProDocument, ProWorkspaceSession) -> ProjectSaveResult)? = null,
+    prepareOpenedNamedProject: (suspend (NamedProject<ProStore.SavedProject>) -> Boolean)? = null,
+    onOpenedNamedProject: ((NamedProject<ProStore.SavedProject>, ProWorkspaceSession) -> Unit)? = null,
+    workingDrafts: List<Pair<String, String>> = emptyList(),
+    onOpenWorkingDraft: ((String, ProDocument, ProWorkspaceSession) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -208,6 +213,7 @@ internal fun ProWorkspaceScreenContent(
     var transform by remember { mutableStateOf(session.transform) }
     var chrome by remember { mutableStateOf(session.chromeVisible) }
     var expanded by remember { mutableStateOf(session.panelExpanded) }
+    var finishedOutput by remember { mutableStateOf(document.linkedFinishes.isNotEmpty()) }
     var showTools by remember { mutableStateOf(false) }
     var showStack by remember { mutableStateOf(false) }
     var showFile by remember { mutableStateOf(false) }
@@ -220,6 +226,7 @@ internal fun ProWorkspaceScreenContent(
         )
     }
     var history by remember { mutableStateOf(session.history) }
+    var documentEstablished by remember { mutableStateOf(session.documentEstablished) }
     // An untouched landing screen can acquire its first source.
     var resetDocument by remember {
         mutableStateOf(session.resetDocument ?: document.takeIf { it.layers.isNotEmpty() })
@@ -278,7 +285,8 @@ internal fun ProWorkspaceScreenContent(
     var showSave by remember { mutableStateOf(false) }
     var showProjects by remember { mutableStateOf(false) }
     var pendingSavedDelete by remember { mutableStateOf<NamedProjectRef?>(null) }
-    var confirmReset by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     var draftName by remember { mutableStateOf("") }
     var pendingReplace by remember { mutableStateOf<ProSaveRequest?>(null) }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -302,6 +310,7 @@ internal fun ProWorkspaceScreenContent(
         selected = index
     }
     fun selectTool(tool: ProSection) {
+        if (busy || exporting || pendingDeparture != null) return
         if (tool != section) {
             selectionBeforeDrag = null
             selectionStart = null
@@ -311,11 +320,13 @@ internal fun ProWorkspaceScreenContent(
             brushFrame = null
         }
         section = tool
+        if (tool != ProSection.LAYERS && tool != ProSection.CANVAS) finishedOutput = false
         expanded = true
         showTools = false
     }
     fun publishDocument(next: ProDocument) {
         if (next != latestDocument) {
+            if (next != ProDocument()) documentEstablished = true
             contentRevision++
             if (next.layers.map { it.uri } != latestDocument.layers.map { it.uri }) sourceRevision++
         }
@@ -356,7 +367,11 @@ internal fun ProWorkspaceScreenContent(
         val index = selected
         val layer = document.layers.getOrNull(index) ?: return
         if (layer.kind == ProLayerKind.TEXT || document.layers.size >= ProMath.MAX_LAYERS) return
-        val copy = layer.copy(name = layer.name.take(32) + " copy")
+        val renamed = layer.copy(name = layer.name.take(32) + " copy")
+        val source = layer.sourceSize
+        val copy = if (layer.kind == ProLayerKind.IMAGE && source != null) {
+            ProImageGeometry.recordImport(renamed, source, placement = layer.sourcePlacement)
+        } else renamed
         val layers = document.layers.toMutableList().also { it.add(index + 1, copy) }
         if (commit(document.copy(layers = layers))) selectLayer(index + 1)
     }
@@ -405,31 +420,34 @@ internal fun ProWorkspaceScreenContent(
         if (!canEditDocument()) return
         val next = ProMath.insert(document, layer)
         if (next == null) { notice = "A project supports up to 12 layers."; return }
-        commit(next, resetDocument ?: ProDocument())
+        val creationSetup = document.sourceCanvasSetup ?: ProCanvasSetup.from(document)
+        commit(next.copy(sourceCanvasSetup = creationSetup), resetDocument ?: ProDocument())
         selectLayer(next.layers.lastIndex)
         expanded = true
         section = when (layer.kind) {
             ProLayerKind.SHAPE -> ProSection.STYLE
             ProLayerKind.DRAWING -> ProSection.PAINT
-            ProLayerKind.ADJUSTMENT -> ProSection.PIXEL
+            ProLayerKind.ADJUSTMENT -> ProSection.GRADE
             else -> ProSection.LAYERS
         }
     }
     fun addCreative(kind: ProLayerKind) {
-        val label = kind.label + " " + (document.layers.size + 1)
-        check(kind == ProLayerKind.SHAPE || kind == ProLayerKind.DRAWING || kind == ProLayerKind.ADJUSTMENT)
+        val label = when (kind) {
+            ProLayerKind.SHAPE -> "Shape layer"
+            ProLayerKind.DRAWING -> "Paint layer"
+            ProLayerKind.ADJUSTMENT -> "Adjustment layer"
+            else -> error("Expected an editable composition layer")
+        } + " " + (document.layers.size + 1)
         val edits = if (kind == ProLayerKind.SHAPE) {
             EditDocument(creative = CreativeDocument(
                 shapes = listOf(ShapeOverlay(kind = ShapeKind.RECTANGLE, color = 0xFF111111.toInt()))))
         } else EditDocument()
-        addLayer(ProLayer(uri = "", kind = kind, edits = edits, name = label,
-            effect = if (kind == ProLayerKind.ADJUSTMENT)
-                ProPixelEffect.GRAYSCALE else ProPixelEffect.NONE))
+        addLayer(ProLayer(uri = "", kind = kind, edits = edits, name = label))
         showAdd = false
     }
 
     fun workspaceSnapshot(): ProWorkspaceSession = ProWorkspaceSession(
-        documentEstablished = session.documentEstablished || resetDocument != null ||
+        documentEstablished = documentEstablished || resetDocument != null ||
             document.layers.isNotEmpty() || history.undo.isNotEmpty() || history.redo.isNotEmpty(),
         selectedLayer = selected.coerceIn(0, document.layers.lastIndex.coerceAtLeast(0)),
         section = section, transform = transform, viewport = viewport,
@@ -555,7 +573,7 @@ internal fun ProWorkspaceScreenContent(
             showStack -> showStack = false
             showTools -> showTools = false
             rename != null -> rename = null
-            confirmReset -> confirmReset = false
+            confirmDelete -> confirmDelete = false
             pendingSavedDelete != null -> pendingSavedDelete = null
             showProjects -> showProjects = false
             showExport -> showExport = false
@@ -570,7 +588,26 @@ internal fun ProWorkspaceScreenContent(
         }
     }
     fun requestSwitch(mode: WorkspaceMode) {
-        if (mode != WorkspaceMode.PRO) requestDeparture(ProDestination.Switch(mode))
+        if (mode == WorkspaceMode.PRO) return
+        val transfer = onRequestRegularTransfer
+        if (mode == WorkspaceMode.PHOTO && transfer != null) {
+            if (!canEditDocument() || confirmDelete) return
+            if (cancelGesture()) {
+                notice = "Unfinished gesture canceled. Your completed edits are kept."
+                return
+            }
+            if (hasUnresolvedToolDraft()) return
+            showFile = false
+            showTools = false
+            showStack = false
+            transfer(latestDocument, workspaceSnapshot())
+        } else requestDeparture(ProDestination.Switch(mode))
+    }
+
+    fun openWorkingDraft(key: String) {
+        if (!canEditDocument() || cancelGesture() || hasUnresolvedToolDraft()) return
+        showProjects = false
+        onOpenWorkingDraft?.invoke(key, latestDocument, workspaceSnapshot())
     }
 
     suspend fun revokeNativeRestoration(nativeOwner: String): Boolean {
@@ -597,13 +634,24 @@ internal fun ProWorkspaceScreenContent(
         busy = true
         scope.launch {
             try {
-                if (!revokeNativeRestoration(beforeSession.nativeOwnerKey())) return@launch
-                if (!owns(token) || latestDocument != before) {
-                    notice = "The work changed. Choose Delete current work again."
+                deleteError = null
+                val revoke = onRevokeWorkingSession
+                val revoked = if (revoke != null) revoke(beforeSession.nativeOwnerKey())
+                    else revokeNativeRestoration(beforeSession.nativeOwnerKey())
+                if (!revoked) {
+                    deleteError = "Could not record Delete. Your Pro work remains open."
                     return@launch
                 }
-                val clean = beforeSession.resetDocument ?: ProDocument()
-                resetDocument = clean
+                if (!owns(token) || latestDocument != before) {
+                    deleteError = "The work changed. Choose Delete again."
+                    return@launch
+                }
+                val clean = ProDocument()
+                resetDocument = null
+                documentEstablished = false
+                finishedOutput = false
+                addPickerOwner = null
+                cancelDeparture()
                 clearToolDrafts()
                 sliderStart = null
                 lastSliderValue = null
@@ -629,9 +677,50 @@ internal fun ProWorkspaceScreenContent(
                 expanded = true
                 preview = null
                 resetGeneration++
-                confirmReset = false
+                confirmDelete = false
                 publishDocument(clean)
-                notice = "Current Pro work discarded."
+                notice = "Current Pro work deleted."
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                deleteError = "Could not record Delete. Your Pro work remains open."
+            } finally { busy = false }
+        }
+    }
+
+    fun resetAllEdits() {
+        if (!canEditDocument() || cancelGesture() || hasUnresolvedToolDraft()) return
+        val token = operationToken()
+        val before = latestDocument
+        val legacy = resetDocument
+        val selectedImage = before.layers.getOrNull(selected)?.let { it.kind == ProLayerKind.IMAGE } == true
+        val imageIndex = if (selectedImage) before.layers.take(selected).count { it.kind == ProLayerKind.IMAGE } else 0
+        busy = true
+        scope.launch {
+            try {
+                val neutral = withContext(Dispatchers.IO) {
+                    val geometry = ProImageGeometry.recover(resolver, ProStore.SavedProject(before, legacy ?: before))
+                    ProImageGeometry.reset(geometry.document, geometry.resetDocument)
+                }
+                if (!owns(token) || latestDocument != before) return@launch
+                if (neutral == null) {
+                    notice = "Could not verify original layer placement. Your edits are kept."
+                    return@launch
+                }
+                if (neutral == before) {
+                    notice = "The Pro work is already reset."
+                    return@launch
+                }
+                if (commit(neutral, allowBusy = true)) {
+                    clearToolDrafts()
+                    selected = imageIndex.coerceAtMost(neutral.layers.lastIndex).coerceAtLeast(0)
+                    if (neutral.layers.isEmpty()) section = ProSection.CANVAS
+                    notice = "Pro edits reset. Undo restores the previous work."
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                notice = "Could not reset all edits. Your Pro work is kept."
             } finally { busy = false }
         }
     }
@@ -659,7 +748,9 @@ internal fun ProWorkspaceScreenContent(
         scope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    ProStore.saveNamed(context, request.intent, request.document, request.reset)
+                    val save = saveCapturedProject
+                    if (save != null) save(request.intent, request.document, request.session)
+                    else ProStore.saveNamed(context, request.intent, request.document, request.session.resetDocument)
                 }
                 pendingReplace = null
                 when (result) {
@@ -695,6 +786,11 @@ internal fun ProWorkspaceScreenContent(
                         showSave = true
                     }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                saveError = saveFailure(ProjectSaveFailure.STORAGE_FAILURE)
+                showSave = true
             } finally {
                 busy = false
             }
@@ -726,7 +822,7 @@ internal fun ProWorkspaceScreenContent(
                 notice = "Already saved."
                 return
             }
-            saveProject(ProSaveRequest(ref.name, document, resetDocument, saveTarget, token,
+            saveProject(ProSaveRequest(ref.name, document, workspaceSnapshot(), token,
                 ProjectSaveIntent.Update(ref)))
         } else {
             draftName = if (asCopy) saveTarget.name?.let { "$it copy" }.orEmpty() else ""
@@ -757,7 +853,8 @@ internal fun ProWorkspaceScreenContent(
         preparedReset: ProDocument? = null,
         project: NamedProjectRef? = null,
         replacementOnly: Boolean = false,
-        preparedSelection: Int? = null
+        preparedSelection: Int? = null,
+        openedNamedProject: NamedProject<ProStore.SavedProject>? = null
     ) {
         if (pendingDeparture?.token?.operationId != request.token.operationId ||
             !owns(request.token) || latestDocument != request.document) {
@@ -810,6 +907,8 @@ internal fun ProWorkspaceScreenContent(
         resetDocument = nextReset
         selected = nextSelection
         if (!replacementOnly) {
+            documentEstablished = true
+            finishedOutput = prepared.linkedFinishes.isNotEmpty()
             entryDocument = prepared
             baselines = baselines + (nextTarget.workId to ProWorkBaseline(
                 prepared, prepared.takeIf { project != null }
@@ -824,6 +923,11 @@ internal fun ProWorkspaceScreenContent(
         preview = null
         publishDocument(prepared)
         cancelDeparture()
+        if (openedNamedProject != null) {
+            onOpenedNamedProject?.invoke(openedNamedProject, workspaceSnapshot().copy(
+                documentEstablished = true, viewportAspect = prepared.canvasAspectRatio
+            ))
+        }
         notice = when {
             replacementOnly -> "Source replaced. Layer edits preserved."
             project != null -> "Pro project opened"
@@ -858,7 +962,7 @@ internal fun ProWorkspaceScreenContent(
                                 resolver.takePersistableUriPermission(
                                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             } catch (_: SecurityException) {}
-                            ProImageGeometry.bind(ProLayer(
+                            ProImageGeometry.recordImport(ProLayer(
                                 uri = uri.toString(), name = "Image " + (document.layers.size + index + 1)
                             ), ProImageGeometry.sourceSize(resolver, uri))
                         }
@@ -869,7 +973,10 @@ internal fun ProWorkspaceScreenContent(
                     }
                     if (layers.isNotEmpty()) {
                         val original = resetDocument ?: document.copy(layers = listOf(layers.first()))
-                        commit(document.copy(layers = document.layers + layers), original, allowBusy = true)
+                        commit(document.copy(
+                            layers = document.layers + layers,
+                            sourceCanvasSetup = document.sourceCanvasSetup ?: ProCanvasSetup.from(document)
+                        ), original, allowBusy = true)
                         selectLayer(document.layers.size + layers.lastIndex)
                         section = ProSection.LAYERS
                         showAdd = false
@@ -936,15 +1043,18 @@ internal fun ProWorkspaceScreenContent(
                                         retained.layers[index].kind == ProLayerKind.IMAGE) {
                                         "The selected layer changed. Current work is kept; choose the layer again."
                                     }
-                                    val layer = ProImageGeometry.bind(
-                                        retained.layers[index].copy(uri = uri.toString()), size)
+                                    val previousLayer = retained.layers[index]
+                                    val layer = ProImageGeometry.recordImport(
+                                        previousLayer.copy(uri = uri.toString()), size,
+                                        placement = previousLayer.sourcePlacement)
                                     retained.copy(layers = retained.layers.toMutableList().also { it[index] = layer }) to index
                                 }
                                 ProDestination.OpenPhoto -> {
-                                    val layer = ProImageGeometry.bind(
+                                    val layer = ProImageGeometry.recordImport(
                                         ProLayer(uri.toString(), name = "Original photo"), size)
-                                    ProDocument(layers = listOf(layer), background = ProBackground.TRANSPARENT,
-                                        sourceAspectRatio = size.aspect, canvasSize = size) to 0
+                                    val opened = ProDocument(layers = listOf(layer), background = ProBackground.TRANSPARENT,
+                                        sourceAspectRatio = size.aspect, canvasSize = size)
+                                    opened.copy(sourceCanvasSetup = ProCanvasSetup.from(opened)) to 0
                                 }
                                 else -> error("The photo request no longer owns this operation.")
                             }
@@ -976,7 +1086,11 @@ internal fun ProWorkspaceScreenContent(
         }
         when (val action = request.destination) {
             ProDestination.Back, is ProDestination.Switch -> finishDeparture(request)
-            ProDestination.NewCanvas -> finishDeparture(request, ProDocument(), ProDocument())
+            ProDestination.NewCanvas -> {
+                val blank = ProDocument()
+                val established = blank.copy(sourceCanvasSetup = ProCanvasSetup.from(blank))
+                finishDeparture(request, established, established)
+            }
             ProDestination.OpenPhoto, is ProDestination.ReplaceImage -> {
                 departureStage = ProDepartureStage.PICKER
                 try {
@@ -1001,8 +1115,19 @@ internal fun ProWorkspaceScreenContent(
                             cancelDeparture()
                             openError = "Project unreadable or unavailable. Current work kept."
                             showProjects = true
-                        } else finishDeparture(request, loaded.content.document,
-                            loaded.content.resetDocument, loaded.project)
+                        } else if (pendingDeparture?.token != request.token || !owns(request.token) ||
+                            latestDocument != request.document) {
+                            cancelDeparture()
+                            openError = "The work changed. Choose Open project again."
+                            showProjects = true
+                        } else if (prepareOpenedNamedProject?.invoke(loaded) == false) {
+                            cancelDeparture()
+                            openError = "Could not reopen the project's working history. Current work kept."
+                            showProjects = true
+                        } else {
+                            finishDeparture(request, loaded.content.document, loaded.content.resetDocument,
+                                loaded.project, openedNamedProject = loaded)
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: OutOfMemoryError) {
@@ -1025,6 +1150,14 @@ internal fun ProWorkspaceScreenContent(
     }
     val intendedExportSize = ProMath.intendedCanvasSize(document)
     val safeExportSize = intendedExportSize.within(ProMath.MAX_EXPORT_EDGE, exportPixelBudget)
+    var exportOutputSize by remember(document, safeExportSize) { mutableStateOf<ProPixelSize?>(null) }
+    LaunchedEffect(showExport, document, safeExportSize) {
+        if (showExport && document.linkedFinishes.isNotEmpty()) {
+            exportOutputSize = withContext(Dispatchers.IO) {
+                runCatching { ProRaster.outputSize(context, document, safeExportSize) }.getOrNull()
+            }
+        }
+    }
 
     suspend fun retainExportForRetry(pending: PendingExport, message: String) {
         notice = message
@@ -1047,7 +1180,7 @@ internal fun ProWorkspaceScreenContent(
         notice = "Exporting editable composition…"
         val dimensions = withContext(Dispatchers.Default) {
             val coroutine = currentCoroutineContext()
-            val image = ProRaster.render(resolver, request.document, request.size.width, request.size.height, false) {
+            val image = ProRaster.renderOutput(context, request.document, request.size, preview = false) {
                 coroutine.ensureActive()
             }
             try {
@@ -1233,8 +1366,9 @@ internal fun ProWorkspaceScreenContent(
         preview = null
         notice = "Source for image layer " + (missing.position + 1) + " is unavailable."
     }
-    LaunchedEffect(document, artboardSize, resolver, resetGeneration) {
-        if (pristine) {
+    val showingFinishedOutput = finishedOutput && document.linkedFinishes.isNotEmpty()
+    LaunchedEffect(document, artboardSize, resolver, resetGeneration, showingFinishedOutput) {
+        if (pristine && !showingFinishedOutput) {
             preview = null
             rendering = false
             if (document.layers.isEmpty()) chrome = true
@@ -1245,8 +1379,10 @@ internal fun ProWorkspaceScreenContent(
             val (w, h) = artboardSize
             val bitmap = withContext(Dispatchers.Default) {
                 val job = currentCoroutineContext()
-                val rendered = ProRaster.render(resolver, document, w, h, true) {
-                    job.ensureActive()
+                val rendered = if (showingFinishedOutput) {
+                    ProRaster.renderOutput(context, document, artboardSize, preview = true) { job.ensureActive() }
+                } else {
+                    ProRaster.render(resolver, document, w, h, true) { job.ensureActive() }
                 }
                 try { job.ensureActive(); rendered }
                 catch (cancelled: CancellationException) {
@@ -1266,7 +1402,7 @@ internal fun ProWorkspaceScreenContent(
         } finally { rendering = false }
     }
     val brushLayer = selected.takeIf {
-        section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
+        !showingFinishedOutput && section == ProSection.PAINT && active?.kind == ProLayerKind.DRAWING &&
             active.visible && active.opacity > 0f
     }
     val brushSizePixels = remember(document.canvasAspectRatio, maxPreviewPixels) {
@@ -1326,6 +1462,9 @@ internal fun ProWorkspaceScreenContent(
     }
 
     val available = canEditDocument()
+    val hasWork = documentEstablished || resetDocument != null || document != ProDocument() ||
+        history.undo.isNotEmpty() || history.redo.isNotEmpty()
+    val operationUnavailable = "Finish the current operation first."
     // The original BoxWithConstraints used a SubcomposeLayout for the entire
     // Pro workspace. Its disposable nested slot table could fail during Android
     // activity teardown after rapid layer/brush changes. The workspace needs
@@ -1333,20 +1472,16 @@ internal fun ProWorkspaceScreenContent(
     // preserve usable canvas space without a nested composition lifecycle.
     val panelHeight = LocalConfiguration.current.screenHeightDp.dp * .39f
     Box(Modifier.fillMaxSize().background(Color(0xFF080B10))) {
-        val safeArea = if (chrome) Modifier.statusBarsPadding().navigationBarsPadding() else Modifier
+        val safeArea = if (chrome) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier
         Column(Modifier.fillMaxSize().then(safeArea)) {
             if (chrome) {
                 EditorWorkspaceHeader(
                     workspace = WorkspaceMode.PRO,
                     commands = listOf(
-                        WorkspaceCommand(WorkspaceCommandId.NEW, "New canvas…", available) {
-                            requestDeparture(ProDestination.NewCanvas)
-                        },
-                        WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "Open photo as new document…", available) {
-                            requestDeparture(ProDestination.OpenPhoto)
-                        },
+                        WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "New / Open media…", available,
+                            if (!available) operationUnavailable else null) { },
                         WorkspaceCommand(WorkspaceCommandId.OPEN_PROJECT, "Open project…", available,
-                            onInvoke = ::openProjects),
+                            if (!available) operationUnavailable else null, onInvoke = ::openProjects),
                         WorkspaceCommand(WorkspaceCommandId.SAVE, "Save project",
                             available && ProMath.valid(document) &&
                                 (saveTarget.savedRef == null || workspaceSnapshot().isDirty(document)),
@@ -1369,12 +1504,23 @@ internal fun ProWorkspaceScreenContent(
                                 showExport = !showExportRecovery
                             }
                         },
-                        WorkspaceCommand(WorkspaceCommandId.RESET, "Delete current work…",
-                            available && (document.layers.isNotEmpty() || history.undo.isNotEmpty() ||
-                                history.redo.isNotEmpty() || document != ProDocument())) {
-                            confirmReset = true
+                        WorkspaceCommand(WorkspaceCommandId.RESET, "Reset all edits", available && hasWork,
+                            if (!hasWork) "There is no Pro work to reset." else if (!available) operationUnavailable else null,
+                            onInvoke = ::resetAllEdits),
+                        WorkspaceCommand(WorkspaceCommandId.DELETE, "Delete", available && hasWork,
+                            if (!hasWork) "There is no Pro work to delete." else if (!available) operationUnavailable else null) {
+                            deleteError = null
+                            confirmDelete = true
                         },
                         WorkspaceCommand(WorkspaceCommandId.HELP, "Help", available) { showHelp = true }
+                    ),
+                    mediaChoices = listOf(
+                        WorkspaceCommand(WorkspaceCommandId.NEW, "New canvas…", available) {
+                            requestDeparture(ProDestination.NewCanvas)
+                        },
+                        WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "Open photo as new document…", available) {
+                            requestDeparture(ProDestination.OpenPhoto)
+                        }
                     ),
                     canUndo = available && history.undo.isNotEmpty(),
                     canRedo = available && history.redo.isNotEmpty(),
@@ -1384,59 +1530,36 @@ internal fun ProWorkspaceScreenContent(
                     menuExpanded = showFile, onMenuExpandedChange = { showFile = it },
                     enabled = available, onBack = ::requestBack
                 )
-                Row(Modifier.fillMaxWidth().background(EditorSurface),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { showAdd = true },
-                        enabled = available && document.layers.size < ProMath.MAX_LAYERS) {
-                        Text("+ Add layer", color = EditorMint)
-                    }
-                    if (document.layers.isNotEmpty()) TextButton(
-                        onClick = { viewport = ProViewport() }, enabled = available
-                    ) { Text("Fit canvas") }
-                }
                 if (notice.isNotBlank()) Text(notice, color = EditorMint, fontSize = 12.sp,
                     maxLines = 2, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
             }
             Box(Modifier.weight(1f).fillMaxWidth().clipToBounds(), contentAlignment = Alignment.Center) {
-                if (document.layers.isEmpty()) {
+                if (document.layers.isEmpty() && !hasWork) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 44.dp)
                             .verticalScroll(rememberScrollState())) {
-                        Text("Photo editing Pro", color = EditorWhite,
-                            fontWeight = FontWeight.Bold, fontSize = 24.sp)
-                        Text("Select an image to edit", color = EditorMuted, fontSize = 13.sp)
-                        Text("Use Options to open a photo or project, or Add layer to build this canvas.",
-                            color = EditorMuted, fontSize = 13.sp)
-                        Row(Modifier.horizontalScroll(rememberScrollState())) {
-                            ProAspect.entries.forEach { aspect ->
-                                DockChip(aspect.label, document.aspect == aspect, enabled = available) {
-                                    commit(ProMath.withAspect(document, aspect))
-                                }
-                            }
-                        }
-                        Row(Modifier.horizontalScroll(rememberScrollState())) {
-                            ProBackground.entries.forEach { background ->
-                                DockChip(background.label, document.background == background, enabled = available) {
-                                    commit(document.copy(background = background))
-                                }
-                            }
-                        }
+                        Text("Open a photo or create a canvas from Options.",
+                            color = EditorWhite, fontSize = 16.sp)
                     }
                     Text("© 2026 Greenezone Software LLC", color = EditorMuted, fontSize = 11.sp,
                         modifier = Modifier.align(Alignment.BottomStart).padding(12.dp))
                 } else {
-                    val bitmap = if (pristine) null else preview
+                    val bitmap = if (pristine && !showingFinishedOutput) null else preview
                     val live = brushFrame?.takeIf {
                         it.draftId == activeStroke?.id && selected == brushLayer &&
                             dragStart?.document == document
                     }?.bitmap
                     val (canvasW, canvasH) = artboardSize
-                    val canEdit = available && (pristine || bitmap != null ||
+                    val canEdit = available && !showingFinishedOutput && (pristine || bitmap != null ||
                         document.layers.none { it.kind == ProLayerKind.IMAGE && it.visible })
-                    ProCanvasSurface(live ?: bitmap, artboardSize, document.background.argb,
-                        section, active, viewport, chrome, canEdit,
-                        draftSelection, retouchSource,
+                    val displaySize = if (showingFinishedOutput && bitmap != null) {
+                        ProPixelSize(bitmap.width, bitmap.height)
+                    } else artboardSize
+                    ProCanvasSurface(live ?: bitmap, displaySize, document.background.argb,
+                        section, active.takeUnless { showingFinishedOutput }, viewport, chrome, canEdit,
+                        draftSelection.takeUnless { showingFinishedOutput },
+                        retouchSource.takeUnless { showingFinishedOutput },
                         actions = ProCanvasActions(
                             toggleControls = { chrome = !chrome },
                             hold = { point ->
@@ -1552,26 +1675,49 @@ internal fun ProWorkspaceScreenContent(
                         ), modifier = Modifier.fillMaxSize())
                 }
             }
-            if (chrome && document.layers.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth().background(EditorSurface),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { showTools = true }, enabled = available) { Text("Tools ▾", color = EditorMint) }
-                    TextButton(onClick = { showStack = true }, enabled = available) {
-                        Text("Stack (" + document.layers.size + ")")
-                    }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { expanded = !expanded }, enabled = available) {
-                        Text(section.title + if (expanded) " ▴" else " ▾", maxLines = 1,
-                            overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                if (expanded) {
+            if (chrome) {
+                if (hasWork && expanded) {
                     Column(Modifier.fillMaxWidth().heightIn(max = panelHeight)
                         .background(EditorSurface).verticalScroll(rememberScrollState())
                         .padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(active?.name.orEmpty() + " · " + (active?.kind?.label ?: ""),
+                        if (active != null) Text(active.name + " · " + active.kind.label,
                             color = EditorMuted, fontSize = 12.sp,
                             modifier = Modifier.padding(horizontal = 13.dp))
+                        if (section == ProSection.LAYERS || active == null) {
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = { showAdd = true },
+                                    enabled = available && document.layers.size < ProMath.MAX_LAYERS) {
+                                    Text("+ Add layer", color = EditorMint)
+                                }
+                                if (document.layers.isNotEmpty()) {
+                                    TextButton(onClick = { showStack = true }, enabled = available) {
+                                        Text("Stack (" + document.layers.size + ")")
+                                    }
+                                    TextButton(onClick = { viewport = ProViewport() }, enabled = available) {
+                                        Text("Fit canvas")
+                                    }
+                                    if (document.linkedFinishes.isNotEmpty()) {
+                                        TextButton(enabled = available, onClick = {
+                                            if (!cancelGesture() && !hasUnresolvedToolDraft()) {
+                                                finishedOutput = !showingFinishedOutput
+                                                viewport = ProViewport()
+                                            }
+                                        }) {
+                                            Text(if (showingFinishedOutput) "Edit native layers" else "Preview finished output")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (section == ProSection.CANVAS || active == null) {
+                            ProCanvasProperties(document, available) { updated ->
+                                val creating = document.layers.isEmpty() &&
+                                    (history.undo + history.redo).none { it.document.layers.isNotEmpty() }
+                                commit(if (creating) updated.copy(sourceCanvasSetup = ProCanvasSetup.from(updated))
+                                    else updated)
+                            }
+                        }
                         if (active != null) when (section) {
                             ProSection.LAYERS -> {
                                 Text("Tap the canvas to hide controls. Hold an object to select its layer.",
@@ -1609,14 +1755,14 @@ internal fun ProWorkspaceScreenContent(
                                         Text("Duplicate", color = EditorWhite)
                                     }
                                     TextButton(enabled = available, onClick = ::deleteSelectedLayer) {
-                                        Text("Delete layer", color = Color(0xFFFF9D9D))
+                                        Text("Remove layer", color = Color(0xFFFF9D9D))
                                     }
                                 }
                             }
                             ProSection.MOVE -> {
                                 if (active.kind == ProLayerKind.DRAWING ||
                                     active.kind == ProLayerKind.ADJUSTMENT) {
-                                    Text("Use Transform on image or shape layers. Draw directly in Brush.",
+                                    Text("Use Transform on image or shape layers. Paint directly on a paint layer.",
                                         color = EditorMuted, fontSize = 12.sp,
                                         modifier = Modifier.padding(horizontal = 14.dp))
                                 } else if (!active.visible) {
@@ -1693,15 +1839,15 @@ internal fun ProWorkspaceScreenContent(
                                     }
                                     ProColorPalette(shape.color) { color -> editShape { it.copy(color = color) } }
                                 } else {
-                                    TextButton(enabled = document.layers.size < ProMath.MAX_LAYERS,
+                                    TextButton(enabled = available && document.layers.size < ProMath.MAX_LAYERS,
                                         onClick = { addCreative(ProLayerKind.SHAPE) }) {
-                                        Text("+ Shape layer", color = EditorMint)
+                                        Text("Add shape layer", color = EditorMint)
                                     }
                                 }
                             }
                             ProSection.PAINT -> {
                                 if (active.kind == ProLayerKind.DRAWING && (!active.visible || active.opacity <= 0f)) {
-                                    Text("Show this brush layer and raise its opacity to paint or erase.",
+                                    Text("Show this paint layer and raise its opacity to paint or erase.",
                                         color = EditorMuted, fontSize = 12.sp,
                                         modifier = Modifier.padding(horizontal = 13.dp))
                                 } else if (active.kind == ProLayerKind.DRAWING) {
@@ -1712,8 +1858,8 @@ internal fun ProWorkspaceScreenContent(
                                         DockChip("Eraser", eraserMode) { eraserMode = true }
                                     }
                                     Text(if (eraserMode)
-                                        "Drag to erase pixels from this drawing layer."
-                                        else "Drag to paint. Hold a color on the canvas to sample it.",
+                                        "Erase pixels from " + active.name + "."
+                                        else "Paint on " + active.name + ". Hold a canvas color to sample it.",
                                         color = EditorMuted, fontSize = 12.sp,
                                         modifier = Modifier.padding(horizontal = 13.dp))
                                     if (!eraserMode) ProColorPalette(brushColor) { brushColor = it }
@@ -1738,9 +1884,9 @@ internal fun ProWorkspaceScreenContent(
                                         }
                                     }
                                 } else TextButton(
-                                    enabled = document.layers.size < ProMath.MAX_LAYERS,
+                                    enabled = available && document.layers.size < ProMath.MAX_LAYERS,
                                     onClick = { addCreative(ProLayerKind.DRAWING) }
-                                ) { Text("+ Draw on new layer", color = EditorMint) }
+                                ) { Text("Add paint layer", color = EditorMint) }
                             }
                             ProSection.SELECT -> ProSelectionPanel(
                                 layer = active,
@@ -1801,7 +1947,11 @@ internal fun ProWorkspaceScreenContent(
                             ProSection.PIXEL -> ProPixelEffectPanel(
                                 layer = active,
                                 canAdd = document.layers.size < ProMath.MAX_LAYERS,
-                                onAdd = { addCreative(ProLayerKind.ADJUSTMENT) },
+                                enabled = available,
+                                onAdd = {
+                                    addCreative(ProLayerKind.ADJUSTMENT)
+                                    selectTool(ProSection.PIXEL)
+                                },
                                 onEffect = { effect ->
                                     changeLayer { it.copy(effect = effect) }
                                 },
@@ -1812,16 +1962,19 @@ internal fun ProWorkspaceScreenContent(
                             )
                             ProSection.GRADE -> ProGradePanel(
                                 layer = active,
+                                enabled = available,
                                 canAdd = document.layers.size < ProMath.MAX_LAYERS,
-                                onAdd = {
-                                    addLayer(ProLayer(uri = "", name = "Tone & color",
-                                        kind = ProLayerKind.ADJUSTMENT))
-                                    selectTool(ProSection.GRADE)
-                                },
+                                onAdd = { addCreative(ProLayerKind.ADJUSTMENT) },
                                 onGrade = { grade ->
-                                    changeLayer({ it.copy(edits = it.edits.copy(grade = grade)) }, true)
+                                    if (latestDocument.layers.getOrNull(selected) === active) {
+                                        changeLayer({ it.copy(edits = it.edits.copy(grade = grade)) }, true)
+                                    }
                                 },
-                                onCommitGrade = { grade -> changeLayer { it.copy(edits = it.edits.copy(grade = grade)) } },
+                                onCommitGrade = { grade ->
+                                    if (latestDocument.layers.getOrNull(selected) === active) {
+                                        changeLayer { it.copy(edits = it.edits.copy(grade = grade)) }
+                                    }
+                                },
                                 onFinish = ::finishSlider
                             )
                             ProSection.BLEND -> {
@@ -1841,77 +1994,51 @@ internal fun ProWorkspaceScreenContent(
                                 } else {
                                     "Layer below: " + below.name + " · " + document.background.label + " canvas"
                                 }
-                                Text(backdrop, color = EditorWhite, fontSize = 12.sp,
-                                    modifier = Modifier.padding(horizontal = 13.dp))
                                 val guidance = when {
                                     !active.visible -> "Show this layer to preview its blend and opacity."
+                                    active.opacity <= 0f -> "Raise this layer's opacity to preview blending."
                                     emptyBackdrop && active.kind == ProLayerKind.ADJUSTMENT ->
                                         "Add visible content below this adjustment or choose an opaque canvas."
                                     emptyBackdrop ->
-                                        "Add a visible layer below to blend overlapping pixels. Opacity still works."
+                                        "Add a visible layer below to see blending where they overlap."
                                     below == null && document.background == ProBackground.WHITE ->
                                         "Screen and Overlay produce white over this white canvas."
                                     else -> "Blending changes the selected layer where it overlaps the backdrop."
                                 }
-                                Text(guidance, color = EditorMuted, fontSize = 12.sp,
-                                    modifier = Modifier.padding(horizontal = 13.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 13.dp)) {
-                                    Text("Mode: " + active.blend.label, color = EditorWhite, fontSize = 12.sp,
-                                        modifier = Modifier.weight(1f))
-                                    TextButton(enabled = active.blend != ProBlend.NORMAL,
-                                        onClick = { changeLayer { it.copy(blend = ProBlend.NORMAL) } }) {
-                                        Text("Restore Normal")
-                                    }
-                                }
-                                Row(Modifier.horizontalScroll(rememberScrollState())
-                                    .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                    ProBlend.entries.filter { it != ProBlend.NORMAL }.forEach { blend ->
-                                        DockChip(blend.label, active.blend == blend,
-                                            enabled = active.visible && !emptyBackdrop) {
-                                            changeLayer { it.copy(blend = blend) }
+                                val target = selected
+                                ProBlendPanel(
+                                    layer = active,
+                                    backdrop = backdrop,
+                                    guidance = guidance,
+                                    enabled = available,
+                                    onMode = { mode ->
+                                        if (selected == target && latestDocument.layers.getOrNull(target) === active &&
+                                            active.blend != mode) changeLayer { it.copy(blend = mode) }
+                                    },
+                                    onOpacity = { opacity ->
+                                        if (selected == target && latestDocument.layers.getOrNull(target) === active) {
+                                            changeLayer({ it.copy(opacity = opacity) }, true)
                                         }
+                                    },
+                                    onOpacityDone = {
+                                        if (canEditDocument() && selected == target) finishSlider()
                                     }
-                                }
-                                Text("Opacity · ${(active.opacity * 100).toInt()}%", color = EditorMuted,
-                                    fontSize = 12.sp, modifier = Modifier.padding(horizontal = 13.dp))
-                                Slider(value = active.opacity,
-                                    enabled = active.visible &&
-                                        (!emptyBackdrop || active.kind != ProLayerKind.ADJUSTMENT),
-                                    onValueChange = { opacity ->
-                                        changeLayer({ it.copy(opacity = opacity) }, true)
-                                    }, onValueChangeFinished = ::finishSlider,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp))
+                                )
                             }
-                            ProSection.CANVAS -> {
-                                Row(Modifier.horizontalScroll(rememberScrollState())
-                                    .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                    if (document.sourceAspectRatio != null) {
-                                        Text("Source aspect", color = EditorMint,
-                                            modifier = Modifier.align(Alignment.CenterVertically))
-                                    }
-                                    ProAspect.entries.forEach { aspect ->
-                                        DockChip(aspect.label,
-                                            document.sourceAspectRatio == null && document.aspect == aspect) {
-                                            commit(ProMath.withAspect(document, aspect))
-                                        }
-                                    }
-                                }
-                                Row(Modifier.horizontalScroll(rememberScrollState())
-                                    .padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                    ProBackground.entries.forEach { background ->
-                                        DockChip(background.label, document.background == background) {
-                                            commit(document.copy(background = background))
-                                        }
-                                    }
-                                }
-                            }
+                            ProSection.CANVAS -> Unit
                         }
                     }
                 }
+                WorkspaceToolsBar(
+                    expanded = expanded && hasWork,
+                    onOpenTools = { showTools = true },
+                    onToggleExpanded = { expanded = !expanded },
+                    target = if (hasWork) section.title else "No Pro work loaded",
+                    enabled = available && hasWork
+                )
             }
         }
-        if (busy || exporting || (rendering && !pristine && preview == null)) {
+        if (busy || exporting || (rendering && (!pristine || showingFinishedOutput) && preview == null)) {
             Row(Modifier.align(Alignment.Center)
                 .background(Color(0xE0212630), RoundedCornerShape(14.dp))
                 .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -1928,10 +2055,13 @@ internal fun ProWorkspaceScreenContent(
     }
 
     if (showTools) ProToolChooser(section, ::selectTool) { showTools = false }
-    if (showStack) ProLayerStack(document, selected, onSelect = {
-        selectLayer(it); showStack = false; selectTool(ProSection.LAYERS)
-    }, onVisibility = ::toggleLayerVisibility,
-        onAdd = { showStack = false; showAdd = true }, onDismiss = { showStack = false })
+    if (showStack) ProLayerStack(document, selected, enabled = available, onSelect = {
+        if (canEditDocument()) {
+            selectLayer(it)
+            showStack = false
+            selectTool(ProSection.LAYERS)
+        }
+    }, onVisibility = ::toggleLayerVisibility, onDismiss = { showStack = false })
     rename?.let { name ->
         SaveNameDialog("Rename layer", "Choose a name for this layer.", name,
             onName = { rename = it }, onSave = {
@@ -1950,13 +2080,13 @@ internal fun ProWorkspaceScreenContent(
                     Text("Photo or image", color = EditorMint)
                 }
                 TextButton(onClick = { addCreative(ProLayerKind.SHAPE) }) {
-                    Text("Shape", color = EditorWhite)
+                    Text("Shape layer", color = EditorWhite)
                 }
                 TextButton(onClick = { addCreative(ProLayerKind.DRAWING) }) {
-                    Text("Draw / Brush", color = EditorWhite)
+                    Text("Paint layer", color = EditorWhite)
                 }
                 TextButton(onClick = { addCreative(ProLayerKind.ADJUSTMENT) }) {
-                    Text("Color adjustment", color = EditorWhite)
+                    Text("Adjustment layer", color = EditorWhite)
                 }
             }
         },
@@ -1976,7 +2106,10 @@ internal fun ProWorkspaceScreenContent(
     if (showExport) ExportDialog(
         settings = exportSettings, onSettings = { exportSettings = it },
         onSave = ::startExport, onDismiss = { showExport = false },
-        originalOutput = if (safeExportSize == intendedExportSize) {
+        originalOutput = if (document.linkedFinishes.isNotEmpty()) {
+            exportOutputSize?.let { "${it.width} × ${it.height} pixels with linked edits" }
+                ?: "Output dimensions will follow the linked edits."
+        } else if (safeExportSize == intendedExportSize) {
             "${safeExportSize.width} × ${safeExportSize.height} pixels"
         } else {
             "${safeExportSize.width} × ${safeExportSize.height} pixels on this device. " +
@@ -2019,7 +2152,7 @@ internal fun ProWorkspaceScreenContent(
             }
         },
         onSave = {
-            val request = retrySave ?: ProSaveRequest(draftName, document, resetDocument, saveTarget,
+            val request = retrySave ?: ProSaveRequest(draftName, document, workspaceSnapshot(),
                 pendingDeparture?.token ?: operationToken(), ProjectSaveIntent.Create(draftName))
             saveProject(request)
         },
@@ -2047,6 +2180,15 @@ internal fun ProWorkspaceScreenContent(
             Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                 openError?.let { Text(it, color = EditorMuted) }
                 if (busy) Text("Opening project…", color = EditorMuted)
+                if (workingDrafts.isNotEmpty()) {
+                    Text("Working drafts", color = EditorWhite)
+                    workingDrafts.forEach { (key, title) ->
+                        TextButton(onClick = { openWorkingDraft(key) }, enabled = !busy) {
+                            Text(title, color = EditorMint)
+                        }
+                    }
+                    Text("Named projects", color = EditorWhite)
+                }
                 if (savedNames.isEmpty()) Text("No saved Pro projects yet.", color = EditorMuted)
                 savedNames.forEach { name ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -2124,20 +2266,12 @@ internal fun ProWorkspaceScreenContent(
             }
         )
     }
-    if (confirmReset) AlertDialog(
-        onDismissRequest = { if (!busy) confirmReset = false },
-        title = { Text("Delete current Pro work?") },
-        text = { Text(
-            (if (resetDocument?.layers?.isNotEmpty() == true)
-                "This discards the current Pro changes and restores the work's starting version."
-            else "This discards the current Pro changes and returns to an empty workspace.") +
-                " Original photos and saved projects will be kept.",
-            color = EditorMuted
-        ) },
-        confirmButton = {
-            TextButton(enabled = !busy, onClick = ::deleteCurrentWork) { Text("Delete work", color = Color(0xFFFF9D9D)) }
-        },
-        dismissButton = { TextButton(enabled = !busy, onClick = { confirmReset = false }) { Text("Cancel") } }
+    if (confirmDelete) WorkspaceDeleteDialog(
+        message = "Delete this Pro composition and its working history?",
+        onConfirm = ::deleteCurrentWork,
+        onCancel = { confirmDelete = false; deleteError = null },
+        busy = busy,
+        error = deleteError
     )
     if (showHelp) ProHelpDialog(onDismiss = { showHelp = false })
 }

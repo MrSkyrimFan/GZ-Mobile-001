@@ -19,6 +19,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.CreativeDocument
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.ProAspect
+import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProDocument
 import com.greenezone.gzphotoeditor.editor.ProLayer
 import com.greenezone.gzphotoeditor.editor.ProLayerKind
@@ -57,10 +59,19 @@ class ProWorkingDocumentTest {
         }
     }
 
-    private fun openReset() {
+    private fun openDelete() {
         rule.onNodeWithText("Options").performClick()
-        rule.onNodeWithText("Delete current work…").performClick()
-        rule.onNodeWithText("Delete current Pro work?").assertIsDisplayed()
+        rule.onNodeWithText("Delete", substring = false).performClick()
+        rule.onNodeWithText("Delete current work?").assertIsDisplayed()
+    }
+
+    private fun resetAllEdits() {
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("Reset all edits").performClick()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Pro edits reset. Undo restores the previous work.")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     @Test fun deleteCurrentWorkCancelsOrRestoresOriginalWithoutDeletingSave() {
@@ -92,27 +103,45 @@ class ProWorkingDocumentTest {
             rule.onNodeWithText("Hide").performScrollTo().performClick()
             rule.runOnIdle { assertFalse(current.layers.single().visible) }
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
-            openReset()
+            openDelete()
             rule.onNodeWithText("Cancel").performClick()
-            rule.runOnIdle { assertFalse(current.layers.single().visible) }
-            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
-            openReset()
-            rule.onNodeWithText("Delete work").performClick()
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
-                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
-                        .fetchSemanticsNodes().isNotEmpty()
+            val hidden = rule.runOnIdle {
+                assertFalse(current.layers.single().visible)
+                current
             }
-            rule.runOnIdle { assertEquals(original, current) }
-            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
-            rule.onNodeWithContentDescription("Redo").assertIsNotEnabled()
+            rule.onNodeWithContentDescription("Undo").assertIsEnabled()
+
+            resetAllEdits()
+            val neutral = rule.runOnIdle {
+                val image = current.layers.single()
+                assertEquals(uri.toString(), image.uri)
+                assertEquals(original.layers.single().name, image.name)
+                assertEquals(EditDocument(), image.edits)
+                assertTrue(image.visible)
+                assertEquals(1f, image.opacity, 0f)
+                current
+            }
+            rule.onNodeWithContentDescription("Undo").performClick()
+            rule.runOnIdle { assertEquals(hidden, current) }
+            rule.onNodeWithContentDescription("Redo").performClick()
+            rule.runOnIdle { assertEquals(neutral, current) }
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithContentDescription("Pro editable composition")
                     .fetchSemanticsNodes().isNotEmpty()
             }
-            val image = rule.onNodeWithTag("pro-canvas").captureToImage().asAndroidBitmap()
-            val center = image.getPixel(image.width / 2, image.height / 2)
-            assertTrue(Color.green(center) > 220 && Color.red(center) < 30 && Color.blue(center) < 30)
+            rule.waitUntil(15_000) {
+                val image = rule.onNodeWithTag("pro-canvas").captureToImage().asAndroidBitmap()
+                try {
+                    val center = image.getPixel(image.width / 2, image.height / 2)
+                    Color.green(center) > 220 && Color.red(center) < 30 && Color.blue(center) < 30
+                } finally { image.recycle() }
+            }
+
+            openDelete()
+            rule.onNode(hasText("Delete", substring = false) and hasAnyAncestor(isDialog())).performClick()
+            rule.waitUntil(15_000) { current == ProDocument() }
+            rule.onNodeWithContentDescription("Undo").assertIsNotEnabled()
+            rule.onNodeWithContentDescription("Redo").assertIsNotEnabled()
             assertEquals(saved, ProStore.load(context, name))
             assertArrayEquals(originalBytes, requireNotNull(resolver.openInputStream(uri)).use { it.readBytes() })
         } finally {
@@ -142,7 +171,9 @@ class ProWorkingDocumentTest {
     }
 
     @Test fun undoOpenRestoresThePriorPhotosResetBaseline() {
-        val photo = adjustment("Prior original")
+        val photo = adjustment("Prior original").copy(
+            aspect = ProAspect.PORTRAIT, background = ProBackground.BLACK
+        )
         val editedPhoto = photo.copy(layers = listOf(photo.layers.single().copy(opacity = .7f)))
         val saved = adjustment("Different saved composition")
         val name = "Undo open " + System.nanoTime().toString().takeLast(12)
@@ -153,14 +184,17 @@ class ProWorkingDocumentTest {
             rule.runOnIdle { assertEquals(saved, current) }
             rule.onNodeWithContentDescription("Undo").performClick()
             rule.runOnIdle { assertEquals(editedPhoto, current) }
-            openReset()
-            rule.onNodeWithText("Delete work").performClick()
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
-                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
-                        .fetchSemanticsNodes().isNotEmpty()
+            resetAllEdits()
+            val neutral = rule.runOnIdle {
+                assertTrue(current.layers.isEmpty())
+                assertEquals(photo.aspect, current.aspect)
+                assertEquals(photo.background, current.background)
+                current
             }
-            rule.runOnIdle { assertEquals(photo, current) }
+            rule.onNodeWithContentDescription("Undo").performClick()
+            rule.runOnIdle { assertEquals(editedPhoto, current) }
+            rule.onNodeWithContentDescription("Redo").performClick()
+            rule.runOnIdle { assertEquals(neutral, current) }
             assertEquals(saved, ProStore.load(context, name))
         } finally {
             ProStore.delete(context, name)
@@ -168,7 +202,9 @@ class ProWorkingDocumentTest {
     }
 
     @Test fun saveOpenUndoRedoPreservesTheNamedResetBaseline() {
-        val baseline = adjustment("Original baseline")
+        val baseline = adjustment("Original baseline").copy(
+            aspect = ProAspect.LANDSCAPE, background = ProBackground.TRANSPARENT
+        )
         val edited = baseline.copy(layers = listOf(baseline.layers.single().copy(opacity = .6f)))
         val hidden = edited.copy(layers = listOf(edited.layers.single().copy(visible = false)))
         val name = "Reopen baseline " + System.nanoTime().toString().takeLast(12)
@@ -203,14 +239,14 @@ class ProWorkingDocumentTest {
             rule.runOnIdle { assertEquals(hidden, current) }
             rule.onNodeWithContentDescription("Redo").performClick()
             rule.runOnIdle { assertEquals(edited, current) }
-            openReset()
-            rule.onNodeWithText("Delete work").performClick()
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
-                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
-                        .fetchSemanticsNodes().isNotEmpty()
+            resetAllEdits()
+            rule.runOnIdle {
+                assertTrue(current.layers.isEmpty())
+                assertEquals(baseline.aspect, current.aspect)
+                assertEquals(baseline.background, current.background)
             }
-            rule.runOnIdle { assertEquals(baseline, current) }
+            rule.onNodeWithContentDescription("Undo").performClick()
+            rule.runOnIdle { assertEquals(edited, current) }
             assertEquals(edited, ProStore.load(context, name))
             assertEquals(hidden, ProStore.load(context, hiddenName))
         } finally {
@@ -228,14 +264,16 @@ class ProWorkingDocumentTest {
             openSaved(name)
             rule.onNodeWithText("Hide").performScrollTo().performClick()
             rule.runOnIdle { assertFalse(current.layers.single().visible) }
-            openReset()
-            rule.onNodeWithText("Delete work").performClick()
-            rule.waitUntil(15_000) {
-                rule.onAllNodesWithText("Delete current Pro work?").fetchSemanticsNodes().isEmpty() &&
-                    rule.onAllNodes(hasContentDescription("Choose editing workspace") and isEnabled())
-                        .fetchSemanticsNodes().isNotEmpty()
+            val hidden = rule.runOnIdle { current }
+            resetAllEdits()
+            rule.runOnIdle {
+                assertTrue(current.layers.isEmpty())
+                assertEquals(saved.canvasAspectRatio, current.canvasAspectRatio, 0f)
+                assertEquals(saved.background, current.background)
             }
-            rule.runOnIdle { assertEquals(saved, current) }
+            rule.onNodeWithContentDescription("Undo").performClick()
+            rule.runOnIdle { assertEquals(hidden, current) }
+            assertEquals(saved, ProStore.load(context, name))
         } finally {
             ProStore.delete(context, name)
         }
@@ -289,16 +327,16 @@ class ProWorkingDocumentTest {
         open(ProDocument(layers = listOf(ProLayer(uri = "", name = "Grade",
             kind = ProLayerKind.ADJUSTMENT))))
         val canvas = rule.onNodeWithTag("pro-canvas")
-        rule.onNodeWithText("Tools ▾").performClick()
+        rule.onNodeWithTag("workspace-tools").performClick()
         rule.onNodeWithText("Select & mask").performClick()
         canvas.performTouchInput { click(center) }
-        rule.onNodeWithText("Tools ▾").assertDoesNotExist()
+        rule.onNodeWithTag("workspace-tools").assertDoesNotExist()
         canvas.performTouchInput {
             val distance = minOf(width, height) * .2f
             swipe(center - Offset(distance, distance), center + Offset(distance, distance))
         }
         rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
-        rule.onNodeWithText("Tools ▾").assertIsDisplayed()
+        rule.onNodeWithTag("workspace-tools").assertIsDisplayed()
         rule.onNodeWithText("Apply layer mask").assertIsEnabled()
         rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
         rule.onNodeWithText("Apply layer mask").assertIsNotEnabled()
@@ -339,7 +377,7 @@ class ProWorkingDocumentTest {
             rule.runOnIdle { assertEquals(legacy, current) }
             rule.onNodeWithText("+ Add layer").performClick()
             rule.onNodeWithText("Words / Text").assertDoesNotExist()
-            rule.onNodeWithText("Shape").assertIsDisplayed()
+            rule.onNodeWithText("Shape layer").assertIsDisplayed()
             rule.onNodeWithText("Close").performClick()
             rule.onNodeWithText("Options").performClick()
             rule.onNodeWithText("Save project as…").performClick()
