@@ -65,8 +65,15 @@ data class CollageLayout(
 
 data class CollageDocument(
     val photos: List<CollagePhoto> = emptyList(),
-    val layout: CollageLayout = CollageLayout()
-)
+    val layout: CollageLayout = CollageLayout(),
+    val creationTemplate: CollageTemplate = layout.template,
+    val creationAspect: CollageAspect = layout.aspect
+) {
+    internal fun resetEdits(): CollageDocument = copy(
+        photos = photos.map { it.copy(edits = EditDocument()) },
+        layout = CollageLayout(template = creationTemplate, aspect = creationAspect)
+    )
+}
 
 /** Recoverable layout and tile decisions; slider drags receive one checkpoint per gesture. */
 data class CollageHistory(

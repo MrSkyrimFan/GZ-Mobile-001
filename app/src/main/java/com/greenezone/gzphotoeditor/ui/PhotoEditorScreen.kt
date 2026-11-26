@@ -154,7 +154,8 @@ fun PhotoEditorScreen(
     onDoneCollagePhoto: ((CollagePhoto) -> Unit)? = null,
     onCancelCollagePhoto: (() -> Unit)? = null,
     onRequestCollageWorkspace: ((WorkspaceMode, CollagePhoto?) -> Unit)? = null,
-    savePhotoProject: (Context, ProjectSaveIntent, Uri, EditDocument) -> ProjectSaveResult = ProjectStore::saveNamed
+    savePhotoProject: (Context, ProjectSaveIntent, Uri, EditDocument) -> ProjectSaveResult = ProjectStore::saveNamed,
+    onDeleteCollageWork: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -258,6 +259,9 @@ fun PhotoEditorScreen(
     var optionsExpanded by remember { mutableStateOf(false) }
     var showPhotoHelp by remember { mutableStateOf(false) }
     var showPhotoReset by remember { mutableStateOf(false) }
+    var showPhotoDelete by remember { mutableStateOf(false) }
+    var photoDeleteError by remember { mutableStateOf<String?>(null) }
+    var photoToolsExpanded by remember { mutableStateOf(true) }
     var photoUiEpoch by remember { mutableStateOf(0L) }
     var photoRetryIntent by remember { mutableStateOf<ProjectSaveIntent?>(null) }
     var photoRetryAllowed by remember { mutableStateOf(true) }
@@ -479,8 +483,8 @@ fun PhotoEditorScreen(
         requestDeparture(PhotoDepartureKind.REPLACE_PHOTO, null, candidate)
     }
 
-    fun closeCurrentPhoto() {
-        if (!photoExport.resolveNativeDraft(photoOwnerId)) {
+    fun closeCurrentPhoto(recoveryResolved: Boolean = false) {
+        if (!recoveryResolved && !photoExport.resolveNativeDraft(photoOwnerId)) {
             showRegularExit = true
             return
         }
@@ -520,6 +524,10 @@ fun PhotoEditorScreen(
         showTextDialog = false
         showRegularExit = false
         showTileExit = false
+        showPhotoDelete = false
+        photoPickerToken = null
+        photoUiEpoch += 1
+        photoToolsExpanded = true
         closeAfterProjectSave = false
         replacement = null
         replacementAfterSave = false
@@ -1484,7 +1492,7 @@ fun PhotoEditorScreen(
         if (original == null) {
             Text("© 2026 Greenezone Software LLC", color = EditorMuted, fontSize = 10.sp,
                 modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding()
-                    .padding(start = 16.dp, bottom = 12.dp))
+                    .padding(start = 16.dp, bottom = 60.dp))
         }
 
         if (chromeVisible || original == null) {
@@ -1508,10 +1516,20 @@ fun PhotoEditorScreen(
                         add(WorkspaceCommand(WorkspaceCommandId.SAVE_AS,
                             if (child) "Save photo project as…" else "Save project as…", hasPhoto,
                             if (hasPhoto) null else photoReason, onInvoke = { saveProject(true) }))
-                        if (!child) add(WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export image…",
-                            hasPhoto, if (hasPhoto) null else photoReason, onInvoke = { photoExport.openDialog() }))
+                        add(WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export image…",
+                            hasPhoto && !child, when {
+                                child -> "Choose Done and export from the collage."
+                                !hasPhoto -> photoReason
+                                else -> null
+                            }, onInvoke = { photoExport.openDialog() }))
                         add(WorkspaceCommand(WorkspaceCommandId.RESET, "Reset all edits…", hasPhoto,
                             if (hasPhoto) null else photoReason, onInvoke = { showPhotoReset = true }))
+                        add(WorkspaceCommand(WorkspaceCommandId.DELETE, "Delete",
+                            if (child) onDeleteCollageWork != null else hasPhoto,
+                            if (child) "Return to the collage to delete it." else "There is no working photo to delete.",
+                            onInvoke = {
+                                if (child) onDeleteCollageWork?.invoke() else { photoDeleteError = null; showPhotoDelete = true }
+                            }))
                         add(WorkspaceCommand(WorkspaceCommandId.HELP, "Help", onInvoke = { showPhotoHelp = true }))
                     },
                     canUndo = history.undo.isNotEmpty(), canRedo = history.redo.isNotEmpty(),
@@ -1534,37 +1552,19 @@ fun PhotoEditorScreen(
                         workspaceNavigation.previewBack() != null) ::requestRegularBack else null,
                     workspaceSelectionEnabled = !child || onRequestCollageWorkspace != null
                 )
-                if (hasPhoto) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        TextButton(onClick = { compare = !compare }, enabled = !busy && !exporting) {
-                            Text(if (compare) "Edited" else "Before", color = EditorWhite)
-                        }
-                        if (zoom > 1.01f) TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) {
-                            Text("Fit canvas", color = EditorMint)
-                        }
-                        if (child) {
-                            TextButton(onClick = { if (!busy && !exporting) {
-                                cancelDraft(); onCancelCollagePhoto?.invoke()
-                            } }, enabled = !busy && !exporting) { Text("Cancel", color = EditorWhite) }
-                            TextButton(onClick = ::finishCollageTile, enabled = !busy && !exporting) {
-                                Text("Done", color = EditorMint)
-                            }
-                        }
-                    }
-                }
                 if (notice.isNotEmpty()) Text(notice, color = EditorWhite, fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp))
             }
 
-            if (original != null) {
-                Box(
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .then(if (selectedTab == EditTab.CROP) {
-                            Modifier.onSizeChanged { bottomChromeHeight = it.height }
-                        } else Modifier)
-                        .navigationBarsPadding()
-                ) {
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .then(if (selectedTab == EditTab.CROP) {
+                        Modifier.onSizeChanged { bottomChromeHeight = it.height }
+                    } else Modifier)
+                    .navigationBarsPadding()
+                    .background(Color(0xE5090C13))
+            ) {
+                if (original != null && photoToolsExpanded) {
                     RegularPhotoDock(
                         state = RegularDockState(
                             tab = selectedTab,
@@ -1622,6 +1622,32 @@ fun PhotoEditorScreen(
                         )
                     )
                 }
+                if (original != null) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { compare = !compare }, enabled = !busy && !exporting) {
+                            Text(if (compare) "Edited" else "Before", color = EditorWhite)
+                        }
+                        if (zoom > 1.01f) TextButton(onClick = { zoom = 1f; panX = 0f; panY = 0f }) {
+                            Text("Fit canvas", color = EditorMint)
+                        }
+                        if (onDoneCollagePhoto != null) {
+                            TextButton(onClick = { if (!busy && !exporting) {
+                                cancelDraft(); onCancelCollagePhoto?.invoke()
+                            } }, enabled = !busy && !exporting) { Text("Cancel", color = EditorWhite) }
+                            TextButton(onClick = ::finishCollageTile, enabled = !busy && !exporting) {
+                                Text("Done", color = EditorMint)
+                            }
+                        }
+                    }
+                }
+                WorkspaceToolsBar(
+                    expanded = photoToolsExpanded && original != null,
+                    onOpenTools = { photoToolsExpanded = true },
+                    onToggleExpanded = { photoToolsExpanded = !photoToolsExpanded },
+                    target = if (original == null) "Open a photo to use tools."
+                        else if (onDoneCollagePhoto != null) "Selected collage photo" else "Current photo",
+                    enabled = original != null && !busy && !exporting
+                )
             }
         }
 
@@ -1645,10 +1671,22 @@ fun PhotoEditorScreen(
 
     if (onDoneCollagePhoto == null) PhotoExportDialogs(photoExport, sourceUri, sourceSize, document, busy, notice, photoOwnerId)
     if (showPhotoHelp) PhotoHelpDialog { showPhotoHelp = false }
+    if (showPhotoDelete) WorkspaceDeleteDialog(
+        message = "Clear the current photo and its editing history?",
+        onConfirm = {
+            if (!busy && !exporting && sourceUri != null) {
+                if (photoExport.resolveNativeDraft(photoOwnerId)) closeCurrentPhoto(recoveryResolved = true)
+                else photoDeleteError = "Could not clear this photo's recovery record. Current work is still open."
+            }
+        },
+        onCancel = { showPhotoDelete = false; photoDeleteError = null },
+        busy = busy || exporting,
+        error = photoDeleteError
+    )
     if (showPhotoReset) AlertDialog(
         onDismissRequest = { showPhotoReset = false },
         title = { Text("Reset all edits?") },
-        text = { Text("Return this photo to its original appearance. You can undo this edit.") },
+        text = { Text("Reset edits on the current photo input. The input stays available and you can undo the reset.") },
         confirmButton = { TextButton(onClick = {
             commit(EditDocument()); activeLook = "none"; showPhotoReset = false
         }) { Text("Reset") } },
@@ -1802,7 +1840,7 @@ fun PhotoEditorScreen(
                             }
                         }
                     }
-                }, enabled = !busy) { Text("Delete project") }
+                }, enabled = !busy) { Text("Delete saved project") }
             },
             dismissButton = {
                 TextButton(onClick = closeConfirmation, enabled = !busy) { Text("Cancel") }

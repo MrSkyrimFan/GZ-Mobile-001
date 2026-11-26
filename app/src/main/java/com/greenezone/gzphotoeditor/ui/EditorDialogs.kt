@@ -265,7 +265,7 @@ internal fun ProjectsDialog(
                 TextButton(
                     enabled = enabled && projects.any { it.project == selectedProject },
                     onClick = onDelete
-                ) { Text("Delete", color = EditorMuted) }
+                ) { Text("Delete saved project", color = EditorMuted) }
                 TextButton(onClick = onDismiss) { Text("Close", color = EditorMuted) }
             }
         }

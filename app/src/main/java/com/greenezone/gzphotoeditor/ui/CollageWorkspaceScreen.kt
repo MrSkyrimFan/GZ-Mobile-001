@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -44,6 +43,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -138,7 +139,8 @@ internal data class CollageWorkspaceSession(
     val savedHistory: CollageHistory = CollageHistory(),
     val entryHistory: CollageHistory = CollageHistory(),
     val contentRevision: Long = 0,
-    val tileRevisions: Map<String, Long> = emptyMap()
+    val tileRevisions: Map<String, Long> = emptyMap(),
+    val toolsExpanded: Boolean = true
 )
 
 private data class CollageTileEntry(
@@ -187,7 +189,6 @@ private data class PreparedTileSource(val choice: TileSourceChoice, val photo: C
 
 private sealed interface CollageDestination {
     data object Back : CollageDestination
-    data object New : CollageDestination
     data class Switch(val mode: WorkspaceMode) : CollageDestination
     data class Open(val project: NamedProject<CollageDocument>) : CollageDestination
 }
@@ -198,6 +199,11 @@ private data class CollageDeparture(
     val candidateHistory: CollageHistory,
     val destination: CollageDestination,
     val child: CollageTileEntry? = null
+)
+private data class CollageDeleteRequest(
+    val token: WorkspaceOperationToken,
+    val document: CollageDocument,
+    val child: CollageTileEntry?
 )
 private data class CollageSaveAttempt(
     val ownerId: String,
@@ -265,6 +271,8 @@ internal fun CollageWorkspaceScreenContent(
     var section by remember { mutableStateOf(session.section) }
     var control by remember { mutableStateOf(session.control) }
     var toolsVisible by remember { mutableStateOf(session.toolsVisible) }
+    var toolsExpanded by remember { mutableStateOf(session.toolsExpanded) }
+    var toolsMenuOpen by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
@@ -281,6 +289,9 @@ internal fun CollageWorkspaceScreenContent(
     var loadingProject by remember { mutableStateOf(false) }
     var preparingSources by remember { mutableStateOf(false) }
     var writingProject by remember { mutableStateOf(false) }
+    var deletingWork by remember { mutableStateOf(false) }
+    var deleteWorkRequest by remember { mutableStateOf<CollageDeleteRequest?>(null) }
+    var deleteWorkError by remember { mutableStateOf<String?>(null) }
     var editingTile by remember { mutableStateOf<CollageTileEntry?>(null) }
     var pendingDeparture by remember { mutableStateOf<CollageDeparture?>(null) }
     var showDeparture by remember { mutableStateOf(false) }
@@ -307,7 +318,7 @@ internal fun CollageWorkspaceScreenContent(
     var showExportRecovery by remember { mutableStateOf(recoveredExport != null) }
     var exportRecoveryError by remember { mutableStateOf<String?>(null) }
 
-    fun busy() = exporting || loadingProject || preparingSources || writingProject
+    fun busy() = exporting || loadingProject || preparingSources || writingProject || deletingWork
     fun baseline() = if (savedProject != null) savedDocument else entryDocument
     fun baselineHistory() = (if (savedProject != null) savedHistory else entryHistory).copy(redo = emptyList())
     fun dirty(value: CollageDocument = latestDocument) = value != baseline()
@@ -318,7 +329,7 @@ internal fun CollageWorkspaceScreenContent(
             history = history, section = section, control = control, toolsVisible = toolsVisible,
             savedDocument = savedDocument, documentId = documentId, entryDocument = entryDocument,
             savedProject = savedProject, savedHistory = savedHistory, entryHistory = entryHistory,
-            contentRevision = contentRevision, tileRevisions = tileRevisions
+            contentRevision = contentRevision, tileRevisions = tileRevisions, toolsExpanded = toolsExpanded
         ))
     }
 
@@ -442,6 +453,10 @@ internal fun CollageWorkspaceScreenContent(
         missingTileId = null
         savedList = false
         toolsVisible = true
+        toolsExpanded = true
+        toolsMenuOpen = false
+        section = CollageSection.TEMPLATES
+        control = FrameControl.GAP
         onDocument(next)
         persistSession(next)
     }
@@ -455,7 +470,7 @@ internal fun CollageWorkspaceScreenContent(
                 failureMessage = "The collage changed while this action was pending. Your current work is still open."
                 return@commitPrepared false
             }
-            if (discard || destination == CollageDestination.New || destination is CollageDestination.Open) {
+            if (discard || destination is CollageDestination.Open) {
                 try {
                     // Export retry owns its immutable recipe independently. Only
                     // suppress native restoration of this departing document.
@@ -475,7 +490,6 @@ internal fun CollageWorkspaceScreenContent(
             }
             clearDeparture()
             when (destination) {
-                CollageDestination.New -> { adoptProject(CollageDocument()); notice = "New collage" }
                 is CollageDestination.Open -> {
                     adoptProject(destination.project.content, destination.project.project)
                     notice = "Saved collage opened"
@@ -516,6 +530,74 @@ internal fun CollageWorkspaceScreenContent(
         menuExpanded = false
         if (dirty(candidate)) showDeparture = true
         else completeDeparture(departure, candidate, departure.candidateHistory)
+    }
+
+    fun validDelete(request: CollageDeleteRequest): Boolean =
+        request.token.ownerId == documentId && request.token.contentRevision == contentRevision &&
+            request.document == latestDocument && request.child == editingTile &&
+            (request.child == null || resolveTile(request.child, null) != null)
+
+    fun requestDeleteWork(child: CollageTileEntry? = null) {
+        if (busy() || pendingDeparture != null || saveAttempt != null || deleteWorkRequest != null ||
+            latestDocument.photos.isEmpty() || child != editingTile || cancelLayout()) return
+        val request = CollageDeleteRequest(WorkspaceOperationToken(documentId, contentRevision),
+            latestDocument, child)
+        if (!validDelete(request)) return
+        deleteWorkError = null
+        deleteWorkRequest = request
+    }
+
+    fun confirmDeleteWork(request: CollageDeleteRequest) {
+        if (busy() || deleteWorkRequest != request) return
+        if (!validDelete(request)) {
+            deleteWorkError = "The collage changed. Cancel and choose Delete again."
+            return
+        }
+        deletingWork = true
+        val ownerId = request.token.ownerId
+        val visibleRequest = pendingExport
+        scope.launch {
+            try {
+                val retained = withContext(Dispatchers.IO) {
+                    val current = exportJournal.read(ExportWorkspace.COLLAGE)
+                    check(current != null || visibleRequest == null) { "The export request is unavailable." }
+                    if (current == null || (current.nativeOwnerId ?: current.id) != ownerId) current
+                    else {
+                        val settled = if (current.phase == PendingExportPhase.PICKING) {
+                            checkNotNull(exportJournal.failed(current))
+                        } else current
+                        checkNotNull(exportJournal.suppressNativeRestore(settled, ownerId))
+                    }
+                }
+                pendingExport = retained
+                if (!validDelete(request)) {
+                    deleteWorkError = "The collage changed. Cancel and choose Delete again."
+                    return@launch
+                }
+                mediaToken = null
+                tileSourceChoice = null
+                replaceConfirmation = null
+                preparedRelink = null
+                exportLaunchId = null
+                showExport = false
+                showExportRecovery = false
+                clearDeparture()
+                deleteWorkRequest = null
+                adoptProject(CollageDocument())
+                notice = "Collage deleted."
+            } catch (canceled: CancellationException) { throw canceled }
+            catch (_: Exception) {
+                deleteWorkError = "Could not update local recovery. Try Delete again."
+            } finally {
+                deletingWork = false
+            }
+        }
+    }
+
+    fun resetAllEdits() {
+        if (busy() || latestDocument.photos.isEmpty() || cancelLayout()) return
+        val next = latestDocument.resetEdits()
+        if (next != latestDocument) commit(next)
     }
 
     fun requestBack() {
@@ -781,6 +863,7 @@ internal fun CollageWorkspaceScreenContent(
                 }
             },
             onCancelCollagePhoto = { if (!busy() && pendingDeparture == null) editingTile = null },
+            onDeleteCollageWork = { requestDeleteWork(entry) },
             onRequestCollageWorkspace = { mode, edited ->
                 if (editingTile == entry && !busy() && pendingDeparture == null) {
                     val next = resolveTile(entry, edited)
@@ -869,6 +952,7 @@ internal fun CollageWorkspaceScreenContent(
             retainExportForRetry(pending, error.message ?: "Could not open the destination picker")
         },
         onResult = resultReceived@ { pending, result ->
+            if (deletingWork) return@resultReceived
             try {
                 val active = exportJournal.read(ExportWorkspace.COLLAGE)
                 if (active == null || active.id != pending.id || active.phase != PendingExportPhase.PICKING) {
@@ -972,9 +1056,6 @@ internal fun CollageWorkspaceScreenContent(
                     Text("Combine 1–20 photos and edit each one.", color = EditorMuted, fontSize = 13.sp)
                     Text("Use Options to add photos or open a saved project.", color = EditorMuted, fontSize = 13.sp)
                 }
-                Text("© 2026 Greenezone Software LLC", color = EditorMuted, fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding()
-                        .padding(start = 16.dp, bottom = 12.dp))
             } else if (shown != null) {
                 Image(bitmap = shown.asImageBitmap(), contentDescription = "Photo collage preview",
                     modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
@@ -1038,10 +1119,7 @@ internal fun CollageWorkspaceScreenContent(
             if (chrome) {
                 val canSave = CollageMath.validCount(document.photos.size)
                 val commands = listOf(
-                    WorkspaceCommand(WorkspaceCommandId.NEW, "New collage…", !busy()) {
-                        requestDeparture(CollageDestination.New)
-                    },
-                    WorkspaceCommand(WorkspaceCommandId.ADD_PHOTOS, "Add photos…",
+                    WorkspaceCommand(WorkspaceCommandId.OPEN_MEDIA, "Add photos…",
                         !busy() && document.photos.size < CollageMath.MAX_PHOTOS,
                         if (document.photos.size >= CollageMath.MAX_PHOTOS) "Maximum of twenty photos reached." else null,
                         ::openMulti),
@@ -1053,10 +1131,17 @@ internal fun CollageWorkspaceScreenContent(
                             "Already saved." else null) { beginSave() },
                     WorkspaceCommand(WorkspaceCommandId.SAVE_AS, "Save project as…", !busy() && canSave,
                         if (!canSave) "Add at least one photo before saving." else null) { beginSave(asCopy = true) },
-                    WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export image…", !busy() && canSave,
-                        if (!canSave) "Add at least one photo before exporting." else null) {
-                        if (!cancelLayout()) showExport = true
+                    WorkspaceCommand(WorkspaceCommandId.EXPORT, "Export image…",
+                        !busy() && (canSave || pendingExport != null),
+                        if (!canSave && pendingExport == null) "Add at least one photo before exporting." else null) {
+                        if (!cancelLayout()) {
+                            if (pendingExport != null) showExportRecovery = true else showExport = true
+                        }
                     },
+                    WorkspaceCommand(WorkspaceCommandId.RESET, "Reset all edits", !busy() && canSave,
+                        if (!canSave) "Add photos to reset edits." else null, ::resetAllEdits),
+                    WorkspaceCommand(WorkspaceCommandId.DELETE, "Delete", !busy() && canSave,
+                        if (!canSave) "No active collage to delete." else null) { requestDeleteWork() },
                     WorkspaceCommand(WorkspaceCommandId.HELP, "Help", !busy()) { showHelp = true }
                 )
                 Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().windowInsetsPadding(
@@ -1074,10 +1159,12 @@ internal fun CollageWorkspaceScreenContent(
                     if (notice.isNotBlank()) Text(notice, color = EditorMuted, fontSize = 11.sp,
                         modifier = Modifier.fillMaxWidth().background(EditorSurface).padding(horizontal = 12.dp))
                 }
-                if (document.photos.isNotEmpty()) {
-                    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .navigationBarsPadding().background(EditorSurface).padding(top = 9.dp, bottom = 5.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val hasPhotos = document.photos.isNotEmpty()
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(EditorSurface)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(
+                        WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (hasPhotos && toolsExpanded) {
                         CollageControls(
                             document = document, selected = selected, section = section, control = control,
                             enabled = !busy(),
@@ -1113,6 +1200,25 @@ internal fun CollageWorkspaceScreenContent(
                             }
                         )
                     }
+                    if (!hasPhotos) Text("© 2026 Greenezone Software LLC", color = EditorMuted,
+                        fontSize = 10.sp, modifier = Modifier.padding(start = 16.dp, top = 7.dp))
+                    Box {
+                        WorkspaceToolsBar(expanded = hasPhotos && toolsExpanded,
+                            onOpenTools = { toolsMenuOpen = true },
+                            onToggleExpanded = { toolsExpanded = !toolsExpanded },
+                            target = if (hasPhotos) section.label else "Add photos to edit",
+                            enabled = hasPhotos && !busy())
+                        DropdownMenu(expanded = toolsMenuOpen,
+                            onDismissRequest = { toolsMenuOpen = false }) {
+                            CollageSection.entries.forEach { choice ->
+                                DropdownMenuItem(text = { Text(choice.label) }, onClick = {
+                                    section = choice
+                                    toolsExpanded = true
+                                    toolsMenuOpen = false
+                                })
+                            }
+                        }
+                    }
                 }
             } else {
                 TextButton(onClick = { toolsVisible = true },
@@ -1130,6 +1236,18 @@ internal fun CollageWorkspaceScreenContent(
                 }
             }
         }
+    }
+
+    deleteWorkRequest?.let { request ->
+        WorkspaceDeleteDialog(
+            message = if (request.child != null)
+                "Delete this collage and its pending photo edits? Your original photos and saved projects stay on your phone."
+            else "Delete this collage? Your original photos and saved projects stay on your phone.",
+            onConfirm = { confirmDeleteWork(request) },
+            onCancel = { if (!deletingWork) deleteWorkRequest = null },
+            busy = deletingWork,
+            error = deleteWorkError
+        )
     }
 
     val departure = pendingDeparture
@@ -1203,7 +1321,7 @@ internal fun CollageWorkspaceScreenContent(
                 onClick = { savedChoice?.let(::requestOpen) }) { Text("Open", color = EditorMint) } },
             dismissButton = { Row {
                 TextButton(enabled = savedChoice != null && !loadingProject,
-                    onClick = { savedChoice?.let(::requestDelete) }) { Text("Delete", color = EditorMuted) }
+                    onClick = { savedChoice?.let(::requestDelete) }) { Text("Delete saved project", color = EditorMuted) }
                 TextButton(enabled = !loadingProject, onClick = { savedList = false }) { Text("Cancel", color = EditorMuted) }
             } })
     }
@@ -1272,7 +1390,7 @@ internal fun CollageWorkspaceScreenContent(
         AlertDialog(onDismissRequest = { showHelp = false }, title = { Text("Collage help") },
             text = { Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Use Options to create, open, save or export a collage. Save keeps an editable project; Export creates a finished image. Keep source photos available.")
+                Text("Use Options to add photos, open, save or export a collage. Save keeps an editable project; Export creates a finished image. Keep source photos available.")
                 Text("A free tap selects the photo under it and hides or shows the controls. Tapping a margin only toggles the controls. Editing guides remain visible.")
                 Text("Choose a photo in Photos, then Edit selected. Done applies only that tile; Cancel keeps the parent's tile unchanged. A separately saved photo project does not apply the tile.")
                 Text("Relink restores a missing original while keeping edits. Replace adopts a new photo and resets that tile's edits. Other tiles stay independent.")
