@@ -655,6 +655,9 @@ internal fun GifMakerScreenContent(
         contentAlignment = Alignment.Center) {
         val deckHeight = maxHeight * .38f
         if (preview != null) {
+            androidx.compose.runtime.SideEffect {
+                android.util.Log.i("GzU1Process", "GIF frame attached to compose window")
+            }
             Image(bitmap = preview!!.asImageBitmap(),
                 contentDescription = "Animated GIF frame preview",
                 modifier = Modifier.fillMaxSize()

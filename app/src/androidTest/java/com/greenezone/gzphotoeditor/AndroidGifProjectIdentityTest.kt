@@ -26,7 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -393,17 +393,25 @@ class AndroidGifProjectIdentityTest {
 
     private fun waitPhotoColor(expected: Int) {
         val description = "Animated GIF frame preview"
-        val image = rule.onNodeWithContentDescription(description, substring = false)
+        val image = rule.onNodeWithContentDescription(description, substring = false, useUnmergedTree = true)
         try {
             rule.waitUntil(15_000) {
                 val unavailable = rule.onAllNodes(hasText("unavailable. Remove or replace it.", substring = true))
                     .fetchSemanticsNodes()
                 assertTrue("The photo preview reported a source failure", unavailable.isEmpty())
-                rule.onAllNodesWithContentDescription(description, substring = false)
+                rule.onAllNodesWithContentDescription(description, substring = false, useUnmergedTree = true)
                     .fetchSemanticsNodes().size == 1
             }
         } catch (timeout: ComposeTimeoutException) {
-            throw AssertionError("The editor did not present an animated GIF preview", timeout)
+            val roots = rule.onAllNodes(isRoot(), useUnmergedTree = true).fetchSemanticsNodes()
+            val semantics = roots.indices.joinToString("\n") { index ->
+                rule.onAllNodes(isRoot(), useUnmergedTree = true)[index].printToString()
+                    .lineSequence().filter { entry ->
+                        "Description" in entry || "photo" in entry || "Photos" in entry ||
+                            "GIF" in entry || "Options" in entry || "Play" in entry
+                    }.take(40).joinToString("\n")
+            }
+            throw AssertionError("The editor did not present an animated GIF preview:\n$semantics", timeout)
         }
 
         // Use the actual tool collapse control before sampling the rendered frame.
