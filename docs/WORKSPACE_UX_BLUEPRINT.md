@@ -21,7 +21,7 @@ Regular and Pro serve different document workflows. Shared algorithms, file safe
 
 Official Photoshop documentation describes painting with controllable brush behavior, editable vector shapes/paths, masks, and editable adjustment layers. GIMP likewise treats blend as a layer/composition property. Those professional operations remain required.
 
-In GZ, **Paint** means painting a clearly identified paint layer or mask; **Vector shapes** means selecting and editing a separate shape/path object; **Adjustments** means a named adjustment object with visible stack/mask scope. Regular's Draw/Shapes remain photo decoration with their existing behavior. There is no requirement to duplicate Regular's whole photographic development presentation in Pro.
+In GZ, **Paint** means painting a clearly identified paint layer; the required later R3/P05/P08 mask-painting workflow must explicitly target a mask when implemented. U1 must not expose an unsupported mask-painting action or imply it already exists. **Vector shapes** means selecting and editing a separate shape/path object; **Adjustments** means a named adjustment object with visible stack/mask scope. Regular's Draw/Shapes remain photo decoration with their existing behavior. There is no requirement to duplicate Regular's whole photographic development presentation in Pro.
 
 For U1:
 
@@ -105,11 +105,13 @@ Reset keeps the current media and workspace open and removes the edits applied t
 | Context | Retained media/input | Neutral reset result |
 | --- | --- | --- |
 | Regular | Same photo/source identity, orientation and source grant | Empty development/creative recipe, neutral crop/geometry as source permits; preserve the current working identity. Existing undoable Regular behavior is protected. |
-| Pro | Every currently present imported image asset, stable IDs/order and creation canvas setup; no loss of a later-imported image merely because an old entry baseline predates it | Neutral image-edit/mask/blend/opacity/transform state using the recorded source-placement baseline; remove newly authored paint/vector/adjustment/effect content as one undoable transaction. No-source canvas remains a neutral canvas with its creation dimensions, unlike Delete's empty entry screen. |
+| Pro | Every currently present imported image asset, stable IDs/order and creation canvas setup; no loss of a later-imported image merely because an old entry baseline predates it | Neutral image-edit/mask/blend/opacity/transform state using the recorded source-placement baseline; remove all composition-authored paint, vector, adjustment, effect and legacy Text content in the active document, including content loaded from a named project, as one undoable transaction. Membership depends on native content kind and the source-bound baseline, never on whether it was created before or after opening this session. No-source canvas remains a neutral canvas with its creation dimensions, unlike Delete's empty entry screen. |
 | Parent Collage | All current photos, stable tile identities/order and creation layout/aspect | Neutral per-photo recipes and layout styling using the documented creation defaults; no photo removal or sibling identity merge. |
 | Selected Collage photo | That child photo/source only | Existing child-photo reset behavior; parent and siblings remain unchanged until Done. Display the photo target next to these contextual commands. This nested editor is not a separate Regular↔Pro bridge. |
 | GIF video/existing GIF | Same source and its neutral import timing/orientation/aspect baseline | Full import range, forward/default speed, neutral effects/framing/captions and source loop/timing defaults. Do not change source bytes or conflate the two source types. |
 | GIF photo sequence | All current source photos/frame IDs/order | Neutral frame edits, timing/loop/canvas defaults recorded for that sequence; no frame deletion. |
+
+An imported raster is an input asset; Reset cannot unpaint pixels baked into that source. Native paint/vector/adjustment/legacy Text records are authored edits and are removed from the active reset result, while Undo and unchanged named saves retain them. Linked native parent inputs are retained under the explicit rule below.
 
 Record these source-bound baselines in native/recovery storage. Legacy migration must preserve media and derive a valid baseline without silently resetting to a guessed or unrelated source. If it cannot, report the specific limitation and keep the work intact.
 
@@ -132,7 +134,7 @@ No mandatory **Resume existing / Start another / Yes bring / No blank** sequence
 
 ### Existing target and working-draft custody
 
-If the other workspace contains unrelated work, preserve it automatically as a distinct local working draft before replacing its active slot. Open project contains the Working drafts section; do not introduce another major command. A short status line can say previous work remains there. Named saved projects and working drafts must be visibly distinguished.
+If the other workspace contains unrelated work, preserve it automatically as a distinct local working draft before replacing its active slot. Open project contains the Working drafts section; do not introduce another major command. List only actual acknowledged recoverable roots, scoped to the applicable workspace/session; never list an in-memory placeholder as durable. U1 requires these roots for Regular/Pro, not completed all-workspace draft autosave. Other owners may show a section only for roots they can actually restore. A short status line can say previous work remains there. Named saved projects and working drafts must be visibly distinguished.
 
 Automatic private recovery checkpoints are durability, not a user-requested named project save. Bring must not create a named record, increment a named version, mark dirty work clean or require a save location. If required custody fails or its declared bound is exhausted, retain both originals and the route and report the failure. No silent eviction of dirty work.
 
