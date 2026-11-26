@@ -272,6 +272,7 @@ class AndroidRegularDepartureContractTest {
         }
     }
 
+    @U1FinalProbe
     @Test fun u1RepeatedBringKeepsNativeLayersAndAddsNoNamedRecord() {
         withEditor(realBridgeRoot = true) { fixture ->
             val namedPhotoBefore = requireNotNull(ProjectStore.listMetadata(fixture.context)).map { it.project }
@@ -336,6 +337,7 @@ class AndroidRegularDepartureContractTest {
         }
     }
 
+    @U1FinalProbe
     @Test fun u1ProStartedRepeatedBringKeepsEachNativeEditInFinalProNamedSave() {
         withEditor(realBridgeRoot = true) { fixture ->
             val name = "U1 mixed Pro " + System.nanoTime().toString().takeLast(10)
@@ -409,6 +411,7 @@ class AndroidRegularDepartureContractTest {
         }
     }
 
+    @U1FinalProbe
     @Test fun u1IdenticalDerivativeBytesDoNotReplayAnAlreadyLinkedRegularFinish() {
         withEditor(realBridgeRoot = true) { fixture ->
             val name = "U1 identical derivative " + System.nanoTime().toString().takeLast(10)

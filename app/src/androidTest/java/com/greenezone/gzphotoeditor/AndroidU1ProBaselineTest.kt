@@ -193,6 +193,7 @@ class AndroidU1ProBaselineTest {
         }
     }
 
+    @U1FinalProbe
     @Test fun everyBlendModeSurvivesNamedReopenAndDecodedPng() {
         // Independently evaluated sRGB blend equations for the two opaque fixture colors.
         val expectedCenter = mapOf(
