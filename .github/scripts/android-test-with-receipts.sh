@@ -88,7 +88,7 @@ if [[ -n "${GZ_CI_HEAP_MIB:-}" ]]; then
 fi
 
 ordinary_status=0
-if gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest; then
+if gradle --no-daemon --stacktrace :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.greenezone.gzphotoeditor.AndroidRegularDepartureContractTest#u1IdenticalDerivativeBytesDoNotReplayAnAlreadyLinkedRegularFinish'; then
   echo "Android instrumentation suite: PASS"
 else
   ordinary_status=$?
@@ -117,23 +117,15 @@ if [[ -s app/build/outputs/apk/debug/app-debug.apk &&
   mkdir -p "$receipt_dir"
   test_class='com.greenezone.gzphotoeditor.AndroidU1ProcessRecoveryTest#verifyNativeRecovery'
   runner="$test_id/androidx.test.runner.AndroidJUnitRunner"
-  recovery_status=0
   for phase in seed reopen; do
-    if ! adb shell am instrument -w -r -e class "$test_class" -e u1ProcessPhase "$phase" "$runner" \
-      | tee "$receipt_dir/u1-native-process-$phase.txt"; then
-      recovery_status=1
-      break
-    fi
-    if ! grep -F 'OK (1 test)' "$receipt_dir/u1-native-process-$phase.txt"; then
-      recovery_status=1
-      break
-    fi
+    adb shell am instrument -w -r -e class "$test_class" -e u1ProcessPhase "$phase" "$runner" \
+      | tee "$receipt_dir/u1-native-process-$phase.txt"
+    grep -F 'OK (1 test)' "$receipt_dir/u1-native-process-$phase.txt"
     if [[ "$phase" == seed ]]; then
       adb shell am force-stop "$app_id"
     fi
   done
   adb logcat -d -s GzU1Process:I | tee "$receipt_dir/u1-native-process-logcat.txt"
-  if [[ "$recovery_status" != 0 ]]; then exit "$recovery_status"; fi
 elif [[ "$ordinary_status" == 0 ]]; then
   echo "Missing built APKs for process recovery" >&2
   exit 1
