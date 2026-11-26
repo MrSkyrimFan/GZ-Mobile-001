@@ -61,6 +61,11 @@ The corrected v26 Open baseline produced all five intended failures independentl
 
 The independent Pro source reviewer verified at `e813f7a91b54befa3d680e773dc278135a0d6ecf` that the mode-keyed bitmap and rendering states isolate late finished output from native input and preserve the matching preview dimensions. The reviewed Save consumer preserves the captured baseline and binds the exact prior target without replacing current content or reauthorizing a canceled switch.
 
+[Corrected focused run 45907591692](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907591692) passed Verify and the selected Android suite on API29 and API35. It exercises the two physical shortcut cases, all five failed/canceled/stale Open cases, acquisition cancellation and exact-token collection controls, and the held inline Save after Cancel. The scoped test selection remains on its disposable branch. The full application candidate restores the unchanged unfiltered runner and independent process lane.
+- API29 [raw receipt 15159365857](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907591692/artifacts/15159365857) · `sha256:94824ced112627274fd99dd90f533d8592d691c8c2b4ddd8bc3d5e1a75d59f34`
+- API35 [raw receipt 15158349089](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907591692/artifacts/15158349089) · `sha256:72760ac9c237cdf2c2ca64d4e7eb7ed6668967e386b3263244e0ba06bb04de9d`
+
+
 ### Documentation review receipt
 
 Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.
