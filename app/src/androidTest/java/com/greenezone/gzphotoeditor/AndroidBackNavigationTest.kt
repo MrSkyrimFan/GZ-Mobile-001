@@ -407,7 +407,7 @@ class AndroidBackNavigationTest {
         rule.onNodeWithText("Shape layer 2 · Shape").assertIsDisplayed()
         rule.onNodeWithTag("workspace-tools").performClick()
         rule.onNodeWithText("Transform").performClick()
-        rule.onNodeWithText("Transform", substring = false).assertIsDisplayed()
+        rule.onNodeWithText("Transform · Shape layer 2", substring = false).assertIsDisplayed()
         rule.onNodeWithContentDescription("Undo").assertIsEnabled()
         rule.waitUntil(15_000) {
             rule.onAllNodesWithContentDescription("Pro editable composition")
@@ -443,7 +443,7 @@ class AndroidBackNavigationTest {
         pressBackThroughDispatcher()
         rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
         rule.onNodeWithText("Shape layer 2 · Shape").assertIsDisplayed()
-        rule.onNodeWithText("Transform", substring = false).assertIsDisplayed()
+        rule.onNodeWithText("Transform · Shape layer 2", substring = false).assertIsDisplayed()
         rule.onNodeWithContentDescription("Undo").assertIsEnabled()
         assertEquals(
             proViewport,

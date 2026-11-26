@@ -1160,13 +1160,20 @@ fun PhotoEditorScreen(
         if (!request.hasWork) launchNativeSwitch(request, bring = false)
     }
 
+    suspend fun revokeUnlinkedProRecovery(ownerId: String): Boolean = try {
+        withContext(Dispatchers.IO) { startupJournal.suppressNativeRestores(listOf(ExportWorkspace.PRO to ownerId)) }
+        true
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) { false }
+
     suspend fun revokeWorkingOwner(ownerId: String): Boolean {
-        val current = nativeActive ?: return true
+        val current = nativeActive ?: return revokeUnlinkedProRecovery(ownerId)
         val regularOwns = current.state.regular?.ownerId == ownerId
         val proOwns = current.state.pro?.let {
             (it.saveTarget.nativeOwnerId ?: (it.ownerId + "/" + it.saveTarget.workId)) == ownerId
         } == true
-        if (!regularOwns && !proOwns) return true
+        if (!regularOwns && !proOwns) return revokeUnlinkedProRecovery(ownerId)
         val catalog = when (val recovered = nativeStore.recover()) {
             is NativeWorkResult.Ok -> recovered.value
             is NativeWorkResult.Failed -> return false

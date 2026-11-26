@@ -43,6 +43,8 @@ The derivative used 7,680,000 bitmap bytes and about 4.49 MB compressed. The sam
 
 The first common presentation pass gives Regular and the Collage adapter the lower Tools location, and separates the current-work Delete from the named-project action. The replaced Regular named-delete labels in AndroidRegularToolsTest preserve its cancel, original hash, dirty draft and exact saved-project assertions.
 
+Root also owns the cross-workspace AndroidBackRotationTest, AndroidNativeDepartureReviewTest and PhotoFirstUiTest assertion migration. The changed expectations are the new source submenu, Paint/Shape/Tools target labels, and true Delete emptiness while the independent recovery recipe and existing motion/history assertions retain their scope.
+
 Production writer additions under the original ownership: `/root` owns the `RegularProSwitch.kt` host coordinator and inherited `AndroidBackNavigationTest.kt` / `AndroidRegularToolsTest.kt` assertion mapping; the custody writer owns `ProImageGeometry.kt` and `ProRaster.kt` for recorded source placement and shared finished composition rendering; the Collage/GIF writer owns native creation-layout baselines in `CollageModel.kt` / `CollageStore.kt` and the bounded saved-dialog identity in `GifProjectDialogs.kt`.
 
 ## Active owner correction — U1

@@ -74,12 +74,17 @@ class PhotoFirstUiTest {
                 )
             }
         }
+        rule.onNodeWithText("Options").performClick()
+        rule.onNodeWithText("New / Open media…").performClick()
+        rule.onNodeWithText("New canvas…").performClick()
         rule.onNodeWithText("+ Add layer").performClick()
         rule.onNodeWithText("Paint layer", substring = false).performClick()
+        rule.onNodeWithTag("workspace-tools").performClick()
+        rule.onNodeWithText("Layers", substring = false).performClick()
         rule.onNodeWithText("+ Add layer").performClick()
         rule.onNodeWithText("Words / Text").assertDoesNotExist()
         rule.onNodeWithText("Shape layer", substring = false).performClick()
-        rule.onNodeWithText("Vector shapes", substring = false).assertIsDisplayed()
+        rule.onNodeWithText("Vector shapes · Shape layer 2", substring = false).assertIsDisplayed()
         rule.runOnIdle {
             assertEquals(2, lastDocument.layers.size)
             assertEquals(com.greenezone.gzphotoeditor.editor.ProLayerKind.DRAWING,

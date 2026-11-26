@@ -33,14 +33,22 @@ class AndroidBackRotationTest {
         try {
             rule.onNodeWithContentDescription("Choose editing workspace").performClick()
             rule.onNodeWithText("Photo editing Pro").performClick()
+            rule.waitUntil(15_000) {
+                rule.onAllNodesWithText("Photo Pro ▾").fetchSemanticsNodes().isNotEmpty()
+            }
+            rule.onNodeWithText("Options").performClick()
+            rule.onNodeWithText("New / Open media…").performClick()
+            rule.onNodeWithText("New canvas…").performClick()
             rule.onNodeWithText("+ Add layer").performClick()
-            rule.onNodeWithText("Draw / Brush").performClick()
+            rule.onNodeWithText("Paint layer", substring = false).performClick()
+            rule.onNodeWithTag("workspace-tools").performClick()
+            rule.onNodeWithText("Layers", substring = false).performClick()
             rule.onNodeWithText("+ Add layer").performClick()
-            rule.onNodeWithText("Shape").performClick()
-            rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
-            rule.onNodeWithText("Tools ▾").performClick()
+            rule.onNodeWithText("Shape layer", substring = false).performClick()
+            rule.onNodeWithText("Shape layer 2 · Shape").assertIsDisplayed()
+            rule.onNodeWithTag("workspace-tools").performClick()
             rule.onNodeWithText("Transform").performClick()
-            rule.onNodeWithText("Transform ▴").assertIsDisplayed()
+            rule.onNodeWithText("Transform · Shape layer 2", substring = false).assertIsDisplayed()
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             rule.waitUntil(15_000) {
                 rule.onAllNodesWithContentDescription("Pro editable composition")
@@ -72,8 +80,8 @@ class AndroidBackRotationTest {
             }
 
             rule.onNodeWithText("Photo Pro ▾").assertIsDisplayed()
-            rule.onNodeWithText("Shape 2 · Shape").assertIsDisplayed()
-            rule.onNodeWithText("Transform ▴").assertIsDisplayed()
+            rule.onNodeWithText("Shape layer 2 · Shape").assertIsDisplayed()
+            rule.onNodeWithText("Transform · Shape layer 2", substring = false).assertIsDisplayed()
             rule.onNodeWithContentDescription("Undo").assertIsEnabled()
             assertEquals(
                 viewport,

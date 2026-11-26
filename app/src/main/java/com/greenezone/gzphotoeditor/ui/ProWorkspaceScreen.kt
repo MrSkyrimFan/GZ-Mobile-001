@@ -422,6 +422,7 @@ internal fun ProWorkspaceScreenContent(
         if (next == null) { notice = "A project supports up to 12 layers."; return }
         val creationSetup = document.sourceCanvasSetup ?: ProCanvasSetup.from(document)
         commit(next.copy(sourceCanvasSetup = creationSetup), resetDocument ?: ProDocument())
+        finishedOutput = false
         selectLayer(next.layers.lastIndex)
         expanded = true
         section = when (layer.kind) {
@@ -2033,7 +2034,8 @@ internal fun ProWorkspaceScreenContent(
                     expanded = expanded && hasWork,
                     onOpenTools = { showTools = true },
                     onToggleExpanded = { expanded = !expanded },
-                    target = if (hasWork) section.title else "No Pro work loaded",
+                    target = if (hasWork) listOfNotNull(section.title, active?.name).joinToString(" · ")
+                        else "No Pro work loaded",
                     enabled = available && hasWork
                 )
             }
