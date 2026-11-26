@@ -1,6 +1,6 @@
 # Workspace interaction and tool-ownership blueprint
 
-Status: **required behavior for the next authorized correction wave; not an implementation-complete claim**.
+**Status:** Controlling workspace behavior. PR #46 engineering-qualifies U1, with the focused owner handset confirmation and wider family exits still open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 Updated November 25, 2026 (America/Denver), following the [0.12.13 owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md).
 
 This is the detailed interaction contract under [PRODUCT_SPEC](PRODUCT_SPEC.md), not a second roadmap. [GZ_ENGINEERING_ROADMAP](GZ_ENGINEERING_ROADMAP.md) preserves all 77 families; [WORK_LEDGER](WORK_LEDGER.md) alone orders execution. Latest direct owner instructions control. Historical blueprints, CQ answers and receipts remain evidence except for the specifically superseded interaction clauses named below.

@@ -1,6 +1,6 @@
 # GZ Editor Pro engineering and release gates
 
-> **Current work — November 25, 2026.** Qualified application: [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43), **0.12.13 Test / code 25 / phonetest.v25**, app merge **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**; candidate and merge each passed JVM/build/signing and **279/279 on API29 and API35**. The [latest owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and opens the Pro blend/tool-ownership, shared controls, Delete/Reset and symmetric switching corrections. **U1 is next**, including its minimum R1.2/S06 custody dependency; the full remaining roadmap is preserved. B2 numeric/F03 workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [Execution ledger](WORK_LEDGER.md#next-engineering-action--u1-coherent-workspace-workflow).
+> **Current work — November 25, 2026.** [PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46) qualifies **0.12.14 Test / code 26 / phonetest.v26** for focused handset confirmation. Application merge **e6321322526521ace13a45c231b25bb08f91c565** and candidate each passed JVM/build/signing and **303/303 on API29 and API35**, with separate force-stop and new-process native recovery on each API. **Remaining R1.2 is the next engineering package.** B2 numerical and F03 matched-workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
 ## Latest owner evidence and U1 correction gate
 
@@ -9,11 +9,11 @@ The [0.12.13 phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) 
 - [x] Latest owner report received; unmentioned supplied phone checks credited with their actual scope.
 - [x] Earlier A1 25/50 exchange, owner relay and required reads completed. No new alignment questionnaire or activation hold.
 - [x] R1.1/RV4 and inherited B1 follow-up retain their exact candidate/merge engineering receipts.
-- [ ] U1-01: all advertised Pro blend choices work through actual pointer input, correct target/property/history/native reopen and independently decoded output; explicit no-backdrop/busy/scroll/stale cases.
-- [ ] U1-02: Regular photographic and Pro layer/mask/vector/paint/adjustment workflows have clear distinct roles; no duplicate generic development deck; legacy capabilities and saved data remain intact.
-- [ ] U1-03: common anchored Tools/Options/Undo-Redo and context layout across empty/loaded/busy current workspaces; one major command home; distinct Delete and undoable retained-media Reset, including child/GIF ownership and no resurrection.
-- [ ] U1-04: one four-choice Regular↔Pro surface both directions, no named Save for Bring, no Resume/Yes-No cascade, displaced drafts safe, real native repeated exchange, final linked Save from either mode and cold reopen after new-process loss.
-- [ ] U1-05: complete changed-candidate and exact app-merge JVM/API29/API35/build/signing qualification, inherited-assertion mapping, independent review, failure receipts and exact APK identity; followed by the focused owner run.
+- [x] U1-01 engineering: all advertised Pro blend choices work through actual pointer input, correct target/property/history/native reopen and independently decoded output; explicit no-backdrop/busy/scroll/stale cases.
+- [x] U1-02 engineering: Regular photographic and Pro layer/mask/vector/paint/adjustment workflows have clear distinct roles; no duplicate generic development deck; legacy capabilities and saved data remain intact.
+- [x] U1-03 engineering: common anchored Tools/Options/Undo-Redo and context layout across empty/loaded/busy current workspaces; one major command home; distinct Delete and undoable retained-media Reset, including child/GIF ownership and no resurrection.
+- [x] U1-04 engineering: one four-choice Regular↔Pro surface both directions, no named Save for Bring, no Resume/Yes-No cascade, displaced drafts safe, real native repeated exchange, final linked Save from either mode and cold reopen after new-process loss.
+- [x] U1-05 engineering: exact candidate/merge JVM/API29/API35/build/signing, inherited-assertion mapping, independent review, failure receipts and exact APK identity. The focused owner run stays open below.
 - [ ] B2 numeric/matched-sample and F03 quantitative phone-workload closure; no new measurements supplied by the latest generic pass.
 - [ ] RV5 stage/retry recovery and the full remaining R1–R11/device/owner/release gates.
 
@@ -43,7 +43,11 @@ Historical tests using removed File/More/Histogram, old Yes/No/Resume or reset-a
 A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. After the owner relays the U1 handoff, engineering continues independent authorized work. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
 
 
-## Current engineering qualification — PR #43 / 0.12.13 Test
+## Current engineering qualification — PR #46 / 0.12.14 Test
+
+U1 candidate and same-tree app merge passed JVM/build/signing, the full API29/API35 suites and separate true new-process recovery on both APIs. Focused owner handset confirmation is open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
+
+## Retained R1.1 and RV4 qualification — PR #43 / 0.12.13 Test
 
 Regular saved-project migration, metadata listing, selected Open and Pro unreadable deletion have bounded engineering qualification. The latest unmentioned supplied phone checks are credited. Physical same-ID migration, broader device cases, quantitative B2/F03 and formal workspace/release gates retain separate evidence requirements. See the [exact R1.1 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
 
@@ -53,7 +57,7 @@ Regular saved-project migration, metadata listing, selected Open and Pro unreada
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next engineering package is U1: coherent workspace workflow.** The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) select working Pro blend controls, distinct photographic/layered workflows, common control anchors, Delete versus Reset and one four-choice Regular↔Pro switch. Bring requires a minimum durable Regular/Pro working-session and native-lineage slice from R1.2/S06. Remaining R1.2/R1 and every R2–R11 child remain required. R1.1/RV4 qualification, all 77 families, four locks before Video, all-five acceptance before final bilingual onboarding and app plus website before Console are retained.
+**Next engineering package is the remainder of R1.2.** U1 qualifies its minimum Regular/Pro acknowledged draft custody and linked native save, alongside the named workspace controls. Remaining R1.2/R1 and all R2–R11 children are required. Four owner locks precede Video, all five editing acceptances precede final bilingual onboarding, and the qualified app plus finished website precede Play Console setup.
 
 The detailed B1 checklist above retains its complete product/owner scope. Executed fixture results support the bounded engineering claims in the receipt. In particular, 320dp/200% font and touch tests do not replace real TalkBack/keyboard or broader device acceptance. B2 numerical misses are not waived by B1 delivery.
 

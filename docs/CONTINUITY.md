@@ -1,6 +1,6 @@
 # GZ Editor Pro — continuity / engineering custody
 
-> **Current work — November 25, 2026.** Qualified application: [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43), **0.12.13 Test / code 25 / phonetest.v25**, app merge **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**; candidate and merge each passed JVM/build/signing and **279/279 on API29 and API35**. The [latest owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and opens the Pro blend/tool-ownership, shared controls, Delete/Reset and symmetric switching corrections. **U1 is next**, including its minimum R1.2/S06 custody dependency; the full remaining roadmap is preserved. B2 numeric/F03 workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [Execution ledger](WORK_LEDGER.md#next-engineering-action--u1-coherent-workspace-workflow).
+> **Current work — November 25, 2026.** [PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46) qualifies **0.12.14 Test / code 26 / phonetest.v26** for focused handset confirmation. Application merge **e6321322526521ace13a45c231b25bb08f91c565** and candidate each passed JVM/build/signing and **303/303 on API29 and API35**, with separate force-stop and new-process native recovery on each API. **Remaining R1.2 is the next engineering package.** B2 numerical and F03 matched-workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
 ## Latest owner direction — U1 workspace correction
 
@@ -8,11 +8,11 @@ The latest [0.12.13 owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-1
 
 Start with [PRODUCT_SPEC](PRODUCT_SPEC.md), [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md), the [single work ledger](WORK_LEDGER.md), [single roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family matrix](CAPABILITY_MATRIX.md), [release gates](RELEASE_GATE.md) and the [U1 handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md). Root AGENTS.md requires Codex to reconcile its actual applicable project-local instructions to these exact committed contracts before application edits.
 
-Qualified application remains **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**, 0.12.13 Test/code25, with candidate/merge 279/279 per API29/API35 and JVM/build/signing. Documentation intake is **598ae126b7c722bdccfcbdef5d5ce989d1677786**. [R1.1/RV4 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4) retains all raw failures, timings and APK identity. The new owner failure is not waived by those passes.
+Qualified U1 application **e6321322526521ace13a45c231b25bb08f91c565** uses candidate **95929d3a292101de0bd7ceaa0c831ca9737c67cc** and the same verified tree. The v25 baseline and original failure evidence remain in the ledger. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
 A1's 25 answers/50 questions/50 answers and activation are complete historical records. U1 expressly supersedes old mandatory Yes/No/Resume and fourth-choice prohibition, reset-as-Delete, one-way-only live transfer and copied generic Pro tool presentation. Preserve unaffected child/save/cancel/async/source protections. Do not repeat intake or re-read all frozen appendices merely to dispatch a correction.
 
-**Current work is U1**, with only its necessary Regular/Pro R1.2/S06 draft/lineage slice brought forward. Remaining R1.2/R1 and all R2–R11 children stay required. Full native Save after repeated exchange, genuine process loss and source custody cannot be replaced by a transient screenshot or in-memory old stack.
+**Remaining R1.2 is next.** U1 qualified the minimum Regular/Pro native custody required for Bring and linked Save. Full all-workspace recovery, history and source/provider custody remain required, along with the other R1 and R2–R11 children. [Current execution order](WORK_LEDGER.md#next-engineering-action--remaining-r12).
 
 GIF controls receive the stated bounded phone pass credit. B2's recorded numeric misses and F03 quantitative/matched-workload evidence remain open because no new measurements were supplied. RV5 stage/retry recovery and broader device evidence are separate. Four explicit locks still precede Video; all-five editing acceptance precedes final bilingual onboarding; app and Greenezone website precede Console. Publication requires explicit owner approval.
 
@@ -22,7 +22,7 @@ New documents and handoffs stay in this repository, without local copies or SSD/
 
 **Previously qualified application:** PR #31 is merged at `3ad65c533f7667a136d4fa1838afcc06d3f484da`, with tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`, identical to the qualified candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0`. Candidate run 45480001019 and merged-main run 45483297512 each pass JVM/build/signing and **193/193 Android cases per API29/API35**, zero failures/errors/skips. That historical combined phone build was **0.12.10 Test / code 22 / phonetest.v22**. [Exact source, raw receipts, APK and phone script](ERASER_REPAIR_VERIFICATION.md).
 
-Lance explicitly authorized these repository fixes after the independent PR #29 review. R29-01/R29-02 Eraser geometry/capacity corrections and the observed GIF Save performance correction are engineering-verified. The prior original four R0 repairs remain credited. The old 0.12.9 delivery hold is superseded by the qualified replacement. The latest phone report above supplies scoped owner-reported passes and named exceptions; all formal workspace/release gates remain open. Follow [WORK_LEDGER](WORK_LEDGER.md) for owner-relayed activation and the agreed correction sequence. R1.1 was subsequently qualified; current U1 and remaining R1.2 ordering is recorded above. Do not restart the completed repair intake without a named new failure.
+Lance explicitly authorized these repository fixes after the independent PR #29 review. R29-01/R29-02 Eraser geometry/capacity corrections and the observed GIF Save performance correction are engineering-verified. The prior original four R0 repairs remain credited. The old 0.12.9 delivery hold is superseded by the qualified replacement. The latest phone report above supplies scoped owner-reported passes and named exceptions; all formal workspace/release gates remain open. Follow [WORK_LEDGER](WORK_LEDGER.md) for owner-relayed activation and the agreed correction sequence. R1.1 was subsequently qualified; U1 qualification and remaining R1.2 ordering is recorded above. Do not restart the completed repair intake without a named new failure.
 
 A later documentation-only `main` commit may contain this reconciliation. The app/test/Gradle/CI inputs qualified here belong to the exact application commit above; documentation changes do not create a newly tested APK.
 
@@ -52,7 +52,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 - Single authorized repo: `MrSkyrimFan/GZ-Mobile-001`.
 - Baseline GZ Editor Pro 0.6 merge: `2a0f11b7eef2c5b42e5f569890b694a1dd7ba265`.
 - Historical 0.7 engineering branch: `feature/gz-editor-pro-creation-export-07`.
-- Production application ID: `com.greenezone.gzphotoeditor`; current separate phone-test package: `com.greenezone.gzphotoeditor.phonetest.v25`, 0.12.13 Test/code25. Target Android 10+, compile/target SDK36. A separate test installation is not same-ID upgrade proof.
+- Production application ID: `com.greenezone.gzphotoeditor`; current separate phone-test package: `com.greenezone.gzphotoeditor.phonetest.v26`, 0.12.14 Test/code26. Target Android 10+, compile/target SDK36. A separate test installation is not same-ID upgrade proof.
 - Retail target $2.99 one-time. Offline editing without runtime AI, ads, watermarks, in-app purchases, subscriptions, tracking or remote services.
 
 ## Architecture
