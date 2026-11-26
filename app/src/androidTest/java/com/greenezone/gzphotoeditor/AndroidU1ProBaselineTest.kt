@@ -37,6 +37,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /** Reproduces owner-reported paths on the unmodified Pro workspace. */
+@U1BaselineProbe
 @RunWith(AndroidJUnit4::class)
 class AndroidU1ProBaselineTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()

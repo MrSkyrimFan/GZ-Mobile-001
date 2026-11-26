@@ -27,6 +27,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /** Numeric reference measurements on the existing app; the bridge and its acknowledgement do not exist here. */
+@U1BaselineProbe
 @RunWith(AndroidJUnit4::class)
 class AndroidU1NativeCustodyBaselineTest {
     @Test fun measureNativeNamedStoresAndLosslessDerivative() {

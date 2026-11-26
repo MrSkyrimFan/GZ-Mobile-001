@@ -235,6 +235,7 @@ class AndroidRegularDepartureContractTest {
         return requireNotNull(ProjectStore.loadNamed(fixture.context, name))
     }
 
+    @U1BaselineProbe
     @Test fun u1RegularToProOffersOneFourChoiceSurfaceAndCancelKeepsTheEdit() {
         withEditor { fixture ->
             openPhoto(fixture)
@@ -252,6 +253,7 @@ class AndroidRegularDepartureContractTest {
         }
     }
 
+    @U1BaselineProbe
     @Test fun u1RegularOptionsSeparateDeleteFromResetAndKeepNamedProject() {
         withEditor { fixture ->
             openPhoto(fixture)
