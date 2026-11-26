@@ -55,6 +55,8 @@ Production writer additions under the original ownership: `/root` owns the `Regu
 - [gz-editor-pro-emulator-api29-receipts 15081401746](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45740110835/artifacts/15081401746) · `sha256:388fbbe0364655c06534440495970d41321aaea12e37c5f0efdf5519034061a7`
 - [gz-editor-pro-emulator-receipts 15081127835](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45740110835/artifacts/15081127835) · `sha256:5c1053812f76c89cde406bdc1f75d1c2be5edd7751ab0200776f4a51b628b8f1`
 
+[Verify 45741814036](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45741814036) stopped during Android test compilation after a test-only selection annotation was carried into the engineering version of the Pro test. Removed only that marker and kept all recorded assertions. The targeted runner now checks that input classes contain no prior marker before it applies selection.
+
 ## Active owner correction — U1
 
 The [0.12.13 owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied phone instructions 1–5. O25-01–O25-06 authorize specific blend/input, Pro tool-ownership, shared-control, Delete/Reset and bidirectional transfer corrections. [PRODUCT_SPEC](PRODUCT_SPEC.md) and [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md) replace conflicting old interaction rules. This docs-only reconciliation does not implement the fixes or change the qualified APK.
