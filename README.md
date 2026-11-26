@@ -1,12 +1,12 @@
 # GZ Editor Pro
 
-> **Current work — November 25, 2026.** Qualified application: [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43), **0.12.13 Test / code 25 / phonetest.v25**, app merge **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**; candidate and merge each passed JVM/build/signing and **279/279 on API29 and API35**. The [latest owner phone report](docs/coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and opens the Pro blend/tool-ownership, shared controls, Delete/Reset and symmetric switching corrections. **U1 is next**, including its minimum R1.2/S06 custody dependency; the full remaining roadmap is preserved. B2 numeric/F03 workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [Execution ledger](docs/WORK_LEDGER.md#next-engineering-action--u1-coherent-workspace-workflow).
+> **Current work — November 25, 2026.** [PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46) qualifies **0.12.14 Test / code 26 / phonetest.v26** for focused handset confirmation. Application merge **e6321322526521ace13a45c231b25bb08f91c565** and candidate each passed JVM/build/signing and **303/303 on API29 and API35**, with separate force-stop and new-process native recovery on each API. **Remaining R1.2 is the next engineering package.** B2 numerical and F03 matched-workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [U1 qualification receipt](docs/WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-**Current engineering and phone status:** PR #43 qualifies 0.12.13 Test/code25 and R1.1/RV4. The owner reports unmentioned supplied phone checks 1–5 passed and identifies specific Pro blend/input and workflow problems. [Owner report](docs/coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md). A new test count or this documentation update does not resolve those findings.
+**Current engineering and phone status:** PR #46 qualifies the U1 correction wave for focused handset confirmation. The earlier owner-reported passes retain their scope, and the 0.12.13 report documents the original exceptions. [Owner report](docs/coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md).
 
-**Next: U1 coherent workspace workflow.** Fix usable blend controls, distinct photography/layered tool roles, common control placement, Delete versus Reset, and symmetric Regular↔Pro Bring without a named Save. Include only its necessary durable draft/native-lineage dependency; complete remaining R1.2/R1 and all R2–R11 afterward. B2 numeric/F03 matched-workload gaps, RV5, broad device and formal owner/release gates remain open.
+**Next engineering package is the rest of R1.2.** Complete the remaining acknowledged recovery, history, source and child custody work after U1's live Regular/Pro slice. All R1–R11 obligations remain in the single roadmap.
 
 [Product requirements](docs/PRODUCT_SPEC.md) · [Workspace blueprint](docs/WORKSPACE_UX_BLUEPRINT.md) · [Codex handoff](docs/coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md) · [Single roadmap](docs/GZ_ENGINEERING_ROADMAP.md) · [77-family inventory](docs/CAPABILITY_MATRIX.md) · [Work ledger](docs/WORK_LEDGER.md) · [Release gates](docs/RELEASE_GATE.md).
 
@@ -16,7 +16,7 @@
 - All edits are parameters in saved local project snapshots; previous projects remain decodable.
 - Compact image-first interface with a consistent shared header, Undo/Redo arrow icons and one top-right Options dropdown for major file/help commands. The agreed common-chrome contract has bounded B1 engineering qualification; historical UI descriptions below describe earlier builds. Keep tool-specific controls, tap-to-hide behavior and the company footer without duplicate major command locations.
 - Preserve the existing Regular photo adjustments, Looks, color, curves, Text, Blur & cover, crop and export. Regular and Collage tile editing have no Masks authoring. Older saved masks must continue to render and round-trip. Pro owns selection and masking, and preserves legacy Text layers without Text authoring.
-- Regular↔Pro uses one Discard / Save current work / Bring current work / Cancel surface. Bring carries current edits and editable native lineage without a named Save; Save succeeds then opens blank, Discard opens blank, Cancel changes nothing. This required U1 behavior replaces the old Yes/No/Resume flow and is not yet an implemented claim.
+- Regular↔Pro uses one Discard / Save current work / Bring current work / Cancel surface. Bring carries current edits and editable native lineage without a named Save; Save succeeds then opens blank, Discard opens blank, Cancel changes nothing. PR #46 qualifies this workflow for focused handset confirmation.
 
 > **Historical version notes below:** descriptions of File/More, earlier tool placement, old transfer rules, limits and prior next actions are dated evidence. Current PRODUCT_SPEC/WORKSPACE_UX_BLUEPRINT and the ledger supersede conflicting directions. The completed historical stages are not new dispatch gates.
 
@@ -78,7 +78,7 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 - All creative layers are composited in preview/export after privacy redaction; no branding, timestamp or watermark added to the exported photo.
 
 ## Limits and safeguards
-- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36. The production application ID is `com.greenezone.gzphotoeditor`; versioned phone-test builds use a separate suffix, currently `com.greenezone.gzphotoeditor.phonetest.v25`. Their local project storage is separate.
+- Android 10+ (API29), JDK17, Kotlin/Compose, Gradle9.6, compile/target API36. The production application ID is `com.greenezone.gzphotoeditor`; versioned phone-test builds use a separate suffix, currently `com.greenezone.gzphotoeditor.phonetest.v26`. Their local project storage is separate.
 - Renderer uses 8-bit sRGB, not a RAW/16-bit managed photo pipeline. New TIFF is uncompressed 8-bit RGB, not 16-bit.
 - Social dimensions are practical composition presets, **not guarantees of platform acceptance**, safe-area rules or uploaded file size. Platforms may change their policies.
 - Export presets may upscale lower-resolution source photos; this cannot recover missing detail. Fit can add margins; Fill can crop. The user selects explicitly.
@@ -88,9 +88,9 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 
 ## Build and test
 
-The [qualified application commit b0f0d0e5](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/b0f0d0e5e2d879ddddedede442ba92ef30b69a78) matches the PR #43 candidate application tree. [Merged verification](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45720375226) passed JVM/build/signing and 279/279 on both Android API29 and API35. U1 owner findings remain open; this is the retained baseline, not a corrected U1 download.
+The [qualified application commit e6321322](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/e6321322526521ace13a45c231b25bb08f91c565) matches the PR #46 candidate tree. [Merged verification](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847) passed JVM/build/signing and 303/303 on each Android API. See the [U1 qualification receipt](docs/WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
-[Download the merged API35 phone APK ZIP](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45720375226/artifacts/15073420431). Extract `app-debug.apk` for **GZ Editor Pro 0.12.13 Test**, code 25, `com.greenezone.gzphotoeditor.phonetest.v25`, Android 10+. Each package has separate project storage. See the [exact R1.1 receipt](docs/WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4).
+[Download the merged API35 phone APK ZIP](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847/artifacts/15085954966). Extract and install the single APK for **GZ Editor Pro 0.12.14 Test**, code 26, `com.greenezone.gzphotoeditor.phonetest.v26`, Android 10+. Its versioned package keeps separate local project storage.
 
 See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`.
 

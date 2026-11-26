@@ -1,6 +1,6 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 25, 2026.** Qualified application: [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43), **0.12.13 Test / code 25 / phonetest.v25**, app merge **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**; candidate and merge each passed JVM/build/signing and **279/279 on API29 and API35**. The [latest owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and opens the Pro blend/tool-ownership, shared controls, Delete/Reset and symmetric switching corrections. **U1 is in engineering preflight**, including its minimum R1.2/S06 custody dependency; the full remaining roadmap is preserved. B2 numeric/F03 workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [Execution ledger](WORK_LEDGER.md#next-engineering-action--u1-coherent-workspace-workflow).
+> **Current work — November 25, 2026.** [PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46) qualifies **0.12.14 Test / code 26 / phonetest.v26** for focused handset confirmation. Application merge **e6321322526521ace13a45c231b25bb08f91c565** and candidate each passed JVM/build/signing and **303/303 on API29 and API35**, with separate force-stop and new-process native recovery on each API. **Remaining R1.2 is the next engineering package.** B2 numerical and F03 matched-workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
 ## U1 owner relay and execution alignment
 
@@ -84,11 +84,79 @@ An additional independent review of the revised checkpoint identified a selectio
 
 [Checkpoint diagnostic 45748642589](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45748642589) passed Verify and both separate seed/force-stop/reopen lanes with the same application checkpoint logic and retained edit/selection assertions. The diagnostic API35 observed a captured checkpoint lose ownership when selection changed, followed by the restarted checkpoint publishing revision 9 to the exact newly named Pro root. The diagnostic log instrumentation stays on the disposable branch. Full candidate and merge run the same required assertions without the diagnostic log lines.
 
-## Active owner correction — U1
+## Completed U1 — coherent workspace workflow
 
-The [0.12.13 owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied phone instructions 1–5. O25-01–O25-06 authorize specific blend/input, Pro tool-ownership, shared-control, Delete/Reset and bidirectional transfer corrections. [PRODUCT_SPEC](PRODUCT_SPEC.md) and [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md) replace conflicting old interaction rules. This docs-only reconciliation does not implement the fixes or change the qualified APK.
+[GPT-6 Pro independent review handoff](coordination/GPT_6_PRO_U1_IMPLEMENTATION_HANDOFF_2026-11-25.md).
 
-**Status: Unchanged-app reproduction and resource baseline complete. Scoped implementation in progress.** Three independent documentation-review scopes approved the clarified behavioral contract at **9514b574a859ef547ec4a854cb23806cf24e0df8**. They checked blend/tool roles, navigation/custody, and full product/instruction scope; their exact findings/dispositions and pinned reads are in the handoff. All77 IDs and R2–R11 child scope remain; only Markdown changes, with no app build/test rerun. The next decisive action is the exact-baseline reproduction and project-instruction alignment in the [finite Codex handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md). No new 25/50 cycle or full historical audit.
+[Application PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46) qualifies 0.12.14 Test / code 26. Candidate `95929d3a292101de0bd7ceaa0c831ca9737c67cc` and application merge `e6321322526521ace13a45c231b25bb08f91c565` share the exact complete tree `e15ba826d15cfb42449461f2528718e9efca5819`. Compare [the retained v25 app to the qualified U1 app](https://github.com/MrSkyrimFan/GZ-Mobile-001/compare/b0f0d0e5e2d879ddddedede442ba92ef30b69a78...e6321322526521ace13a45c231b25bb08f91c565).
+
+| Head | JVM/build/signing | Full Android |
+| --- | --- | --- |
+| [Candidate](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/95929d3a292101de0bd7ceaa0c831ca9737c67cc) | [push Verify](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45749303161/job/139673021685) and [PR Verify](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45749309506/job/139672991950) | [run 45749303161](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45749303161) · 303/303 on API29 and API35 |
+| [Application merge](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/e6321322526521ace13a45c231b25bb08f91c565) | [merged Verify](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847/job/139681255486) | [run 45751851847](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847) · 303/303 on API29 and API35 |
+
+Every Android ordinary suite has zero failures, errors, skips and duplicates. All 279 inherited case identities remain, and 24 new identities are present. Both heads and both APIs share the sorted LF-joined case identity SHA-256 `cf4ccb11cfc6d38dfd82318cab74e5e9074c0e7dd4740c2d84685b96d75084df`. The raw archives retain the complete XML inventory.
+
+[Superseded full run 45744390242](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45744390242) passed Verify at 14ff9ea9cc76be68a48bb18ba0572fff738099ee. The expanded verification head superseded both Android jobs while ordinary tests were in progress. Its two partial archives contain no completed XML or process proofs and receive no qualification credit.
+
+[Isolated GIF diagnostic 45750952927](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45750952927) passed the exact red/blue preview, named save/reopen, identity and timing assertions on both APIs with the v2 Compose test rule and an unmerged preview query. Its temporary tracing confirmed the same application renderer published the frame. Earlier isolated legacy-rule receipts time out before observing the preview and remain available. The qualified full suites with the actual shipped app inputs pass the retained assertion on both APIs. [API29 diagnostic receipt](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45750952927/artifacts/15085577475) · [API35 diagnostic receipt](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45750952927/artifacts/15085617797).
+
+#### Actual forced-stop and named recovery
+
+On each API and each head, the runner installed the exercised APK, cleared data for the dedicated fixture, ran one seed, force-stopped the app, and ran one reopen. Each seed and each reopen reported `OK (1 test)` independently of the ordinary suite counts. The new PID launched the actual MainActivity and recovered the selected native root within the pinned limits. It retained 35 logical Regular Undo positions, two Pro linked finishes after Bring, one parked draft and two exact named identities, and rejected retirement resurrection. It reopened both named saves through their own Options, performed an independent native-layer visibility edit on each, and checked the exact named versions and independent retry record.
+
+| Evidence lane | ZIP and SHA-256 | Seed PID → reopened PID | Cold MainActivity recovery | Sampled managed heap increase |
+| --- | --- | --- | ---: | ---: |
+| Candidate API29 | [receipt 15085910573](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45749303161/artifacts/15085910573) `sha256:1ef092f8b5ac5db9b3c78e3a170aa90ed9f73aca71e85bc418e3765c7562883b` | 18384 → 18429 | 1598 ms | 8.04 MiB |
+| Candidate API35 | [receipt 15085334133](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45749303161/artifacts/15085334133) `sha256:c30f2df2cb4418cf877b1431b9b76d206672ca412e93d5d6a424c28ac232bdb3` | 9246 → 9285 | 1912 ms | 10.96 MiB |
+| App merge API29 | [receipt 15086148186](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847/artifacts/15086148186) `sha256:2a0e0364a9223f224dc345535056eeb071e5c7c5dc9d533168f75f7d52eb7119` | 18848 → 18894 | 897 ms | 9.51 MiB |
+| App merge API35 | [receipt 15086916614](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847/artifacts/15086916614) `sha256:f4b84944144d9fed644be9c53450f101fcd9496451e0459491546820944f936b` | 9242 → 9287 | 1452 ms | 9.97 MiB |
+
+#### Inherited R1.1 timing and storage
+
+All four lanes retain zero recipe decodes and zero legacy preference accesses per list, and exactly one decode per selected open. Each table value is the maximum across the cold and three warm measurements where applicable. The heap observation uses the before/after values and any samples taken while the operation runs. All recorded timings and observed managed heap increases meet the original list, selected-open and migration bounds.
+
+| Lane | List ms / MiB | Selected Open ms / MiB | Warm selected median ms | Migration ms / MiB |
+| --- | ---: | ---: | ---: | ---: |
+| Candidate API29 | 3.07 / 0.41 | 149.78 / 47.74 | 148.77 | 2038.33 / 45.54 |
+| Candidate API35 | 2.77 / 0.30 | 219.27 / 27.94 | 201.65 | 2972.27 / 33.37 |
+| Merge API29 | 1.85 / 0.41 | 100.07 / 23.83 | 98.58 | 1653.18 / 38.90 |
+| Merge API35 | 2.49 / 0.30 | 546.62 / 53.62 | 192.48 | 3004.47 / 42.92 |
+
+#### Instrumentation and review disposition
+
+- All 16 real pointer choices bind one selected layer and one changed-value history entry. Independent sRGB equations cover all 16 preview and final raster outputs. A separate named Save/reopen and independent PNG decode covers each mode. An actual Multiply UI case spans busy guard, pointer, named reopen and destination file. The hidden and transparent-bottom named red cases are retained as regression assertions.
+- Shared-header and Options fixtures cover narrow double-font layout, 48dp control reach, distinct command dispatch and parent Collage insets. Typed Pro targets cover Paint, Vector shapes, and masked adjustments. Regular keeps its photographic controls and the existing legacy Pro recipes remain readable.
+- Parent/child Collage, photo-sequence GIF and video/imported GIF regression tests preserve media through undoable Reset and verify true clear, exact tile/frame identity, late picker rejection and independent retry custody. The real held provider-copy test verifies Delete is unavailable during COPY and that the provider finishes with the staged bytes.
+- The mixed-workflow cases assert the four-choice route, cancel, inline Save in both directions and no extra named records for Bring. Actual Regular-start and Pro-start edited loops Save from both modes and verify the named native parent, its shape data and the linked Regular finish recipes. The dedicated force-stop lane independently verifies the exact saved and working roots, logical Undo, named UI opens and post-Open native edits.
+- Independent Pro code review found work visible before native acknowledgment, stale host/Pro identities, recipe resurrection after Delete, dirty Regular companion misreporting, incompatible linked geometry, and prepared-stage leaks. Those seams now require durable acknowledgment, use exact work keys, suppress only retired editor resurrection while preserving retry, maintain companion cleanliness, guard incompatible geometry, and release the exact returned stages. Independent Collage/GIF review confirmed the stable child-to-parent Delete transaction and separate copy/retry owner. The raw red runs, focused failures and exact dispositions above are retained.
+- Existing method IDs whose wording reflects the previous behavior remain traceable. Updated assertions follow the explicitly superseded Options/media labels, real Delete, and four-choice switch. Historical safety assertions for exact references, earlier named saves, originals, cancel, child transactions, selection and stale callbacks remain.
+
+#### Sole U1 handset artifact
+
+[Download merged API35 phone APK ZIP 15085954966](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847/artifacts/15085954966). Extract and install its single APK on Android 10 or later. This is the side-by-side test package `com.greenezone.gzphotoeditor.phonetest.v26`, version `0.12.14`, code 26, display name **GZ Editor Pro 0.12.14 Test**, min SDK 29 and target SDK 36. Each phone-test ID keeps its own working and named project storage.
+
+| Merged APK property | Verified value |
+| --- | --- |
+| File size | 34,374,380 bytes |
+| APK SHA-256 | `f2ce7fbd2b3c69c107749ba9a419f389a673a1098a8cc22979c9d860b72ac7ee` |
+| Archive SHA-256 | `a669238751a4c4e42fc26e34c41d692ed0d72a2eaf329b91fae61ca010348b4d` |
+| Android v2 signer certificate SHA-256 | `19726dc1336f784ed9f03251d4e7b44821f1565d3e01604e8fbb7b965e202f9c` |
+
+The APK manifest and v2 signer content digests and signatures were independently verified from artifact bytes. The candidate signing check also passed, with APK SHA-256 `b83c9ace4433b7edaa93f41956e7eee4a7d1d6a571596aeadca3cdd3c2df803f`. The merged artifact alone is delivered for handset confirmation. Physical same-ID upgrade and production-key acceptance remain separate.
+
+#### Focused owner confirmation
+
+1. In Pro, overlap two contrasting layers and select the upper one. Try the previously affected modes and Restore Normal. Check the selected value, Undo/Redo, and a visible change where there is suitable overlap.
+2. Visit Regular, Pro, Collage and GIF. Check shared control positions and the distinct Regular photography and Pro layer tools. In disposable work, Reset and Undo, then Delete. Media should survive Reset, and Delete should clear the active work while an earlier named project remains available. Include an affected Collage photo child.
+3. Edit in Regular, Bring to Pro, add or edit a layer, Bring to Regular, edit and Bring back. The Bring steps should reuse one switch surface and avoid naming. Save once, reopen, and edit a retained Pro layer. Check Discard opens blank and Cancel keeps the current edit.
+4. For a changed route that fails, send the build, device, workspace, target and observed action/result. One short capture is enough to identify the next check.
+
+B2 measured targets, F03 workload evidence, RV5, remaining R1.2/R1 and all later roadmap requirements remain. U1 evidence is scoped to these interactions and linked Regular/Pro custody. The physical owner check, Accessibility/device tiers, four pre-Video workspace locks, all-five acceptance before bilingual onboarding, finished website before Play Console, and explicit publication approval retain their existing scope.
+
+The [0.12.13 owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied phone instructions 1–5. O25-01–O25-06 authorize specific blend/input, Pro tool-ownership, shared-control, Delete/Reset and bidirectional transfer corrections. [PRODUCT_SPEC](PRODUCT_SPEC.md) and [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md) replace conflicting old interaction rules. PR #45 recorded this alignment. PR #46 implements the scoped correction.
+
+**Status: U1 engineering-qualified.** Candidate and exact app merge passed all required JVM, build, signing, full Android and genuine new-process checks. Handset confirmation remains open. The earlier independent contract review and exact preflight are preserved above. This wave retains all 77 capability IDs and every remaining roadmap child.
 
 | Slice | Observable exit and owner boundary | Dependency / disposition |
 | --- | --- | --- |
@@ -342,8 +410,8 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 | Order | Package / completion target | Prerequisite and current disposition |
 | --- | --- | --- |
-| U1 | Named owner workspace corrections: blend, tool roles, common controls, Delete/Reset and four-choice live exchange | Current; minimum R1.2/S03/S06 custody included only as necessary. O25 report and blueprint control. |
-| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, live/saved repeated exchange and portable bundles | R1.1 qualified; after U1 finish remaining R1.2/all-workspace recovery and other R1 children, including RV5. B2/F03 stays independent; S01–S08 remain open/partial |
+| U1 | Named owner workspace corrections: blend, tool roles, common controls, Delete/Reset and four-choice live exchange | Engineering-qualified in PR #46. Focused handset confirmation open. Minimum Regular/Pro R1.2/S03/S06 custody credited. |
+| R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, live/saved repeated exchange and portable bundles | R1.1 qualified; next finish remaining R1.2/all-workspace recovery and other R1 children, including RV5. B2/F03 stays independent; S01–S08 remain open/partial |
 | R2 | Pro layer tree/groups/clipping and memory-bounded reference compositor | R1 contracts; preserve legacy pixels |
 | R3 | Full Pro selection, paint, retouch, shapes, transforms, effects and declared interchange | R2 foundation |
 | R4 | Offline Subject & Background, refine/removal and reshaping | R2/R3 mask/geometry foundation; no runtime AI |
@@ -357,13 +425,13 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next engineering action — U1 coherent workspace workflow
+## Next engineering action — remaining R1.2
 
-After the owner relays the committed [Codex handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md), reconcile actual applicable project-local instructions, verify live main versus the recorded documentation/app refs, and name one writer per shared file. Reproduce the supported blend/input conditions and old Delete/switch behavior before replacing them.
+Use the qualified U1 implementation and independent review evidence to verify any new blocking defect first. Continue the remaining R1.2 package within the existing Stage 3 native durability contract.
 
-Implement the finite U1 slices above using the detailed blueprint; do not stop at a new menu label, a one-way bitmap transfer or an in-memory draft. Final Save from either workspace must preserve linked native editability. Keep documentation/evidence updates coupled to the exact code and actual measured exits. Deliver one coherent corrected APK after candidate/merge qualification; no new APK is made for this documentation change.
+The U1 receipt records the acknowledged Regular/Pro minimum. Reuse it where appropriate and verify the remaining workspace-specific custody, child and recovery properties against the active contract.
 
-Then complete remaining R1.2: acknowledged completed edits, atomic bounded history, actual new-process restore of document/source/baselines/route/child state, expanded to all workspace owners. The minimal U1 dependency must be subtracted accurately from what remains, not used to mark the whole package complete. Continue ordered R1 and R2–R11 without another arbitrary alignment cycle.
+Complete the remaining R1.2 scope with acknowledged completed edits, atomic bounded history, actual new-process restore of document/source/baselines/route/child state, expanded to all workspace owners. The minimal U1 dependency must be subtracted accurately from what remains, not used to mark the whole package complete. Continue ordered R1 and R2–R11 without another arbitrary alignment cycle.
 
 ## Pending owner/device decisions
 

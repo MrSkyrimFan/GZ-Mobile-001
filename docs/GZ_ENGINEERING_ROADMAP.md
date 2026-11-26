@@ -1,12 +1,12 @@
 # GZ Editor Pro — complete product roadmap
 
-> **Current work — November 25, 2026.** Qualified application: [PR #43](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/43), **0.12.13 Test / code 25 / phonetest.v25**, app merge **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**; candidate and merge each passed JVM/build/signing and **279/279 on API29 and API35**. The [latest owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and opens the Pro blend/tool-ownership, shared controls, Delete/Reset and symmetric switching corrections. **U1 is next**, including its minimum R1.2/S06 custody dependency; the full remaining roadmap is preserved. B2 numeric/F03 workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [Execution ledger](WORK_LEDGER.md#next-engineering-action--u1-coherent-workspace-workflow).
+> **Current work — November 25, 2026.** [PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46) qualifies **0.12.14 Test / code 26 / phonetest.v26** for focused handset confirmation. Application merge **e6321322526521ace13a45c231b25bb08f91c565** and candidate each passed JVM/build/signing and **303/303 on API29 and API35**, with separate force-stop and new-process native recovery on each API. **Remaining R1.2 is the next engineering package.** B2 numerical and F03 matched-workload evidence, RV5, broader device qualification, formal workspace locks and release gates remain open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
-## Current sequence — owner workspace correction U1
+## Current sequence — remaining R1.2 after U1
 
 The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied 0.12.13 phone checks 1–5 and specifically opens Pro blend/input, tool ownership, common control positions, Delete/Reset and symmetric Regular↔Pro transfer. The [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) replaces the old conflicting interaction clauses while preserving source/history/cancel/child safety.
 
-**U1 precedes the remaining R1.2 work and includes only the minimum Regular/Pro durable draft/lineage dependency needed by Bring.** Blend and shared presentation work can proceed independently of that storage slice. After U1, complete the remaining R1.2/R1 children, then the R2–R11 sequence below; B2/F03 measurement and RV5 remain explicit independent open work. No required family is removed or declared complete.
+**Remaining R1.2 follows the qualified U1 correction wave.** U1 includes the Regular/Pro durable draft and lineage slice needed by Bring. Complete the remaining recovery, history and custody scope, then the other R1 and R2–R11 children below. B2/F03 measurement and RV5 remain explicit. All 77 families and their required children remain in scope.
 
 A1's 25/50 exchange is complete and its activation consumed. Frozen historical roadmaps and CQ answers retain evidence, not superseded execution rules. This remains the single active R0–R11 roadmap. The [ledger](WORK_LEDGER.md) owns exact dispatch and qualifications.
 
@@ -20,9 +20,9 @@ Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WO
 
 ## Current engineering state
 
-Qualified app **b0f0d0e5e2d879ddddedede442ba92ef30b69a78**, 0.12.13 Test/code25, retains candidate/merge **279/279 per API29/API35** and JVM/build/signing; [R1.1/RV4 receipt](WORK_LEDGER.md#completed-r11--bounded-saved-projects-and-pro-rv4). PR #41's busy selection, Collage insets/tap and nested-departure coverage remain credited. The new blend/control findings are not covered by those test counts.
+Qualified app **e6321322526521ace13a45c231b25bb08f91c565**, 0.12.14 Test/code26, passed 303/303 on each API at candidate and merge, plus JVM/build/signing and separate new-process recovery. Earlier R1.1/RV4 and PR #41 bounded repairs remain credited. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
-Owner-reported unmentioned supplied phone checks pass within their scope. U1's changes still need implementation, exact candidate/merge qualification and focused handset confirmation. B2 recorded preparation/response misses and F03 quantitative/matched-workload evidence remain open; the generic latest pass supplies no new times. Preserve GIF controls and fidelity. RV5 stage/retry ownership, broad device and process-loss evidence, formal workspace locks and release remain open.
+Earlier unmentioned supplied phone checks retain their owner-reported scope. U1 awaits focused handset confirmation. B2 preparation and response misses, F03 quantitative matched-workload evidence, RV5 provider stage/retry ownership, broader device/process-loss evidence, formal workspace locks and release remain open.
 
 All 77 family IDs and required children below are retained. A minimal bridge checkpoint adapter does not complete S03/S06, all R1.2, Pro groups/compositor, or Photoshop/GIMP-level capability.
 
@@ -30,13 +30,13 @@ All 77 family IDs and required children below are retained. A minimal bridge che
 
 **Previously qualified correction:** [PR #31](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/31), application merge `3ad65c533f7667a136d4fa1838afcc06d3f484da`, closes only R29-01/R29-02 Eraser engineering and the GIF Save performance failure observed during qualification. Candidate `aa86c37c64c5e395d5378df281a0c7583a39d0e0` and the merge share tree `1c7e3007204192ea240a7fd8d65cbd00cf7f9511`. [Candidate run 45480001019](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45480001019) and [merged run 45483297512](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45483297512) pass JVM/build/signing and **193/193 per Android API**, with zero failures/errors/skips. [Execution receipt and exact 0.12.10 Test APK](ERASER_REPAIR_VERIFICATION.md).
 
-All original 186 Android case identities and established GIF budgets remain; five Eraser and two cache-equivalence cases extend them. The original red reproduction, separate rotation-harness abort, and candidate 1 GIF speed failure remain in the receipt. Existing layout/style and mode ownership are preserved. Later documentation-only commits do not supersede the qualified application identity. R1.1 later qualified bounded saved-project listing/loading. The latest report above supplies scoped phone passes; U1 now controls execution. A1/B1 history and B2 numeric/workload gaps remain credited or open only at their stated scope. Whole-family completion and commercial release remain open.
+All original 186 Android case identities and established GIF budgets remain; five Eraser and two cache-equivalence cases extend them. The original red reproduction, separate rotation-harness abort, and candidate 1 GIF speed failure remain in the receipt. Existing layout/style and mode ownership are preserved. Later documentation-only commits do not supersede the qualified application identity. R1.1 later qualified bounded saved-project listing/loading. The latest report above supplies scoped phone passes; U1 qualified the subsequent named correction. A1/B1 history and B2 numeric/workload gaps remain credited or open only at their stated scope. Whole-family completion and commercial release remain open.
 
 ### Prior verified PR #29 checkpoint
 
 R0 is engineering-verified in [PR #29](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/29), app merge `c9efc5aa0673f21b98f150733582a24996b34d10`, candidate `6ad22e3fabe3964a662c7e0e39bd08c4a8e8f9ca`, [candidate workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45352950946) and [merged-main workflow](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45355074845). Candidate and merged application share tree `47e95c51254ce8e8f97b3883c44dc157ea8452b4`; each passed Verify and 186/186 Android cases on both API29 and API35, with no failures/errors/skips. Version 0.12.9 Test / code 21 was that checkpoint’s qualified phone wave and was followed by PR #31's 0.12.10 Test and PR #37's 0.12.11 Test. Handset acceptance, all formal workspace locks and commercial release remain open.
 
-**Historical ordering only:** R1.2 was the next durability package before O25. Follow U1 and its minimum custody slice in the active ledger; all remaining R1.2 and B2/F03 exits remain.
+**Historical ordering only:** R1.2 was the next durability package before O25. U1 qualified its minimum custody slice. Follow the current ledger for the remaining R1.2 and B2/F03 exits.
 
 The legacy Pro streaming optimization passes in the recorded CI environments; the earlier 16 MiB hard-cap condition has not been independently requalified. R1/R8 retain explicit low-memory/device-tier measurements. Legacy v4 GIF aspect migration remains R7.
 
@@ -82,7 +82,7 @@ These are dependency-ordered work packages, not dates or completion percentages.
 
 The original four defects passed that engineering exit in PR #29. The separately demonstrated R29-01/R29-02 Eraser follow-up and observed GIF Save failure passed their focused candidate/merge exit in PR #31. Both engineering histories remain credited, and unmentioned supplied 0.12.10 checks now have scoped owner-reported pass credit. Full feature families and formal locks remain open. Follow the current U1/remaining-R1 ledger sequence. The owner protects unmentioned passed behavior; modify it only under the named authorization or a subsequent owner direction, while running required regression checks for authorized dependencies.
 
-### Current correction U1 — coherent workspace workflow
+### Qualified correction U1 — coherent workspace workflow
 
 U1 is a bounded correction within S01/S03/S04/S06/S08, P01/P07/P08/P10, C03 and Q01, not new families or a replacement roadmap.
 
