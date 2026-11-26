@@ -171,7 +171,9 @@ fun PhotoEditorScreen(
     onCancelCollagePhoto: (() -> Unit)? = null,
     onRequestCollageWorkspace: ((WorkspaceMode, CollagePhoto?) -> Unit)? = null,
     savePhotoProject: (Context, ProjectSaveIntent, Uri, EditDocument) -> ProjectSaveResult = ProjectStore::saveNamed,
-    onDeleteCollageWork: (() -> Unit)? = null
+    onDeleteCollageWork: (() -> Unit)? = null,
+    beforeInlineWorkspaceSave: suspend (ProjectSaveIntent) -> Unit = {},
+    beforeNativeOpenPublication: suspend () -> Unit = {}
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -1121,6 +1123,7 @@ fun PhotoEditorScreen(
                     val saved = when (val result = nativeStore.prepare(request.source)) {
                         is NativeWorkResult.Ok -> {
                             stagedManifests += result.value
+                            beforeInlineWorkspaceSave(save)
                             nativeStore.saveNamed(save, result.value)
                         }
                         is NativeWorkResult.Failed -> ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)
@@ -1268,6 +1271,7 @@ fun PhotoEditorScreen(
             }
         }
         if (!stillOwned()) return false
+        beforeNativeOpenPublication()
         return when (val saved = nativeStore.acknowledge(catalog.revision, work, displaced, resume, mode)) {
             is NativeWorkResult.Failed -> {
                 nativeOpenError = nativeWorkMessage(saved.reason)

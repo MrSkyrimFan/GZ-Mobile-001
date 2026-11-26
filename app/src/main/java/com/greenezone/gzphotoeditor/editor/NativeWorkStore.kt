@@ -32,6 +32,10 @@ internal class NativeWorkStore(context: Context) {
 
     fun hasRecoveryRecord(): Boolean = catalogFiles().any(File::exists)
 
+    /** Exact handles still protected in this store. Instrumentation uses this after operations settle. */
+    internal suspend fun outstandingStageLeasesForTest(): Int =
+        withContext(Dispatchers.IO) { mutex.withLock { stages[directoryKey]?.size ?: 0 } }
+
     suspend fun recover(): NativeWorkResult<NativeWorkCatalog> = locked {
         val current = readCatalog()
         if (coldFolders.add(directoryKey)) {
