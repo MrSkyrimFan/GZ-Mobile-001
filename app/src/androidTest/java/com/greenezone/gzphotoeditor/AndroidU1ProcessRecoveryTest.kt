@@ -322,18 +322,20 @@ class AndroidU1ProcessRecoveryTest {
         waitContent(hide)
         compose.onNodeWithContentDescription(hide, substring = false).performTouchInput { click() }
         waitContent("Show $OVERLAY_LAYER")
+        tapText(BASE_LAYER)
+        waitText("$BASE_LAYER · Image")
+        val before = requireNotNull(opened.pro).document
+        val selected = before.layers.indexOfFirst { it.name == BASE_LAYER }
         val changed = awaitActiveWork(store, "The layer edit after named Open was not acknowledged for ${opened.id}") {
-            it.mode == NativeWorkMode.PRO && it.id == opened.id &&
+            it.mode == NativeWorkMode.PRO && it.id == opened.id && it.pro?.selectedLayer == selected &&
                 it.pro?.document?.layers?.any { layer -> layer.name == OVERLAY_LAYER && !layer.visible } == true
         }
-        val before = requireNotNull(opened.pro).document
         val after = requireNotNull(changed.pro).document
         val expected = before.layers.map { layer ->
             if (layer.name == OVERLAY_LAYER) layer.copy(visible = false) else layer
         }
         assertEquals(expected, after.layers)
         assertEquals(before.linkedFinishes, after.linkedFinishes)
-        tapText("Done")
     }
 
     private fun chooseWorkspace(label: String) {

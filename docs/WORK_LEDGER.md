@@ -76,6 +76,8 @@ An independent exact-source review of `2be8f86345a9835c2787f646a723c275b70f9866`
 - Focused API29 · [receipt 15084055944](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45746637043/artifacts/15084055944) · `sha256:b7a0081aa74957c37a02a5f08270f3810aa62bbf7daad013c8664b171bce15d1`
 - Focused API35 · [receipt 15083084344](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45746637043/artifacts/15083084344) · `sha256:70d3b517b0d00796c5de8458ebff158c5ac0ad105eb1b5f9334dea7b3a836274`
 
+An additional independent review of the revised checkpoint identified a selection change that could invalidate the ownership check without restarting the effect. Pro selection now restarts the checkpoint, and the actual new-process cases require the durable visibility edit and the subsequently selected layer under each opened named root.
+
 ## Active owner correction — U1
 
 The [0.12.13 owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied phone instructions 1–5. O25-01–O25-06 authorize specific blend/input, Pro tool-ownership, shared-control, Delete/Reset and bidirectional transfer corrections. [PRODUCT_SPEC](PRODUCT_SPEC.md) and [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md) replace conflicting old interaction rules. This docs-only reconciliation does not implement the fixes or change the qualified APK.

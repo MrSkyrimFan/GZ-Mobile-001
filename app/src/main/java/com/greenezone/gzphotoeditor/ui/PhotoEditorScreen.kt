@@ -1592,8 +1592,8 @@ fun PhotoEditorScreen(
             !liveGesture && !painting
 
     LaunchedEffect(nativeActive?.ref?.id, workspaceNavigation.current, contentRevision,
-        proSession.contentRevision, activePhotoProject, proSession.saveTarget.savedRef,
-        canCheckpointNativeWork()) {
+        proSession.contentRevision, proSession.selectedLayer, activePhotoProject,
+        proSession.saveTarget.savedRef, canCheckpointNativeWork()) {
         val previous = nativeActive ?: return@LaunchedEffect
         if (!canCheckpointNativeWork()) return@LaunchedEffect
         val mode = when (workspaceNavigation.current) {
