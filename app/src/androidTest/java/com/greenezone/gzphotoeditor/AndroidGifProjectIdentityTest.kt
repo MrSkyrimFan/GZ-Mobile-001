@@ -393,40 +393,47 @@ class AndroidGifProjectIdentityTest {
 
     private fun waitPhotoColor(expected: Int) {
         val description = "Animated GIF frame preview"
-        var observation = "preview node did not appear"
+        val image = rule.onNodeWithContentDescription(description, substring = false)
         try {
             rule.waitUntil(15_000) {
-                val frame = rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes()
-                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
-                val header = rule.onAllNodesWithTag("workspace-header").fetchSemanticsNodes()
-                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
-                val playback = rule.onAllNodes(hasText("▶ Play") and hasClickAction()).fetchSemanticsNodes()
-                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
+                val unavailable = rule.onAllNodes(hasText("unavailable. Remove or replace it.", substring = true))
+                    .fetchSemanticsNodes()
+                assertTrue("The photo preview reported a source failure", unavailable.isEmpty())
+                rule.onAllNodesWithContentDescription(description, substring = false)
+                    .fetchSemanticsNodes().size == 1
+            }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("The editor did not present an animated GIF preview", timeout)
+        }
 
-                // The square photo is fitted in a full-window node. Its screenshot also
-                // includes the header and the lower controls drawn over that window.
-                val halfSide = minOf(frame.width, frame.height) / 2
-                val top = maxOf(frame.center.y - halfSide, header.bottom)
-                val bottom = minOf(frame.center.y + halfSide, playback.top)
-                observation = "frame=$frame, header=$header, playback=$playback"
-                if (bottom - top < 8f) return@waitUntil false
+        // Use the actual tool collapse control before sampling the rendered frame.
+        // This keeps the screenshot independent of the overlay geometry of that device.
+        val collapse = rule.onNodeWithContentDescription("Collapse tools", substring = false)
+        val expand = rule.onNodeWithContentDescription("Expand tools", substring = false)
+        val restore = rule.onAllNodesWithContentDescription("Collapse tools", substring = false)
+            .fetchSemanticsNodes().isNotEmpty()
+        if (restore) collapse.performTouchInput { click(center) }
 
-                val image = rule.onNodeWithContentDescription(description).captureToImage().asAndroidBitmap()
+        var observation = emptySet<Int>()
+        try {
+            rule.waitUntil(15_000) {
+                val bitmap = image.captureToImage().asAndroidBitmap()
                 try {
-                    val x = image.width / 2
-                    val y = (((top + bottom) / 2 - frame.top) * image.height / frame.height).toInt()
-                    val pixels = (-2..2).flatMap { dy -> (-2..2).map { dx ->
-                        image.getPixel(x + dx, y + dy)
+                    val x = bitmap.width / 2
+                    val y = bitmap.height / 2
+                    observation = (-2..2).flatMap { dy -> (-2..2).map { dx ->
+                        bitmap.getPixel(x + dx, y + dy)
                     } }.toSet()
-                    observation += ", capture=${image.width}×${image.height}, sample=($x,$y), " +
-                        "colors=${pixels.map { it.toUInt().toString(16) }}"
-                    pixels == setOf(expected)
+                    observation == setOf(expected)
                 } finally {
-                    image.recycle()
+                    bitmap.recycle()
                 }
             }
         } catch (timeout: ComposeTimeoutException) {
-            throw AssertionError("Expected rendered GIF color ${expected.toUInt().toString(16)}; $observation", timeout)
+            val observed = observation.map { it.toUInt().toString(16) }
+            throw AssertionError("Expected GIF frame ${expected.toUInt().toString(16)}; observed $observed", timeout)
+        } finally {
+            if (restore) expand.performTouchInput { click(center) }
         }
     }
 }

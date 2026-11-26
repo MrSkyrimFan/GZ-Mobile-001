@@ -621,10 +621,12 @@ internal fun GifMakerScreenContent(
                     if (!source.isRecycled) source.recycle()
                 }
             }
+            android.util.Log.i("GzU1Process", "GIF photo decoded/rendered index=$index dimensions=${frame.width}x${frame.height}")
             preview = frame
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
+            android.util.Log.i("GzU1Process", "GIF photo preview failed index=$index ${failure.javaClass.simpleName}")
             preview = null
             playing = false
             notice = "Photo " + (index + 1) + " unavailable. Remove or replace it."
