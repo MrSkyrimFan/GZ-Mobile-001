@@ -31,11 +31,18 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.CreativeDocument
 import com.greenezone.gzphotoeditor.editor.EditDocument
+import com.greenezone.gzphotoeditor.editor.ExportSettings
+import com.greenezone.gzphotoeditor.editor.ExportSizing
 import com.greenezone.gzphotoeditor.editor.ExportWorkspace
+import com.greenezone.gzphotoeditor.editor.ImageExportFormat
+import com.greenezone.gzphotoeditor.editor.ImageExportWriter
 import com.greenezone.gzphotoeditor.editor.NamedProjectRef
 import com.greenezone.gzphotoeditor.editor.NativeWorkResult
 import com.greenezone.gzphotoeditor.editor.NativeWorkStore
+import com.greenezone.gzphotoeditor.editor.PendingExport
 import com.greenezone.gzphotoeditor.editor.PendingExportJournal
+import com.greenezone.gzphotoeditor.editor.PendingExportPhase
+import com.greenezone.gzphotoeditor.editor.PendingProExportRecipe
 import com.greenezone.gzphotoeditor.editor.ProBackground
 import com.greenezone.gzphotoeditor.editor.ProBlend
 import com.greenezone.gzphotoeditor.editor.ProDocument
@@ -43,7 +50,10 @@ import com.greenezone.gzphotoeditor.editor.ProLayer
 import com.greenezone.gzphotoeditor.editor.ProLayerKind
 import com.greenezone.gzphotoeditor.editor.ProPixelEffect
 import com.greenezone.gzphotoeditor.editor.ProPixelSize
+import com.greenezone.gzphotoeditor.editor.ProRaster
 import com.greenezone.gzphotoeditor.editor.ProStore
+import com.greenezone.gzphotoeditor.editor.ProjectSaveIntent
+import com.greenezone.gzphotoeditor.editor.ProjectSaveResult
 import com.greenezone.gzphotoeditor.editor.ShapeOverlay
 import com.greenezone.gzphotoeditor.ui.ProWorkspaceScreenContent
 import com.greenezone.gzphotoeditor.ui.ProWorkspaceSession
@@ -54,6 +64,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import java.io.ByteArrayOutputStream
 import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -177,6 +188,91 @@ class AndroidU1ProBaselineTest {
             chooseMode(ProBlend.NORMAL, ProBlend.DIFFERENCE)
             rule.runOnIdle { assertEquals(ProBlend.DIFFERENCE, document.layers[1].blend) }
         } finally {
+            resolver.delete(topUri, null, null)
+            resolver.delete(lowerUri, null, null)
+        }
+    }
+
+    @Test fun everyBlendModeSurvivesNamedReopenAndDecodedPng() {
+        // Independently evaluated sRGB blend equations for the two opaque fixture colors.
+        val expectedCenter = mapOf(
+            ProBlend.NORMAL to Color.rgb(67, 188, 220),
+            ProBlend.MULTIPLY to Color.rgb(45, 41, 102),
+            ProBlend.SCREEN to Color.rgb(195, 203, 236),
+            ProBlend.OVERLAY to Color.rgb(134, 83, 204),
+            ProBlend.SOFT_LIGHT to Color.rgb(147, 86, 158),
+            ProBlend.HARD_LIGHT to Color.rgb(91, 150, 217),
+            ProBlend.DARKEN to Color.rgb(67, 56, 118),
+            ProBlend.LIGHTEN to Color.rgb(173, 188, 220),
+            ProBlend.COLOR_DODGE to Color.rgb(235, 213, 255),
+            ProBlend.COLOR_BURN to Color.rgb(0, 0, 96),
+            ProBlend.DIFFERENCE to Color.rgb(106, 132, 102),
+            ProBlend.EXCLUSION to Color.rgb(149, 161, 134),
+            ProBlend.HUE to Color.rgb(30, 123, 147),
+            ProBlend.SATURATION to Color.rgb(196, 43, 124),
+            ProBlend.COLOR to Color.rgb(10, 131, 163),
+            ProBlend.LUMINOSITY to Color.rgb(230, 113, 175),
+        )
+        val lowerUri = photo(Color.rgb(173, 56, 118))
+        val topUri = photo(Color.rgb(67, 188, 220))
+        val name = "U1 blend set " + System.nanoTime().toString().takeLast(12)
+        var previous: NamedProjectRef? = null
+        try {
+            val sourceSize = ProPixelSize(16, 16)
+            val size = ProPixelSize(32, 32)
+            val lower = ProLayer(lowerUri.toString(), name = "Backdrop", sourceSize = sourceSize)
+            val top = ProLayer(topUri.toString(), name = "Blend target", sourceSize = sourceSize)
+            val initial = ProDocument(listOf(lower, top), canvasSize = size)
+            val settings = ExportSettings(format = ImageExportFormat.PNG)
+            for (mode in ProBlend.entries) {
+                val selected = initial.copy(layers = listOf(lower, top.copy(blend = mode)))
+                val prior = previous
+                val intent = if (prior == null) ProjectSaveIntent.Create(name) else ProjectSaveIntent.Update(prior)
+                val result = ProStore.saveNamed(context, intent, selected, initial)
+                assertTrue("Named Save for $mode failed: $result", result is ProjectSaveResult.Saved)
+                val saved = (result as ProjectSaveResult.Saved).project
+                previous = saved
+                if (prior != null) {
+                    assertEquals(mode.label, prior.id, saved.id)
+                    assertNotEquals(mode.label, prior.version, saved.version)
+                }
+
+                val reopened = requireNotNull(ProStore.loadNamed(context, name))
+                assertEquals(mode.label, saved, reopened.project)
+                assertEquals(mode.label, selected, reopened.content.document)
+                assertEquals(mode.label, initial, reopened.content.resetDocument)
+
+                val capture = PendingProExportRecipe(reopened.content.document,
+                    reopened.content.resetDocument, settings, size)
+                val pending = PendingExport(ExportWorkspace.PRO, saved.id, PendingExportPhase.PICKING,
+                    settings.format.mime, "blend.png", capture.encode())
+                val request = requireNotNull(PendingProExportRecipe.decode(pending))
+                assertEquals(mode.label, capture, request)
+
+                val rendered = ProRaster.renderOutput(context, request.document, request.size, preview = false)
+                val bytes = try {
+                    val output = ExportSizing.layout(rendered, request.settings)
+                    try {
+                        ByteArrayOutputStream().use { buffer ->
+                            assertTrue("PNG encoding failed for $mode",
+                                ImageExportWriter.write(output, request.settings, buffer))
+                            buffer.toByteArray()
+                        }
+                    } finally { if (output !== rendered) output.recycle() }
+                } finally { rendered.recycle() }
+                val decoded = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+                try {
+                    assertEquals(mode.label, size.width, decoded.width)
+                    assertEquals(mode.label, size.height, decoded.height)
+                    val actual = decoded.getPixel(decoded.width / 2, decoded.height / 2)
+                    val expected = expectedCenter.getValue(mode)
+                    assertEquals(mode.label, Color.alpha(expected), Color.alpha(actual))
+                    assertTrue("$mode expected #${expected.toUInt().toString(16)}, got #${actual.toUInt().toString(16)}",
+                        nearColor(expected, actual))
+                } finally { decoded.recycle() }
+            }
+        } finally {
+            previous?.let { ProStore.deleteNamed(context, it) }
             resolver.delete(topUri, null, null)
             resolver.delete(lowerUri, null, null)
         }

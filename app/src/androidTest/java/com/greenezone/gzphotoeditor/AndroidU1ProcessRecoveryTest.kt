@@ -217,12 +217,7 @@ class AndroidU1ProcessRecoveryTest {
             tapText("Photo editing Pro")
             tapText("Bring current work")
             waitText("Photo Pro ▾")
-            waitText("Resume export")
-            // Back closes the independent retry surface while leaving its record intact.
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("Resume export", substring = false).fetchSemanticsNodes().isEmpty()
-            }
+            dismissRetainedExportDialog()
             tapText("Stack (3)")
             compose.onNodeWithText(BASE_LAYER, substring = false).assertIsDisplayed()
             compose.onNodeWithText(OVERLAY_LAYER, substring = false).assertIsDisplayed()
@@ -249,6 +244,110 @@ class AndroidU1ProcessRecoveryTest {
             assertEquals(expected.getString("retry"),
                 PendingExportJournal(target.filesDir).read(ExportWorkspace.PRO)?.id)
             Log.i(TAG, "proof pid=$pid nativeLayerEdit=true linkedFinishes=2 undo=35 parked=1 named=2 retired=true")
+
+            tapText("Done")
+            verifyNamedUiOpens(store, expected, restored, pid)
+        }
+    }
+
+    private fun verifyNamedUiOpens(
+        store: NativeWorkStore, expected: JSONObject, original: NativeWorkState, pid: Int
+    ) {
+        val photoRef = namedFrom(expected.getJSONObject("photoNamed"), ProjectKind.PHOTO)
+        val proRef = namedFrom(expected.getJSONObject("proNamed"), ProjectKind.PRO)
+        val savedPhoto = requireNotNull(original.regular)
+        val savedPro = requireNotNull(original.pro).document
+
+        // Open the actual Regular named row from a blank workspace in the new process.
+        chooseWorkspace("Photo editing")
+        tapText("Discard")
+        waitText("Photo ▾")
+        waitText("Choose Options → New photo… to begin.")
+        tapText("Options")
+        tapText("Open project…")
+        tapText(PHOTO_SAVE)
+        tapText("Open project")
+        waitContent("Photo editing canvas. Tap to hide or show tools.")
+        compose.onNodeWithContentDescription("Undo", substring = false).assertIsEnabled()
+        val openedPhoto = awaitActiveWork(store, "The Regular named Open did not publish its linked root") {
+            it.mode == NativeWorkMode.REGULAR && it.regular?.savedRef == photoRef && it.id != original.id
+        }
+        assertEquals(savedPhoto.clean, openedPhoto.regular?.document)
+        assertEquals(savedPhoto.clean, openedPhoto.regular?.clean)
+        assertEquals(35, openedPhoto.regular?.history?.undo?.size)
+        assertEquals(savedPro, openedPhoto.pro?.document)
+
+        chooseWorkspace("Photo editing Pro")
+        tapText("Bring current work")
+        waitText("Photo Pro ▾")
+        dismissRetainedExportDialog()
+        val photoPro = awaitActiveWork(store, "The Regular named Open did not return to editable Pro layers") {
+            it.mode == NativeWorkMode.PRO && it.id == openedPhoto.id
+        }
+        assertEquals(savedPro.layers, photoPro.pro?.document?.layers)
+        assertEquals(2, photoPro.pro?.document?.linkedFinishes?.size)
+        hideNamedNativeOverlay(store, photoPro)
+
+        // The Pro chooser opens the independently saved version, with the hidden layer visible again.
+        tapText("Options")
+        tapText("Open project…")
+        waitText("Saved Pro projects")
+        tapText(PRO_SAVE)
+        tapText("Discard")
+        val openedPro = awaitActiveWork(store, "The Pro named Open did not publish its linked root") {
+            it.mode == NativeWorkMode.PRO && it.pro?.saveTarget?.savedRef == proRef &&
+                it.id != original.id && it.id != openedPhoto.id
+        }
+        assertEquals(savedPro, openedPro.pro?.document)
+        assertEquals(savedPhoto.document, openedPro.regular?.document)
+        assertEquals(savedPhoto.document, openedPro.regular?.clean)
+        hideNamedNativeOverlay(store, openedPro)
+
+        assertEquals(photoRef, ProjectStore.loadNamed(target, photoRef)?.project)
+        assertEquals(proRef, ProStore.loadNamed(target, PRO_SAVE)?.project)
+        val parked = refFrom(expected.getJSONObject("draft"))
+        assertTrue(runBlocking { ok(store.recover()).drafts.any { it.ref == parked } })
+        assertEquals(expected.getString("retry"),
+            PendingExportJournal(target.filesDir).read(ExportWorkspace.PRO)?.id)
+        assertEquals(pid, Process.myPid())
+        Log.i(TAG, "named-ui pid=$pid regularOpen=true proOpen=true nativeEdits=2 namedVersionsRetained=true")
+    }
+
+    private fun hideNamedNativeOverlay(store: NativeWorkStore, opened: NativeWorkState) {
+        tapText("Stack (3)")
+        compose.onNodeWithText(BASE_LAYER, substring = false).assertIsDisplayed()
+        compose.onNodeWithText(OVERLAY_LAYER, substring = false).assertIsDisplayed()
+        compose.onNodeWithText(PAINT_LAYER, substring = false).assertIsDisplayed()
+        val hide = "Hide $OVERLAY_LAYER"
+        waitContent(hide)
+        compose.onNodeWithContentDescription(hide, substring = false).performTouchInput { click() }
+        waitContent("Show $OVERLAY_LAYER")
+        val changed = awaitActiveWork(store, "The layer edit after named Open was not acknowledged") {
+            it.mode == NativeWorkMode.PRO && it.id == opened.id &&
+                it.pro?.document?.layers?.any { layer -> layer.name == OVERLAY_LAYER && !layer.visible } == true
+        }
+        val before = requireNotNull(opened.pro).document
+        val after = requireNotNull(changed.pro).document
+        val expected = before.layers.map { layer ->
+            if (layer.name == OVERLAY_LAYER) layer.copy(visible = false) else layer
+        }
+        assertEquals(expected, after.layers)
+        assertEquals(before.linkedFinishes, after.linkedFinishes)
+        tapText("Done")
+    }
+
+    private fun chooseWorkspace(label: String) {
+        compose.onNodeWithContentDescription("Choose editing workspace", substring = false)
+            .performTouchInput { click() }
+        tapText(label)
+    }
+
+    private fun dismissRetainedExportDialog() {
+        waitText("Resume export")
+        // Back closes the independent retry surface while leaving its record intact.
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("Resume export", substring = false).fetchSemanticsNodes().isEmpty()
         }
     }
 
@@ -306,7 +405,15 @@ class AndroidU1ProcessRecoveryTest {
         return current
     }
 
-    private fun awaitHiddenOverlay(store: NativeWorkStore): NativeWorkState {
+    private fun awaitHiddenOverlay(store: NativeWorkStore): NativeWorkState =
+        awaitActiveWork(store, "The recovered Pro layer edit did not reach the acknowledged native root") {
+            it.mode == NativeWorkMode.PRO &&
+                it.pro?.document?.layers?.any { layer -> layer.name == OVERLAY_LAYER && !layer.visible } == true
+        }
+
+    private fun awaitActiveWork(
+        store: NativeWorkStore, missing: String, matches: (NativeWorkState) -> Boolean
+    ): NativeWorkState {
         val until = SystemClock.elapsedRealtime() + 12_000L
         do {
             val current = runBlocking {
@@ -323,12 +430,10 @@ class AndroidU1ProcessRecoveryTest {
                     }
                 }
             }
-            if (current?.mode == NativeWorkMode.PRO &&
-                current.pro?.document?.layers?.any { it.name == OVERLAY_LAYER && !it.visible } == true)
-                return current
+            if (current != null && matches(current)) return current
             SystemClock.sleep(80)
         } while (SystemClock.elapsedRealtime() < until)
-        error("The recovered Pro layer edit did not reach the acknowledged native root")
+        error(missing)
     }
 
     private fun waitText(label: String) {
