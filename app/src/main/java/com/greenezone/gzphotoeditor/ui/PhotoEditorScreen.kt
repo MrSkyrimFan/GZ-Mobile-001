@@ -171,7 +171,9 @@ fun PhotoEditorScreen(
     onCancelCollagePhoto: (() -> Unit)? = null,
     onRequestCollageWorkspace: ((WorkspaceMode, CollagePhoto?) -> Unit)? = null,
     savePhotoProject: (Context, ProjectSaveIntent, Uri, EditDocument) -> ProjectSaveResult = ProjectStore::saveNamed,
-    onDeleteCollageWork: (() -> Unit)? = null
+    onDeleteCollageWork: (() -> Unit)? = null,
+    beforeInlineWorkspaceSave: suspend (ProjectSaveIntent) -> Unit = {},
+    beforeNativeOpenPublication: suspend () -> Unit = {}
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -189,6 +191,7 @@ fun PhotoEditorScreen(
     var nativeCatalog by remember(context) { mutableStateOf<NativeWorkCatalog?>(null) }
     var nativeActive by remember(context) { mutableStateOf<NativeWorkLoaded?>(null) }
     var stagedNamedPro by remember(context) { mutableStateOf<PreparedNamedWorkspace?>(null) }
+    var inlineProSaveAcknowledgement by remember(context) { mutableStateOf<ProInlineSaveAcknowledgement?>(null) }
     var nativeOpenError by remember(context) { mutableStateOf<String?>(null) }
     val latestNamedPreparation by rememberUpdatedState(stagedNamedPro)
     DisposableEffect(context) {
@@ -1121,6 +1124,7 @@ fun PhotoEditorScreen(
                     val saved = when (val result = nativeStore.prepare(request.source)) {
                         is NativeWorkResult.Ok -> {
                             stagedManifests += result.value
+                            beforeInlineWorkspaceSave(save)
                             nativeStore.saveNamed(save, result.value)
                         }
                         is NativeWorkResult.Failed -> ProjectSaveResult.Rejected(ProjectSaveFailure.STORAGE_FAILURE)
@@ -1134,9 +1138,20 @@ fun PhotoEditorScreen(
                                 baselineUri = request.source.regular?.uri?.toString()
                                 baselineDocument = requireNotNull(request.source.regular).document
                                 markLinkedProClean(request.source.pro)
-                            } else if (request.source.mode == NativeWorkMode.PRO && proSession.ownerId == request.proOwner) {
-                                request.source.pro?.let { proSession = proSession.saved(it.document, saved.project) }
-                                markLinkedRegularClean(request.source.regular)
+                            } else if (request.source.mode == NativeWorkMode.PRO) {
+                                val captured = requireNotNull(request.source.pro)
+                                val key = captured.nativeOwnerKey()
+                                if (proSession.nativeOwnerKey() == key &&
+                                    proSession.saveTarget.savedRef == captured.saveTarget.savedRef) {
+                                    if (workspaceNavigation.current == WorkspaceMode.PRO) {
+                                        inlineProSaveAcknowledgement = ProInlineSaveAcknowledgement(
+                                            key, captured.saveTarget.savedRef, captured.document, saved.project
+                                        )
+                                    } else {
+                                        proSession = proSession.saved(captured.document, saved.project)
+                                    }
+                                    markLinkedRegularClean(request.source.regular)
+                                }
                             }
                         }
                         is ProjectSaveResult.Exists -> {
@@ -1163,6 +1178,7 @@ fun PhotoEditorScreen(
                             closeCurrentPhoto(recoveryResolved = true)
                             proDocument = ProDocument()
                             proSession = ProWorkspaceSession()
+                            inlineProSaveAcknowledgement = null
                         } else {
                             applyNativeWork(staged, preparedPhoto)
                             preparedPhoto = null
@@ -1268,6 +1284,8 @@ fun PhotoEditorScreen(
             }
         }
         if (!stillOwned()) return false
+        beforeNativeOpenPublication()
+        if (!stillOwned()) return false
         return when (val saved = nativeStore.acknowledge(catalog.revision, work, displaced, resume, mode)) {
             is NativeWorkResult.Failed -> {
                 nativeOpenError = nativeWorkMessage(saved.reason)
@@ -1298,16 +1316,27 @@ fun PhotoEditorScreen(
                 return null
             }
         }
-        val photo = try { prepareNativePhoto(prepared.state) }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: OutOfMemoryError) {
+        var photo: PreparedRegularPhoto? = null
+        var transferred = false
+        try {
+            photo = prepareNativePhoto(prepared.state)
+            val result = PreparedNamedWorkspace(named, prepared, photo)
+            transferred = true
+            return result
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: OutOfMemoryError) {
             nativeOpenError = "There is not enough memory to open this saved work."
             return null
         } catch (_: Exception) {
             nativeOpenError = "A source for this saved work is unavailable."
             return null
+        } finally {
+            if (!transferred) {
+                photo?.discard()
+                withContext(NonCancellable) { nativeStore.release(prepared) }
+            }
         }
-        return PreparedNamedWorkspace(named, prepared, photo)
     }
 
     fun openWorkingDraft(id: String, mode: NativeWorkMode, pending: PhotoDeparture? = null) {
@@ -1321,6 +1350,8 @@ fun PhotoEditorScreen(
         busy = true
         scope.launch {
             var photo: PreparedRegularPhoto? = null
+            var activeLease: NativeWorkPrepared? = null
+            var displacedLease: NativeWorkPrepared? = null
             try {
                 fun ownsRequest() = workspaceNavigation.current == mode.workspace() &&
                     previousOwner == photoOwnerId && previousRevision == contentRevision &&
@@ -1335,7 +1366,7 @@ fun PhotoEditorScreen(
                     }
                 }
                 val prepared = when (val result = nativeStore.prepare(loaded.state.copy(mode = mode))) {
-                    is NativeWorkResult.Ok -> result.value
+                    is NativeWorkResult.Ok -> result.value.also { activeLease = it }
                     is NativeWorkResult.Failed -> {
                         nativeOpenError = nativeWorkMessage(result.reason)
                         return@launch
@@ -1345,7 +1376,7 @@ fun PhotoEditorScreen(
                 val displaced = if (pending?.discard == true || current.id == selected.ref.id ||
                     current.regular == null && current.pro == null) null
                 else when (val result = nativeStore.prepare(current)) {
-                    is NativeWorkResult.Ok -> result.value
+                    is NativeWorkResult.Ok -> result.value.also { displacedLease = it }
                     is NativeWorkResult.Failed -> {
                         nativeOpenError = nativeWorkMessage(result.reason)
                         return@launch
@@ -1363,7 +1394,14 @@ fun PhotoEditorScreen(
                 nativeOpenError = "A source for this working draft is unavailable."
             } finally {
                 photo?.discard()
-                busy = false
+                try {
+                    withContext(NonCancellable) {
+                        activeLease?.let { nativeStore.release(it) }
+                        displacedLease?.let { nativeStore.release(it) }
+                    }
+                } finally {
+                    busy = false
+                }
             }
         }
     }
@@ -1798,6 +1836,10 @@ fun PhotoEditorScreen(
                 },
                 onRevokeWorkingSession = ::revokeWorkingOwner,
                 saveCapturedProject = ::saveCapturedPro,
+                inlineSaveAcknowledgement = inlineProSaveAcknowledgement,
+                onInlineSaveAcknowledged = { consumed ->
+                    if (inlineProSaveAcknowledgement === consumed) inlineProSaveAcknowledgement = null
+                },
                 linkedDraftDirty = nativeActive?.state?.let { active ->
                     active.pro?.nativeOwnerKey() == proSession.nativeOwnerKey() &&
                         active.regular?.ownerId == photoOwnerId &&
@@ -1844,20 +1886,22 @@ fun PhotoEditorScreen(
                             } finally {
                                 if (!transferred) {
                                     staged.photo?.discard()
-                                    nativeStore.release(staged.work)
+                                    withContext(NonCancellable) { nativeStore.release(staged.work) }
                                 }
                             }
                         }
                     }
                 },
                 onOpenedNamedProject = { loaded, _ ->
-                    val staged = stagedNamedPro?.takeIf { it.ref == loaded.project }
+                    val staged = stagedNamedPro
                     stagedNamedPro = null
                     val catalog = staged?.catalog
-                    if (staged != null && catalog != null) {
+                    if (staged != null && staged.ref == loaded.project && catalog != null) {
                         nativeCatalog = catalog
                         nativeActive = catalog.active?.let { NativeWorkLoaded(it.ref, staged.work.state) }
                         applyNativeWork(staged.work.state, staged.photo)
+                    } else {
+                        staged?.photo?.discard()
                     }
                 }
             )
@@ -2386,17 +2430,26 @@ fun PhotoEditorScreen(
                                 openPreparedPhoto(PhotoReplacement(loaded.content.image, loaded.content.document,
                                     loaded.project.name, loaded.project))
                             } else {
-                                var photo: PreparedRegularPhoto? = null
+                                var staged: PreparedNamedWorkspace? = null
+                                var adopted = false
                                 busy = true
                                 try {
-                                    val staged = prepareNamedWorkspace(manifest, loaded.project)
-                                    photo = staged?.photo
-                                    if (staged != null && publishPreparedWork(staged.work, photo, NativeWorkMode.REGULAR,
+                                    staged = prepareNamedWorkspace(manifest, loaded.project)
+                                    if (staged != null && publishPreparedWork(staged.work, staged.photo, NativeWorkMode.REGULAR,
                                             stillOwned = { pendingDeparture == captured && departureOwned(captured) })) {
-                                        photo = null
+                                        adopted = true
                                         cancelDeparture()
                                     }
-                                } finally { photo?.discard(); busy = false }
+                                } finally {
+                                    if (!adopted) staged?.photo?.discard()
+                                    try {
+                                        withContext(NonCancellable) {
+                                            staged?.let { nativeStore.release(it.work) }
+                                        }
+                                    } finally {
+                                        busy = false
+                                    }
+                                }
                             }
                         }
                     }

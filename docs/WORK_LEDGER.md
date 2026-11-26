@@ -40,6 +40,14 @@ Root also owns the narrow `RegularProSwitch.kt` prepared-photo lifetime dependen
 
 [Focused v26 baseline 45906324931](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931) is pinned at `3fd93dc42493da44496c0e665d446858cf84e320`, tree `11f9211fc51d25a55364c8115400ed8f161bf802`. It adds only the new test cases, temporary test selection, an exact lease-count observer, and default-inert gates before actual inline publication and Open acknowledgement. The old U1 tool, save and acquisition outcome logic is unchanged. Full-suite selection and the separate force-stop lane stay unmodified on the engineering branch.
 
+
+[Unchanged-behavior baseline 45906324931](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931) passed Verify. Both APIs ran ten focused cases. Both physical Layers shortcuts reached the expected broken editing state: selection Apply stayed disabled after a real drag and retouch Reset source stayed disabled after a hold. Three real failed Regular named Opens retained one, two and three leases against a zero baseline, even though restoring source access let Open succeed. Cancellation after actual IO lease registration and before caller delivery retained exactly one lease. The exact-token control passed. Held inline Pro Save persisted the captured visible layer and kept the newer hidden layer live after Cancel, but ordinary Save still showed as enabled after Undo to the captured saved revision. This establishes U1R-V1 at runtime and confines the correction to save acknowledgement.
+
+Four other cases stopped in fixtures and receive no baseline claim: Pro needed the real ActivityResult registry under its isolated context. Three held-Open cases entered a raw blocking wait before Compose could start the pending action. The corrected fixtures use the real Activity registry and a Compose wait for the same exact publication gate. The corrected Open-only red run is pinned to `b262dc0b1aa34a6f6bc621752dcb4caf9ff6e801`.
+
+- API35 [raw receipt 15157858464](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931/artifacts/15157858464) · `sha256:1ae162ac22155083b1ed94487f21eb010f29f25d7291add8eceeed06f830bbe8`
+- API29 [raw receipt 15157614042](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931/artifacts/15157614042) · `sha256:d4f42740ab411806f757b0cd6c3ffa5c70633e9a77b52e2d14f9b12df6295f4a`
+
 ### Documentation review receipt
 
 Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.

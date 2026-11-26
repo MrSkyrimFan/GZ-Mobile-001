@@ -130,6 +130,13 @@ internal data class ProWorkspaceSession(
     val sourceRevision: Long = 0
 )
 
+internal data class ProInlineSaveAcknowledgement(
+    val ownerKey: String,
+    val previousTarget: NamedProjectRef?,
+    val capturedDocument: ProDocument,
+    val saved: NamedProjectRef
+)
+
 internal fun ProWorkspaceSession.nativeOwnerKey(): String =
     saveTarget.nativeOwnerId ?: (ownerId + "/" + saveTarget.workId)
 
@@ -200,7 +207,9 @@ internal fun ProWorkspaceScreenContent(
     onOpenedNamedProject: ((NamedProject<ProStore.SavedProject>, ProWorkspaceSession) -> Unit)? = null,
     workingDrafts: List<Pair<String, String>> = emptyList(),
     onOpenWorkingDraft: ((String, ProDocument, ProWorkspaceSession) -> Unit)? = null,
-    linkedDraftDirty: Boolean = false
+    linkedDraftDirty: Boolean = false,
+    inlineSaveAcknowledgement: ProInlineSaveAcknowledgement? = null,
+    onInlineSaveAcknowledged: (ProInlineSaveAcknowledgement) -> Unit = {}
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -939,7 +948,27 @@ internal fun ProWorkspaceScreenContent(
         }
     }
 
-    SideEffect { persistSession() }
+    // A tracked gesture still holds a history entry with the previous save target.
+    val inlineSaveReady = inlineSaveAcknowledgement != null && dragStart == null && sliderStart == null
+    SideEffect {
+        val acknowledgement = inlineSaveAcknowledgement
+        var settled = false
+        if (acknowledgement != null) {
+            val current = workspaceSnapshot()
+            val ownsSave = current.nativeOwnerKey() == acknowledgement.ownerKey &&
+                current.saveTarget.savedRef == acknowledgement.previousTarget
+            if (ownsSave && inlineSaveReady) {
+                val saved = current.saved(acknowledgement.capturedDocument, acknowledgement.saved)
+                saveTarget = saved.saveTarget
+                history = saved.history
+                baselines = saved.baselines
+                entryDocument = saved.entryDocument
+            }
+            settled = !ownsSave || inlineSaveReady
+        }
+        persistSession()
+        if (settled && acknowledgement != null) onInlineSaveAcknowledged(acknowledgement)
+    }
     DisposableEffect(ownerId) { onDispose { cancelGesture() } }
     BackHandler { requestBack() }
 
@@ -1742,11 +1771,11 @@ internal fun ProWorkspaceScreenContent(
                                     horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                                     TextButton(onClick = { rename = active.name }) { Text("Rename") }
                                     if (active.kind == ProLayerKind.IMAGE) {
-                                        TextButton(onClick = {
-                                            section = ProSection.SELECT
+                                        TextButton(enabled = available, onClick = {
+                                            selectTool(ProSection.SELECT)
                                         }) { Text("Select / mask", color = EditorMint) }
-                                        TextButton(onClick = {
-                                            section = ProSection.RETOUCH
+                                        TextButton(enabled = available, onClick = {
+                                            selectTool(ProSection.RETOUCH)
                                         }) { Text("Clone / repair", color = EditorMint) }
                                         TextButton(enabled = available, onClick = {
                                             requestDeparture(ProDestination.ReplaceImage(selected, active))

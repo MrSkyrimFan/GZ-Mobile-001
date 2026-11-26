@@ -27,24 +27,33 @@ internal suspend fun prepareRegularPhoto(
     uri: Uri,
     edits: EditDocument?
 ): PreparedRegularPhoto {
-    val (bitmap, dimensions) = withContext(Dispatchers.IO) {
-        var header: Pair<Int, Int>? = null
-        val input = ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L) { w, h ->
-            header = w to h
+    var decoded: Bitmap? = null
+    var rendered: Bitmap? = null
+    var transferred = false
+    try {
+        val (bitmap, dimensions) = withContext(Dispatchers.IO) {
+            var header: Pair<Int, Int>? = null
+            val input = ImagePipeline.decode(resolver, uri, ImagePipeline.PREVIEW_MAX_EDGE, 2_000_000L) { w, h ->
+                header = w to h
+            }
+            decoded = input
+            input to checkNotNull(header)
         }
-        input to checkNotNull(header)
-    }
-    return try {
         val preview = if (edits != null && edits.privacy.isNotEmpty()) {
             withContext(Dispatchers.Default) {
                 val job = currentCoroutineContext()
-                ImagePipeline.render(bitmap, edits) { job.ensureActive() }
+                ImagePipeline.render(bitmap, edits) { job.ensureActive() }.also { rendered = it }
             }
         } else bitmap
-        PreparedRegularPhoto(bitmap, dimensions, preview)
-    } catch (failure: Throwable) {
-        bitmap.recycle()
-        throw failure
+        currentCoroutineContext().ensureActive()
+        val prepared = PreparedRegularPhoto(bitmap, dimensions, preview)
+        transferred = true
+        return prepared
+    } finally {
+        if (!transferred) {
+            if (rendered !== decoded) rendered?.recycle()
+            decoded?.recycle()
+        }
     }
 }
 
