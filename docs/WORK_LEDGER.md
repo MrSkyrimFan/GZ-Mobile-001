@@ -36,6 +36,10 @@ Both pinned review and follow-up were read in full, along with the current proje
 
 The optional Collage wording item is deferred to keep the delivery focused. The next decisive result is the red baseline on API29/API35. The existing 303 case identities, numerical limits, inherited assertions, and process qualification remain required.
 
+Root also owns the narrow `RegularProSwitch.kt` prepared-photo lifetime dependency discovered during review. Its decode and privacy-preview bitmaps cross explicit dispatcher return boundaries before the host receives the prepared photo, so the Open cleanup must account for cancellation there as well. The bridge and rendering rules remain unchanged.
+
+[Focused v26 baseline 45906324931](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931) is pinned at `3fd93dc42493da44496c0e665d446858cf84e320`, tree `11f9211fc51d25a55364c8115400ed8f161bf802`. It adds only the new test cases, temporary test selection, an exact lease-count observer, and default-inert gates before actual inline publication and Open acknowledgement. The old U1 tool, save and acquisition outcome logic is unchanged. Full-suite selection and the separate force-stop lane stay unmodified on the engineering branch.
+
 ### Documentation review receipt
 
 Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.
