@@ -278,8 +278,10 @@ internal fun ProWorkspaceScreenContent(
     val latestDocument by rememberUpdatedState(document)
     var showAdd by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
-    var preview by remember { mutableStateOf<Bitmap?>(null) }
-    var rendering by remember { mutableStateOf(false) }
+    val showingFinishedOutput = finishedOutput && document.linkedFinishes.isNotEmpty()
+    // Keep each mode's raster and pending render separate from the other mode's canvas.
+    var preview by remember(showingFinishedOutput) { mutableStateOf<Bitmap?>(null) }
+    var rendering by remember(showingFinishedOutput) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
@@ -962,7 +964,7 @@ internal fun ProWorkspaceScreenContent(
                 saveTarget = saved.saveTarget
                 history = saved.history
                 baselines = saved.baselines
-                entryDocument = saved.entryDocument
+                entryDocument = saved.entryDocument ?: entryDocument
             }
             settled = !ownsSave || inlineSaveReady
         }
@@ -1402,7 +1404,6 @@ internal fun ProWorkspaceScreenContent(
         preview = null
         notice = "Source for image layer " + (missing.position + 1) + " is unavailable."
     }
-    val showingFinishedOutput = finishedOutput && document.linkedFinishes.isNotEmpty()
     LaunchedEffect(document, artboardSize, resolver, resetGeneration, showingFinishedOutput) {
         if (pristine && !showingFinishedOutput) {
             preview = null

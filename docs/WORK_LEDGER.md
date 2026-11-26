@@ -48,6 +48,12 @@ Four other cases stopped in fixtures and receive no baseline claim: Pro needed t
 - API35 [raw receipt 15157858464](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931/artifacts/15157858464) · `sha256:1ae162ac22155083b1ed94487f21eb010f29f25d7291add8eceeed06f830bbe8`
 - API29 [raw receipt 15157614042](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45906324931/artifacts/15157614042) · `sha256:d4f42740ab411806f757b0cd6c3ffa5c70633e9a77b52e2d14f9b12df6295f4a`
 
+The first corrected focused build ([45907209655](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907209655)) failed Kotlin compilation at the remembered Pro entry baseline. The saved session value is nullable while the current editor entry is non-null. The corrected consumer uses the same fallback as the ordinary save metadata installer.
+
+Independent exact-source review passed the Open lease, bitmap transfer and Save metadata ownership. A second scope found that a freshly activated native tool could use the old finished-output raster until asynchronous native rendering completed. This risk is reachable from the repaired shortcuts. Each preview mode now owns a separate remembered raster slot, so late finished rendering cannot enable native input or show finished geometry beneath native controls. Existing rendering and history rules remain. The custody review also recorded a preexisting Bring-only derivative/finish result-delivery concern for remaining R1.2. The reviewed Open paths use neither acquisition.
+
+[Corrected Open baseline 45907070523](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907070523) supplied the actual ActivityResult registry for Pro and synchronized the pending action with Compose. It keeps the old application behavior and the exact held-publication assertions.
+
 ### Documentation review receipt
 
 Three independent documentation scopes read both new files completely at **5af5250b1432c55d6b6dc5374809b3afe981c2d5** in [PR #48](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/48): Pro/source accuracy and tool guards; bridge/custody/cancellation and held-save uncertainty; canonical dispatch, full scope and qualification boundaries. The scope reviewer requested explicit historical labels on two old next-action sentences; those labels are applied in this documentation follow-up.
