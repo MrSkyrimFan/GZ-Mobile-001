@@ -28,6 +28,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 
+@U1ReviewFocused
 @RunWith(AndroidJUnit4::class)
 class AndroidU1ReviewLeaseTest {
     @Test fun acquisitionCanceledAtIoReturnReleasesUndeliveredLease() = runBlocking {

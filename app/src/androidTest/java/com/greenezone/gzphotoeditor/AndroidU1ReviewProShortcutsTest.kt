@@ -35,6 +35,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+@U1ReviewFocused
 @RunWith(AndroidJUnit4::class)
 class AndroidU1ReviewProShortcutsTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
