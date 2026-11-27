@@ -1,6 +1,6 @@
 # GZ Editor Pro — continuity / engineering custody
 
-> **Current work — November 26, 2026.** PR #46 / **0.12.14 Test, code 26** remains the recorded engineering checkpoint at **e6321322526521ace13a45c231b25bb08f91c565**: candidate and merge passed JVM/build/signing, **303/303 on API29 and API35**, and separate new-process recovery. The [independent U1 review](coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) found two medium-severity defects in linked Pro tool activation and failed-Open staging cleanup. **Next: bounded U1 review follow-up, then remaining R1.2.** Hold a clean U1 handset recommendation until the follow-up qualifies. Prior passes remain credited; B2/F03, RV5 and all device/owner/release gates remain open. [Active dispatch](WORK_LEDGER.md#next-engineering-action--u1-review-follow-up).
+> **Current work — November 26, 2026.** [PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49) contains the U1 review corrections. Exact [PR #50](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/50) candidate is held at **717.745 ms** against the **650 ms** API35 R1.1 per-Open limit. [Current disposition](WORK_LEDGER.md#u1-review-correction-and-qualification-hold). PR #46 / **0.12.14 Test, code 26** retains its recorded 303/303 engineering qualification. Focused review and a qualified replacement APK precede the next handset recommendation. Remaining R1.2 and later gates stay in scope.
 
 ## Latest owner direction — U1 workspace correction
 
@@ -12,7 +12,7 @@ Qualified U1 application **e6321322526521ace13a45c231b25bb08f91c565** uses candi
 
 A1's 25 answers/50 questions/50 answers and activation are complete historical records. U1 expressly supersedes old mandatory Yes/No/Resume and fourth-choice prohibition, reset-as-Delete, one-way-only live transfer and copied generic Pro tool presentation. Preserve unaffected child/save/cancel/async/source protections. Do not repeat intake or re-read all frozen appendices merely to dispatch a correction.
 
-**The bounded [U1 review follow-up](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) is next, then remaining R1.2.** U1 qualified the minimum Regular/Pro native custody required for Bring and linked Save. Full all-workspace recovery, history and source/provider custody remain required, along with the other R1 and R2–R11 children. [Current execution order](WORK_LEDGER.md#next-engineering-action--u1-review-follow-up).
+**Resolve exact qualification before remaining R1.2.** PR #49 contains the reviewed corrections. The draft PR #50 candidate preserves production inputs and remains held on an inherited API35 measurement. Wider recovery, history and source/provider custody and all other roadmap obligations remain. [Current execution order](WORK_LEDGER.md#u1-review-correction-and-qualification-hold).
 
 GIF controls receive the stated bounded phone pass credit. B2's recorded numeric misses and F03 quantitative/matched-workload evidence remain open because no new measurements were supplied. RV5 stage/retry recovery and broader device evidence are separate. Four explicit locks still precede Video; all-five editing acceptance precedes final bilingual onboarding; app and Greenezone website precede Console. Publication requires explicit owner approval.
 
