@@ -6,7 +6,7 @@
 
 The latest [0.12.13 owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and protects their behavior. It opens Pro blend input, Regular/Pro tool ownership, shared control locations, Delete versus Reset, and a symmetric four-choice no-forced-save Bring workflow.
 
-Start with [PRODUCT_SPEC](PRODUCT_SPEC.md), [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md), the [single work ledger](WORK_LEDGER.md), [single roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family matrix](CAPABILITY_MATRIX.md), [release gates](RELEASE_GATE.md) and the [U1 handoff](coordination/CODEX_WORKSPACE_CORRECTION_HANDOFF_2026-11-25.md). Root AGENTS.md requires Codex to reconcile its actual applicable project-local instructions to these exact committed contracts before application edits.
+Start with [PRODUCT_SPEC](PRODUCT_SPEC.md), [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md), the [single work ledger](WORK_LEDGER.md), [single roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family matrix](CAPABILITY_MATRIX.md), [release gates](RELEASE_GATE.md) and the [GPT-6 Pro review handoff](coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_HANDOFF_2026-11-26.md). Root AGENTS.md requires Codex to reconcile its actual applicable project-local instructions to these exact committed contracts before application edits.
 
 Qualified U1 application **e6321322526521ace13a45c231b25bb08f91c565** uses candidate **95929d3a292101de0bd7ceaa0c831ca9737c67cc** and the same verified tree. The v25 baseline and original failure evidence remain in the ledger. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
