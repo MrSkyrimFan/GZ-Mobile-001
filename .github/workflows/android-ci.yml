@@ -1,70 +1,37 @@
-name: R1.1 API35 targeted diagnostic
+name: Analyze saved R1.1 Perfetto trace
 on:
   push:
-    branches: [feature/r11-api35-trace-27406f4]
+    branches: [feature/r11-existing-trace-analysis-27406f4]
 permissions:
   contents: read
+  actions: read
 jobs:
-  traced-r11:
+  saved-trace:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      ORG_GRADLE_PROJECT_gzPhoneTestInstall: 'true'
-      R11_SOURCE_SHA: 27406f4aed8efa42a6078e1108c53304d4a0043e
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Check out exact held candidate
-        uses: actions/checkout@v4
         with:
-          ref: 27406f4aed8efa42a6078e1108c53304d4a0043e
-          path: source
           persist-credentials: false
-      - uses: actions/setup-java@v4
+      - uses: actions/download-artifact@v4
         with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v4
-      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.6.0'
-      - name: Build exact application and instrumentation inputs
-        working-directory: source
+          github-token: ${{ github.token }}
+          run-id: 45926598413
+          name: r11-api35-targeted-trace
+          path: prior-trace
+      - name: Verify and analyze existing trace bytes
         run: |
-          test "$(git rev-parse HEAD)" = "$R11_SOURCE_SHA"
-          gradle --no-daemon --stacktrace :app:assembleDebug :app:assembleDebugAndroidTest
-      - name: Enable KVM as in the API35 qualification job
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Trace the complete unchanged R1.1 method once
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          profile: pixel_3a
-          ram-size: 2048M
-          heap-size: 256M
-          disable-animations: true
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: bash .github/scripts/r11-api35-trace.sh
-      - name: Analyze scheduler and ART intervals
-        if: always() && hashFiles('r11-receipt/r11.pftrace') != ''
-        run: |
+          (cd prior-trace && sha256sum -c SHA256SUMS)
+          echo 'c22fd144f6edfb0e545b387cfc7a0a2352fbd23bdf46296980e796ec107c2388  prior-trace/r11.pftrace' | sha256sum -c
           python3 -m venv "$RUNNER_TEMP/r11-perfetto"
           "$RUNNER_TEMP/r11-perfetto/bin/pip" install perfetto==0.16.0
-          "$RUNNER_TEMP/r11-perfetto/bin/python" .github/scripts/r11-api35-analysis.py r11-receipt
-      - name: Record evidence checksums
-        if: always() && hashFiles('r11-receipt/*') != ''
-        run: |
-          cd r11-receipt
-          sha256sum -- * > ../r11-sha256.txt
-          mv ../r11-sha256.txt SHA256SUMS
+          "$RUNNER_TEMP/r11-perfetto/bin/python" .github/scripts/r11-runnable-occupancy.py prior-trace | tee runnable-occupancy.json
+          sha256sum runnable-occupancy.json > runnable-occupancy.sha256
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r11-api35-targeted-trace
-          path: r11-receipt/
+          name: r11-existing-trace-occupancy
+          path: |
+            runnable-occupancy.json
+            runnable-occupancy.sha256
           if-no-files-found: error
