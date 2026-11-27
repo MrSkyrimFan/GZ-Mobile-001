@@ -26,6 +26,16 @@ The per-test log records a contemporaneous concurrent ART collection of 551.746 
 
 PR #50 remains open in draft. The exact candidate has no qualified merged APK. Hold the next handset recommendation and preserve the recorded PR #46 result. [GPT-6 Pro review handoff](coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_HANDOFF_2026-11-26.md).
 
+### Independent review and next diagnostic
+
+[Independent U1 correction review and finite Codex continuation](coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_2026-11-26.md) credits U1R-01, U1R-02 and reproduced U1R-V1 from exact source and raw red/green evidence. Three independent source scopes found no additional blocking defect in those corrections. PR #50's three instrumentation changes retain the inherited assertions and limits. Root verified both 313-identity XML inventories against the prior 303 cases, all ten additions, both separate real new-process lanes and the exact timing failure. The prior GIF/scheduler/tile-notice failure receipts remain credited only at their observed scope.
+
+**Disposition: corrected APK remains held; PR #50 remains draft.** The 551.746 ms concurrent GC is not 551.746 ms of demonstrated app pause. Reported pauses total 21.335 ms; process-wide allocation data and temporal overlap do not establish a cause. The 717.745435 ms sample is not waived or adjusted.
+
+**Next:** one traced execution of the unchanged complete API35 R1.1 method at candidate `27406f4aed8efa42a6078e1108c53304d4a0043e`, with the same twelve dense recipes, 192 MiB heap, selection order, assertions and 650 ms/300 ms limits. Collect scheduler/ART evidence and thread running time against wall time before choosing a repair. A fresh-process targeted pass is diagnostic only. One original-suite-position trace is permitted only if preceding suite state remains the specific unresolved hypothesis; no retry-until-green loop. The review defines evidence branches, file ownership and final exact candidate/merge qualification. Retain still-applicable exact-head passes and original failures. Remaining R1.2 follows that qualification disposition; no new intake or roadmap rewrite.
+
+This review updates documentation only. It does not execute application tests, rebuild an APK, change application/test/build/CI inputs, close a capability family, or claim handset acceptance.
+
 ### Earlier qualification attempts
 
 The original PR #49 candidate passed 313/313 on both APIs. Its exact merge passed Verify, API35 and both force-stop lanes. The two API29 readiness failures and the later isolated harness failures below were retained. The test-only follow-up retains the MediaStore input, time limits, exact visible pixels and Save/Open checks, actual new-process behavior and current-data preservation.
@@ -538,7 +548,7 @@ Subdivide a selected package into bounded deliverables with affected files and o
 
 ## Next engineering action — resolve exact qualification hold
 
-Review the exact [current qualification hold](#u1-review-correction-and-qualification-hold) and decide the smallest evidence-backed action for the R1.1 measurement. Keep the candidate and its original reports pinned. Remaining R1.2 follows this qualification and focused independent review.
+Follow the [completed independent review and finite diagnostic instruction](coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_2026-11-26.md#finite-codex-continuation--next-diagnostic-and-completion-criteria). The first action is one traced execution of the unchanged complete API35 R1.1 method to attribute the 717.745 ms result; the exact limits and workload remain. PR #50 and the corrected handset recommendation stay held until the required qualification completes. Preserve original reports and still-applicable exact-head passes. Remaining R1.2 follows this disposition under the existing scope.
 
 ## Following engineering action — remaining R1.2
 
