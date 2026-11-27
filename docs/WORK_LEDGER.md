@@ -73,6 +73,16 @@ The first Open spent at least **687.812 ms** runnable off guest CPU, compared wi
 
 **Open technical question:** the original failing sample lacks concurrent scheduler attribution, and this guest trace has no host vCPU scheduling evidence. A future matched capture should correlate the guest runnable intervals with host QEMU vCPU runnable/deschedule intervals and record the same-interval Google services and keyboard load. That would distinguish guest background contention, host descheduling and diagnostic overhead without adjusting the 650 ms and 300 ms gates. Any environment correction needs evidence that it addresses the measured condition while retaining the fixture and device tier. Remaining R1.2 follows qualification disposition and focused review.
 
+### Independent trace review and final paired check
+
+The [independent trace review and finite continuation](coordination/R11_PAIRED_SCHEDULING_CHECK_2026-11-26.md) validates the PR #53 receipt and its conservative bounds. Raw protobuf reconstruction independently matches all nine phase state totals and all four selected-phase per-CPU occupancy totals. The diagnostic executed the unchanged method once and correctly remained failed. No source repair or numerical-receipt correction is substantiated by this review.
+
+**Next bounded action:** one paired guest/runner-host scheduling capture, after a no-app capability/identity/clock/coverage preflight. Keep the exact candidate, fixture, heap, CPU tier, stopwatch and every gate. If essential observability fails, execute zero new app tests. This is the final authorized diagnostic batch, not another unused original-suite retry. The committed instruction defines clock uncertainty, source/file ownership, evidence branches and unprofiled candidate/merge exits.
+
+**Forward-path clarification:** the historical 717.745435 ms cause remains unresolved; retroactive proof is not an impossible permanent delivery gate. A prospectively supported correction or environment disposition plus the unchanged complete qualification can resolve the hold. A lone later pass cannot. PR #50 and the corrected APK remain held until those exits. Remaining R1.2 and all 77 families/roadmap children are preserved.
+
+This independent review changes documentation only and performs no app build, emulator execution or Android test. The prior raw failures and successful exact-head receipts remain intact.
+
 ### Earlier qualification attempts
 
 The original PR #49 candidate passed 313/313 on both APIs. Its exact merge passed Verify, API35 and both force-stop lanes. The two API29 readiness failures and the later isolated harness failures below were retained. The test-only follow-up retains the MediaStore input, time limits, exact visible pixels and Save/Open checks, actual new-process behavior and current-data preservation.
@@ -585,7 +595,7 @@ Subdivide a selected package into bounded deliverables with affected files and o
 
 ## Next engineering action — resolve exact qualification hold
 
-The [executed API35 diagnostic](#executed-api35-diagnostic-and-qualification-hold) reproduced the latency failure in a fresh process and bounded the dominant time spent runnable off guest CPU. The source of the original delay remains unresolved. Preserve the 650 ms per-Open and 300 ms warm-median limits, original reports and exact-head passes. PR #50 and the corrected handset recommendation remain held. The next technical hypothesis is paired guest/host scheduling evidence on the unchanged fixture. Remaining R1.2 follows qualification disposition and focused review.
+Follow the [reviewed final paired scheduling check](coordination/R11_PAIRED_SCHEDULING_CHECK_2026-11-26.md#next-action-one-final-paired-diagnostic-batch): verify host/guest observability without running the app test, then execute the unchanged complete method at most once with both traces. Preserve every fixture, tier, assertion and timing limit. Stop the diagnostic loop at the documented disposition; original untraced causality is not a permanent exit requirement. A supported correction/environment disposition proceeds through the established unprofiled exact-candidate/exact-merge qualification. PR #50 and the corrected handset recommendation stay held until those gates complete. Remaining R1.2 follows under its existing scope.
 
 ## Following engineering action — remaining R1.2
 
