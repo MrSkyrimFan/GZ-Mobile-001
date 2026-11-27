@@ -83,6 +83,8 @@ Use the existing diagnostic runner privileges and a small no-app capture to veri
 4. Trace loss/overrun/coverage checks work on the preflight capture. Use low-overhead scheduler events, not full method/allocation tracing.
 5. Existing process metadata can be recorded without changing it: host QEMU and guest test-thread policy/priority, CPU affinity/allowed sets and cgroup/cpuset membership when available. Capture boot age, premeasurement background activity and relevant host CPU/steal/pressure context. Mark unavailable supplemental counters explicitly.
 
+The no-app preflight uses existing system/emulator processes. Collect the new test thread's optional metadata only when its TID exists during the one authorized method execution; never launch an extra app test solely to obtain it.
+
 Host trace availability, usable identity, clock correlation and relevant interval coverage are essential. **If those essentials fail preflight, execute zero new app tests and publish the exact observability block.** Do not run another workload with the same known missing evidence. Missing optional counters alone need not block a capture that can answer the scoped scheduling question.
 
 Do not introduce a guessed boot sleep, favorable-idle selection, service/keyboard disabling, background-work suppression, CPU pinning/priority change, tier upgrade or per-Open GC as part of the diagnostic. Record the time the preflight itself consumes; do not describe a different boot age as an identical startup condition.
