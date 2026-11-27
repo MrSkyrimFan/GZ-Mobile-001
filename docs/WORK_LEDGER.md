@@ -32,9 +32,46 @@ PR #50 remains open in draft. The exact candidate has no qualified merged APK. H
 
 **Disposition: corrected APK remains held; PR #50 remains draft.** The 551.746 ms concurrent GC is not 551.746 ms of demonstrated app pause. Reported pauses total 21.335 ms; process-wide allocation data and temporal overlap do not establish a cause. The 717.745435 ms sample is not waived or adjusted.
 
-**Next:** one traced execution of the unchanged complete API35 R1.1 method at candidate `27406f4aed8efa42a6078e1108c53304d4a0043e`, with the same twelve dense recipes, 192 MiB heap, selection order, assertions and 650 ms/300 ms limits. Collect scheduler/ART evidence and thread running time against wall time before choosing a repair. A fresh-process targeted pass is diagnostic only. One original-suite-position trace is permitted only if preceding suite state remains the specific unresolved hypothesis; no retry-until-green loop. The review defines evidence branches, file ownership and final exact candidate/merge qualification. Retain still-applicable exact-head passes and original failures. Remaining R1.2 follows that qualification disposition; no new intake or roadmap rewrite.
+**Original diagnostic dispatch, now executed:** one traced execution of the unchanged complete API35 R1.1 method at candidate `27406f4aed8efa42a6078e1108c53304d4a0043e`, with the same twelve dense recipes, 192 MiB heap, selection order, assertions and 650 ms/300 ms limits. Collect scheduler/ART evidence and thread running time against wall time before choosing a repair. A fresh-process targeted pass is diagnostic only. One original-suite-position trace is permitted only if preceding suite state remains the specific unresolved hypothesis; no retry-until-green loop. The review defines evidence branches, file ownership and final exact candidate/merge qualification. Retain still-applicable exact-head passes and original failures. Remaining R1.2 follows that qualification disposition; no new intake or roadmap rewrite.
 
 This review updates documentation only. It does not execute application tests, rebuild an APK, change application/test/build/CI inputs, close a capability family, or claim handset acceptance.
+
+### Executed API35 diagnostic and qualification hold
+
+November 26, 2026 (America/Denver). Live `main` at intake was `3e605d29852855c62e797f7d33fe137d8affc80f` (PR #52). Its delta from PR #51 comprises the independent review and this ledger only. PR #50 remained draft at `27406f4aed8efa42a6078e1108c53304d4a0043e` with tree `2c0f8ffab9a8321f8f9f823c9354c26b5a2fb6c8`. The PR #49 production merge remains `b342f0bd656753b3692b741489438c6790d14d8b`.
+
+The [targeted run 45926598413](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45926598413) used disposable diagnostic head `77af73ece1e21e22d671fb18eaad6b5bb80d0f90`, tree `0365e73c3a55fc034c54145f39e7f883017b69f4`. The harness checked out and built the exact held candidate separately. Only the disposable workflow, external capture script and analysis script differ. The app, test method, fixture, clock, order, GC setup and assertions were unchanged. The guest was Android 15 Google APIs x86_64 Pixel 3a with 2,048 MiB RAM and a verified **192 MiB managed heap**. The actual fixture reported 12 projects and 23,881,171 raw XML bytes. The selected order was #12, #01, #06, #12.
+
+Executed once on the disposable emulator:
+
+```sh
+adb shell am instrument -w -r -e class 'com.greenezone.gzphotoeditor.AndroidRegularProjectListAcceptanceTest#twelveLegacyRecipesMigrateAndTheReadyIndexDoesNoListDecodes' com.greenezone.gzphotoeditor.phonetest.v27.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+Perfetto v46 started before the method and captured ftrace scheduling, process/thread identity, ART slices and filtered Android phase logs. The exact capture configuration is in the archive and [diagnostic source](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/77af73ece1e21e22d671fb18eaad6b5bb80d0f90/.github/scripts/r11-api35-trace.sh). `GzR11Acceptance` phase markers matched PID 2567/TID 2784. The trace log brackets surround the unmodified stopwatch. Scheduler ranges use the interval guaranteed inside that stopwatch for the lower bound and the full log bracket for the upper bound. Trace Processor reported continuous selected-thread coverage across all nine brackets and no nonzero ftrace loss/overrun counter. Its informational interned-data tokenizer counter was 87,584. ART slices provide context and do not establish complete ART attribution. Guest scheduled-running time may include host vCPU descheduling.
+
+| Phase | Wall ms | Observed managed growth MiB | Guest running ms | Guest runnable off-CPU ms | Other wait ms | Log bracket slack ms | ART allocation delta as reported, bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `initial_migration` | 5878.227 | 75.77 | 3478.069–3479.181 | 1975.555–1975.555 | 424.047–424.047 | 0.556 | 677069568 |
+| `existing_index_first` | 16.328 | 0.32 | 3.018–3.387 | 12.089–14.161 | 0.000–0.000 | 1.220 | 335920 |
+| `existing_index_warm_1` | 3.540 | 0.33 | 0.000–3.009 | 0.000–11.684 | 0.000–0.000 | 11.154 | 344112 |
+| `existing_index_warm_2` | 8.176 | 0.34 | 2.238–3.217 | 5.115–5.780 | 0.000–0.000 | 0.822 | 352304 |
+| `existing_index_warm_3` | 14.663 | 0.34 | 3.027–3.478 | 11.112–11.708 | 0.000–0.000 | 0.524 | 352304 |
+| `selected_first` | 920.415 | 32.83 | 211.502–215.066 | 687.812–693.568 | 16.441–16.441 | 4.660 | 56635440 |
+| `selected_warm_1` | 857.696 | 11.97 | 231.989–234.163 | 540.598–543.405 | 82.619–82.619 | 2.490 | 56401968 |
+| `selected_warm_2` | 373.395 | 36.21 | 201.712–201.974 | 159.513–159.513 | 12.039–12.039 | 0.131 | 56254512 |
+| `selected_warm_3` | 532.515 | 28.12 | 194.027–194.342 | 270.669–270.669 | 67.661–67.661 | 0.158 | 0 |
+
+The single method **failed** at selected_first (920.414908 ms versus 650 ms). Its complete measurements also show selected_warm_1 at 857.696254 ms. All four selected phases logged the expected project name, one decode and a successful Open. The first selected phase passed the exact identity, source and marker assertions before failing latency. The later selected assertions were not reached. Each list logged zero recipe decodes and zero legacy preference accesses. Migration logged 12 rows/12 decodes. The arithmetic warm median was 532.514765 ms. The failure interrupted the assertions before the test itself reported or asserted that median. Growth values are observations, with later assertions short-circuited by the first latency failure. The zero allocation delta reported for warm_3 is a process counter observation.
+
+The first Open spent at least **687.812 ms** runnable off guest CPU, compared with **211.502–215.066 ms** scheduled running. In the first warm Open those ranges were **540.598–543.405 ms** and **231.989–234.163 ms**. ART GC and `FullSuspendCheck` overlapped portions of the logged intervals. The same saved trace was reanalyzed without running any app or emulator. Both guest CPUs have complete occupancy for the first Open's guaranteed runnable interval. Google Play services' `highpool[0]` ran 253.019 ms on guest CPU 1 while the test thread was runnable. The keyboard had several concurrent workers, including 94.868 ms on CPU 1 during the first warm Open. The test app's `HeapTaskDaemon` ran 30.965 ms on CPU 1 during the first Open's guaranteed runnable interval. These are CPU occupancy overlaps. They do not apportion the wait or establish the cause of the original untraced 717.745435 ms sample.
+
+- [Raw trace, instrumentation, configuration and analysis archive 15167106304](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45926598413/artifacts/15167106304) · `sha256:d14e235612df3e72c95f16a80718197b267776429bc7b25a1585b6d6f5712a2c`. Raw Perfetto file 33,512,355 bytes, SHA-256 `c22fd144f6edfb0e545b387cfc7a0a2352fbd23bdf46296980e796ec107c2388`. The downloaded ZIP and each file matched the recorded checksums.
+- [Existing-trace occupancy analysis run 45928121708](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45928121708) at `7f4ac905ffdfd8d2f0d604ac27bba8eb06fcd7f9` · [raw occupancy JSON archive 15167108427](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45928121708/artifacts/15167108427) · `sha256:569c0128ee5180a70838415e3244ff46758b39c435d57388e108120fa18a65c0`. JSON SHA-256 `2ecf71513dfd627e61ea8bd984ae1697d0cdd5c25c3ee9170ea74b98240b08cf`.
+
+**Disposition:** The unchanged method exceeded the limit in a fresh process, without the original suite's 197 preceding tests. The permitted original-suite-position trace depends on a specific preceding-suite hypothesis. The current evidence does not establish one, so the second execution was not used. Neither a production change nor an emulator change was justified for the original gate by this evidence. PR #50 stays draft and the corrected APK remains held. Prior exact-head JVM/build/signing, API29 ordinary pass and separate recovery evidence stay credited. No new full qualification or APK delivery was attempted.
+
+**Open technical question:** the original failing sample lacks concurrent scheduler attribution, and this guest trace has no host vCPU scheduling evidence. A future matched capture should correlate the guest runnable intervals with host QEMU vCPU runnable/deschedule intervals and record the same-interval Google services and keyboard load. That would distinguish guest background contention, host descheduling and diagnostic overhead without adjusting the 650 ms and 300 ms gates. Any environment correction needs evidence that it addresses the measured condition while retaining the fixture and device tier. Remaining R1.2 follows qualification disposition and focused review.
 
 ### Earlier qualification attempts
 
@@ -548,7 +585,7 @@ Subdivide a selected package into bounded deliverables with affected files and o
 
 ## Next engineering action — resolve exact qualification hold
 
-Follow the [completed independent review and finite diagnostic instruction](coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_2026-11-26.md#finite-codex-continuation--next-diagnostic-and-completion-criteria). The first action is one traced execution of the unchanged complete API35 R1.1 method to attribute the 717.745 ms result; the exact limits and workload remain. PR #50 and the corrected handset recommendation stay held until the required qualification completes. Preserve original reports and still-applicable exact-head passes. Remaining R1.2 follows this disposition under the existing scope.
+The [executed API35 diagnostic](#executed-api35-diagnostic-and-qualification-hold) reproduced the latency failure in a fresh process and bounded the dominant time spent runnable off guest CPU. The source of the original delay remains unresolved. Preserve the 650 ms per-Open and 300 ms warm-median limits, original reports and exact-head passes. PR #50 and the corrected handset recommendation remain held. The next technical hypothesis is paired guest/host scheduling evidence on the unchanged fixture. Remaining R1.2 follows qualification disposition and focused review.
 
 ## Following engineering action — remaining R1.2
 
