@@ -46,6 +46,7 @@ import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
 class AndroidGifProjectIdentityTest {
+    // Queue composition when media and store work return from background threads.
     @get:Rule val rule = createComposeRule()
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
