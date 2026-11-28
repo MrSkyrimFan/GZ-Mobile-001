@@ -1,6 +1,6 @@
 # Workspace interaction and tool-ownership blueprint
 
-**Status** — Controlling workspace behavior. PR #49 contains the reviewed tool-entry, Open ownership and held-Save corrections. PR #50's app merge passed Regular selected Open on API29 and API35. The exact merged API35 GIF final-frame timeout holds the replacement APK. Focused handset confirmation and wider family exits remain. [Current qualification hold](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete)
+**Status** — Controlling workspace behavior. PR #62 passed exact candidate and merged qualification for the reviewed U1 corrections. Focused handset confirmation and wider family exits remain. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair).
 Updated November 26, 2026 (America/Denver), preserving the [0.12.13 owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and all existing interaction requirements.
 
 This is the detailed interaction contract under [PRODUCT_SPEC](PRODUCT_SPEC.md), not a second roadmap. [GZ_ENGINEERING_ROADMAP](GZ_ENGINEERING_ROADMAP.md) preserves all 77 families; [WORK_LEDGER](WORK_LEDGER.md) alone orders execution. Latest direct owner instructions control. Historical blueprints, CQ answers and receipts remain evidence except for the specifically superseded interaction clauses named below.
@@ -166,7 +166,7 @@ These are enforcement details for the existing editable-round-trip and failure c
 - Every prepared native-work handle has an explicit owner until transfer or release. Failed source decode, stale/publication failure and cancellation, including acquisition/result delivery, release only the operation's own leases. Reference-aware collection still preserves named/active/draft/export roots; success and failure do not justify clearing global stages.
 - A completed inline named Save remains accurately acknowledged if its switch is canceled. Cancel keeps the route, and a stale save result cannot clean newer edits. A controlled held-publication test reproduced the U1R-V1 acknowledgement issue. The replacement uses exact-owner acknowledgement.
 
-The [completed correction dispatch](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) records reproductions and file boundaries. [The ledger](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete) records the exact qualification hold.
+The [completed correction dispatch](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) records reproductions and file boundaries. [The ledger](WORK_LEDGER.md#qualified-gif-paused-seek-repair) records the resolved hold and exact qualification.
 
 ## Pro Blend: usable property, truthful preview
 

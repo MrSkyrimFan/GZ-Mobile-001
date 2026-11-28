@@ -1,17 +1,17 @@
 # GZ Editor Pro engineering and release gates
 
-> **Current work — November 27, 2026.** PR #50's merged Regular selected-Open repair passed its unchanged limits on API29 and API35. The exact merge remains unqualified because of an inherited API35 GIF final-frame seek timeout. The scoped and full-context diagnostics did not reproduce the timeout. The replacement APK remains held. PR #46 retains its prior full engineering qualification. [Exact disposition and review handoff](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete)
+> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
 
-## U1 independent review — corrections implemented, qualification held
+## U1 independent review — corrections engineering-qualified
 
-The November 26 review identified two source-confirmed defects. PR #49 implements those corrections and the reproduced held-Save acknowledgement repair. Focused engineering checks passed. Full exact qualification and handset confirmation remain open.
+The November 26 review identified two source-confirmed defects. PR #49 implements those corrections and the reproduced held-Save acknowledgement repair. Full exact candidate and merge qualification passed. Focused handset confirmation remains open.
 
 - [x] U1R-01: Layers → Select / mask and Clone / repair activate real native editing after linked return/named Open, preserving target, finish, history and busy guards.
 - [x] U1R-02: failed/canceled/stale native named/draft Opens release their exact preparation leases, including acquisition/result delivery; current work and named/draft/retry assets remain safe.
 - [x] U1R-V1: held inline Pro Save then Cancel has a deterministic pass or qualified correction disposition; no unsupported corruption claim.
-- [ ] Corrected candidate and exact merge retain all 303 inherited cases/meaningful assertions, full JVM/API29/API35/build/signing and the separate new-process lane, with independent review and one exact APK.
+- [x] Corrected candidate and exact merge retain 303 inherited plus ten correction cases and meaningful assertions, full JVM/API29/API35/build/signing and the separate new-process lane, with independent review and one exact APK.
 
-The repaired R1.1 Open passed the existing budgets. The exact merged API35 GIF final-frame timeout holds the replacement handset recommendation. Earlier credited phone checks retain their scope. B2/F03, RV5 and broader release obligations remain open. [Exact receipt](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete).
+The repaired Regular Open and GIF seek passed exact canonical qualification. Earlier credited phone checks retain their scope. Focused v27 handset confirmation, B2/F03, RV5 and broader release obligations remain open. [Exact receipt](WORK_LEDGER.md#qualified-gif-paused-seek-repair).
 
 ## Latest owner evidence and U1 correction gate
 
@@ -54,9 +54,15 @@ Historical tests using removed File/More/Histogram, old Yes/No/Resume or reset-a
 A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. The active ledger records the U1 qualification dependency. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
 
 
-## Current engineering qualification — PR #46 / 0.12.14 Test
+## Current engineering qualification — PR #62 / 0.12.15 Test
 
-U1 candidate and same-tree app merge passed JVM/build/signing, the full API29/API35 suites and separate true new-process recovery on both APIs. The bounded independent-review corrections above precede a clean new handset recommendation; focused owner confirmation remains open. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
+Exact candidate and app merge `4114238397a2bb8c27a302082b68aec35eb0bdae` passed JVM/build/signing, both complete API29/API35 suites and separate true new-process recovery on both APIs. The v27 APK comes from the exact merged API35 job. Focused handset confirmation is open. [Exact qualification and handset receipt](WORK_LEDGER.md#qualified-gif-paused-seek-repair).
+
+<a id="current-engineering-qualification--pr-46--01214-test"></a>
+
+## Prior engineering qualification — PR #46 / 0.12.14 Test
+
+The earlier U1 candidate and same-tree app merge passed JVM/build/signing, the full API29/API35 suites and separate true new-process recovery on both APIs. This checkpoint retains its engineering credit. [PR #46 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
 ## Retained R1.1 and RV4 qualification — PR #43 / 0.12.13 Test
 
@@ -68,7 +74,7 @@ Regular saved-project migration, metadata listing, selected Open and Pro unreada
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next is exact U1 qualification, followed by remaining R1.2.** Four owner locks precede Video. All five workspace acceptances precede final bilingual onboarding. The qualified app and finished website precede Play Console setup.
+**Next is remaining R1.2.** Four owner locks precede Video. All five workspace acceptances precede final bilingual onboarding. The qualified app and finished website precede Play Console setup.
 
 The detailed B1 checklist above retains its complete product/owner scope. Executed fixture results support the bounded engineering claims in the receipt. In particular, 320dp/200% font and touch tests do not replace real TalkBack/keyboard or broader device acceptance. B2 numerical misses are not waived by B1 delivery.
 
