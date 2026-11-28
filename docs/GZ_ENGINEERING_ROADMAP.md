@@ -86,7 +86,7 @@ The original four defects passed that engineering exit in PR #29. The separately
 
 ### Qualified correction U1 — coherent workspace workflow
 
-U1 is a bounded correction within S01/S03/S04/S06/S08, P01/P07/P08/P10, C03 and Q01, not new families or a replacement roadmap. PR #46's recorded exits are retained; the November 26 review led to U1R-01/U1R-02 and the reproduced U1R-V1 correction. PR #${p.pr} established exact candidate and merged qualification. Native selection/retouch entry coverage touches existing P05/P09 without completing those families.
+U1 is a bounded correction within S01/S03/S04/S06/S08, P01/P07/P08/P10, C03 and Q01, not new families or a replacement roadmap. PR #46's recorded exits are retained; the November 26 review led to U1R-01/U1R-02 and the reproduced U1R-V1 correction. [PR #62](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/62) established exact candidate and merged qualification. Native selection/retouch entry coverage touches existing P05/P09 without completing those families.
 
 1. Reproduce O25-01 through actual Blend input; preserve all16 modes and demonstrate selected value/history/native reopen/export, including no-backdrop and busy states.
 2. Make Pro's layer/mask/vector/adjustment ownership explicit; remove the generic duplicated Regular development deck without removing professional paint/shapes/adjustments or legacy editability.
