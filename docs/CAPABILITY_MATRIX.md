@@ -1,12 +1,12 @@
 # GZ Editor Pro — capability and evidence inventory
 
-> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
+> **Current work — November 28, 2026.** PR #64 qualifies the first standalone Regular R1.2 recovery slice at exact application merge `ed0f21af0280`. The acknowledged Regular edit and both history branches recover in a new process on API29 and API35. The focused v27 handset APK remains the signed PR #62 build. Continue remaining R1.2 and the full professional roadmap. [Latest engineering qualification](WORK_LEDGER.md#qualified-standalone-regular-recovery)
 
 ## Latest owner evidence and current execution
 
 The [latest report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied 0.12.13 phone instructions 1–5 and opens O25-01–O25-06. Preserve that exact scope; it is not a whole-family lock. [U1's blueprint](WORKSPACE_UX_BLUEPRINT.md) adds current acceptance obligations without deleting any family or child requirement. All **77 rows/77 unique IDs** remain.
 
-Current qualified app is PR #62 `4114238397a2bb8c27a302082b68aec35eb0bdae` (313/313 per API at candidate and merge). PR #46 and earlier scoped receipts retain their recorded engineering credit. [Current qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair). The full inventory originated against d2a8f4de41839e25ad54060be803746d7307bee8 and tracks work beyond this bounded result.
+Current qualified application is PR #64 `ed0f21af028090839135a39d5b502020d78d8b8f` with 313/313 per API at candidate and merge. The new standalone Regular receipt credits only the specified R1.2 behavior. Earlier checkpoints retain their respective engineering and handset scope. [Latest qualification](WORK_LEDGER.md#qualified-standalone-regular-recovery). The full inventory originated against d2a8f4de41839e25ad54060be803746d7307bee8 and tracks work beyond this bounded result.
 
 PR #46's bounded U1 qualification remains credited within existing families. U1R-01 is a confirmed native tool-entry defect affecting existing P05/P09/S08; U1R-02 is a confirmed prepared-work lifetime defect affecting S03/S06. PR #49 implements the corrections and U1R-V1. [PR #62 qualified the correction package](WORK_LEDGER.md#qualified-gif-paused-seek-repair). Its Regular/Pro draft and lineage slice remains partial against full S03/S06/R1.2. Remaining R1–R11, numerical B2/F03 gaps, RV5, and device, owner and release gates stay open.
 

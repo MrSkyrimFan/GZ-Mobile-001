@@ -1,6 +1,14 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](#qualified-gif-paused-seek-repair)
+> **Current work — November 28, 2026.** PR #64 qualifies the first standalone Regular R1.2 recovery slice at exact application merge `ed0f21af0280`. The acknowledged Regular edit and both history branches recover in a new process on API29 and API35. The focused v27 handset APK remains the signed PR #62 build. Continue remaining R1.2 and the full professional roadmap. [Latest engineering qualification](#qualified-standalone-regular-recovery)
+
+## Qualified standalone Regular recovery
+
+PR #64 publishes an ordinary unlinked Regular photo and its completed edits as acknowledged, atomic working generations. The real MainActivity owns the checkpoint. Recovery preserves the source URI and logical owner identity, entry/clean/reset recipes and both Undo/Redo branches. The owning catalog and completed revision guard replacement, ordinary Close and explicit Delete. Linked and child work retain their existing paths and independent export retry records remain available.
+
+Candidate `c2a29a574f6e73a9c710915fd72b6ae5175be087` and exact application merge `ed0f21af028090839135a39d5b502020d78d8b8f` share tree `e3705c8ec73ebc2640904f7a07623dbbead47616`. Both inputs passed the JVM/build/signing checks and the complete 313-case suite on API29 and API35. Both external linked and standalone recovery lanes passed. The standalone lane also verified that a failed replacement preserves the exact root, pixels and source bytes and that ordinary Close clears the exact active root without retiring the owner. [Canonical candidate](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46117654704) · [Canonical exact merge](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46119442817) · [Full review evidence](coordination/GPT_6_PRO_U1_GIF_SEEK_QUALIFICATION_HANDOFF_2026-11-27.md#standalone-regular-recovery).
+
+The separate v27 handset download remains the focused GIF/U1 build documented below. Physical handset and workspace acceptance, provider grant loss and same-URI change/relink, other workspace owners and remaining R1.2 through R11 stay open.
 
 ## Qualified GIF paused seek repair
 
@@ -704,7 +712,7 @@ The [GIF blocker correction and exact qualification](#qualified-gif-paused-seek-
 
 ## Next engineering action — remaining R1.2
 
-Begin remaining R1.2 with an ordinary unlinked Regular import and completed edit, first durable acknowledged working generation, and actual force-stop/new-PID restore of the exact source, entry/clean baselines, route and Undo/Redo. Preserve intentional departure, failed replacement, linked and child custody and independent export retry. Continue under the existing Stage 3 contract. Pending independent phone observations hold only their affected acceptance; do not recreate a global idle gate.
+The [first standalone Regular recovery slice](#qualified-standalone-regular-recovery) is complete at the defined accessible-source scope. Continue R1.2 with the bounded Regular source-custody slice for revoked or changed providers and explicit recovery or relink with exact owner and previous draft preservation. Continue to the remaining workspace-specific and child-state work under the existing Stage 3 contract. Device observations hold only their affected acceptance.
 
 The U1 receipt records the acknowledged Regular/Pro minimum. Reuse it where appropriate and verify the remaining workspace-specific custody, child and recovery properties against the active contract.
 

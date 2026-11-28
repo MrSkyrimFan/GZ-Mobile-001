@@ -1,6 +1,6 @@
 # Workspace interaction and tool-ownership blueprint
 
-**Status** — Controlling workspace behavior. PR #62 passed exact candidate and merged qualification for the reviewed U1 corrections. Focused handset confirmation and wider family exits remain. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair).
+**Status** — Controlling workspace behavior. PR #62 passed exact candidate and merged qualification for the reviewed U1 corrections. Focused handset confirmation and wider family exits remain. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair). The first standalone Regular recovery slice has exact engineering evidence. [Regular recovery receipt](WORK_LEDGER.md#qualified-standalone-regular-recovery).
 Updated November 26, 2026 (America/Denver), preserving the [0.12.13 owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) and all existing interaction requirements.
 
 This is the detailed interaction contract under [PRODUCT_SPEC](PRODUCT_SPEC.md), not a second roadmap. [GZ_ENGINEERING_ROADMAP](GZ_ENGINEERING_ROADMAP.md) preserves all 77 families; [WORK_LEDGER](WORK_LEDGER.md) alone orders execution. Latest direct owner instructions control. Historical blueprints, CQ answers and receipts remain evidence except for the specifically superseded interaction clauses named below.

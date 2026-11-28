@@ -1,6 +1,6 @@
 # GZ Editor Pro product requirements
 
-> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
+> **Current work — November 28, 2026.** PR #64 qualifies the first standalone Regular R1.2 recovery slice at exact application merge `ed0f21af0280`. The acknowledged Regular edit and both history branches recover in a new process on API29 and API35. The focused v27 handset APK remains the signed PR #62 build. Continue remaining R1.2 and the full professional roadmap. [Latest engineering qualification](WORK_LEDGER.md#qualified-standalone-regular-recovery)
 
 ## Latest owner requirements — professional workspaces and simple navigation
 
