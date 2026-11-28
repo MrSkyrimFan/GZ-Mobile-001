@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
@@ -407,28 +408,58 @@ class AndroidU1ProcessRecoveryTest {
     }
 
     private fun waitStandalonePixels(horizontal: Boolean, vertical: Boolean) {
-        compose.waitUntil(15_000) {
-            val capture = compose.onNodeWithContentDescription(REGULAR_CANVAS, substring = false)
-                .captureToImage().asAndroidBitmap()
-            try {
-                val fittedWidth = minOf(capture.width, capture.height * STANDALONE_WIDTH / STANDALONE_HEIGHT)
-                val fittedHeight = minOf(capture.height, capture.width * STANDALONE_HEIGHT / STANDALONE_WIDTH)
-                val left = (capture.width - fittedWidth) / 2
-                val top = (capture.height - fittedHeight) / 2
-                (0..1).all { row ->
-                    (0..1).all { column ->
+        val canvas = compose.onNodeWithContentDescription(REGULAR_CANVAS, substring = false)
+        val options = compose.onAllNodesWithText("Options", substring = false)
+        val chromeWasVisible = options.fetchSemanticsNodes().isNotEmpty()
+        if (chromeWasVisible) canvas.performSemanticsAction(SemanticsActions.OnClick)
+        var samples = "no unoccluded capture"
+        var verificationFailure: Throwable? = null
+        try {
+            compose.waitUntil(15_000) {
+                if (options.fetchSemanticsNodes().isNotEmpty()) return@waitUntil false
+                val capture = canvas.captureToImage().asAndroidBitmap()
+                try {
+                    val fittedWidth = minOf(capture.width, capture.height * STANDALONE_WIDTH / STANDALONE_HEIGHT)
+                    val fittedHeight = minOf(capture.height, capture.width * STANDALONE_HEIGHT / STANDALONE_WIDTH)
+                    val left = (capture.width - fittedWidth) / 2
+                    val top = (capture.height - fittedHeight) / 2
+                    val pixels = List(4) { index ->
+                        val row = index / 2
+                        val column = index % 2
+                        capture.getPixel(left + (2 * column + 1) * fittedWidth / 4,
+                            top + (2 * row + 1) * fittedHeight / 4)
+                    }
+                    samples = "capture=" + capture.width + "x" + capture.height +
+                        " fitted=" + fittedWidth + "x" + fittedHeight +
+                        " pixels=" + pixels.joinToString(",") { Integer.toHexString(it) }
+                    pixels.indices.all { index ->
+                        val row = index / 2
+                        val column = index % 2
                         val sourceRow = if (vertical) 1 - row else row
                         val sourceColumn = if (horizontal) 1 - column else column
                         val expected = standaloneColors[sourceRow * 2 + sourceColumn]
-                        val pixel = capture.getPixel(left + (2 * column + 1) * fittedWidth / 4,
-                            top + (2 * row + 1) * fittedHeight / 4)
+                        val pixel = pixels[index]
                         val distance = kotlin.math.abs(Color.red(expected) - Color.red(pixel)) +
                             kotlin.math.abs(Color.green(expected) - Color.green(pixel)) +
                             kotlin.math.abs(Color.blue(expected) - Color.blue(pixel))
                         distance <= 16
                     }
+                } finally { capture.recycle() }
+            }
+        } catch (failure: Throwable) {
+            verificationFailure = failure
+            Log.i(STANDALONE_TAG, "pixel timeout horizontal=$horizontal vertical=$vertical $samples")
+            throw failure
+        } finally {
+            if (chromeWasVisible) {
+                try {
+                    canvas.performSemanticsAction(SemanticsActions.OnClick)
+                } catch (restoreFailure: Throwable) {
+                    val prior = verificationFailure
+                    if (prior == null) throw restoreFailure
+                    prior.addSuppressed(restoreFailure)
                 }
-            } finally { capture.recycle() }
+            }
         }
     }
 
