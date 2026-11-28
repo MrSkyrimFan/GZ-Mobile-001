@@ -1,12 +1,12 @@
 # GZ Editor Pro — complete product roadmap
 
-> **Current work — November 27, 2026.** PR #50's merged Regular selected-Open repair passed its unchanged limits on API29 and API35. The exact merge remains unqualified because of an inherited API35 GIF final-frame seek timeout. The scoped and full-context diagnostics did not reproduce the timeout. The replacement APK remains held. PR #46 retains its prior full engineering qualification. [Exact disposition and review handoff](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete)
+> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
 
-## Current sequence — exact U1 qualification, then remaining R1.2
+## Current sequence — remaining R1.2 after exact U1 qualification
 
 The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied 0.12.13 phone checks 1–5 and specifically opens Pro blend/input, tool ownership, common control positions, Delete/Reset and symmetric Regular↔Pro transfer. The [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) replaces the old conflicting interaction clauses while preserving source/history/cancel/child safety.
 
-**Resolve the full qualification hold before remaining R1.2.** The bounded U1 and selected-Open repairs have exact scoped evidence. One API35 GIF test prevents full merged qualification. Durable draft and lineage credit retains its scope. Continue wider recovery, history, custody and all existing family obligations in the single roadmap. [Current disposition](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete)
+**Continue remaining R1.2.** PR #62 qualified the corrected U1 application and focused GIF seek behavior. Preserve bounded existing draft and lineage credit while completing wider recovery, history and custody under the single roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
 
 A1's 25/50 exchange is complete and its activation consumed. Frozen historical roadmaps and CQ answers retain evidence, not superseded execution rules. This remains the single active R0–R11 roadmap. The [ledger](WORK_LEDGER.md) owns exact dispatch and qualifications.
 
@@ -22,9 +22,9 @@ Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WO
 
 ## Current engineering state
 
-Qualified app **e6321322526521ace13a45c231b25bb08f91c565**, 0.12.14 Test/code26, passed 303/303 on each API at candidate and merge, plus JVM/build/signing and separate new-process recovery. Earlier R1.1/RV4 and PR #41 bounded repairs remain credited. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
+Qualified app **4114238397a2bb8c27a302082b68aec35eb0bdae**, 0.12.15 Test/code27, passed full JVM/build/signing, 313/313 per API at both inputs and both external new-process lanes. Earlier R1.1/RV4 and U1 engineering checkpoints remain credited. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair).
 
-Earlier unmentioned supplied phone checks retain their owner-reported scope. A clean U1 handset recommendation awaits qualified correction evidence and focused independent review. Owner confirmation remains open. B2 preparation and response misses, F03 quantitative matched-workload evidence, RV5 provider stage/retry ownership, broader device/process-loss evidence, formal workspace locks and release remain open.
+Earlier unmentioned supplied phone checks retain their owner-reported scope. Focused owner confirmation of the qualified v27 APK remains open. B2 preparation and response misses, F03 quantitative matched-workload evidence, RV5 provider stage/retry ownership, broader device/process-loss evidence, formal workspace locks and release remain open. [Focused handset instructions](coordination/GPT_6_PRO_U1_GIF_SEEK_QUALIFICATION_HANDOFF_2026-11-27.md#exact-handset-build).
 
 All 77 family IDs and required children below are retained. A minimal bridge checkpoint adapter does not complete S03/S06, all R1.2, Pro groups/compositor, or Photoshop/GIMP-level capability.
 
@@ -86,7 +86,7 @@ The original four defects passed that engineering exit in PR #29. The separately
 
 ### Qualified correction U1 — coherent workspace workflow
 
-U1 is a bounded correction within S01/S03/S04/S06/S08, P01/P07/P08/P10, C03 and Q01, not new families or a replacement roadmap. PR #46's recorded exits are retained; the November 26 review led to U1R-01/U1R-02 and the reproduced U1R-V1 correction. Exact qualification remains held. Native selection/retouch entry coverage touches existing P05/P09 without completing those families.
+U1 is a bounded correction within S01/S03/S04/S06/S08, P01/P07/P08/P10, C03 and Q01, not new families or a replacement roadmap. PR #46's recorded exits are retained; the November 26 review led to U1R-01/U1R-02 and the reproduced U1R-V1 correction. PR #${p.pr} established exact candidate and merged qualification. Native selection/retouch entry coverage touches existing P05/P09 without completing those families.
 
 1. Reproduce O25-01 through actual Blend input; preserve all16 modes and demonstrate selected value/history/native reopen/export, including no-backdrop and busy states.
 2. Make Pro's layer/mask/vector/adjustment ownership explicit; remove the generic duplicated Regular development deck without removing professional paint/shapes/adjustments or legacy editability.

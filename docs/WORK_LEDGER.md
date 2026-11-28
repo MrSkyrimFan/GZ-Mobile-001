@@ -1,8 +1,18 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 27, 2026.** PR #50 exact candidate passed both full Android suites. Its identical-tree exact merge passed the Regular selected-Open timing gates on both APIs and both actual new-process checks. One inherited GIF final-frame timeout keeps API35 exact merged qualification open. Targeted and full-context passes left the original cause unresolved. The replacement APK remains held. [Exact merge disposition](#pr-50-exact-merge-qualification-incomplete) · [GPT-6 Pro review handoff](coordination/GPT_6_PRO_R11_SELECTED_OPEN_REVIEW_HANDOFF_2026-11-27.md)
+> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](#qualified-gif-paused-seek-repair)
+
+## Qualified GIF paused seek repair
+
+PR #60 fixes a reproduced paused-preview defect. A failed older read no longer ends collection before a newer accepted seek. The controlled baseline showed an accepted and bound final request followed by the older injected `IOException` and no final consumption or visible still. The same controlled case decoded, assigned and displayed frame 16 after the fix. The original PR #50 timeout retains its original evidence and unresolved attribution. [Exact causal evidence and independent review](coordination/GPT_6_PRO_U1_GIF_SEEK_QUALIFICATION_HANDOFF_2026-11-27.md)
+
+Candidate `dda4e5617b23cfcbce11c9472551349404251fed` and exact app merge `4114238397a2bb8c27a302082b68aec35eb0bdae` share tree `6f09276cd155c9e65c38706d4a8ef87bdb3d9c63`. Each passed full JVM/build/signing, 313/313 on each API with the preserved exact identity inventory, and actual external force-stop/new-PID recovery for both named Opens and durable layer edits. Regular selected-Open warm medians were 126.243 / 78.837 ms on the candidate and 44.020 / 97.347 ms on the merge, API29 then API35. [Candidate run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46112340733) · [Merged run](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46114849773)
+
+The sole qualified v27 handset APK was exercised by the exact merged API35 job. APK SHA-256 `45232cb9b32b60a4083a3558e07cbc238357bd5881bb8caaa86a98bf0cc72957`. Focused handset observations remain open. [Download the one merged APK ZIP](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46114849773/artifacts/15252211361)
 
 ## PR #50 exact merge qualification incomplete
+
+This historical run remains a failed exact qualification. The [later GIF correction and final exact verification](#qualified-gif-paused-seek-repair) govern current handset routing.
 
 The [exact candidate](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46094860317) `4fb4ec51f916934aeaa2cbeab6790b0f077e2cab` completed JVM/build/signing, 313/313 with no errors or skips on both APIs, both external force-stop/new-PID checks and a verified candidate APK identity. Unchanged Regular Open warm medians were 45.261 ms on API29 and 87.789 ms on API35.
 
@@ -28,13 +38,15 @@ Read-only scope reconciliation at `07578107c15e6df3f08ea30427ea55b9da5ba8e2` ver
 
 Full R2/R3/R4 professional layers/groups/compositing, selections/channels/editable masks, brush/retouch/vector/effects/interchange and Subject & Background/reshaping remain required before their workspace closure. Remaining R1–R11, Regular/Collage/GIF scope, B2/F03, RV5, all-workspace recovery and formal owner/release gates remain. Use the existing end-to-end workflow acceptance contract; do not reduce difficult features to labels or move required pre-release Pro work after launch.
 
-**Dispatch:** The Regular performance repair passed its exact limits. The merged suite's inherited GIF test still blocks v27 qualification. Follow the [exact disposition](#pr-50-exact-merge-qualification-incomplete) with the full R1.2 and professional scope preserved.
+**Dispatch:** The [exact U1 v27 engineering qualification](#qualified-gif-paused-seek-repair) is complete. Continue [remaining R1.2](#next-engineering-action--remaining-r12) and preserve all existing Pro and workspace scope.
 
-## U1 review correction and qualification hold
+## Historical U1 review correction and qualification hold
+
+These entries preserve the failed and bounded qualification attempts. The [current exact release disposition](#qualified-gif-paused-seek-repair) governs the corrected APK.
 
 - Production correction merge `b342f0bd656753b3692b741489438c6790d14d8b`, complete tree `046ac9806b7181c78cb1b30cf88505d02354e9cf`. [Application PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49).
 - Draft qualification candidate `27406f4aed8efa42a6078e1108c53304d4a0043e`, complete tree `2c0f8ffab9a8321f8f9f823c9354c26b5a2fb6c8`, 0.12.15 Test/code27/phonetest.v27. [Qualification PR #50](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/50).
-- Last fully qualified application `e6321322526521ace13a45c231b25bb08f91c565`, 0.12.14 Test/code26. [Prior application PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46).
+- Last fully qualified application at this historical checkpoint `e6321322526521ace13a45c231b25bb08f91c565`, 0.12.14 Test/code26. [Prior application PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46).
 
 - **U1R-01:** actual Layers **Select / mask** and **Clone / repair** transition to native editing. The mode-keyed preview state waits for the matching raster and geometry. The focused tests exercise real gestures, target/history, named Open and decoded PNG output.
 - **U1R-02:** failed, stale and canceled named and working-draft Opens release exact owned handles and undelivered bitmaps. Repeated failure, exact cancellation and restored-source checks retain named, current, unrelated draft and retry custody.
@@ -680,13 +692,13 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next engineering action — resolve exact qualification hold
+## Previous engineering action — GIF qualification
 
-The [selected-Open repair](#pr-50-exact-merge-qualification-incomplete) passed its own exact limits. The merged API35 GIF final-frame timeout remains a real qualification blocker. Use the [review handoff](coordination/GPT_6_PRO_R11_SELECTED_OPEN_REVIEW_HANDOFF_2026-11-27.md) to identify new attributable evidence or a supported correction before repeating full exact qualification. Keep the original workload, time and memory gates and all test identities. Preserve the replacement APK hold and continue remaining R1.2 after qualification.
+The [GIF blocker correction and exact qualification](#qualified-gif-paused-seek-repair) completed this dispatch. The old PR #50 result is retained above. Earlier test failures, diagnostic boundaries and exact replacement APK identity are in the [review handoff](coordination/GPT_6_PRO_U1_GIF_SEEK_QUALIFICATION_HANDOFF_2026-11-27.md).
 
-## Following engineering action — remaining R1.2
+## Next engineering action — remaining R1.2
 
-After the bounded U1 follow-up, continue remaining R1.2 within the existing Stage 3 native durability contract. Pending independent phone observations hold only their affected acceptance; do not recreate a global idle gate.
+Begin remaining R1.2 with an ordinary unlinked Regular import and completed edit, first durable acknowledged working generation, and actual force-stop/new-PID restore of the exact source, entry/clean baselines, route and Undo/Redo. Preserve intentional departure, failed replacement, linked and child custody and independent export retry. Continue under the existing Stage 3 contract. Pending independent phone observations hold only their affected acceptance; do not recreate a global idle gate.
 
 The U1 receipt records the acknowledged Regular/Pro minimum. Reuse it where appropriate and verify the remaining workspace-specific custody, child and recovery properties against the active contract.
 

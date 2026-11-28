@@ -1,18 +1,18 @@
 # GZ Editor Pro — continuity / engineering custody
 
-> **Current work — November 27, 2026.** PR #50's merged Regular selected-Open repair passed its unchanged limits on API29 and API35. The exact merge remains unqualified because of an inherited API35 GIF final-frame seek timeout. The scoped and full-context diagnostics did not reproduce the timeout. The replacement APK remains held. PR #46 retains its prior full engineering qualification. [Exact disposition and review handoff](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete)
+> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
 
 ## Latest owner direction — U1 workspace correction
 
 The latest [0.12.13 owner phone report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) credits unmentioned supplied checks 1–5 and protects their behavior. It opens Pro blend input, Regular/Pro tool ownership, shared control locations, Delete versus Reset, and a symmetric four-choice no-forced-save Bring workflow.
 
-Start with [PRODUCT_SPEC](PRODUCT_SPEC.md), [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md), the [single work ledger](WORK_LEDGER.md), [single roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family matrix](CAPABILITY_MATRIX.md), [release gates](RELEASE_GATE.md) and the [GPT-6 Pro review handoff](coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_HANDOFF_2026-11-26.md). Root AGENTS.md requires Codex to reconcile its actual applicable project-local instructions to these exact committed contracts before application edits.
+Start with [PRODUCT_SPEC](PRODUCT_SPEC.md), [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md), the [single work ledger](WORK_LEDGER.md), [single roadmap](GZ_ENGINEERING_ROADMAP.md), [77-family matrix](CAPABILITY_MATRIX.md), [release gates](RELEASE_GATE.md) and the [GPT-6 Pro review handoff](coordination/GPT_6_PRO_U1_GIF_SEEK_QUALIFICATION_HANDOFF_2026-11-27.md). Root AGENTS.md requires Codex to reconcile its actual applicable project-local instructions to these exact committed contracts before application edits.
 
-Qualified U1 application **e6321322526521ace13a45c231b25bb08f91c565** uses candidate **95929d3a292101de0bd7ceaa0c831ca9737c67cc** and the same verified tree. The v25 baseline and original failure evidence remain in the ledger. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
+Prior qualified U1 application **e6321322526521ace13a45c231b25bb08f91c565** uses candidate **95929d3a292101de0bd7ceaa0c831ca9737c67cc** and the same verified tree. The v25 baseline and original failure evidence remain in the ledger. [U1 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
 A1's 25 answers/50 questions/50 answers and activation are complete historical records. U1 expressly supersedes old mandatory Yes/No/Resume and fourth-choice prohibition, reset-as-Delete, one-way-only live transfer and copied generic Pro tool presentation. Preserve unaffected child/save/cancel/async/source protections. Do not repeat intake or re-read all frozen appendices merely to dispatch a correction.
 
-**Resolve exact qualification before remaining R1.2.** PR #50 is merged and passed Regular selected Open at both exact inputs and APIs. The merged API35 GIF timeout keeps the replacement APK held. Wider recovery, source/provider custody, history and all other roadmap obligations remain. [Current execution order](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete)
+**Continue remaining R1.2.** PR #62 qualified the focused U1 corrections. Wider recovery, source/provider custody, history and the complete roadmap remain. [Current execution order](WORK_LEDGER.md#next-engineering-action--remaining-r12).
 
 GIF controls receive the stated bounded phone pass credit. B2's recorded numeric misses and F03 quantitative/matched-workload evidence remain open because no new measurements were supplied. RV5 stage/retry recovery and broader device evidence are separate. Four explicit locks still precede Video; all-five editing acceptance precedes final bilingual onboarding; app and Greenezone website precede Console. Publication requires explicit owner approval.
 
@@ -52,7 +52,7 @@ The 0.12.3 handset test was the original Revision 4 baseline. The follow-up repa
 - Single authorized repo: `MrSkyrimFan/GZ-Mobile-001`.
 - Baseline GZ Editor Pro 0.6 merge: `2a0f11b7eef2c5b42e5f569890b694a1dd7ba265`.
 - Historical 0.7 engineering branch: `feature/gz-editor-pro-creation-export-07`.
-- Production application ID: `com.greenezone.gzphotoeditor`; current separate phone-test package: `com.greenezone.gzphotoeditor.phonetest.v26`, 0.12.14 Test/code26. Target Android 10+, compile/target SDK36. A separate test installation is not same-ID upgrade proof.
+- Production application ID: `com.greenezone.gzphotoeditor`; current separate phone-test package: `com.greenezone.gzphotoeditor.phonetest.v27`, 0.12.15 Test/code27. Target Android 10+, compile/target SDK36. A separate test installation is not same-ID upgrade proof.
 - Retail target $2.99 one-time. Offline editing without runtime AI, ads, watermarks, in-app purchases, subscriptions, tracking or remote services.
 
 ## Architecture
