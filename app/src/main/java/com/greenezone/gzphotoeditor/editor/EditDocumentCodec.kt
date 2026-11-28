@@ -13,9 +13,12 @@ object EditDocumentCodec {
     private const val MAX_STROKES = 40
     private const val MAX_BRUSH_POINTS = 640
     private const val MAX_INK_POINTS = 500
+    private const val MAX_INK_DECIMAL_CHARS = 18
+    private const val MAX_EXACT_DOUBLE_INTEGER = 9_007_199_254_740_992L
+    // In 10^22 = 2^22 * 5^22, the odd factor fits a double significand.
     private val inkDecimalDivisors = doubleArrayOf(
-        1.0, 10.0, 100.0, 1_000.0, 10_000.0, 100_000.0,
-        1_000_000.0, 10_000_000.0, 100_000_000.0, 1_000_000_000.0
+        1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,
+        1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22
     )
     internal const val MAX_ENCODED_CHARS = 2_000_000
 
@@ -184,7 +187,9 @@ object EditDocumentCodec {
         decode(content, projectLimit)
 
     // Disposable selected-Open instrumentation. This source is diagnostic only.
-    internal class InkProbe(val phase: String) {
+    internal class InkProbe(val phase: String, val baselineParser: Boolean = false) {
+        var recipeCopyCpuNs = 0L
+        var boundedCount = 0
         var fieldsCpuNs = 0L
         var fieldsChars = 0
         var inkCpuNs = 0L
@@ -194,6 +199,7 @@ object EditDocumentCodec {
     }
 
     internal val selectedInkProbe = ThreadLocal<InkProbe>()
+    internal val heldInkParserForRun = ThreadLocal<Boolean>()
 
     private fun decodeInkPoints(value: String): List<BrushPoint> {
         val probe = selectedInkProbe.get()
@@ -235,7 +241,7 @@ object EditDocumentCodec {
         return token.toFloatOrNull() ?: Float.NaN
     }
 
-    private fun inkCoordinate(value: String, start: Int, end: Int): Float {
+    private fun heldInkCoordinate(value: String, start: Int, end: Int): Float {
         val digits = end - start - 2
         if (digits !in 1..inkDecimalDivisors.lastIndex || value[start] != '0' || value[start + 1] != '.')
             return inkFallback(value, start, end)
@@ -250,6 +256,84 @@ object EditDocumentCodec {
         // therefore rounds as direct float parsing does.
         selectedInkProbe.get()?.let { it.fastCount++ }
         return (numerator / inkDecimalDivisors[digits]).toFloat()
+    }
+
+    private fun inkCoordinate(value: String, start: Int, end: Int): Float {
+        val probe = selectedInkProbe.get()
+        if (probe?.baselineParser ?: (heldInkParserForRun.get() == true))
+            return heldInkCoordinate(value, start, end)
+        val digits = end - start - 2
+        if (digits in 1..9 && value[start] == '0' && value[start + 1] == '.') {
+            var numerator = 0
+            for (index in start + 2 until end) {
+                val digit = value[index] - '0'
+                if (digit !in 0..9) return extendedInkCoordinate(value, start, end)
+                numerator = numerator * 10 + digit
+            }
+            // With at most nine decimal places, any nonzero gap to a float
+            // midpoint exceeds half a double ULP there (5^9 < 2^29).
+            probe?.let { it.fastCount++ }
+            return (numerator / inkDecimalDivisors[digits]).toFloat()
+        }
+        return extendedInkCoordinate(value, start, end)
+    }
+
+    private fun extendedInkCoordinate(value: String, start: Int, end: Int): Float {
+        val coordinate = boundedInkDecimal(value, start, end)
+        if (!coordinate.isNaN()) {
+            selectedInkProbe.get()?.let { it.boundedCount++ }
+            return coordinate
+        }
+        return inkFallback(value, start, end)
+    }
+
+    private fun boundedInkDecimal(value: String, start: Int, end: Int): Float {
+        // Eighteen characters bound the coefficient accumulation to fewer than 10^18.
+        if (end - start > MAX_INK_DECIMAL_CHARS) return Float.NaN
+        var index = start
+        val negative = value[index] == '-'
+        if (negative || value[index] == '+') index++
+        var coefficient = 0L
+        var digits = 0
+        var decimalPoint = -1
+        while (index < end) {
+            val char = value[index]
+            val digit = char - '0'
+            if (digit in 0..9) {
+                coefficient = coefficient * 10 + digit
+                digits++
+            } else if (char == '.' && decimalPoint == -1) {
+                decimalPoint = index
+            } else break
+            index++
+        }
+        if (digits == 0 || coefficient > MAX_EXACT_DOUBLE_INTEGER) return Float.NaN
+        var scale = if (decimalPoint == -1) 0 else index - decimalPoint - 1
+        if (index < end) {
+            if (value[index] != 'e' && value[index] != 'E') return Float.NaN
+            index++
+            if (index == end) return Float.NaN
+            val negativeExponent = value[index] == '-'
+            if (negativeExponent || value[index] == '+') index++
+            if (end - index !in 1..2) return Float.NaN
+            var exponent = 0
+            while (index < end) {
+                val digit = value[index++] - '0'
+                if (digit !in 0..9) return Float.NaN
+                exponent = exponent * 10 + digit
+            }
+            scale += if (negativeExponent) exponent else -exponent
+        }
+        if (scale !in inkDecimalDivisors.indices) return Float.NaN
+
+        // The operands are exact doubles, and nonzero quotients stay in the
+        // normal float range. A rounded double can only obscure direct float
+        // rounding if it lands on a float midpoint. The 29 extra significand
+        // bits identify that case, which goes through the direct parser.
+        val magnitude = coefficient / inkDecimalDivisors[scale]
+        if ((magnitude.toRawBits() and 0x1fffffffL) == 0x10000000L) return Float.NaN
+        val rounded = magnitude.toFloat()
+        return if (negative) -rounded else rounded
     }
 
     private fun decode(content: String, limit: Int): EditDocument? {

@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.BrushPoint
 import com.greenezone.gzphotoeditor.editor.CreativeDocument
 import com.greenezone.gzphotoeditor.editor.EditDocument
@@ -69,7 +70,9 @@ class AndroidRegularProjectListAcceptanceTest {
         withRegularProjectFixture { fixture ->
             val context = fixture.context()
             val sources = mutableListOf<Uri>()
+            val phaseLabel = InstrumentationRegistry.getArguments().getString("gzInkProbePhase") ?: "dense_repaired"
             try {
+                EditDocumentCodec.heldInkParserForRun.set(phaseLabel == "dense_held")
                 val entries = seedTwelve(fixture, context, sources)
                 val legacyBytes = fixture.legacyXml.length()
                 Log.i(TAG, "fixture=matched_twelve rawXmlBytes=" + legacyBytes +
@@ -132,13 +135,15 @@ class AndroidRegularProjectListAcceptanceTest {
                 assertTrue("Warm selected median exceeded 300 ms: " + warmMedian, warmMedian <= 300 * MILLIS)
                 assertEquals(0, fixture.legacyPreferenceAccesses.get())
             } finally {
+                EditDocumentCodec.heldInkParserForRun.remove()
                 sources.forEach { context.contentResolver.delete(it, null, null) }
             }
         }
 
     private fun measureOpen(context: Context, entry: Entry, phase: String): Sample<OpenEvidence> {
         var decodes = 0
-        val probe = EditDocumentCodec.InkProbe(phase)
+        val mode = InstrumentationRegistry.getArguments().getString("gzInkProbePhase") ?: "dense_repaired"
+        val probe = EditDocumentCodec.InkProbe(mode + "_" + phase, mode == "dense_held")
         var throughReadCpu = 0L
         var openCpu = 0L
         var processAllocated = 0L
@@ -160,9 +165,10 @@ class AndroidRegularProjectListAcceptanceTest {
             }
         }
         Log.i("GzR11Probe", "phase=" + probe.phase + " openCpuNs=" + openCpu +
-            " throughReadCpuNs=" + throughReadCpu + " fieldsCpuNs=" + probe.fieldsCpuNs +
+            " throughReadCpuNs=" + throughReadCpu + " recipeCopyCpuNs=" + probe.recipeCopyCpuNs +
+            " fieldsCpuNs=" + probe.fieldsCpuNs +
             " recipeChars=" + probe.fieldsChars + " inkCpuNs=" + probe.inkCpuNs +
-            " fast=" + probe.fastCount + " fallback=" + probe.fallbackCount +
+            " fast=" + probe.fastCount + " bounded=" + probe.boundedCount + " fallback=" + probe.fallbackCount +
             " fallbackSamples=" + probe.firstFallbacks + " wholeProcessAllocated=" + processAllocated)
         val loaded = sample.data
         Log.i(TAG, "phase=" + phase + " name=" + entry.project.name + " decodes=" + decodes +
@@ -266,6 +272,63 @@ class AndroidRegularProjectListAcceptanceTest {
         }
         assertTrue(strokes.size in 100..160)
         return document.copy(creative = CreativeDocument(strokes = strokes))
+    }
+
+
+    @Test fun compareVariedInkOnTheSameGuest() {
+        val mantissas = listOf(1, 0x3e99999a, 0x3eaaaaab, 0x3f7fffff, 0x3981b397,
+            0x360637bd, 0x34f9407d, 0x3083f0bf, 0, Int.MIN_VALUE)
+        val legacy = listOf(".0", "0x1.0p-12", "-0", " 0.75 ", "1e-22", ".5000000298023223876953125",
+            ".5000000298023223876953126", "0.000876543218F", "+4.62e-7", "-0.0d", "1.0", "0.000000001",
+            "NaN", "Infinity", "bad", "0x1.p-140", "0.0000000000000000000000100000000000")
+        val doc = EditDocument(creative = CreativeDocument(strokes = List(36) { stroke ->
+            InkStroke(List(500) { point ->
+                val x = Float.fromBits(mantissas[(stroke + point) % mantissas.size])
+                val y = ((31 * stroke + point * 17) % 997) / 997f
+                BrushPoint(x, y)
+            })
+        }))
+        val canonical = EditDocumentCodec.encode(doc)
+        val pointsLine = Regex("""^creative\.ink\.\d+\.points=""")
+        val mixed = canonical.lineSequence().mapIndexed { i, line ->
+            if (!pointsLine.containsMatchIn(line)) line else {
+                line.substringBefore('=') + "=" + (0 until 500).joinToString(";") { j ->
+                    "${legacy[(i + j) % legacy.size]},${legacy[(i + j * 5 + 1) % legacy.size]}"
+                }
+            }
+        }.joinToString("\n")
+
+        fun decode(label: String, repetition: Int, recipe: String, baseline: Boolean): List<Int> {
+            val phase = "varied_" + label + "_" + repetition
+            val probe = EditDocumentCodec.InkProbe(phase, baseline)
+            val before = Debug.getRuntimeStat("art.gc.bytes-allocated")?.toLongOrNull()
+            val cpuStart = Debug.threadCpuTimeNanos()
+            EditDocumentCodec.selectedInkProbe.set(probe)
+            val decoded = try {
+                requireNotNull(EditDocumentCodec.decode(recipe))
+            } finally {
+                EditDocumentCodec.selectedInkProbe.remove()
+            }
+            val cpuNs = Debug.threadCpuTimeNanos() - cpuStart
+            val after = Debug.getRuntimeStat("art.gc.bytes-allocated")?.toLongOrNull()
+            val allocation = if (before != null && after != null) after - before else -1
+            Log.i("GzR11Probe", "phase=" + phase + " baseline=" + baseline + " codecCpuNs=" + cpuNs +
+                " fieldsCpuNs=" + probe.fieldsCpuNs + " inkCpuNs=" + probe.inkCpuNs +
+                " recipeChars=" + probe.fieldsChars + " fast=" + probe.fastCount +
+                " bounded=" + probe.boundedCount + " fallback=" + probe.fallbackCount +
+                " wholeProcessAllocated=" + allocation)
+            return decoded.creative.strokes.flatMap { stroke ->
+                stroke.points.flatMap { point -> listOf(point.x.toRawBits(), point.y.toRawBits()) }
+            }
+        }
+        listOf("canonical" to canonical, "mixed_legacy" to mixed).forEach { (label, recipe) ->
+            val warmBaseline = decode(label, -1, recipe, true)
+            assertTrue(warmBaseline.isNotEmpty())
+            assertEquals(warmBaseline, decode(label, -1, recipe, false))
+            listOf(true, false, false, true, false, true, true, false).forEachIndexed { index, baseline ->
+                assertEquals(warmBaseline, decode(label, index, recipe, baseline))
+            }
+        }
     }
 
     private fun heapUsed(): Long = runtime.totalMemory() - runtime.freeMemory()

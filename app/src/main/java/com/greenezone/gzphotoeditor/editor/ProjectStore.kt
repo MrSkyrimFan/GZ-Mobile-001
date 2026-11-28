@@ -71,7 +71,11 @@ object ProjectStore {
         val uri = Uri.parse(String(Base64.getUrlDecoder().decode(value.substring(0, split)), Charsets.UTF_8))
         if (uri.scheme != "content") return null
         onDecode?.invoke()
-        val document = EditDocumentCodec.decode(value.substring(split + 1)) ?: return null
+        val probe = EditDocumentCodec.selectedInkProbe.get()
+        val copyStart = if (probe != null) android.os.Debug.threadCpuTimeNanos() else 0L
+        val recipe = value.substring(split + 1)
+        if (probe != null) probe.recipeCopyCpuNs = android.os.Debug.threadCpuTimeNanos() - copyStart
+        val document = EditDocumentCodec.decode(recipe) ?: return null
         return SavedProject(name, uri, document)
     }
 
