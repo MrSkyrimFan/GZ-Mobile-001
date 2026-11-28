@@ -1,9 +1,13 @@
 package com.greenezone.gzphotoeditor
 
+import android.app.Activity
+import android.app.Instrumentation
 import android.content.ContentValues
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -12,6 +16,9 @@ import android.os.Process
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Log
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
@@ -44,7 +51,336 @@ class AndroidU1ProcessRecoveryTest {
             null, "ordinary" -> runBlocking { verifyIsolatedStore() }
             "seed" -> runBlocking { seedForProcessLoss() }
             "reopen" -> reopenInSeparateProcess()
+            "standalone-seed" -> seedStandaloneRegular()
+            "standalone-reopen" -> reopenStandaloneRegular()
             else -> error("Unknown u1ProcessPhase: $phase")
+        }
+    }
+
+
+    private data class RegularCheckpoint(val catalog: NativeWorkCatalog, val loaded: NativeWorkLoaded)
+
+    private val standaloneReceipt: File get() = File(target.filesDir, "r12-standalone-process-receipt.json")
+    private val originalRegular = EditDocument()
+    private val horizontalRegular = originalRegular.copy(mirrored = true)
+    private val bothFlipsRegular = horizontalRegular.copy(flipVertical = true)
+
+    private fun seedStandaloneRegular() {
+        val store = NativeWorkStore(target)
+        assertFalse("Standalone seed needs a fresh disposable app install", store.hasRecoveryRecord())
+        assertFalse(standaloneReceipt.exists())
+        val seedPid = Process.myPid()
+        val uri = createStandaloneSource()
+        var keepSource = false
+        try {
+            val sourceSha = bytesAt(uri)
+            ActivityScenario.launch(MainActivity::class.java).use { activity ->
+                activity.onActivity { assertEquals(seedPid, Process.myPid()) }
+                waitText("Photo ▾")
+                waitText("Choose Options → New photo… to begin.")
+                importStandalonePhoto(uri)
+                assertStandaloneSource(uri, sourceSha)
+                waitStandalonePixels(horizontal = false, vertical = false)
+
+                val imported = readRegularCheckpoint(store)
+                if (imported != null) {
+                    assertRegularCheckpoint(imported, uri, originalRegular, emptyList(), emptyList())
+                }
+                val tools = compose.onNodeWithTag("photo-tools")
+                tools.performScrollToNode(hasText("Crop", substring = false))
+                tapText("Crop")
+                tapStandaloneTransform("Flip horizontal")
+                val horizontal = awaitRegularCheckpoint(store, uri, horizontalRegular,
+                    undo = listOf(originalRegular), redo = emptyList(), previous = imported)
+                Log.i(STANDALONE_TAG, "first-ack pid=$seedPid" +
+                    " generation=" + horizontal.loaded.ref.revision + " undo=1 redo=0")
+
+                tapStandaloneTransform("Flip vertical")
+                val both = awaitRegularCheckpoint(store, uri, bothFlipsRegular,
+                    undo = listOf(originalRegular, horizontalRegular), redo = emptyList(), previous = horizontal)
+                tools.performScrollToNode(hasText("Looks", substring = false))
+                tapText("Looks")
+                waitStandalonePixels(horizontal = true, vertical = true)
+                compose.onNodeWithContentDescription("Undo", substring = false).assertIsEnabled().performClick()
+                val checkpoint = awaitRegularCheckpoint(store, uri, horizontalRegular,
+                    undo = listOf(originalRegular), redo = listOf(bothFlipsRegular), previous = both)
+                waitStandalonePixels(horizontal = true, vertical = false)
+                assertStandaloneSource(uri, sourceSha)
+
+                val expected = JSONObject()
+                    .put("seedPid", seedPid)
+                    .put("catalogRevision", checkpoint.catalog.revision)
+                    .put("firstAcknowledged", refJson(horizontal.loaded.ref))
+                    .put("active", refJson(checkpoint.loaded.ref))
+                    .put("fingerprint", fingerprint(checkpoint.loaded.state))
+                    .put("sourceUri", uri.toString())
+                    .put("sourceSha", sourceSha)
+                FileOutputStream(standaloneReceipt).use { output ->
+                    output.write(expected.toString().toByteArray(Charsets.UTF_8))
+                    output.fd.sync()
+                }
+                Log.i(STANDALONE_TAG, "seed pid=$seedPid" +
+                    " generation=" + checkpoint.loaded.ref.revision + " route=REGULAR undo=1 redo=1")
+            }
+            keepSource = true
+        } finally {
+            if (!keepSource) {
+                standaloneReceipt.delete()
+                target.contentResolver.delete(uri, null, null)
+            }
+        }
+    }
+
+    private fun reopenStandaloneRegular() {
+        assertTrue("Run standalone-seed before the external force-stop", standaloneReceipt.isFile)
+        val expected = JSONObject(standaloneReceipt.readText(Charsets.UTF_8))
+        val seedPid = expected.getInt("seedPid")
+        val pid = Process.myPid()
+        assertNotEquals("Standalone Regular recovery must use a new process", seedPid, pid)
+        val uri = Uri.parse(expected.getString("sourceUri"))
+        val sourceSha = expected.getString("sourceSha")
+        val before = managedHeap()
+        val sampling = AtomicBoolean(true)
+        var peak = before
+        val sampler = thread(name = "r12-standalone-heap") {
+            while (sampling.get()) {
+                peak = maxOf(peak, managedHeap())
+                SystemClock.sleep(12)
+            }
+        }
+        val start = SystemClock.elapsedRealtime()
+        var coldHostMs = 0L
+        try {
+            val scenario = try {
+                ActivityScenario.launch(MainActivity::class.java).also { opened ->
+                    try {
+                        waitContent(REGULAR_CANVAS)
+                        coldHostMs = SystemClock.elapsedRealtime() - start
+                    } catch (failure: Throwable) {
+                        opened.close()
+                        throw failure
+                    }
+                }
+            } finally {
+                sampling.set(false)
+                sampler.join()
+            }
+            scenario.use { activity ->
+                activity.onActivity { assertEquals(pid, Process.myPid()) }
+                val managedIncrease = maxOf(peak, managedHeap()) - before
+                Log.i(STANDALONE_TAG, "reopen seedPid=$seedPid pid=$pid route=REGULAR " +
+                    "coldHostMs=$coldHostMs managedIncrease=$managedIncrease")
+                assertTrue("Standalone cold host recovery exceeded 10 seconds: $coldHostMs", coldHostMs <= 10_000)
+                assertTrue("Standalone cold host recovery exceeded 128 MiB: $managedIncrease",
+                    managedIncrease <= 128L * 1024L * 1024L)
+                compose.onNodeWithText("Photo ▾", substring = false).assertIsDisplayed()
+                compose.onNodeWithContentDescription("Undo", substring = false).assertIsEnabled()
+                compose.onNodeWithContentDescription("Redo", substring = false).assertIsEnabled()
+                waitStandalonePixels(horizontal = true, vertical = false)
+                assertStandaloneSource(uri, sourceSha)
+
+                val store = NativeWorkStore(target)
+                val restored = requireNotNull(readRegularCheckpoint(store))
+                assertEquals(expected.getLong("catalogRevision"), restored.catalog.revision)
+                assertEquals(refFrom(expected.getJSONObject("active")), restored.loaded.ref)
+                val first = refFrom(expected.getJSONObject("firstAcknowledged"))
+                assertEquals(first.id, restored.loaded.ref.id)
+                assertTrue(restored.loaded.ref.revision > first.revision)
+                assertEquals(expected.getString("fingerprint"), fingerprint(restored.loaded.state))
+                assertRegularCheckpoint(restored, uri, horizontalRegular,
+                    undo = listOf(originalRegular), redo = listOf(bothFlipsRegular))
+
+                compose.onNodeWithContentDescription("Redo", substring = false).performClick()
+                val redone = awaitRegularCheckpoint(store, uri, bothFlipsRegular,
+                    undo = listOf(originalRegular, horizontalRegular), redo = emptyList(), previous = restored)
+                compose.onNodeWithContentDescription("Redo", substring = false).assertIsNotEnabled()
+                waitStandalonePixels(horizontal = true, vertical = true)
+
+                compose.onNodeWithContentDescription("Undo", substring = false).performClick()
+                val undone = awaitRegularCheckpoint(store, uri, horizontalRegular,
+                    undo = listOf(originalRegular), redo = listOf(bothFlipsRegular), previous = redone)
+                waitStandalonePixels(horizontal = true, vertical = false)
+                assertStandaloneSource(uri, sourceSha)
+                Log.i(STANDALONE_TAG, "proof pid=$pid sourceHashRetained=true pixelsRetained=true " +
+                    "baselinesRetained=true undo=1 redo=1 postReopenEdits=2 generation=" + undone.loaded.ref.revision)
+            }
+        } finally {
+            target.contentResolver.delete(uri, null, null)
+            standaloneReceipt.delete()
+        }
+    }
+
+    private fun importStandalonePhoto(uri: Uri) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val expected = ActivityResultContracts.PickVisualMedia().createIntent(
+            target, PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        val monitor = object : Instrumentation.ActivityMonitor() {
+            override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? =
+                if (expected.filterEquals(intent))
+                    Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(uri))
+                else null
+        }
+        instrumentation.addMonitor(monitor)
+        try {
+            tapText("Options")
+            tapText("New photo…")
+            waitContent(REGULAR_CANVAS)
+            assertEquals("Only the actual image picker intent may be intercepted", 1, monitor.hits)
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
+    }
+
+    private fun tapStandaloneTransform(label: String) {
+        compose.onNodeWithTag("crop-transforms").performScrollToNode(hasText(label, substring = false))
+        tapText(label)
+    }
+
+    private fun readRegularCheckpoint(store: NativeWorkStore): RegularCheckpoint? = runBlocking {
+        val catalog = ok(store.recover())
+        val selected = catalog.active ?: return@runBlocking null
+        when (val loaded = store.load(selected.ref)) {
+            is NativeWorkResult.Ok -> RegularCheckpoint(catalog, loaded.value)
+            is NativeWorkResult.Failed -> {
+                if (loaded.reason != NativeWorkFailure.STALE) error("Native custody failed: " + loaded.reason)
+                null
+            }
+        }
+    }
+
+    private fun awaitRegularCheckpoint(
+        store: NativeWorkStore, uri: Uri, document: EditDocument, undo: List<EditDocument>,
+        redo: List<EditDocument>, previous: RegularCheckpoint?
+    ): RegularCheckpoint {
+        var observed: RegularCheckpoint? = null
+        var acknowledged: RegularCheckpoint? = null
+        try {
+            compose.waitUntil(10_000) {
+                val current = readRegularCheckpoint(store)
+                observed = current
+                val regular = current?.loaded?.state?.regular
+                if (current == null || regular == null || regular.uri != uri || regular.document != document ||
+                    regular.history.undo != undo || regular.history.redo != redo ||
+                    current.loaded.ref.revision <= (previous?.loaded?.ref?.revision ?: 0L)) {
+                    false
+                } else {
+                    acknowledged = current
+                    true
+                }
+            }
+        } finally {
+            if (acknowledged == null) {
+                val last = observed?.loaded?.state?.regular
+                Log.i(STANDALONE_TAG, "ack pending generation=" + observed?.loaded?.ref?.revision +
+                    " documentMatches=" + (last?.document == document) + " undo=" + last?.history?.undo?.size +
+                    " redo=" + last?.history?.redo?.size + " expectedUndo=" + undo.size + " expectedRedo=" + redo.size)
+            }
+        }
+        val current = requireNotNull(acknowledged)
+        assertRegularCheckpoint(current, uri, document, undo, redo)
+        if (previous != null) {
+            assertEquals(previous.loaded.ref.id, current.loaded.ref.id)
+            val oldSource = requireNotNull(previous.loaded.state.regular)
+            val newSource = requireNotNull(current.loaded.state.regular)
+            assertEquals(oldSource.ownerId, newSource.ownerId)
+            assertEquals(oldSource.sourceId, newSource.sourceId)
+            assertEquals(oldSource.sourceRevision, newSource.sourceRevision)
+            assertTrue(newSource.contentRevision > oldSource.contentRevision)
+        }
+        return current
+    }
+
+    private fun assertRegularCheckpoint(
+        checkpoint: RegularCheckpoint, uri: Uri, document: EditDocument,
+        undo: List<EditDocument>, redo: List<EditDocument>
+    ) {
+        val state = checkpoint.loaded.state
+        val regular = requireNotNull(state.regular)
+        assertEquals(NativeWorkMode.REGULAR, checkpoint.catalog.route)
+        assertEquals(NativeWorkMode.REGULAR, state.mode)
+        assertEquals(checkpoint.loaded.ref, checkpoint.catalog.active?.ref)
+        assertEquals(checkpoint.catalog.revision, checkpoint.loaded.ref.revision)
+        assertTrue(checkpoint.catalog.drafts.isEmpty())
+        assertNull(state.pro)
+        assertNull(state.link)
+        assertTrue(regular.sourceId.isNotBlank())
+        assertEquals(uri, regular.uri)
+        assertEquals(document, regular.document)
+        assertEquals(originalRegular, regular.entry)
+        assertEquals(originalRegular, regular.clean)
+        assertEquals(originalRegular, regular.reset)
+        assertEquals(undo, regular.history.undo)
+        assertEquals(redo, regular.history.redo)
+        assertNull(regular.savedRef)
+    }
+
+    private fun createStandaloneSource(): Uri {
+        val resolver = target.contentResolver
+        val width = STANDALONE_WIDTH
+        val height = STANDALONE_HEIGHT
+        val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "gz-r12-standalone-" + System.nanoTime() + ".png")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/GzR12Process")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }))
+        val pixels = IntArray(width * height) { index ->
+            standaloneColors[(index / width / (height / 2)) * 2 + (index % width / (width / 2))]
+        }
+        val bitmap = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        try {
+            requireNotNull(resolver.openOutputStream(uri, "wt")).use {
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            assertEquals(1, resolver.update(uri, ContentValues().apply {
+                put(MediaStore.Images.Media.IS_PENDING, 0)
+            }, null, null))
+            return uri
+        } catch (failure: Throwable) {
+            resolver.delete(uri, null, null)
+            throw failure
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun assertStandaloneSource(uri: Uri, expectedSha: String) {
+        val bytes = requireNotNull(target.contentResolver.openInputStream(uri)).use { it.readBytes() }
+        assertEquals("Imported media bytes must remain unchanged", expectedSha, sha(bytes))
+        val bitmap = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
+        try {
+            assertEquals(STANDALONE_WIDTH, bitmap.width)
+            assertEquals(STANDALONE_HEIGHT, bitmap.height)
+            for (row in 0..1) for (column in 0..1) {
+                assertEquals(standaloneColors[row * 2 + column],
+                    bitmap.getPixel((2 * column + 1) * bitmap.width / 4, (2 * row + 1) * bitmap.height / 4))
+            }
+        } finally { bitmap.recycle() }
+    }
+
+    private fun waitStandalonePixels(horizontal: Boolean, vertical: Boolean) {
+        compose.waitUntil(15_000) {
+            val capture = compose.onNodeWithContentDescription(REGULAR_CANVAS, substring = false)
+                .captureToImage().asAndroidBitmap()
+            try {
+                val fittedWidth = minOf(capture.width, capture.height * STANDALONE_WIDTH / STANDALONE_HEIGHT)
+                val fittedHeight = minOf(capture.height, capture.width * STANDALONE_HEIGHT / STANDALONE_WIDTH)
+                val left = (capture.width - fittedWidth) / 2
+                val top = (capture.height - fittedHeight) / 2
+                (0..1).all { row ->
+                    (0..1).all { column ->
+                        val sourceRow = if (vertical) 1 - row else row
+                        val sourceColumn = if (horizontal) 1 - column else column
+                        val expected = standaloneColors[sourceRow * 2 + sourceColumn]
+                        val pixel = capture.getPixel(left + (2 * column + 1) * fittedWidth / 4,
+                            top + (2 * row + 1) * fittedHeight / 4)
+                        val distance = kotlin.math.abs(Color.red(expected) - Color.red(pixel)) +
+                            kotlin.math.abs(Color.green(expected) - Color.green(pixel)) +
+                            kotlin.math.abs(Color.blue(expected) - Color.blue(pixel))
+                        distance <= 16
+                    }
+                }
+            } finally { capture.recycle() }
         }
     }
 
@@ -586,6 +922,14 @@ class AndroidU1ProcessRecoveryTest {
 
     private companion object {
         const val TAG = "GzU1Process"
+        const val STANDALONE_TAG = "GzR12Process"
+        const val REGULAR_CANVAS = "Photo editing canvas. Tap to hide or show tools."
+        const val STANDALONE_WIDTH = 320
+        const val STANDALONE_HEIGHT = 240
+        val standaloneColors = listOf(
+            Color.rgb(183, 43, 51), Color.rgb(41, 158, 81),
+            Color.rgb(55, 84, 193), Color.rgb(219, 166, 53)
+        )
         const val PHOTO_SAVE = "U1 Process Regular"
         const val PRO_SAVE = "U1 Process Pro"
         const val ACTIVE_ROOT = "process-linked-active"
