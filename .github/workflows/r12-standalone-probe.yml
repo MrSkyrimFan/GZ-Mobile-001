@@ -1,0 +1,58 @@
+name: R1.2 standalone Regular process proof
+on:
+  push:
+    branches: ["diag/r12-standalone-regular"]
+
+jobs:
+  standalone:
+    strategy:
+      fail-fast: false
+      matrix:
+        item: [baseline, corrected]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ORG_GRADLE_PROJECT_gzPhoneTestInstall: 'true'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.item == 'baseline' && 'e9dfd8be404c430916d2e7deea43a0c8ba604c08' || github.sha }}
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Gradle 9.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise standalone Regular recovery
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_3a
+          # Retain the API35 lane; its actual runtime heap is logged by the profile.
+          # API29 below uses an explicit guest-property preflight.
+          ram-size: 2048M
+          heap-size: 256M
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash .github/scripts/r12-standalone-probe.sh
+      - name: Upload focused receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r12-standalone-${{ matrix.item }}
+          path: r12-standalone-receipts/
+          if-no-files-found: warn

@@ -136,6 +136,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.UUID
@@ -173,6 +175,7 @@ fun PhotoEditorScreen(
     savePhotoProject: (Context, ProjectSaveIntent, Uri, EditDocument) -> ProjectSaveResult = ProjectStore::saveNamed,
     onDeleteCollageWork: (() -> Unit)? = null,
     beforeInlineWorkspaceSave: suspend (ProjectSaveIntent) -> Unit = {},
+    recoverStandaloneRegular: Boolean = false,
     beforeNativeOpenPublication: suspend () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -184,6 +187,7 @@ fun PhotoEditorScreen(
 
     val startupJournal = remember(context) { PendingExportJournal(context.filesDir) }
     val nativeStore = remember(context) { NativeWorkStore(context) }
+    val standaloneRegularWriter = remember(nativeStore) { Mutex() }
     val needsNativeRestore = remember(nativeStore, tileEntryBaseline) {
         tileEntryBaseline == null && nativeStore.hasRecoveryRecord()
     }
@@ -275,6 +279,7 @@ fun PhotoEditorScreen(
     var editingTextIndex by remember { mutableIntStateOf(-1) }
     var baselineUri by remember { mutableStateOf<String?>(null) }
     var baselineDocument by remember { mutableStateOf(EditDocument()) }
+    var photoEntryDocument by remember { mutableStateOf(EditDocument()) }
     var showRegularExit by remember { mutableStateOf(false) }
     var replacement by remember { mutableStateOf<PhotoReplacement?>(null) }
     var replacementAfterSave by remember { mutableStateOf(false) }
@@ -404,6 +409,7 @@ fun PhotoEditorScreen(
         liveGesture = false
         val loadedDocument = restored ?: EditDocument()
         document = loadedDocument
+        photoEntryDocument = if (restoringExport) EditDocument() else loadedDocument
         if (establishBaseline) {
             baselineUri = uri.toString()
             baselineDocument = if (restoringExport) EditDocument() else loadedDocument
@@ -435,12 +441,14 @@ fun PhotoEditorScreen(
         projectRef: NamedProjectRef? = null,
         restoredOwnerId: String? = null,
         beforePublish: () -> Boolean = { true },
-        onLoaded: () -> Unit = {}
+        onLoaded: () -> Unit = {},
+        publish: suspend (loadIsCurrent: () -> Boolean, install: () -> Unit) -> Unit = { _, install -> install() }
     ) {
         val request = ++loadingToken
         scope.launch {
             busy = true
             if (!restoringExport) notice = "Opening photo…"
+            var unownedPhoto: PreparedRegularPhoto? = null
             try {
                 try {
                     resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -448,13 +456,14 @@ fun PhotoEditorScreen(
                     // Some pickers grant access only for this session.
                 }
                 val prepared = prepareRegularPhoto(resolver, uri, restored)
-                if (request != loadingToken || !beforePublish()) {
-                    prepared.discard()
-                    return@launch
+                unownedPhoto = prepared
+                if (request != loadingToken || !beforePublish()) return@launch
+                publish({ request == loadingToken }) {
+                    installPreparedPhoto(prepared, uri, restored, establishBaseline, restoringExport,
+                        projectRef, restoredOwnerId)
+                    unownedPhoto = null
+                    onLoaded()
                 }
-                installPreparedPhoto(prepared, uri, restored, establishBaseline, restoringExport,
-                    projectRef, restoredOwnerId)
-                onLoaded()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -463,6 +472,7 @@ fun PhotoEditorScreen(
                         (error.message ?: "file missing or permission revoked")
                 }
             } finally {
+                unownedPhoto?.discard()
                 if (request == loadingToken) {
                     busy = false
                     if (pendingDeparture?.kind in listOf(PhotoDepartureKind.PICK_PHOTO,
@@ -530,6 +540,7 @@ fun PhotoEditorScreen(
         document = EditDocument()
         baselineUri = null
         baselineDocument = EditDocument()
+        photoEntryDocument = EditDocument()
         history = EditHistory()
         gestureStart = null
         liveGesture = false
@@ -945,20 +956,128 @@ fun PhotoEditorScreen(
         return true
     }
 
+    fun standaloneRegularRoot(owner: String = photoOwnerId): NativeWorkLoaded? =
+        nativeActive?.takeIf { recoverStandaloneRegular && it.state.mode == NativeWorkMode.REGULAR &&
+            it.state.link == null && it.state.pro == null && it.state.regular?.ownerId == owner }
+
+    suspend fun readNativeCatalogForTransition(): NativeWorkResult<NativeWorkCatalog> {
+        // A standalone checkpoint already publishing can complete before this
+        // action takes its catalog revision. Busy/switch ownership blocks later checkpoints.
+        return if (standaloneRegularRoot() == null) nativeStore.recover()
+        else standaloneRegularWriter.withLock { nativeStore.recover() }
+    }
+
+    suspend fun suppressStandalonePhotoRestore(owner: String): Boolean = try {
+        val suppressed = withContext(Dispatchers.IO) {
+            startupJournal.suppressNativeRestores(listOf(ExportWorkspace.PHOTO to owner))
+        }
+        photoExport.adoptNativeDisposition(suppressed)
+        true
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        false
+    }
+
+    suspend fun commitStandaloneRoot(
+        expectedRootId: String?,
+        stillOwned: () -> Boolean,
+        write: suspend (NativeWorkCatalog) -> NativeWorkResult<NativeWorkCatalog>,
+        onCommitted: (NativeWorkCatalog) -> Unit
+    ): NativeWorkFailure? = standaloneRegularWriter.withLock {
+        if (!stillOwned()) return@withLock NativeWorkFailure.STALE
+        val catalog = when (val stored = nativeStore.recover()) {
+            is NativeWorkResult.Ok -> stored.value
+            is NativeWorkResult.Failed -> return@withLock stored.reason
+        }
+        // A vacant catalog is only admissible for first publication. A newer
+        // checkpoint of the same root can precede a transition, but another root cannot.
+        if (catalog.active?.ref?.id != expectedRootId || !stillOwned()) return@withLock NativeWorkFailure.STALE
+        currentCoroutineContext().ensureActive()
+        withContext(NonCancellable) {
+            // Once submitted, deliver the verified outcome to this host before
+            // releasing ownership of its bitmap or allowing another writer.
+            when (val result = write(catalog)) {
+                is NativeWorkResult.Failed -> result.reason
+                is NativeWorkResult.Ok -> {
+                    nativeCatalog = result.value
+                    onCommitted(result.value)
+                    null
+                }
+            }
+        }
+    }
+
     fun openPreparedPhoto(candidate: PhotoReplacement) {
         val pending = pendingDeparture ?: return
         if (!departureOwned(pending)) { cancelDeparture(); return }
-        // loadPhoto publishes only after decode succeeds. A canceled or failed
-        // replacement therefore never commits a provisional Discard.
+        fun ownsDeparture() = pendingDeparture == pending && departureOwned(pending)
+        fun finishOpen() {
+            pendingDeparture = null
+            showRegularExit = false
+            showProjects = false
+        }
+
+        val outgoing = standaloneRegularRoot()
+        val legacyExportOwner = sourceUri != null && photoExport.initialRecoveryId != null &&
+            photoOwnerId == photoExport.recoveredOwnerId
+        val standaloneOpen = recoverStandaloneRegular && tileEntryBaseline == null && onDoneCollagePhoto == null &&
+            (outgoing != null || nativeActive == null && !legacyExportOwner)
+        if (!standaloneOpen) {
+            loadPhoto(candidate.uri, candidate.edits, establishBaseline = true,
+                projectRef = candidate.projectRef,
+                beforePublish = {
+                    ownsDeparture() && (!pending.discard || photoExport.resolveNativeDraft(photoOwnerId))
+                }, onLoaded = ::finishOpen)
+            return
+        }
+
+        val owner = UUID.randomUUID().toString()
+        val initialDocument = candidate.edits ?: EditDocument()
+        val regular = NativeRegularState(
+            ownerId = owner,
+            sourceId = owner,
+            sourceRevision = 0L,
+            contentRevision = contentRevision + 1L,
+            uri = candidate.uri,
+            document = initialDocument,
+            entry = initialDocument,
+            clean = initialDocument,
+            reset = EditDocument(),
+            history = EditHistory(),
+            savedRef = candidate.projectRef
+        )
+        val next = NativeWorkState(owner, NativeWorkMode.REGULAR, regular, pro = null, link = null)
         loadPhoto(candidate.uri, candidate.edits, establishBaseline = true,
-            projectRef = candidate.projectRef,
-            beforePublish = {
-                pendingDeparture == pending && departureOwned(pending) &&
-                    (!pending.discard || photoExport.resolveNativeDraft(photoOwnerId))
-            }, onLoaded = {
-                pendingDeparture = null
-                showRegularExit = false
-                showProjects = false
+            projectRef = candidate.projectRef, restoredOwnerId = owner,
+            beforePublish = ::ownsDeparture, onLoaded = ::finishOpen,
+            publish = publication@{ loadIsCurrent, install ->
+                val staged = when (val result = nativeStore.prepare(next)) {
+                    is NativeWorkResult.Ok -> result.value
+                    is NativeWorkResult.Failed -> {
+                        if (loadIsCurrent() && ownsDeparture()) nativeOpenError = nativeWorkMessage(result.reason)
+                        return@publication
+                    }
+                }
+                try {
+                    beforeNativeOpenPublication()
+                    fun stillOwned() = loadIsCurrent() && ownsDeparture() &&
+                        workspaceNavigation.current == WorkspaceMode.PHOTO
+                    val failed = commitStandaloneRoot(outgoing?.ref?.id, ::stillOwned,
+                        write = { catalog ->
+                            if (outgoing != null && pending.discard &&
+                                !suppressStandalonePhotoRestore(pending.token.ownerId))
+                                NativeWorkResult.Failed(NativeWorkFailure.STORAGE)
+                            else nativeStore.acknowledge(catalog.revision, staged)
+                        },
+                        onCommitted = { catalog ->
+                            nativeActive = NativeWorkLoaded(requireNotNull(catalog.active).ref, staged.state)
+                            install()
+                        })
+                    if (failed != null && stillOwned()) nativeOpenError = nativeWorkMessage(failed)
+                } finally {
+                    withContext(NonCancellable) { nativeStore.release(staged) }
+                }
             })
     }
 
@@ -972,7 +1091,7 @@ fun PhotoEditorScreen(
             contentRevision = contentRevision,
             uri = uri,
             document = document,
-            entry = prior?.entry ?: baselineDocument,
+            entry = prior?.entry ?: if (recoverStandaloneRegular) photoEntryDocument else baselineDocument,
             clean = baselineDocument,
             reset = prior?.reset ?: EditDocument(),
             history = history,
@@ -1035,6 +1154,7 @@ fun PhotoEditorScreen(
             document = regular.document
             baselineUri = regular.uri.toString()
             baselineDocument = regular.clean
+            photoEntryDocument = regular.entry
             history = regular.history
         }
         val pro = state.pro
@@ -1085,7 +1205,7 @@ fun PhotoEditorScreen(
             var stagedFinish: ProLinkedFinishRef? = null
             val stagedManifests = mutableListOf<NativeWorkPrepared>()
             try {
-                val catalog = when (val recovered = nativeStore.recover()) {
+                val catalog = when (val recovered = readNativeCatalogForTransition()) {
                     is NativeWorkResult.Ok -> recovered.value
                     is NativeWorkResult.Failed -> {
                         switchError = nativeWorkMessage(recovered.reason)
@@ -1276,7 +1396,7 @@ fun PhotoEditorScreen(
         mode: NativeWorkMode, stillOwned: () -> Boolean,
         displaced: NativeWorkPrepared? = null, resume: NativeWorkRef? = null
     ): Boolean {
-        val catalog = when (val recovered = nativeStore.recover()) {
+        val catalog = when (val recovered = readNativeCatalogForTransition()) {
             is NativeWorkResult.Ok -> recovered.value
             is NativeWorkResult.Failed -> {
                 nativeOpenError = nativeWorkMessage(recovered.reason)
@@ -1439,22 +1559,110 @@ fun PhotoEditorScreen(
         return saved
     }
 
+    fun closeStandaloneRegular(
+        root: NativeWorkLoaded,
+        stillOwned: () -> Boolean,
+        onFailure: (NativeWorkFailure) -> Unit
+    ) {
+        busy = true
+        scope.launch {
+            try {
+                val owner = requireNotNull(root.state.regular).ownerId
+                val failed = commitStandaloneRoot(root.ref.id, stillOwned,
+                    write = { catalog ->
+                        if (!suppressStandalonePhotoRestore(owner)) NativeWorkResult.Failed(NativeWorkFailure.STORAGE)
+                        else nativeStore.delete(catalog.revision, requireNotNull(catalog.active).ref)
+                    },
+                    onCommitted = {
+                        nativeActive = null
+                        closeCurrentPhoto(recoveryResolved = true)
+                    })
+                if (failed != null && stillOwned()) onFailure(failed)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    fun retainRegularOnDeparture(pending: PhotoDeparture, move: () -> Unit) {
+        fun finish() {
+            cancelDeparture()
+            move()
+        }
+
+        val root = standaloneRegularRoot()
+        if (root == null) {
+            if (commitDiscard(pending)) finish()
+            return
+        }
+        val current = captureNativeWork(NativeWorkMode.REGULAR)
+        if (!pending.discard && current == root.state) {
+            finish()
+            return
+        }
+        val regular = requireNotNull(current.regular)
+        val next = if (pending.discard) current.copy(regular = regular.copy(
+            document = regular.clean, history = EditHistory(), contentRevision = contentRevision + 1L
+        )) else current
+        fun stillOwned() = pendingDeparture == pending && departureOwned(pending)
+        fun fail(reason: NativeWorkFailure) {
+            if (!stillOwned()) return
+            if (pending.discard) showRegularExit = true else cancelDeparture()
+            notice = nativeWorkMessage(reason)
+        }
+
+        busy = true
+        scope.launch {
+            var staged: NativeWorkPrepared? = null
+            try {
+                val work = when (val result = nativeStore.prepare(next)) {
+                    is NativeWorkResult.Ok -> result.value.also { staged = it }
+                    is NativeWorkResult.Failed -> {
+                        fail(result.reason)
+                        return@launch
+                    }
+                }
+                val failed = commitStandaloneRoot(root.ref.id, ::stillOwned,
+                    write = { catalog ->
+                        if (pending.discard && !suppressStandalonePhotoRestore(regular.ownerId))
+                            NativeWorkResult.Failed(NativeWorkFailure.STORAGE)
+                        else nativeStore.acknowledge(catalog.revision, work)
+                    },
+                    onCommitted = { catalog ->
+                        nativeActive = NativeWorkLoaded(requireNotNull(catalog.active).ref, work.state)
+                        if (pending.discard) commitDiscard(pending, recoveryResolved = true)
+                        finish()
+                    })
+                if (failed != null) fail(failed)
+            } finally {
+                try {
+                    withContext(NonCancellable) { staged?.let { nativeStore.release(it) } }
+                } finally {
+                    busy = false
+                }
+            }
+        }
+    }
+
     continueDeparture = continuation@{
         val pending = pendingDeparture ?: return@continuation
         if (!departureOwned(pending)) { cancelDeparture(); return@continuation }
         showRegularExit = false
         when (pending.kind) {
-            PhotoDepartureKind.CLOSE -> closeCurrentPhoto()
-            PhotoDepartureKind.BACK -> {
-                if (!commitDiscard(pending)) return@continuation
-                cancelDeparture()
-                leaveWorkspace()
+            PhotoDepartureKind.CLOSE -> {
+                val root = standaloneRegularRoot()
+                if (root == null) closeCurrentPhoto()
+                else closeStandaloneRegular(root,
+                    stillOwned = { pendingDeparture == pending && departureOwned(pending) },
+                    onFailure = {
+                        if (pending.discard) showRegularExit = true else cancelDeparture()
+                        notice = nativeWorkMessage(it)
+                    })
             }
+            PhotoDepartureKind.BACK -> retainRegularOnDeparture(pending, ::leaveWorkspace)
             PhotoDepartureKind.WORKSPACE -> {
                 val target = pending.workspace ?: return@continuation
-                if (!commitDiscard(pending)) return@continuation
-                cancelDeparture()
-                workspaceNavigation = workspaceNavigation.open(target)
+                retainRegularOnDeparture(pending) { workspaceNavigation = workspaceNavigation.open(target) }
             }
             PhotoDepartureKind.PICK_PHOTO -> photoPickerToken = pending.token
             PhotoDepartureKind.OPEN_PROJECT -> {
@@ -1515,8 +1723,9 @@ fun PhotoEditorScreen(
     performPhotoSave = save@{ intent ->
         if (busy || exporting || gestureStart != null || switchRequest != null) return@save
         val uri = sourceUri ?: return@save
-        val linked = nativeActive?.state?.takeIf { it.regular?.ownerId == photoOwnerId }
-            ?.let { captureNativeWork(NativeWorkMode.REGULAR) }
+        val linked = nativeActive?.state?.takeIf {
+            it.regular?.ownerId == photoOwnerId && standaloneRegularRoot() == null
+        }?.let { captureNativeWork(NativeWorkMode.REGULAR) }
         val capturedDocument = document
         val capturedOwner = photoOwnerId
         val capturedRevision = contentRevision
@@ -1606,7 +1815,10 @@ fun PhotoEditorScreen(
                     applyNativeWork(loaded.value.state, prepared)
                     prepared = null
                     nativeActive = loaded.value
-                    workspaceNavigation = WorkspaceNavigation(current = (route ?: loaded.value.state.mode).workspace())
+                    val nativeRoute = (route ?: loaded.value.state.mode).workspace()
+                    val keepExportRoute = standaloneRegularRoot() != null &&
+                        (startupWorkspace == ExportWorkspace.COLLAGE || startupWorkspace == ExportWorkspace.GIF)
+                    workspaceNavigation = WorkspaceNavigation(current = if (keepExportRoute) recoveredWorkspace else nativeRoute)
                 }
             }
         } catch (cancelled: CancellationException) {
@@ -1627,7 +1839,7 @@ fun PhotoEditorScreen(
 
     fun canCheckpointNativeWork(): Boolean =
         nativeReady && switchRequest == null && !switchBusy && !busy && !exporting &&
-            !liveGesture && !painting
+            (standaloneRegularRoot() == null || gestureStart == null) && !liveGesture && !painting
 
     LaunchedEffect(nativeActive?.ref?.id, workspaceNavigation.current, contentRevision,
         proSession.contentRevision, proSession.selectedLayer, activePhotoProject,
@@ -1654,6 +1866,15 @@ fun PhotoEditorScreen(
             }
         }
         try {
+            if (mode == NativeWorkMode.REGULAR && standaloneRegularRoot()?.ref?.id == current.id) {
+                val failed = commitStandaloneRoot(current.id, ::stillOwnsEdit,
+                    write = { catalog -> nativeStore.acknowledge(catalog.revision, prepared) },
+                    onCommitted = { catalog ->
+                        nativeActive = NativeWorkLoaded(requireNotNull(catalog.active).ref, prepared.state)
+                    })
+                if (failed != null && stillOwnsEdit()) notice = nativeWorkMessage(failed)
+                return@LaunchedEffect
+            }
             // A prior checkpoint can advance this root while its new generation is staged.
             // Re-read on one stale revision while the exact completed edit still owns the route.
             repeat(2) {
@@ -2309,7 +2530,13 @@ fun PhotoEditorScreen(
         onConfirm = {
             if (!busy && !exporting && sourceUri != null) {
                 val owner = photoOwnerId
-                if (nativeActive?.state?.regular?.ownerId == owner) {
+                val standalone = standaloneRegularRoot(owner)
+                if (standalone != null) {
+                    val revision = contentRevision
+                    closeStandaloneRegular(standalone,
+                        stillOwned = { showPhotoDelete && photoOwnerId == owner && contentRevision == revision },
+                        onFailure = { photoDeleteError = nativeWorkMessage(it) })
+                } else if (nativeActive?.state?.regular?.ownerId == owner) {
                     busy = true
                     scope.launch {
                         try {
