@@ -27,14 +27,13 @@ import com.greenezone.gzphotoeditor.editor.GifPreviewRoute
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
 import com.greenezone.gzphotoeditor.editor.afterBitmapCodecFailure
+import com.greenezone.gzphotoeditor.editor.collectPausedGifFrameRequests
 import com.greenezone.gzphotoeditor.editor.previewRoute
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -270,20 +269,33 @@ internal fun GifFramePreview(
                             return PreviewFrame(index, result)
                         }
                         if (!playing) {
-                            snapshotFlow { requestedFrame }.conflate().collect { request ->
-                                val frame = decode(request.coerceIn(times.indices))
-                                withContext(Dispatchers.Main.immediate) {
-                                    if (requestedFrame == request &&
-                                        activeGeneration.get() == generation) {
-                                        shown = frame
-                                    } else {
-                                        GifPreviewDiagnostics.record(operationId, generation,
-                                            GifDiagnosticStage.G4_SEEK,
-                                            GifDiagnosticKind.STALE_FRAME_DISCARDED, bitmapRoute,
-                                            frameIndex = frame.index, frameCount = times.size)
+                            snapshotFlow { requestedFrame }.collectPausedGifFrameRequests(
+                                decode = { request -> decode(request.coerceIn(times.indices)) },
+                                closeReader = ::closeReader,
+                                onFailure = { request, error ->
+                                    withContext(Dispatchers.Main.immediate) {
+                                        if (requestedFrame == request && activeGeneration.get() == generation) {
+                                            GifPreviewDiagnostics.record(operationId, generation,
+                                                GifDiagnosticStage.G4_SEEK, GifDiagnosticKind.PREVIEW_FAILED,
+                                                bitmapRoute, failure = error)
+                                            shown = null
+                                            reportError(error.message ?: "Cannot decode the selected frame")
+                                        }
+                                    }
+                                },
+                                onFrame = { request, frame ->
+                                    withContext(Dispatchers.Main.immediate) {
+                                        if (requestedFrame == request && activeGeneration.get() == generation) {
+                                            shown = frame
+                                        } else {
+                                            GifPreviewDiagnostics.record(operationId, generation,
+                                                GifDiagnosticStage.G4_SEEK,
+                                                GifDiagnosticKind.STALE_FRAME_DISCARDED, bitmapRoute,
+                                                frameIndex = frame.index, frameCount = times.size)
+                                        }
                                     }
                                 }
-                            }
+                            )
                         } else {
                             suspend fun present(frame: PreviewFrame) = withContext(Dispatchers.Main.immediate) {
                                 if (activeGeneration.get() == generation) {
