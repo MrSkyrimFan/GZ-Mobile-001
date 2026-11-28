@@ -2,6 +2,8 @@
 
 > **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
 
+<a id="current-sequence--exact-u1-qualification-then-remaining-r12"></a>
+
 ## Current sequence — remaining R1.2 after exact U1 qualification
 
 The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied 0.12.13 phone checks 1–5 and specifically opens Pro blend/input, tool ownership, common control positions, Delete/Reset and symmetric Regular↔Pro transfer. The [workspace blueprint](WORKSPACE_UX_BLUEPRINT.md) replaces the old conflicting interaction clauses while preserving source/history/cancel/child safety.

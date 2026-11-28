@@ -58,6 +58,8 @@ A missing owner clip/settings/physical observation holds only that F03 reproduct
 
 Exact candidate and app merge `4114238397a2bb8c27a302082b68aec35eb0bdae` passed JVM/build/signing, both complete API29/API35 suites and separate true new-process recovery on both APIs. The v27 APK comes from the exact merged API35 job. Focused handset confirmation is open. [Exact qualification and handset receipt](WORK_LEDGER.md#qualified-gif-paused-seek-repair).
 
+<a id="current-engineering-qualification--pr-46--01214-test"></a>
+
 ## Prior engineering qualification — PR #46 / 0.12.14 Test
 
 The earlier U1 candidate and same-tree app merge passed JVM/build/signing, the full API29/API35 suites and separate true new-process recovery on both APIs. This checkpoint retains its engineering credit. [PR #46 qualification receipt](WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).

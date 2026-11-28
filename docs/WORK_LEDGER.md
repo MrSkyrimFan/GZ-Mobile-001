@@ -40,6 +40,8 @@ Full R2/R3/R4 professional layers/groups/compositing, selections/channels/editab
 
 **Dispatch:** The [exact U1 v27 engineering qualification](#qualified-gif-paused-seek-repair) is complete. Continue [remaining R1.2](#next-engineering-action--remaining-r12) and preserve all existing Pro and workspace scope.
 
+<a id="u1-review-correction-and-qualification-hold"></a>
+
 ## Historical U1 review correction and qualification hold
 
 These entries preserve the failed and bounded qualification attempts. The [current exact release disposition](#qualified-gif-paused-seek-repair) governs the corrected APK.
@@ -692,9 +694,13 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
+<a id="next-engineering-action--resolve-exact-qualification-hold"></a>
+
 ## Previous engineering action — GIF qualification
 
 The [GIF blocker correction and exact qualification](#qualified-gif-paused-seek-repair) completed this dispatch. The old PR #50 result is retained above. Earlier test failures, diagnostic boundaries and exact replacement APK identity are in the [review handoff](coordination/GPT_6_PRO_U1_GIF_SEEK_QUALIFICATION_HANDOFF_2026-11-27.md).
+
+<a id="following-engineering-action--remaining-r12"></a>
 
 ## Next engineering action — remaining R1.2
 
