@@ -183,7 +183,21 @@ object EditDocumentCodec {
     internal fun recoverProRecipe(content: String, projectLimit: Int): EditDocument? =
         decode(content, projectLimit)
 
+    // Disposable selected-Open instrumentation. This source is diagnostic only.
+    internal class InkProbe(val phase: String) {
+        var fieldsCpuNs = 0L
+        var fieldsChars = 0
+        var inkCpuNs = 0L
+        var fastCount = 0
+        var fallbackCount = 0
+        val firstFallbacks = ArrayList<String>(8)
+    }
+
+    internal val selectedInkProbe = ThreadLocal<InkProbe>()
+
     private fun decodeInkPoints(value: String): List<BrushPoint> {
+        val probe = selectedInkProbe.get()
+        val cpuStart = if (probe != null) android.os.Debug.threadCpuTimeNanos() else 0L
         val points = ArrayList<BrushPoint>()
         var start = 0
         var tokens = 0
@@ -194,6 +208,7 @@ object EditDocumentCodec {
             start = end + 1
             tokens++
         }
+        if (probe != null) probe.inkCpuNs += android.os.Debug.threadCpuTimeNanos() - cpuStart
         return points
     }
 
@@ -211,28 +226,44 @@ object EditDocumentCodec {
         return if (x.isFinite() && y.isFinite() && x in 0f..1f && y in 0f..1f) BrushPoint(x, y) else null
     }
 
+    private fun inkFallback(value: String, start: Int, end: Int): Float {
+        val token = value.substring(start, end)
+        selectedInkProbe.get()?.let { probe ->
+            probe.fallbackCount++
+            if (probe.firstFallbacks.size < 8) probe.firstFallbacks.add(token)
+        }
+        return token.toFloatOrNull() ?: Float.NaN
+    }
+
     private fun inkCoordinate(value: String, start: Int, end: Int): Float {
         val digits = end - start - 2
         if (digits !in 1..inkDecimalDivisors.lastIndex || value[start] != '0' || value[start + 1] != '.')
-            return value.substring(start, end).toFloatOrNull() ?: Float.NaN
+            return inkFallback(value, start, end)
         var numerator = 0
         for (index in start + 2 until end) {
             val digit = value[index] - '0'
-            if (digit !in 0..9) return value.substring(start, end).toFloatOrNull() ?: Float.NaN
+            if (digit !in 0..9) return inkFallback(value, start, end)
             numerator = numerator * 10 + digit
         }
         // With at most nine decimal places, any nonzero gap to a float
         // midpoint exceeds half a double ULP there (5^9 < 2^29). Conversion
         // therefore rounds as direct float parsing does.
+        selectedInkProbe.get()?.let { it.fastCount++ }
         return (numerator / inkDecimalDivisors[digits]).toFloat()
     }
 
     private fun decode(content: String, limit: Int): EditDocument? {
         if (content.length > limit) return null
+        val probe = selectedInkProbe.get()
+        val fieldsStart = if (probe != null) android.os.Debug.threadCpuTimeNanos() else 0L
         val fields = content.lineSequence().take(6000).mapNotNull { line ->
             val index = line.indexOf('=')
             if (index <= 0) null else line.substring(0, index) to line.substring(index + 1)
         }.toMap()
+        if (probe != null) {
+            probe.fieldsChars = content.length
+            probe.fieldsCpuNs = android.os.Debug.threadCpuTimeNanos() - fieldsStart
+        }
         val version = fields["version"]
         if (version != LEGACY_VERSION && version != ANCHORED_PRIVACY_VERSION) return null
         fun numeric(key: String, default: Float, min: Float, max: Float): Float {

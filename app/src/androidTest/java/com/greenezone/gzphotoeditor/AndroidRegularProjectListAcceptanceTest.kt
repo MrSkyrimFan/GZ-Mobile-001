@@ -138,9 +138,32 @@ class AndroidRegularProjectListAcceptanceTest {
 
     private fun measureOpen(context: Context, entry: Entry, phase: String): Sample<OpenEvidence> {
         var decodes = 0
+        val probe = EditDocumentCodec.InkProbe(phase)
+        var throughReadCpu = 0L
+        var openCpu = 0L
+        var processAllocated = 0L
         val sample = measure(phase) {
-            ProjectStore.loadNamed(context, entry.project, onDecode = { decodes++ })
+            val allocationBefore = Debug.getRuntimeStat("art.gc.bytes-allocated")?.toLongOrNull()
+            val cpuStart = Debug.threadCpuTimeNanos()
+            EditDocumentCodec.selectedInkProbe.set(probe)
+            try {
+                ProjectStore.loadNamed(context, entry.project, onDecode = {
+                    decodes++
+                    throughReadCpu = Debug.threadCpuTimeNanos() - cpuStart
+                })
+            } finally {
+                EditDocumentCodec.selectedInkProbe.remove()
+                openCpu = Debug.threadCpuTimeNanos() - cpuStart
+                val allocationAfter = Debug.getRuntimeStat("art.gc.bytes-allocated")?.toLongOrNull()
+                processAllocated = if (allocationAfter != null && allocationBefore != null)
+                    allocationAfter - allocationBefore else -1L
+            }
         }
+        Log.i("GzR11Probe", "phase=" + probe.phase + " openCpuNs=" + openCpu +
+            " throughReadCpuNs=" + throughReadCpu + " fieldsCpuNs=" + probe.fieldsCpuNs +
+            " recipeChars=" + probe.fieldsChars + " inkCpuNs=" + probe.inkCpuNs +
+            " fast=" + probe.fastCount + " fallback=" + probe.fallbackCount +
+            " fallbackSamples=" + probe.firstFallbacks + " wholeProcessAllocated=" + processAllocated)
         val loaded = sample.data
         Log.i(TAG, "phase=" + phase + " name=" + entry.project.name + " decodes=" + decodes +
             " opened=" + (loaded != null))
