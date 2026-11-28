@@ -1,6 +1,6 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 27, 2026.** [PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49) contains the U1 review corrections. Exact [PR #50](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/50) candidate is held at **717.745 ms** against the **650 ms** API35 R1.1 per-Open limit. [Current paired diagnostic disposition](WORK_LEDGER.md#final-paired-api35-diagnostic-disposition). PR #46 / **0.12.14 Test, code 26** retains its recorded 303/303 engineering qualification. Focused review and a qualified replacement APK precede the next handset recommendation. Remaining R1.2 and later gates stay in scope.
+> **Current work — November 27, 2026.** The final paired diagnostic is complete. Its **704.840 ms** Open and recorded **468.741 ms** warm median do not meet the unchanged **650 ms / 300 ms** limits. [Independent review and autonomous repair dispatch](#independent-review-and-autonomous-selected-open-repair) opens a scoped selected-record read/decode performance task. PR #50 and the corrected handset APK remain held pending qualification; PR #46 retains its earlier scoped qualification. Remaining R1.2 and all professional capability obligations follow.
 
 ## Owner scope reaffirmation — Pro remains unfinished
 
@@ -10,7 +10,7 @@ Read-only scope reconciliation at `07578107c15e6df3f08ea30427ea55b9da5ba8e2` ver
 
 Full R2/R3/R4 professional layers/groups/compositing, selections/channels/editable masks, brush/retouch/vector/effects/interchange and Subject & Background/reshaping remain required before their workspace closure. Remaining R1–R11, Regular/Collage/GIF scope, B2/F03, RV5, all-workspace recovery and formal owner/release gates remain. Use the existing end-to-end workflow acceptance contract; do not reduce difficult features to labels or move required pre-release Pro work after launch.
 
-**Dispatch:** follow the [final paired diagnostic disposition](#final-paired-api35-diagnostic-disposition); PR #50 and the corrected APK stay held. Then continue remaining R1.2 and the dependency-ordered roadmap under existing authority. This addendum adds no diagnostic execution, new planning cycle, approval barrier or shell rewrite. It updates documentation only; no app/test/build/CI changes, application test execution or APK rebuild.
+**Dispatch:** follow the [autonomous selected-Open repair](#independent-review-and-autonomous-selected-open-repair); the paired diagnostic is complete, and PR #50/the corrected APK stay held until qualification. Then continue remaining R1.2 and the dependency-ordered roadmap under existing authority. This addendum adds no diagnostic execution, new planning cycle, approval barrier or shell rewrite. It updates documentation only; no app/test/build/CI changes, application test execution or APK rebuild.
 
 ## U1 review correction and qualification hold
 
@@ -135,6 +135,22 @@ During that fourth Open, TID 3175 was runnable but unscheduled in the guest for 
 **Next finite engineering decision:** whether to open a bounded selected-Open latency/headroom repair scoped to a source-proven cost, or keep corrected delivery on hold until a reproducible same-tier correction is established. The existing selected-only source route is `PhotoProjectFiles.readRecord` → `ProjectStore.decodeRecord` → `EditDocumentCodec.decode`; the trace did not identify any one of these as the cause. Any repair must retain the workload, 650 ms/300 ms wall limits, 64 MiB cap, one decode and identity/content checks, then pass the existing unprofiled exact-candidate and exact-merge qualification. This record authorizes no further diagnostic execution. Remaining R1.2 follows the qualification disposition. Current Pro remains unaccepted as a finished professional editor. P01–P16 are seven PARTIAL and nine OPEN, with full R2/R3/R4 and overall pre-release obligations retained. Earlier repairs and phone passes retain their stated scope.
 
 The actual project route in `For Codex/START_HERE.md` is the cache of this repository dispatch. Its previous pointer was the completed PR #53 trace. The current governing references are the PR #54 contract, PR #55 owner scope, and this final paired receipt. Original intake and handset artifacts remain protected.
+
+### Independent review and autonomous selected-Open repair
+
+November 27, 2026 (America/Denver). [Reviewed evidence and complete Codex engineering handoff](coordination/R11_SELECTED_OPEN_ENGINEERING_HANDOFF_2026-11-27.md). Documentation intake is `6f1dde78c33782900805ead609d001b37730ed85`; the held behavioral/test baseline remains `27406f4aed8efa42a6078e1108c53304d4a0043e`. The PR #56 finite engineering decision above is now resolved: **open the scoped selected-record Open performance repair and carry it through qualification.**
+
+Read-only review verified both ZIP hashes/CRCs and all 55 paired-manifest entries, source/workflow input equivalence and the bootstrap/one-invocation boundary. Independent raw guest-protobuf and host-ftrace reconstruction reproduced all nine phase state bounds, marker times, vCPU states/mapping and four selected overlap calculations. The slow Open and arithmetic warm median remain failed observations; subsequent median/last heap assertions were not reached.
+
+PR #56's 0.121 ms simultaneous host-vCPU off-CPU value is exact at saved timestamp precision. A conservative ±1 microsecond allowance at each saved host-state endpoint gives **0.129 ms** over the possible entire slow-phase host bracket, still conditional on the observed clock envelope. This precision clarification does not change the hold or reopen the capture. The original native TraceProcessor executable hash was not recorded; disclose that provenance gap. Independent raw reconstruction supports the scheduling numbers without inventing the missing historical identity or rerunning the app.
+
+The paired trace alone identifies no source repair. Separate source inspection supplies a concrete starting hypothesis: `EditDocumentCodec.inkCoordinate` falls back to a coordinate substring/general Float conversion for forms outside its narrow decimal fast path; the dense fixture and writer make actual emitted-token/fallback counts a decisive next observation. The read route also creates full-record/recipe/field strings. Measure attributable cost, implement the smallest compatible improvement and verify it. Do not claim that either source observation explains the historical wall-time failures before evidence. The existing reader hashes while reading; SHA/version/recovery checks remain required.
+
+**Latest owner instruction:** Codex is to act as the engineer and keep solving authorized problems, rather than stopping for owner-mediated relays after routine technical steps. AGENTS and the handoff now authorize diagnosis, targeted profiling, supported implementation iterations, testing, independent review and qualified merge as one package. No arbitrary one-attempt cap applies to useful repair/verification. No blind unchanged retries, weakened gates, invented attribution or repeated general scheduling loop. Escalate only a genuine owner decision or irreducible access/scope/technical blocker; keep independent work moving.
+
+Preserve the exact acceptance workload, timing/memory limits, 303 inherited plus ten correction identities, separate force-stop/new-PID proof, source bytes, compatibility and prior successful repairs. Keep PR #50/the corrected APK held until the unprofiled final candidate and exact merged application qualify. Then continue remaining R1.2 and the next authorized roadmap work. All 77 families/children, Pro non-acceptance and later owner/release gates remain intact.
+
+This review changes documentation only; it executes no application/build/emulator/Android test and produces no replacement APK.
 
 ### Earlier qualification attempts
 
@@ -648,7 +664,7 @@ Subdivide a selected package into bounded deliverables with affected files and o
 
 ## Next engineering action — resolve exact qualification hold
 
-The [final paired diagnostic](#final-paired-api35-diagnostic-disposition) ran once and failed the unchanged API35 Open limit at 704.840334 ms. Guest runnable delay is established for that capture. A qualifying repair or same-tier environment disposition is still unsupported. Keep PR #50 and its handset APK held. Review the finite selected-Open engineering decision in the receipt before any further app execution. Preserve the original 717.745435 ms result, every limit and all prior exact-head passes. Remaining R1.2 and the full professional scope follow the qualifying disposition.
+Execute the [autonomous selected-Open performance package](coordination/R11_SELECTED_OPEN_ENGINEERING_HANDOFF_2026-11-27.md) through attributable-cost evidence, the smallest compatible repair, necessary targeted tests, independent review and unprofiled exact-candidate/exact-merge qualification. The preceding scheduling diagnostic is complete. Useful evidence-driven implementation/verification iterations do not require another owner relay; unchanged blind retries and softened gates remain prohibited. Preserve every failure, workload/limit, inherited case and actual process-recovery obligation. PR #50/the corrected APK remain held until those exits. Continue remaining R1.2 and the full professional roadmap under the same authority.
 
 ## Following engineering action — remaining R1.2
 
