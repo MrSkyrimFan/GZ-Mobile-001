@@ -96,22 +96,30 @@ class AndroidBackNavigationTest {
 
     // Save the actual working snapshot before testing retained workspace history.
     // Discard would intentionally remove that unsaved branch under the new contract.
-    private fun saveDeparture(kind: String) {
+    private fun saveDeparture(kind: String, expectedDestination: String? = null) {
         rule.onNodeWithText("Save").performClick()
         val name = "back-$kind-" + System.nanoTime().toString().takeLast(12)
         savedFixtures.add(kind to name)
         rule.onNode(hasSetTextAction()).performTextInput(name)
         rule.onNodeWithText("Save").performClick()
+        var savedBeforeDestination = false
         rule.waitUntil(15_000) {
             val context = instrumentation.targetContext
-            when (kind) {
+            val saved = when (kind) {
                 "photo" -> ProjectStore.loadNamed(context, name) != null
                 "pro" -> ProStore.loadNamed(context, name) != null
                 "collage" -> CollageStore.loadNamed(context, name) != null
                 "gif" -> GifStore.loadNamed(context, name) != null
                 else -> false
             }
+            // Named Save publishes on IO before its continuation commits the new route.
+            val reached = expectedDestination == null ||
+                rule.onNodeWithText(expectedDestination, substring = false).isDisplayed()
+            if (saved && !reached) savedBeforeDestination = true
+            saved && reached
         }
+        if (expectedDestination != null)
+            android.util.Log.i("GzBackRouteProbe", "namedSaveObservedBeforeDestination=" + savedBeforeDestination)
         rule.waitForIdle()
     }
 
@@ -437,7 +445,7 @@ class AndroidBackNavigationTest {
         rule.onNodeWithContentDescription("Choose editing workspace").performClick()
         rule.onNodeWithText("GIF maker").performClick()
         rule.onNodeWithText("Unsaved Pro changes").assertIsDisplayed()
-        saveDeparture("pro")
+        saveDeparture("pro", expectedDestination = "GIF ▾")
         rule.onNodeWithText("GIF ▾").assertIsDisplayed()
 
         pressBackThroughDispatcher()
