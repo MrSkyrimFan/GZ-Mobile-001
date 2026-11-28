@@ -10,6 +10,8 @@ The [latest owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) p
 
 A1's 25/50 exchange is complete and its activation consumed. Frozen historical roadmaps and CQ answers retain evidence, not superseded execution rules. This remains the single active R0–R11 roadmap. The [ledger](WORK_LEDGER.md) owns exact dispatch and qualifications.
 
+**Owner scope reaffirmation — November 27, 2026.** The [Pro scope addendum](coordination/OWNER_PRO_SCOPE_ADDENDUM_2026-11-27.md) records that present Pro, especially masking, is not accepted as the finished professional product. All 16 Pro families remain PARTIAL/OPEN in the reviewed inventory; no percentage is established. Bounded U1 repairs do not complete R2/R3/R4 or the full professional workflow. All 77 families and required children remain; this roadmap is still the sole delivery plan. The addendum supplements the existing finite qualification disposition, followed by remaining R1.2 and the ordered work below.
+
 ## Current direction and authority
 
 Lance supplied the independent PR #26 review (CHANGES REQUIRED), authorized fixing the issues, and requested a complete roadmap for the original professional app vision. The earlier Audit 2 successor hold was lifted. The November 25 independent review and the later 0.12.13 owner findings are recorded in the ledger with completed corrections and current exceptions. PR #31 and PR #37 supplied the historical 0.12.10 and 0.12.11 test builds. The latest report above records scoped owner-reported passes and open exceptions. Standing engineering, test, branch, PR and verified-merge authority continues through the current ledger. Formal workspace locks and public release remain owner decisions.

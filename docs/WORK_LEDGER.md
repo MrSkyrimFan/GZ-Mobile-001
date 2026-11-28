@@ -2,6 +2,16 @@
 
 > **Current work — November 26, 2026.** [PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49) contains the U1 review corrections. Exact [PR #50](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/50) candidate is held at **717.745 ms** against the **650 ms** API35 R1.1 per-Open limit. [Current disposition](WORK_LEDGER.md#u1-review-correction-and-qualification-hold). PR #46 / **0.12.14 Test, code 26** retains its recorded 303/303 engineering qualification. Focused review and a qualified replacement APK precede the next handset recommendation. Remaining R1.2 and later gates stay in scope.
 
+## Owner scope reaffirmation — Pro remains unfinished
+
+November 27, 2026 (America/Denver). Before relaying the PR #54 continuation, Lance explicitly reaffirmed that current Pro quality, particularly masking, is not acceptable as the finished professional product and asked for a repository addendum. [Owner scope and Codex supplement](coordination/OWNER_PRO_SCOPE_ADDENDUM_2026-11-27.md).
+
+Read-only scope reconciliation at `07578107c15e6df3f08ea30427ea55b9da5ba8e2` verified 77 rows/77 unique capability IDs. All P01–P16 remain unfinished: seven PARTIAL and nine OPEN. No row status, required child or existing pass is removed or promoted. No numerical completion percentage, professional parity, formal workspace lock or release acceptance is established. The feedback is owner non-acceptance of overall Pro quality, not new evidence that a specifically qualified U1 repair regressed.
+
+Full R2/R3/R4 professional layers/groups/compositing, selections/channels/editable masks, brush/retouch/vector/effects/interchange and Subject & Background/reshaping remain required before their workspace closure. Remaining R1–R11, Regular/Collage/GIF scope, B2/F03, RV5, all-workspace recovery and formal owner/release gates remain. Use the existing end-to-end workflow acceptance contract; do not reduce difficult features to labels or move required pre-release Pro work after launch.
+
+**Dispatch remains unchanged:** follow the [final paired scheduling check](coordination/R11_PAIRED_SCHEDULING_CHECK_2026-11-26.md) and its finite disposition; PR #50 and the corrected APK stay held. Then continue remaining R1.2 and the dependency-ordered roadmap under existing authority. This addendum adds no diagnostic execution, new planning cycle, approval barrier or shell rewrite. It updates documentation only; no app/test/build/CI changes, application test execution or APK rebuild.
+
 ## U1 review correction and qualification hold
 
 - Production correction merge `b342f0bd656753b3692b741489438c6790d14d8b`, complete tree `046ac9806b7181c78cb1b30cf88505d02354e9cf`. [Application PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49).
