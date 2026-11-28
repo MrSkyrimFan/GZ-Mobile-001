@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
                 onSurface = Color(0xFFF2F5F5),
                 surfaceVariant = Color(0xFF222A34),
                 onSurfaceVariant = Color(0xFFCDD7DB)
-            )) { PhotoEditorScreen() }
+            )) { PhotoEditorScreen(recoverStandaloneRegular = true) }
         }
     }
 }

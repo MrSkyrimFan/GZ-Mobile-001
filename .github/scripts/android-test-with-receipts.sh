@@ -133,7 +133,37 @@ if [[ -s app/build/outputs/apk/debug/app-debug.apk &&
     fi
   done
   adb logcat -d -s GzU1Process:I | tee "$receipt_dir/u1-native-process-logcat.txt"
-  if [[ "$recovery_status" != 0 ]]; then exit "$recovery_status"; fi
+  standalone_status=0
+  if adb shell pm clear "$app_id" | grep -Fx Success; then
+    for phase in standalone-seed standalone-reopen; do
+      if ! adb shell am instrument -w -r -e class "$test_class" -e u1ProcessPhase "$phase" "$runner" \
+        | tee "$receipt_dir/r12-regular-process-$phase.txt"; then
+        standalone_status=1
+        break
+      fi
+      if ! grep -F 'OK (1 test)' "$receipt_dir/r12-regular-process-$phase.txt"; then
+        standalone_status=1
+        break
+      fi
+      if [[ "$phase" == standalone-seed ]]; then
+        # Record whether instrumentation left a live target before the external stop.
+        before_pid="$(adb shell ps -A -o PID,NAME | awk -v app="$app_id" '$2 == app { print $1 }')"
+        adb shell am force-stop "$app_id"
+        after_pid="$(adb shell ps -A -o PID,NAME | awk -v app="$app_id" '$2 == app { print $1 }')"
+        printf 'external force-stop package=%s before=%s after=%s\n' \
+          "$app_id" "${before_pid:-absent}" "${after_pid:-absent}" \
+          | tee "$receipt_dir/r12-regular-process-force-stop.txt"
+        if [[ -n "$after_pid" ]]; then
+          standalone_status=1
+          break
+        fi
+      fi
+    done
+  else
+    standalone_status=1
+  fi
+  adb logcat -d -s GzR12Process:I | tee "$receipt_dir/r12-regular-process-logcat.txt"
+  if [[ "$recovery_status" != 0 || "$standalone_status" != 0 ]]; then exit 1; fi
 elif [[ "$ordinary_status" == 0 ]]; then
   echo "Missing built APKs for process recovery" >&2
   exit 1

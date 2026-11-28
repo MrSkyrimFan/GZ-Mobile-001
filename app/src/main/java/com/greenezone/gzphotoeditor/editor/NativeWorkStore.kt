@@ -158,12 +158,15 @@ internal class NativeWorkStore(context: Context) {
         next.public
     }
 
-    suspend fun delete(expectedCatalogRevision: Long, expected: NativeWorkRef): NativeWorkResult<NativeWorkCatalog> = locked {
+    suspend fun delete(
+        expectedCatalogRevision: Long, expected: NativeWorkRef, clearRoute: Boolean = false
+    ): NativeWorkResult<NativeWorkCatalog> = locked {
         val current = readCatalog()
         val row = current.active?.takeIf { it.summary.ref == expected } ?: throw StaleWork()
         if (current.revision != expectedCatalogRevision) throw StaleWork()
         val retired = current.retired + row.owners + expected.id
-        val next = current.copy(revision = nextRevision(current.revision), active = null, retired = retired)
+        val next = current.copy(revision = nextRevision(current.revision), active = null, retired = retired,
+            route = if (clearRoute) null else current.route)
         publish(next)
         next.public
     }
