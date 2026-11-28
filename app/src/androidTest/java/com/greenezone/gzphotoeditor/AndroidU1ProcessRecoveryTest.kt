@@ -11,7 +11,6 @@ import android.net.Uri
 import android.os.Process
 import android.os.SystemClock
 import android.provider.MediaStore
-import android.view.KeyEvent
 import android.util.Log
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
@@ -217,7 +216,7 @@ class AndroidU1ProcessRecoveryTest {
             tapText("Photo editing Pro")
             tapText("Bring current work")
             waitText("Photo Pro ▾")
-            dismissRetainedExportDialog()
+            dismissRetainedExportDialog(activity)
             tapText("Stack (3)")
             compose.onNodeWithText(BASE_LAYER, substring = false).assertIsDisplayed()
             compose.onNodeWithText(OVERLAY_LAYER, substring = false).assertIsDisplayed()
@@ -246,12 +245,13 @@ class AndroidU1ProcessRecoveryTest {
             Log.i(TAG, "proof pid=$pid nativeLayerEdit=true linkedFinishes=2 undo=35 parked=1 named=2 retired=true")
 
             tapText("Done")
-            verifyNamedUiOpens(store, expected, restored, pid)
+            verifyNamedUiOpens(store, expected, restored, pid, activity)
         }
     }
 
     private fun verifyNamedUiOpens(
-        store: NativeWorkStore, expected: JSONObject, original: NativeWorkState, pid: Int
+        store: NativeWorkStore, expected: JSONObject, original: NativeWorkState, pid: Int,
+        activity: ActivityScenario<MainActivity>
     ) {
         val photoRef = namedFrom(expected.getJSONObject("photoNamed"), ProjectKind.PHOTO)
         val proRef = namedFrom(expected.getJSONObject("proNamed"), ProjectKind.PRO)
@@ -280,7 +280,7 @@ class AndroidU1ProcessRecoveryTest {
         chooseWorkspace("Photo editing Pro")
         tapText("Bring current work")
         waitText("Photo Pro ▾")
-        dismissRetainedExportDialog()
+        dismissRetainedExportDialog(activity)
         val photoPro = awaitActiveWork(store, "The Regular named Open did not return to editable Pro layers") {
             it.mode == NativeWorkMode.PRO && it.id == openedPhoto.id
         }
@@ -344,13 +344,16 @@ class AndroidU1ProcessRecoveryTest {
         tapText(label)
     }
 
-    private fun dismissRetainedExportDialog() {
+    private fun dismissRetainedExportDialog(activity: ActivityScenario<MainActivity>) {
         waitText("Resume export")
-        // Back closes the independent retry surface while leaving its record intact.
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        val journal = PendingExportJournal(target.filesDir)
+        val retained = requireNotNull(journal.read(ExportWorkspace.PRO))
+        // Use the recovered host's Back handler while keeping the retry record intact.
+        activity.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.waitUntil(10_000) {
             compose.onAllNodesWithText("Resume export", substring = false).fetchSemanticsNodes().isEmpty()
         }
+        assertEquals(retained, journal.read(ExportWorkspace.PRO))
     }
 
     private suspend fun verifyExactRecovery(store: NativeWorkStore, expected: JSONObject): NativeWorkState {

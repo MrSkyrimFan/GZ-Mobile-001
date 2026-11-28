@@ -27,7 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -46,6 +46,7 @@ import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
 class AndroidGifProjectIdentityTest {
+    // Queue composition when media and store work return from background threads.
     @get:Rule val rule = createComposeRule()
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
