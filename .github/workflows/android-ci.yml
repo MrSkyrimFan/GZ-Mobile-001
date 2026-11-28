@@ -31,7 +31,7 @@ jobs:
           sudo udevadm trigger --subsystem-match=misc --sysname-match=kvm
           sudo udevadm settle
           test -r /dev/kvm && test -w /dev/kvm
-      - name: Run the adjacent edited video and final-frame seek tests on API35
+      - name: Compare the original GIF prefix and immediate pause-to-seek dispatch on API35
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35

@@ -414,15 +414,30 @@ class AndroidGifWorkspacePlaybackTest {
                 frame >= 5
             }
             Log.i("GzGifTiming", "2 s, 8 fps MP4: Play to frame 5 or later = ${SystemClock.elapsedRealtime() - startedAt} ms")
-            rule.onNodeWithText("Pause").performClick()
-            pauseAtWall = SystemClock.elapsedRealtime()
-            rule.onNodeWithText("Play").assertIsDisplayed()
             expectedFrame = GifVideoMath.frameCount(doc.video!!)
-            rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
-                androidx.compose.ui.semantics.SemanticsActions.SetProgress
-            ) {
-                seekAtWall = SystemClock.elapsedRealtime()
-                semanticsAccepted = it((expectedFrame - 1).toFloat())
+            val mode = InstrumentationRegistry.getArguments().getString("gzGifPauseSeekMode") ?: "stock"
+            if (mode == "same_dispatch") {
+                val pause = rule.onNodeWithText("Pause").fetchSemanticsNode()
+                    .config[androidx.compose.ui.semantics.SemanticsActions.OnClick].action!!
+                val scrub = rule.onNodeWithContentDescription("Scrub GIF frames").fetchSemanticsNode()
+                    .config[androidx.compose.ui.semantics.SemanticsActions.SetProgress].action!!
+                rule.runOnIdle {
+                    assertTrue(pause())
+                    pauseAtWall = SystemClock.elapsedRealtime()
+                    seekAtWall = SystemClock.elapsedRealtime()
+                    semanticsAccepted = scrub((expectedFrame - 1).toFloat())
+                }
+                rule.onNodeWithText("Play").assertIsDisplayed()
+            } else {
+                rule.onNodeWithText("Pause").performClick()
+                pauseAtWall = SystemClock.elapsedRealtime()
+                rule.onNodeWithText("Play").assertIsDisplayed()
+                rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
+                    androidx.compose.ui.semantics.SemanticsActions.SetProgress
+                ) {
+                    seekAtWall = SystemClock.elapsedRealtime()
+                    semanticsAccepted = it((expectedFrame - 1).toFloat())
+                }
             }
             waitFrame(expectedFrame)
         } finally {

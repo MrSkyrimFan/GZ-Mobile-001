@@ -20,13 +20,19 @@ adb logcat -c
 cls=com.greenezone.gzphotoeditor.AndroidGifWorkspacePlaybackTest
 expected_edited=editedVideoKeepsAdvancingAcrossReverseLookAndSpeedChanges
 expected_seek=mp4PlaysPausesAndSeeksThroughActualEditorControls
-set +e
-adb shell am instrument -w -r -e class "$cls#$expected_edited,$cls#$expected_seek" \
-    "$test_id/androidx.test.runner.AndroidJUnitRunner" | tee gif-seek-probe/test.txt
-status=${PIPESTATUS[0]}
-set -e
-adb logcat -d -v threadtime 'GzGifSeekProbe:I' 'GzGifTiming:I' '*:S' | tee gif-seek-probe/app.log
-grep -Fx "INSTRUMENTATION_STATUS: test=$expected_edited" gif-seek-probe/test.txt
-grep -Fx "INSTRUMENTATION_STATUS: test=$expected_seek" gif-seek-probe/test.txt
-grep -Fx 'OK (2 tests)' gif-seek-probe/test.txt
+status=0
+prefix=com.greenezone.gzphotoeditor
+selectors="$prefix.AndroidGifFidelityTest,$prefix.AndroidGifPreparationProfileTest,$prefix.AndroidGifProjectIdentityTest,$cls#$expected_edited,$cls#$expected_seek"
+for trial in stock_prefix same_dispatch; do
+  adb logcat -c
+  if [[ "$trial" == same_dispatch ]]; then selectors="$cls#$expected_seek"; fi
+  if ! adb shell am instrument -w -r -e class "$selectors" -e gzGifPauseSeekMode "$trial" \
+      "$test_id/androidx.test.runner.AndroidJUnitRunner" | tee "gif-seek-probe/$trial.txt"; then
+    status=1
+  fi
+  adb logcat -d -v threadtime 'GzGifSeekProbe:I' 'GzGifTiming:I' '*:S' | tee "gif-seek-probe/$trial.log"
+  if ! grep -Fx "INSTRUMENTATION_STATUS: test=$expected_seek" "gif-seek-probe/$trial.txt" || \
+      ! grep -E '^OK \([1-9][0-9]* tests?\)$' "gif-seek-probe/$trial.txt"; then status=1; fi
+  if [[ "$trial" == stock_prefix ]]; then adb shell am force-stop "$app_id"; fi
+done
 exit "$status"
