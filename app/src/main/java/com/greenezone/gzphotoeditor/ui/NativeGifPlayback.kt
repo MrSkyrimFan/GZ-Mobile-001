@@ -26,7 +26,8 @@ internal fun NativeGifPlayback(
     onFrame: (Int) -> Unit,
     onEnd: (Int) -> Unit,
     onFailed: (Int) -> Unit,
-    modifier: Modifier
+    modifier: Modifier,
+    onDisposed: () -> Unit
 ) {
     val context = LocalContext.current
     val view = remember(clip.uri) { VideoView(context) }
@@ -81,6 +82,7 @@ internal fun NativeGifPlayback(
             view.setOnCompletionListener(null)
             view.setOnErrorListener(null)
             view.stopPlayback()
+            onDisposed()
         }
     }
     LaunchedEffect(view, started) {

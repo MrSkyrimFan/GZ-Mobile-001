@@ -1,176 +1,52 @@
-name: GZ Editor Pro Android CI
+name: GIF paused request interleaving
 on:
   push:
-    branches: [main, "feature/**"]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
-
-# Superseded feature pushes should not consume emulator minutes in parallel.
-# A merged-main run is never cancelled by a subsequent push.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
+    branches: [feature/u1-gif-paused-request-interleaving-20261127]
 jobs:
-  verify:
+  gif-seek-api35:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Android SDK
-        uses: android-actions/setup-android@v4
-      - name: Install compile SDK
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Gradle 9.6
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.6.0'
-      - name: Verify brand and no forbidden permissions
-        run: |
-          reject_matches() {
-            local status
-            if grep -R -nE "$@"; then
-              return 1
-            else
-              status=$?
-              if [ "$status" -ne 1 ]; then
-                return "$status"
-              fi
-            fi
-          }
-          reject_matches 'ChromaVale|Focavera|com[.]greenezone[.](chromavale|focavera)' app/src/main app/build.gradle.kts settings.gradle.kts
-          reject_matches 'android[.]permission[.](INTERNET|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE)' app/src/main
-      - name: Test and assemble
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
-      - name: Verify testing package
-        run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep -q 'classes.dex'
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --min-sdk-version 29             app/build/outputs/apk/debug/app-debug.apk | tee app/build/apk-signature-verified.txt
-          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true'             app/build/apk-signature-verified.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: gz-editor-pro-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-
-  android-emulator:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
     env:
       ORG_GRADLE_PROJECT_gzPhoneTestInstall: 'true'
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Android SDK
-        uses: android-actions/setup-android@v4
-      - name: Gradle 9.6
-        uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v4
+      - name: Install compile SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.0'
+      - name: Assemble diagnostic app and instrumentation
+        run: gradle --no-daemon --stacktrace :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Run real Android bitmap and activity smoke tests
+          sudo udevadm trigger --subsystem-match=misc --sysname-match=kvm
+          sudo udevadm settle
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Capture baseline and both controlled paused-read outcomes
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
           profile: pixel_3a
-          # Retain the API35 lane; its actual runtime heap is logged by the profile.
-          # API29 below uses an explicit guest-property preflight.
           ram-size: 2048M
           heap-size: 256M
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: bash .github/scripts/android-test-with-receipts.sh
-      - name: Upload the APK exercised on the emulator
+          script: bash .github/scripts/u1-gif-paused-request-interleaving.sh
+      - name: Upload raw app-side observations
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gz-editor-pro-phone-test
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: u1-gif-paused-request-interleaving
+          path: gif-paused-request/
           if-no-files-found: error
-      - name: Upload Android emulator test receipts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gz-editor-pro-emulator-receipts
-          path: |
-            app/build/outputs/androidTest-results/connected/
-            app/build/reports/androidTests/connected/
-          if-no-files-found: warn
-
-  # Android 10 is the advertised minimum, not just a Gradle minSdk number.
-  # Exercise media providers, frame decoding, GIF export and Pro compositing
-  # on the actual minimum supported emulator API independently of API35.
-  android-minimum-api29:
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      ORG_GRADLE_PROJECT_gzPhoneTestInstall: 'true'
-      GZ_CI_HEAP_MIB: '256'
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Android SDK
-        uses: android-actions/setup-android@v4
-      - name: Gradle 9.6
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.6.0'
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Exercise Android 10 media and editing regression
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 29
-          target: google_apis
-          arch: x86_64
-          profile: pixel_3a
-          # Runner v2 writes heap-size to hw.heapSize; the AVD key is vm.heapSize.
-          # The test script also verifies guest properties after restarting zygote.
-          pre-emulator-launch-script: |
-            sed -i '/^vm\.heapSize=/d;/^hw\.heapSize=/d' "$ANDROID_AVD_HOME/test.avd/config.ini"
-            printf 'vm.heapSize=256\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
-          disable-animations: true
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
-          script: bash .github/scripts/android-test-with-receipts.sh
-      - name: Upload Android 10 emulator test receipts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gz-editor-pro-emulator-api29-receipts
-          path: |
-            app/build/outputs/androidTest-results/connected/
-            app/build/reports/androidTests/connected/
-          if-no-files-found: warn

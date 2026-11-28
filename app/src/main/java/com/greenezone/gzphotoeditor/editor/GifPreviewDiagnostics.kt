@@ -42,7 +42,19 @@ internal enum class GifDiagnosticKind {
     EXPORT_FAILED,
     PREVIEW_CLOSED,
     ROUTE_CLOSED,
-    SCREEN_CLOSED
+    SCREEN_CLOSED,
+    COMMAND_PAUSE,
+    COMMAND_SEEK,
+    STATE_PAUSED,
+    NATIVE_DISPOSED,
+    REQUEST_BOUND,
+    REQUEST_CONSUMED,
+    READ_STARTED,
+    READER_READ_FINISHED,
+    READ_FINISHED,
+    READ_FAILED,
+    SHOWN_ASSIGNED,
+    SHOWN_REJECTED
 }
 
 internal data class GifDiagnosticEvent(
@@ -59,7 +71,9 @@ internal data class GifDiagnosticEvent(
     val durationMs: Long? = null,
     val latencyNanos: Long? = null,
     val timestampNanos: Long,
-    val failureClass: String? = null
+    val failureClass: String? = null,
+    val requestSerial: Long? = null,
+    val playing: Boolean? = null
 )
 
 internal class GifDiagnosticBuffer(
@@ -82,7 +96,9 @@ internal class GifDiagnosticBuffer(
         height: Int? = null,
         durationMs: Long? = null,
         latencyNanos: Long? = null,
-        failureClass: String? = null
+        failureClass: String? = null,
+        requestSerial: Long? = null,
+        playing: Boolean? = null
     ): GifDiagnosticEvent {
         val event = GifDiagnosticEvent(
             sequence = sequence.incrementAndGet(),
@@ -104,7 +120,9 @@ internal class GifDiagnosticBuffer(
                 ?.substringAfterLast('\\')
                 ?.filter { it.isLetterOrDigit() || it == '_' || it == '$' }
                 ?.take(80)
-                ?.takeIf { it.isNotBlank() }
+                ?.takeIf { it.isNotBlank() },
+            requestSerial = requestSerial,
+            playing = playing
         )
         while (events.size >= capacity.coerceAtLeast(1)) events.removeFirst()
         events.addLast(event)
@@ -135,7 +153,9 @@ internal object GifPreviewDiagnostics {
         height: Int? = null,
         durationMs: Long? = null,
         latencyNanos: Long? = null,
-        failure: Throwable? = null
+        failure: Throwable? = null,
+        requestSerial: Long? = null,
+        playing: Boolean? = null
     ): GifDiagnosticEvent = buffer.append(
         operationId = operationId,
         generation = generation,
@@ -148,8 +168,39 @@ internal object GifPreviewDiagnostics {
         height = height,
         durationMs = durationMs,
         latencyNanos = latencyNanos,
-        failureClass = failure?.javaClass?.simpleName
+        failureClass = failure?.javaClass?.simpleName,
+        requestSerial = requestSerial,
+        playing = playing
     )
 
     fun snapshot(): List<GifDiagnosticEvent> = buffer.snapshot()
+}
+
+/** Controlled test instrumentation for the disposable seek diagnostic branch. */
+internal object GifSeekProbe {
+    @Volatile
+    var pausedReadBarrier: (suspend (Long, Long, Long, Int) -> Unit)? = null
+
+    fun snapshot(): List<GifDiagnosticEvent> = GifPreviewDiagnostics.snapshot()
+
+    fun record(
+        operationId: Long,
+        generation: Long,
+        kind: GifDiagnosticKind,
+        requestSerial: Long,
+        frameIndex: Int,
+        playing: Boolean,
+        failure: Throwable? = null,
+        route: GifPreviewRoute? = null
+    ) = GifPreviewDiagnostics.record(
+        operationId = operationId,
+        generation = generation,
+        stage = GifDiagnosticStage.G4_SEEK,
+        kind = kind,
+        route = route,
+        frameIndex = frameIndex,
+        failure = failure,
+        requestSerial = requestSerial,
+        playing = playing
+    )
 }

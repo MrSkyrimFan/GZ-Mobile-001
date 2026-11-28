@@ -24,6 +24,7 @@ import com.greenezone.gzphotoeditor.editor.GifPreviewDiagnostics
 import com.greenezone.gzphotoeditor.editor.GifDiagnosticKind
 import com.greenezone.gzphotoeditor.editor.GifDiagnosticStage
 import com.greenezone.gzphotoeditor.editor.GifPreviewRoute
+import com.greenezone.gzphotoeditor.editor.GifSeekProbe
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
 import com.greenezone.gzphotoeditor.editor.afterBitmapCodecFailure
@@ -35,6 +36,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -42,6 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 private data class PreviewFrame(val index: Int, val bitmap: Bitmap)
+private data class TracedSeek(val frame: Int, val serial: Long)
 
 @Composable
 internal fun GifFramePreview(
@@ -49,6 +52,8 @@ internal fun GifFramePreview(
     operationId: Long,
     playing: Boolean,
     startFrame: Int,
+    requestSerial: Long,
+    seekProbeGeneration: AtomicLong,
     editedCodecFailed: AtomicBoolean,
     readerOwner: Mutex,
     onFrame: (Int) -> Unit,
@@ -59,7 +64,7 @@ internal fun GifFramePreview(
     val clip = document.video ?: return
     val context = LocalContext.current
     var shown by remember(operationId, clip.uri) { mutableStateOf<PreviewFrame?>(null) }
-    val requestedFrame by rememberUpdatedState(startFrame)
+    val requested by rememberUpdatedState(TracedSeek(startFrame, requestSerial))
     val reportFrame by rememberUpdatedState(onFrame)
     val reportEnd by rememberUpdatedState(onEnd)
     val reportError by rememberUpdatedState(onError)
@@ -98,11 +103,18 @@ internal fun GifFramePreview(
     }
     DisposableEffect(operationId, generation) {
         activeGeneration.set(generation)
+        seekProbeGeneration.set(generation)
         onDispose {
             activeGeneration.compareAndSet(generation, 0L)
+            seekProbeGeneration.compareAndSet(generation, 0L)
             GifPreviewDiagnostics.record(operationId, generation,
                 GifDiagnosticStage.G7_LIFECYCLE, GifDiagnosticKind.PREVIEW_CLOSED, route)
         }
+    }
+    DisposableEffect(operationId, generation, startFrame, requestSerial, playing) {
+        GifSeekProbe.record(operationId, generation, GifDiagnosticKind.REQUEST_BOUND,
+            requestSerial, startFrame, playing, route = route)
+        onDispose { }
     }
     LaunchedEffect(operationId, generation, route) {
         GifPreviewDiagnostics.record(operationId, generation,
@@ -144,7 +156,11 @@ internal fun GifFramePreview(
         }
         if (route == GifPreviewRoute.NATIVE_SOURCE) {
             NativeGifPlayback(clip, startFrame, document.loopCount,
-                continuousFrame, continuousEnd, fallback, modifier)
+                continuousFrame, continuousEnd, fallback, modifier, onDisposed = {
+                    val current = requested
+                    GifSeekProbe.record(operationId, generation, GifDiagnosticKind.NATIVE_DISPOSED,
+                        current.serial, current.frame, playing = false, route = route)
+                })
         } else {
             ScheduledGifPlayback(clip, startFrame, document.loopCount,
                 continuousFrame, continuousEnd, fallback, modifier)
@@ -212,7 +228,11 @@ internal fun GifFramePreview(
                         }
                     }
                     try {
-                        suspend fun decode(index: Int, warmDecoder: Boolean = false): PreviewFrame {
+                        suspend fun decode(
+                            index: Int,
+                            warmDecoder: Boolean = false,
+                            tracedRequest: TracedSeek? = null
+                        ): PreviewFrame {
                             checkCurrent()
                             val startedAt = System.nanoTime()
                             val cached = if (warmDecoder) null else cache.get(index)
@@ -238,6 +258,10 @@ internal fun GifFramePreview(
                             // still instead of reopening/seeking the video on every move.
                             val reusable = !playing
                             val source = (if (reusable) sourceCache.get(time) else null) ?: readFrame(time).also {
+                                tracedRequest?.let { request ->
+                                    GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READER_READ_FINISHED,
+                                        request.serial, index, playing = false, route = bitmapRoute)
+                                }
                                 try { checkCurrent() } catch (cancelled: CancellationException) {
                                     it.recycle()
                                     throw cancelled
@@ -270,13 +294,33 @@ internal fun GifFramePreview(
                             return PreviewFrame(index, result)
                         }
                         if (!playing) {
-                            snapshotFlow { requestedFrame }.conflate().collect { request ->
-                                val frame = decode(request.coerceIn(times.indices))
+                            snapshotFlow { requested }.distinctUntilChangedBy { it.frame }.conflate().collect { request ->
+                                val index = request.frame.coerceIn(times.indices)
+                                GifSeekProbe.record(operationId, generation, GifDiagnosticKind.REQUEST_CONSUMED,
+                                    request.serial, index, playing = false, route = bitmapRoute)
+                                val frame = try {
+                                    GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_STARTED,
+                                        request.serial, index, playing = false, route = bitmapRoute)
+                                    GifSeekProbe.pausedReadBarrier?.invoke(operationId, generation, request.serial, index)
+                                    decode(index, tracedRequest = request)
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: Exception) {
+                                    GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_FAILED,
+                                        request.serial, index, playing = false, failure = error, route = bitmapRoute)
+                                    throw error
+                                }
+                                GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_FINISHED,
+                                    request.serial, frame.index, playing = false, route = bitmapRoute)
                                 withContext(Dispatchers.Main.immediate) {
-                                    if (requestedFrame == request &&
+                                    if (requested.frame == request.frame &&
                                         activeGeneration.get() == generation) {
                                         shown = frame
+                                        GifSeekProbe.record(operationId, generation, GifDiagnosticKind.SHOWN_ASSIGNED,
+                                            request.serial, frame.index, playing = false, route = bitmapRoute)
                                     } else {
+                                        GifSeekProbe.record(operationId, generation, GifDiagnosticKind.SHOWN_REJECTED,
+                                            request.serial, frame.index, playing = false, route = bitmapRoute)
                                         GifPreviewDiagnostics.record(operationId, generation,
                                             GifDiagnosticStage.G4_SEEK,
                                             GifDiagnosticKind.STALE_FRAME_DISCARDED, bitmapRoute,
@@ -297,7 +341,7 @@ internal fun GifFramePreview(
                                 }
                             }
                             val clock = GifPreviewClock(GifVideoMath.frameDelaysMs(clip))
-                            val first = (resumeFrom ?: requestedFrame).coerceIn(times.indices)
+                            val first = (resumeFrom ?: requested.frame).coerceIn(times.indices)
                             // A displayed still alone does not prepare a reverse sequence.
                             // The reader can use the paused decoder's prepared pictures.
                             // Start the clock once that sequence can supply moving frames.

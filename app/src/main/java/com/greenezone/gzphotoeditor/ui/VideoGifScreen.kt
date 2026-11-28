@@ -33,6 +33,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -103,6 +104,8 @@ internal fun VideoGifScreenContent(
     var tab by remember { mutableStateOf(session.videoTab) }
     var playing by remember { mutableStateOf(false) }
     var seek by remember { mutableIntStateOf(session.videoSeek) }
+    var seekRequestSerial by remember { mutableLongStateOf(0L) }
+    val seekProbeGeneration = remember { AtomicLong() }
     var position by remember { mutableIntStateOf(session.videoPosition) }
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
@@ -152,10 +155,13 @@ internal fun VideoGifScreenContent(
     var toolsMenuOpen by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(session.videoChromeVisible) }
 
-    fun pauseAt(frame: Int) {
+    fun pauseAt(frame: Int, command: GifDiagnosticKind = GifDiagnosticKind.STATE_PAUSED) {
         playing = false
         seek = frame
         position = frame
+        seekRequestSerial += 1
+        GifSeekProbe.record(diagnosticOperation, seekProbeGeneration.get(), command,
+            seekRequestSerial, frame, playing)
     }
     fun snapshot(
         current: GifDocument = custody.current,
@@ -457,6 +463,7 @@ internal fun VideoGifScreenContent(
                     Box(Modifier.weight(1f).fillMaxWidth())
                 } else {
                     GifFramePreview(document, diagnosticOperation, playing, seek,
+                        requestSerial = seekRequestSerial, seekProbeGeneration = seekProbeGeneration,
                         editedCodecFailed = editedCodecFailed, readerOwner = videoReaderOwner,
                         onFrame = { position = it },
                         onEnd = { pauseAt(it) },
@@ -475,7 +482,7 @@ internal fun VideoGifScreenContent(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
                         TextButton(enabled = enabled && count > 1, onClick = {
-                            if (playing) pauseAt(position) else {
+                            if (playing) pauseAt(position, GifDiagnosticKind.COMMAND_PAUSE) else {
                                 seek = if (activeFrame == count - 1) 0 else activeFrame
                                 playing = true
                             }
@@ -507,7 +514,8 @@ internal fun VideoGifScreenContent(
                             verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             when (tab) {
                                 VideoGifTab.TIMELINE -> GifTimeline(clip, activeFrame, count, enabled,
-                                    onSeek = ::pauseAt, onTrim = { next, end ->
+                                    onSeek = { pauseAt(it, GifDiagnosticKind.COMMAND_SEEK) },
+                                    onTrim = { next, end ->
                                         val index = if (end != next.reverse) GifVideoMath.frameCount(next) - 1 else 0
                                         slide(document.copy(video = next), index)
                                     }, onFinish = ::finishSlide)

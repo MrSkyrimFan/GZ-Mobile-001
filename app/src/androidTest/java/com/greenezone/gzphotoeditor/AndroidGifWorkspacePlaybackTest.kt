@@ -25,10 +25,13 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.greenezone.gzphotoeditor.editor.*
 import com.greenezone.gzphotoeditor.ui.VideoGifScreen
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class AndroidGifWorkspacePlaybackTest {
@@ -395,6 +398,9 @@ class AndroidGifWorkspacePlaybackTest {
         val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-editor-preview.mp4", "video/mp4") { out ->
             instrument.context.assets.open("gif_sample_2sec_h264.mp4").use { it.copyTo(out) }
         }
+        val probeStart = System.nanoTime()
+        var accepted: Boolean? = null
+        var finalDisplayed = false
         try {
             val doc = VideoGifSource.document(context, uri)
             show(doc)
@@ -413,10 +419,165 @@ class AndroidGifWorkspacePlaybackTest {
             rule.onNodeWithText("Play").assertIsDisplayed()
             rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
                 androidx.compose.ui.semantics.SemanticsActions.SetProgress
-            ) { it((GifVideoMath.frameCount(doc.video!!) - 1).toFloat()) }
+            ) { accepted = it((GifVideoMath.frameCount(doc.video!!) - 1).toFloat()) }
             waitFrame(GifVideoMath.frameCount(doc.video!!))
-        } finally { resolver.delete(uri, null, null) }
+            finalDisplayed = true
+        } finally {
+            try { reportGifSeekProbe("original", probeStart, accepted, finalDisplayed) }
+            finally { resolver.delete(uri, null, null) }
+        }
     }
+
+    @Test fun mp4FinalSeekSurvivesAnOlderPausedReadCompleting() = verifyFinalSeekWithOlderPausedRead(false)
+
+    @Test fun mp4FinalSeekSurvivesAnOlderPausedReadFailing() = verifyFinalSeekWithOlderPausedRead(true)
+
+    private fun verifyFinalSeekWithOlderPausedRead(failOlderRead: Boolean) {
+        val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-editor-preview.mp4", "video/mp4") { out ->
+            instrument.context.assets.open("gif_sample_2sec_h264.mp4").use { it.copyTo(out) }
+        }
+        val probeStart = System.nanoTime()
+        val held = AtomicReference<GifDiagnosticEvent?>(null)
+        val release = CompletableDeferred<Boolean>()
+        val trial = if (failOlderRead) "older-read-fails" else "older-read-completes"
+        var finalAccepted: Boolean? = null
+        var finalDisplayed = false
+        try {
+            val doc = VideoGifSource.document(context, uri)
+            val count = GifVideoMath.frameCount(requireNotNull(doc.video))
+            assertEquals(16, count)
+            val finalIndex = count - 1
+            show(doc)
+            waitFrame(1)
+            rule.onNodeWithText("Play").performClick()
+            waitTaggedFrameAtLeast("gif-native-video", 5)
+            rule.onNodeWithText("Pause").performClick()
+            rule.onNodeWithText("Play").assertIsDisplayed()
+            val pause = waitGifSeekProbe(probeStart) { it.kind == GifDiagnosticKind.COMMAND_PAUSE }
+            val disposed = waitGifSeekProbe(pause.timestampNanos) {
+                it.operationId == pause.operationId && it.kind == GifDiagnosticKind.NATIVE_DISPOSED
+            }
+
+            val oldIndex = if (gifScrubPosition() == 3f) 2 else 3
+            val beforeOldSeek = System.nanoTime()
+            assertNull("A different test still owns the GIF seek barrier", GifSeekProbe.pausedReadBarrier)
+            GifSeekProbe.pausedReadBarrier = { operation, generation, serial, index ->
+                if (operation == pause.operationId && index == oldIndex) {
+                    val events = gifSeekProbeEvents(beforeOldSeek)
+                    val oldCommand = events.any {
+                        it.operationId == operation && it.kind == GifDiagnosticKind.COMMAND_SEEK &&
+                            it.requestSerial == serial && it.frameIndex == index
+                    }
+                    val consumed = events.lastOrNull {
+                        it.operationId == operation && it.kind == GifDiagnosticKind.REQUEST_CONSUMED &&
+                            it.generation == generation && it.requestSerial == serial && it.frameIndex == index
+                    }
+                    if (oldCommand && consumed != null && held.compareAndSet(null, consumed)) {
+                        if (release.await()) throw IOException("Diagnostic older paused GIF read failed")
+                    }
+                }
+            }
+
+            assertTrue("The older paused seek was rejected by SetProgress", seekGifFrame(oldIndex))
+            rule.waitUntil(15_000) { held.get() != null }
+            val older = requireNotNull(held.get())
+            assertTrue("The older paused read started before native disposal",
+                disposed.timestampNanos <= older.timestampNanos)
+            val beforeFinalSeek = System.nanoTime()
+            finalAccepted = seekGifFrame(finalIndex)
+            assertEquals("The final seek was rejected by SetProgress", true, finalAccepted)
+            val finalCommand = waitGifSeekProbe(beforeFinalSeek) {
+                it.operationId == pause.operationId && it.kind == GifDiagnosticKind.COMMAND_SEEK &&
+                    it.frameIndex == finalIndex
+            }
+            val finalSerial = requireNotNull(finalCommand.requestSerial)
+            assertTrue("The newer seek must have a newer serial", finalSerial > requireNotNull(older.requestSerial))
+            val bound = waitGifSeekProbe(finalCommand.timestampNanos) {
+                it.operationId == pause.operationId && it.kind == GifDiagnosticKind.REQUEST_BOUND &&
+                    it.requestSerial == finalSerial && it.frameIndex == finalIndex && it.playing == false
+            }
+            assertEquals(finalIndex.toFloat(), gifScrubPosition(), 0f)
+            val releasedAt = System.nanoTime()
+            release.complete(failOlderRead)
+
+            fun isFinalRequest(event: GifDiagnosticEvent): Boolean =
+                event.operationId == pause.operationId && event.generation == bound.generation &&
+                    event.requestSerial == finalSerial && event.frameIndex == finalIndex
+            rule.waitUntil(15_000) {
+                gifSeekProbeEvents(releasedAt).any {
+                    isFinalRequest(it) && it.kind == GifDiagnosticKind.SHOWN_ASSIGNED
+                } && taggedFrame("gif-frame") == count
+            }
+            finalDisplayed = true
+
+            val events = gifSeekProbeEvents(older.timestampNanos).filter { it.operationId == older.operationId }
+            val oldEvents = events.filter {
+                it.generation == older.generation && it.requestSerial == older.requestSerial &&
+                    it.frameIndex == oldIndex
+            }
+            val oldOutcome = if (failOlderRead) GifDiagnosticKind.READ_FAILED else GifDiagnosticKind.SHOWN_REJECTED
+            val olderOutcome = requireNotNull(oldEvents.firstOrNull {
+                it.kind == oldOutcome && it.timestampNanos >= releasedAt
+            }) { "Missing stale result boundary $oldOutcome" }
+            if (!failOlderRead) {
+                assertTrue("The older decoded still must reach the stale presentation guard", oldEvents.any {
+                    it.kind == GifDiagnosticKind.READ_FINISHED &&
+                        it.timestampNanos in releasedAt..olderOutcome.timestampNanos
+                })
+            }
+            assertFalse("The older still replaced the newer request",
+                oldEvents.any { it.kind == GifDiagnosticKind.SHOWN_ASSIGNED })
+            val newest = events.filter(::isFinalRequest)
+            val consumed = requireNotNull(newest.firstOrNull { it.kind == GifDiagnosticKind.REQUEST_CONSUMED })
+            val decoded = requireNotNull(newest.firstOrNull { it.kind == GifDiagnosticKind.READ_FINISHED })
+            val shown = requireNotNull(newest.firstOrNull { it.kind == GifDiagnosticKind.SHOWN_ASSIGNED })
+            assertTrue("The final request must be bound, consumed, decoded, then assigned",
+                bound.timestampNanos <= consumed.timestampNanos &&
+                    consumed.timestampNanos <= decoded.timestampNanos && decoded.timestampNanos <= shown.timestampNanos)
+        } finally {
+            try { reportGifSeekProbe(trial, probeStart, finalAccepted, finalDisplayed) }
+            finally {
+                GifSeekProbe.pausedReadBarrier = null
+                release.complete(false)
+                resolver.delete(uri, null, null)
+            }
+        }
+    }
+
+    private fun seekGifFrame(index: Int): Boolean {
+        var accepted: Boolean? = null
+        rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
+            androidx.compose.ui.semantics.SemanticsActions.SetProgress
+        ) { accepted = it(index.toFloat()) }
+        return requireNotNull(accepted)
+    }
+
+    private fun gifScrubPosition(): Float =
+        rule.onNodeWithContentDescription("Scrub GIF frames").fetchSemanticsNode()
+            .config[SemanticsProperties.ProgressBarRangeInfo].current
+
+    private fun gifSeekProbeEvents(since: Long): List<GifDiagnosticEvent> =
+        GifSeekProbe.snapshot().filter { it.timestampNanos >= since }
+
+    private fun waitGifSeekProbe(since: Long, predicate: (GifDiagnosticEvent) -> Boolean): GifDiagnosticEvent {
+        var event: GifDiagnosticEvent? = null
+        rule.waitUntil(15_000) {
+            event = gifSeekProbeEvents(since).firstOrNull(predicate)
+            event != null
+        }
+        return requireNotNull(event)
+    }
+
+    private fun reportGifSeekProbe(trial: String, since: Long, sliderAccepted: Boolean?, finalDisplayed: Boolean) {
+        val events = gifSeekProbeEvents(since)
+        Log.i("GzGifSeekProbe", "trial=$trial accepted=$sliderAccepted finalDisplayed=$finalDisplayed")
+        events.forEach { Log.i("GzGifSeekProbe", "$trial $it") }
+        val position = runCatching { gifScrubPosition() }.getOrNull()
+        val still = runCatching { taggedFrame("gif-frame") }.getOrNull()
+        val native = runCatching { taggedFrame("gif-native-video") }.getOrNull()
+        Log.i("GzGifSeekProbe", "$trial final slider=$position stillFrame=$still nativeFrame=$native")
+    }
+
     @Test fun portraitVideoPlaysAgainAfterTrimAndRapidScrub() {
         val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             "gz-portrait-motion.mp4", "video/mp4") { out ->
