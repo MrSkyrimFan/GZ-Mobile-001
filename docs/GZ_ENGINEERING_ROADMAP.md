@@ -1,6 +1,6 @@
 # GZ Editor Pro — complete product roadmap
 
-> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
+> **Current work — November 28, 2026.** PR #64 qualifies the first standalone Regular R1.2 recovery slice at exact application merge `ed0f21af0280`. The staged Regular edit and both history branches recover in a new process on API29 and API35. The focused v27 handset APK remains the signed PR #62 build. Continue remaining R1.2 and the full professional roadmap. [Latest engineering qualification](WORK_LEDGER.md#qualified-standalone-regular-recovery)
 
 <a id="current-sequence--exact-u1-qualification-then-remaining-r12"></a>
 
@@ -24,7 +24,7 @@ Read this roadmap with [product requirements](PRODUCT_SPEC.md), [work ledger](WO
 
 ## Current engineering state
 
-Qualified app **4114238397a2bb8c27a302082b68aec35eb0bdae**, 0.12.15 Test/code27, passed full JVM/build/signing, 313/313 per API at both inputs and both external new-process lanes. Earlier R1.1/RV4 and U1 engineering checkpoints remain credited. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair).
+Qualified application **ed0f21af028090839135a39d5b502020d78d8b8f** passed JVM/build/signing, 313/313 per API at candidate and exact merge and both separate force-stop routes. PR #62 remains the focused v27 handset build. [Current engineering qualification](WORK_LEDGER.md#qualified-standalone-regular-recovery).
 
 Earlier unmentioned supplied phone checks retain their owner-reported scope. Focused owner confirmation of the qualified v27 APK remains open. B2 preparation and response misses, F03 quantitative matched-workload evidence, RV5 provider stage/retry ownership, broader device/process-loss evidence, formal workspace locks and release remain open. [Focused handset instructions](coordination/GPT_6_PRO_U1_GIF_SEEK_QUALIFICATION_HANDOFF_2026-11-27.md#exact-handset-build).
 

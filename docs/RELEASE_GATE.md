@@ -1,6 +1,6 @@
 # GZ Editor Pro engineering and release gates
 
-> **Current work — November 27, 2026.** PR #62 qualifies the focused U1 correction, including GIF paused seek, at exact merge `4114238397a2`. Candidate and exact merge passed JVM/build/signing, 313/313 on API29 and API35, and both independent new-process lanes. GZ Editor Pro 0.12.15 Test, code 27, is ready for focused handset observation. Continue remaining R1.2 and the full professional roadmap. [Exact qualification](WORK_LEDGER.md#qualified-gif-paused-seek-repair)
+> **Current work — November 28, 2026.** PR #64 qualifies the first standalone Regular R1.2 recovery slice at exact application merge `ed0f21af0280`. The staged Regular edit and both history branches recover in a new process on API29 and API35. The focused v27 handset APK remains the signed PR #62 build. Continue remaining R1.2 and the full professional roadmap. [Latest engineering qualification](WORK_LEDGER.md#qualified-standalone-regular-recovery)
 
 ## U1 independent review — corrections engineering-qualified
 
@@ -54,7 +54,13 @@ Historical tests using removed File/More/Histogram, old Yes/No/Resume or reset-a
 A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. The active ledger records the U1 qualification dependency. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
 
 
-## Current engineering qualification — PR #62 / 0.12.15 Test
+## Current engineering qualification — PR #64
+
+The exact engineering application merge `ed0f21af028090839135a39d5b502020d78d8b8f` passed the full device lanes, JVM/build/signing and the separate linked and standalone process checks on both APIs. The focused U1/GIF handset artifact below keeps its separate scope. [Regular recovery receipt](WORK_LEDGER.md#qualified-standalone-regular-recovery).
+
+<a id="current-engineering-qualification--pr-62--01215-test"></a>
+
+## Focused handset qualification — PR #62 / 0.12.15 Test
 
 Exact candidate and app merge `4114238397a2bb8c27a302082b68aec35eb0bdae` passed JVM/build/signing, both complete API29/API35 suites and separate true new-process recovery on both APIs. The v27 APK comes from the exact merged API35 job. Focused handset confirmation is open. [Exact qualification and handset receipt](WORK_LEDGER.md#qualified-gif-paused-seek-repair).
 

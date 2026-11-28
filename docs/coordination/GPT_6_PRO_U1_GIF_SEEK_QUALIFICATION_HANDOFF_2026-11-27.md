@@ -1,4 +1,6 @@
-# GZ Editor Pro GIF paused seek qualification and review handoff
+# GZ Editor Pro GIF seek and standalone Regular recovery handoff
+
+PR #62 supplies the focused v27 handset build. PR #64 supplies the current standalone Regular engineering baseline. [Standalone Regular recovery](#standalone-regular-recovery).
 
 ## Result
 
@@ -82,6 +84,36 @@ For focused handset confirmation, open a short MP4 in GIF Video, start playback,
 
 ## Continuation and scope
 
-Continue the first remaining R1.2 slice with an ordinary unlinked Regular photo import, completed edit, first durable acknowledged working generation and force-stop/new-PID restore of source, entry/clean baselines, history and route. Preserve exact source custody, intentional departure and canceled replacement, child and linked boundaries and independent export retry. Use the single ledger for the next finite slice. [R1.2 custody contract](CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq14) · [Active work ledger](../WORK_LEDGER.md)
+The first standalone Regular R1.2 slice has a separate qualification and review record below. Continue remaining source custody and workspace-specific restore work through the active ledger. [R1.2 custody contract](CHATGPT_RESPONSE_TO_50_2026-11-24.md#cq14) · [Active work ledger](../WORK_LEDGER.md#qualified-standalone-regular-recovery).
 
 All 77 capability rows and required children remain. All 16 Pro families remain unfinished, with seven PARTIAL and nine OPEN. The repair credits only this GIF behavior and exact engineering qualification. Professional selection and masking, compositing, Subject & Background, remaining R1–R11, B2/F03, RV5, device qualification, workspace locks and owner release gates remain open. Preserve the website-before-Console and editing-acceptance-before-final-bilingual-onboarding order. [Owner scope](OWNER_PRO_SCOPE_ADDENDUM_2026-11-27.md) · [Roadmap](../GZ_ENGINEERING_ROADMAP.md) · [Release gates](../RELEASE_GATE.md)
+
+
+## Standalone Regular recovery
+
+The first remaining R1.2 slice is implemented in [PR #64](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/64). MainActivity owns ordinary standalone Regular publication. The app verifies incoming media before adopting its root and acknowledges completed edit generations with exact ownership. The restored generation retains the selected source URI, logical source/owner, separate entry, saved clean and reset baselines, and both history branches. The app reopens the actual Regular editor from a new process and continues durable Undo/Redo.
+
+An unavailable replacement keeps the old exact root, preview and original bytes. Ordinary Close clears that owner without adding a catalog tombstone. Explicit Delete retains its tombstone behavior and preserves pending export retries. The rolling audit found and the final source corrected an inaccessible catalog fallback and independent startup route precedence. Linked roots, Collage children and prior recovery behavior retain their separate boundaries. The fixture is app-owned and checks its source bytes before and after restart. OS picker UI, third-party grant loss, same-URI changed bytes and explicit relinking remain open.
+
+### Focused comparison
+
+The initial matched API35 workflow 46117165279 imported the fixture on both checkouts, then both timed out at the same first screenshot before any completed edit. The test was sampling an image viewport that could include the overlapping editor dock. The corrected observer uses the actual hide/show controls action, retains the full four-quadrant pixel comparison and 15-second bound, and restores controls. [Initial baseline receipt](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46117165279/artifacts/15252785193) · [Initial corrected-source receipt](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46117165279/artifacts/15252630674).
+
+The matched final comparison uses identical instrumentation source, API tier, source and assertions. Baseline `4344160a2c09b40a5c65147e68007cbff3bc2507` actuates the real horizontal-flip control, then records no root during the 10-second initial durable acknowledgement wait. Corrected source `d1979b0c4f15d57377a44baa39ccf3f877a7664b` acknowledges the exact edit, passes the separate new-process stages and verifies the failed replacement and ordinary Close. [Baseline failure](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46117655892/artifacts/15252209341) · [Corrected evidence](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46117655892/artifacts/15252392135).
+
+### Exact qualification
+
+Candidate `c2a29a574f6e73a9c710915fd72b6ae5175be087` and application merge `ed0f21af028090839135a39d5b502020d78d8b8f` share tree `e3705c8ec73ebc2640904f7a07623dbbead47616`. The independent evidence verifier checked exact job/artifact provenance and raw scope. The rolling reviewer separately checked source ownership, branch/case identity, the observation changes and final gates. The earlier U1 linked-process proof remains separate and intact.
+
+| Input | Ordinary suite | Linked seed → reopen PID | Standalone seed → reopen PID | Standalone cold host / managed growth | Shell target before → after | Raw receipt |
+| --- | ---: | --- | --- | --- | --- | --- |
+| Candidate API29 | 313/313 | 18875 → 18925 | 19052 → 19118 | 937 ms / 6.02 MiB | absent → absent | [15253091063](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46117654704/artifacts/15253091063) |
+| Candidate API35 | 313/313 | 9463 → 9502 | 9653 → 9721 | 2240 ms / 6.75 MiB | absent → absent | [15252539230](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46117654704/artifacts/15252539230) |
+| Exact merge API29 | 313/313 | 18440 → 18486 | 18602 → 18669 | 1670 ms / 4.01 MiB | absent → absent | [15253507836](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46119442817/artifacts/15253507836) |
+| Exact merge API35 | 313/313 | 9335 → 9374 | 9504 → 9570 | 2465 ms / 6.58 MiB | absent → absent | [15253468789](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46119442817/artifacts/15253468789) |
+
+Each raw archive was SHA-256 checked before reading its XML and process receipts. In table order, the digests are `3602079a9744af4dd8a28009c3a9b09830eee4b4e3f935b6dcbad605cdbc9c16` · `c32885cd8f1206bfd553cd125c89bc4697c086be128e46a9801989d479bbd37c` · `933a38d406f0d79006ce8abf1feaa23f9763ca6ad4f2027f0148366478c36a72` · `731bfa2e97469c945ba5ba7319a66e57b7fdbb36f42903af8578166ff851c324`.
+
+The shell always issues external `am force-stop` between phases. The logged target field records whether seed instrumentation left a live app at that boundary. The seed and reopen PIDs independently verify cold recovery in a different app process after durable completion. This slice covers accessible-source Regular work, with the other provider, gesture interruption, child and workspace cases retained in R1.2.
+
+[Exact candidate](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46117654704) · [Exact merge](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46119442817) · [Remaining R1.2](../WORK_LEDGER.md#next-engineering-action--remaining-r12)
