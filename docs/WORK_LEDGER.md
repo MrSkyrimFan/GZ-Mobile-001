@@ -1,6 +1,18 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 27, 2026.** The final paired diagnostic is complete. Its **704.840 ms** Open and recorded **468.741 ms** warm median do not meet the unchanged **650 ms / 300 ms** limits. [Independent review and autonomous repair dispatch](#independent-review-and-autonomous-selected-open-repair) opens a scoped selected-record read/decode performance task. PR #50 and the corrected handset APK remain held pending qualification; PR #46 retains its earlier scoped qualification. Remaining R1.2 and all professional capability obligations follow.
+> **Current work — November 27, 2026.** PR #50 candidate `4fb4ec51f916` passed both full Android suites. Exact application merge `259900f8663e` has a separate GIF final-frame seek timeout on API35 after the requested Regular Open repair passed its timing gates. [Exact merge disposition](#pr-50-exact-merge-qualification-incomplete). The replacement APK remains held while the inherited failure is diagnosed. Remaining R1.2 and the full professional scope stay in order.
+
+## PR #50 exact merge qualification incomplete
+
+The [exact candidate](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46094860317) `4fb4ec51f916934aeaa2cbeab6790b0f077e2cab` completed JVM/build/signing, 313/313 with no errors or skips on both APIs, both external force-stop/new-PID checks and a verified candidate APK identity. Unchanged Regular Open warm medians were 45.261 ms on API29 and 87.789 ms on API35.
+
+[The exact application merge](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46096683742) `259900f8663ef967e24054db2beab7d0d5b62136` has the candidate's tree `45dd153ef3a1d94c845109f80c9895cbebefc9f3`. JVM/build/signing and both external force-stop/new-PID paths passed. API29 passed 313/313. API35 retained all 313 identities and passed 312/313. The exact failed case is `AndroidGifWorkspacePlaybackTest#mp4PlaysPausesAndSeeksThroughActualEditorControls`. It reached native frame 5 at 943 ms and displayed Play after Pause, then timed out at the 15-second last-frame assertion following the scrub action. The raw log does not distinguish delivery of the requested seek from receipt of its decoded frame. The unchanged Regular selected-Open test passed on both APIs at the merge, with warm medians 113.035 ms on API29 and 89.287 ms on API35. Separate process pairs were 18651 → 18696 and 9387 → 9425, including both named Opens and durable layer edits.
+
+- [API29 merge archive](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46096683742/artifacts/15243819472) SHA-256 `b07a21bb076f2e96f84c0d3b52853038f16dfb3d529736b92dc3b6eb48d431e6`.
+- [API35 merge archive](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46096683742/artifacts/15244311620) SHA-256 `327a608a0f8118808fcb966d141739755e7a2eb751a8ef984e915fd83fe2be61`.
+- [Targeted GIF seek diagnostic](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46098721007) at `07ff4c9a57a807448cba9d325bf6c8e7ce8434e2` records the exact scrub semantics return and the existing preview route, reader and frame events. This is a separate diagnostic branch. The app under investigation is still the exact merge above.
+
+The ABI, timing gates and assertions remain as dispatched in PR #57. The GIF test and app path are unchanged from the held source. The full exact-merge qualification and v27 delivery remain open. Keep earlier owner passes, all scopes and later gates intact.
 
 ## Owner scope reaffirmation — Pro remains unfinished
 
