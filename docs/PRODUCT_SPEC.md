@@ -1,6 +1,6 @@
 # GZ Editor Pro product requirements
 
-> **Current work — November 26, 2026.** [PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49) contains the U1 review corrections. Exact [PR #50](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/50) candidate is held at **717.745 ms** against the **650 ms** API35 R1.1 per-Open limit. [Current disposition](WORK_LEDGER.md#u1-review-correction-and-qualification-hold). PR #46 / **0.12.14 Test, code 26** retains its recorded 303/303 engineering qualification. Focused review and a qualified replacement APK precede the next handset recommendation. Remaining R1.2 and later gates stay in scope.
+> **Current work — November 27, 2026.** PR #50's merged Regular selected-Open repair passed its unchanged limits on API29 and API35. The exact merge remains unqualified because of an inherited API35 GIF final-frame seek timeout. The scoped and full-context diagnostics did not reproduce the timeout. The replacement APK remains held. PR #46 retains its prior full engineering qualification. [Exact disposition and review handoff](WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete)
 
 ## Latest owner requirements — professional workspaces and simple navigation
 

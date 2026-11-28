@@ -1,6 +1,6 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 27, 2026.** PR #50 candidate `4fb4ec51f916` passed both full Android suites. Exact application merge `259900f8663e` has a separate GIF final-frame seek timeout on API35 after the requested Regular Open repair passed its timing gates. [Exact merge disposition](#pr-50-exact-merge-qualification-incomplete). The replacement APK remains held while the inherited failure is diagnosed. Remaining R1.2 and the full professional scope stay in order.
+> **Current work — November 27, 2026.** PR #50 exact candidate passed both full Android suites. Its identical-tree exact merge passed the Regular selected-Open timing gates on both APIs and both actual new-process checks. One inherited GIF final-frame timeout keeps API35 exact merged qualification open. Targeted and full-context passes left the original cause unresolved. The replacement APK remains held. [Exact merge disposition](#pr-50-exact-merge-qualification-incomplete) · [GPT-6 Pro review handoff](coordination/GPT_6_PRO_R11_SELECTED_OPEN_REVIEW_HANDOFF_2026-11-27.md)
 
 ## PR #50 exact merge qualification incomplete
 
@@ -14,6 +14,12 @@ The [exact candidate](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/
 
 The ABI, timing gates and assertions remain as dispatched in PR #57. The GIF test and app path are unchanged from the held source. The full exact-merge qualification and v27 delivery remain open. Keep earlier owner passes, all scopes and later gates intact.
 
+### GIF diagnostic disposition and independent review
+
+The two-case direct diagnostic and both target cases in the preceding-GIF and same-dispatch probes reached frame 16. The broader direct-runner prefix recorded a separate MediaStore permissions failure in the preparation-profile case. The [standard unfiltered API35 diagnostic](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46100251518) passed 313/313 with the same test ID inventory. It captured an accepted seek, slider value 15 and visible frame 16. The exact merged failure did not recur, so the failed run remains authoritative for the current gate. No compatible correction or same-tier setup correction was established. Do not rerun the unchanged failing input simply to replace that evidence.
+
+The [GPT-6 Pro handoff](coordination/GPT_6_PRO_R11_SELECTED_OPEN_REVIEW_HANDOFF_2026-11-27.md) contains the Regular attribution, parser compatibility, exact candidate/merge qualification, all diagnostic attempts and remaining scope. PR #46 retains the earlier scoped qualified handset baseline. PR #50 produced no qualified exact-merge v27 handset artifact.
+
 ## Owner scope reaffirmation — Pro remains unfinished
 
 November 27, 2026 (America/Denver). Before relaying the PR #54 continuation, Lance explicitly reaffirmed that current Pro quality, particularly masking, is not acceptable as the finished professional product and asked for a repository addendum. [Owner scope and Codex supplement](coordination/OWNER_PRO_SCOPE_ADDENDUM_2026-11-27.md).
@@ -22,7 +28,7 @@ Read-only scope reconciliation at `07578107c15e6df3f08ea30427ea55b9da5ba8e2` ver
 
 Full R2/R3/R4 professional layers/groups/compositing, selections/channels/editable masks, brush/retouch/vector/effects/interchange and Subject & Background/reshaping remain required before their workspace closure. Remaining R1–R11, Regular/Collage/GIF scope, B2/F03, RV5, all-workspace recovery and formal owner/release gates remain. Use the existing end-to-end workflow acceptance contract; do not reduce difficult features to labels or move required pre-release Pro work after launch.
 
-**Dispatch:** follow the [autonomous selected-Open repair](#independent-review-and-autonomous-selected-open-repair); the paired diagnostic is complete, and PR #50/the corrected APK stay held until qualification. Then continue remaining R1.2 and the dependency-ordered roadmap under existing authority. This addendum adds no diagnostic execution, new planning cycle, approval barrier or shell rewrite. It updates documentation only; no app/test/build/CI changes, application test execution or APK rebuild.
+**Dispatch:** The Regular performance repair passed its exact limits. The merged suite's inherited GIF test still blocks v27 qualification. Follow the [exact disposition](#pr-50-exact-merge-qualification-incomplete) with the full R1.2 and professional scope preserved.
 
 ## U1 review correction and qualification hold
 
@@ -676,7 +682,7 @@ Subdivide a selected package into bounded deliverables with affected files and o
 
 ## Next engineering action — resolve exact qualification hold
 
-Execute the [autonomous selected-Open performance package](coordination/R11_SELECTED_OPEN_ENGINEERING_HANDOFF_2026-11-27.md) through attributable-cost evidence, the smallest compatible repair, necessary targeted tests, independent review and unprofiled exact-candidate/exact-merge qualification. The preceding scheduling diagnostic is complete. Useful evidence-driven implementation/verification iterations do not require another owner relay; unchanged blind retries and softened gates remain prohibited. Preserve every failure, workload/limit, inherited case and actual process-recovery obligation. PR #50/the corrected APK remain held until those exits. Continue remaining R1.2 and the full professional roadmap under the same authority.
+The [selected-Open repair](#pr-50-exact-merge-qualification-incomplete) passed its own exact limits. The merged API35 GIF final-frame timeout remains a real qualification blocker. Use the [review handoff](coordination/GPT_6_PRO_R11_SELECTED_OPEN_REVIEW_HANDOFF_2026-11-27.md) to identify new attributable evidence or a supported correction before repeating full exact qualification. Keep the original workload, time and memory gates and all test identities. Preserve the replacement APK hold and continue remaining R1.2 after qualification.
 
 ## Following engineering action — remaining R1.2
 

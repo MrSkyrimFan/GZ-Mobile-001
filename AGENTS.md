@@ -1,6 +1,6 @@
 # GZ Editor Pro engineering instructions
 
-> **Current work — November 27, 2026.** PR #50's exact merge passed Regular selected-Open and new-process recovery on both APIs. An inherited API35 GIF final-frame seek timeout holds full merged qualification and the replacement APK. [Exact merge disposition](docs/WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete). Diagnose that specific failure under the existing autonomy contract, then continue remaining R1.2 and all professional scope.
+> **Current work — November 27, 2026.** PR #50's merged Regular selected-Open repair passed its limits on both APIs. The exact merge remains unqualified after an inherited API35 GIF final-frame seek timeout. Scoped and full-context diagnostic passes left its cause unresolved. The replacement APK remains held. [Exact disposition](docs/WORK_LEDGER.md#pr-50-exact-merge-qualification-incomplete) · [Review handoff](docs/coordination/GPT_6_PRO_R11_SELECTED_OPEN_REVIEW_HANDOFF_2026-11-27.md)
 
 ## Current owner contract
 
