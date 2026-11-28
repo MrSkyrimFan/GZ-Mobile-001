@@ -1,8 +1,175 @@
 # GZ Editor Pro — single active work ledger
 
-> **Current work — November 26, 2026.** PR #46 / **0.12.14 Test, code 26** remains the recorded engineering checkpoint at **e6321322526521ace13a45c231b25bb08f91c565**: candidate and merge passed JVM/build/signing, **303/303 on API29 and API35**, and separate new-process recovery. The [independent U1 review](coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) found two medium-severity defects in linked Pro tool activation and failed-Open staging cleanup. **Next: bounded U1 review follow-up, then remaining R1.2.** Hold a clean U1 handset recommendation until the follow-up qualifies. Prior passes remain credited; B2/F03, RV5 and all device/owner/release gates remain open. [Active dispatch](WORK_LEDGER.md#next-engineering-action--u1-review-follow-up).
+> **Current work — November 27, 2026.** The final paired diagnostic is complete. Its **704.840 ms** Open and recorded **468.741 ms** warm median do not meet the unchanged **650 ms / 300 ms** limits. [Independent review and autonomous repair dispatch](#independent-review-and-autonomous-selected-open-repair) opens a scoped selected-record read/decode performance task. PR #50 and the corrected handset APK remain held pending qualification; PR #46 retains its earlier scoped qualification. Remaining R1.2 and all professional capability obligations follow.
 
-## U1 independent review — corrections required
+## Owner scope reaffirmation — Pro remains unfinished
+
+November 27, 2026 (America/Denver). Before relaying the PR #54 continuation, Lance explicitly reaffirmed that current Pro quality, particularly masking, is not acceptable as the finished professional product and asked for a repository addendum. [Owner scope and Codex supplement](coordination/OWNER_PRO_SCOPE_ADDENDUM_2026-11-27.md).
+
+Read-only scope reconciliation at `07578107c15e6df3f08ea30427ea55b9da5ba8e2` verified 77 rows/77 unique capability IDs. All P01–P16 remain unfinished: seven PARTIAL and nine OPEN. No row status, required child or existing pass is removed or promoted. No numerical completion percentage, professional parity, formal workspace lock or release acceptance is established. The feedback is owner non-acceptance of overall Pro quality, not new evidence that a specifically qualified U1 repair regressed.
+
+Full R2/R3/R4 professional layers/groups/compositing, selections/channels/editable masks, brush/retouch/vector/effects/interchange and Subject & Background/reshaping remain required before their workspace closure. Remaining R1–R11, Regular/Collage/GIF scope, B2/F03, RV5, all-workspace recovery and formal owner/release gates remain. Use the existing end-to-end workflow acceptance contract; do not reduce difficult features to labels or move required pre-release Pro work after launch.
+
+**Dispatch:** follow the [autonomous selected-Open repair](#independent-review-and-autonomous-selected-open-repair); the paired diagnostic is complete, and PR #50/the corrected APK stay held until qualification. Then continue remaining R1.2 and the dependency-ordered roadmap under existing authority. This addendum adds no diagnostic execution, new planning cycle, approval barrier or shell rewrite. It updates documentation only; no app/test/build/CI changes, application test execution or APK rebuild.
+
+## U1 review correction and qualification hold
+
+- Production correction merge `b342f0bd656753b3692b741489438c6790d14d8b`, complete tree `046ac9806b7181c78cb1b30cf88505d02354e9cf`. [Application PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49).
+- Draft qualification candidate `27406f4aed8efa42a6078e1108c53304d4a0043e`, complete tree `2c0f8ffab9a8321f8f9f823c9354c26b5a2fb6c8`, 0.12.15 Test/code27/phonetest.v27. [Qualification PR #50](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/50).
+- Last fully qualified application `e6321322526521ace13a45c231b25bb08f91c565`, 0.12.14 Test/code26. [Prior application PR #46](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/46).
+
+- **U1R-01:** actual Layers **Select / mask** and **Clone / repair** transition to native editing. The mode-keyed preview state waits for the matching raster and geometry. The focused tests exercise real gestures, target/history, named Open and decoded PNG output.
+- **U1R-02:** failed, stale and canceled named and working-draft Opens release exact owned handles and undelivered bitmaps. Repeated failure, exact cancellation and restored-source checks retain named, current, unrelated draft and retry custody.
+- **U1R-V1:** held Save plus Cancel reproduced a missing acknowledgement. The exact owning Pro session now applies the captured baseline and target while newer content stays dirty. Undo to the saved state and ordinary Save target reuse were exercised.
+- **U1R-N1:** optional Collage wording is deferred. [focused candidate](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45907591692) passed 10/10 new tests on each API.
+
+Latest candidate push Verify and PR Verify passed, including JVM/build/signing. The full receipts retain all 303 inherited case identities and add ten. Both separate lanes used actual force-stop and new PIDs, reopened both named paths and edited native layers. The ordinary result and separate recovery proof have distinct evidence.
+
+| API | Ordinary Android | Separate PID change | Cold host / managed increase | Exact raw receipt |
+| --- | --- | --- | --- | --- |
+| 29 | 313/313 | 19002 → 19049 | 1,618 ms / 10.37 MiB | [15165596289](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45920992792/artifacts/15165596289) `sha256:4d6cb9b5d8a74863555f53ad281afee345f062814f8aa70cf1198943dd9b7af2` |
+| 35 | 312/313 | 9293 → 9330 | 1,616 ms / 10.34 MiB | [15165426352](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45920992792/artifacts/15165426352) `sha256:393898458ae08eb19023f4025aa933c47f1d9f76e1671d328a5a2c08be3ee874` |
+
+The API35 R1.1 test measured selected_warm_3 at **717.745 ms** against the **650 ms per-Open limit**. The other three samples were 206.769, 191.220 and 182.320 ms. All four opened the exact requested record with one recipe decode. The late sample observed 32.16 MiB managed increase, below its 64 MiB limit. The assertion stopped the test before its reported warm median.
+
+The per-test log records a contemporaneous concurrent ART collection of 551.746 ms with 21.335 ms of recorded pauses. That overlap does not identify how much latency it caused. The R1.1 test and production sources are unchanged. Read-only review found no source correction warranted within U1 and no basis to waive the sample. [Exact test-only delta](https://github.com/MrSkyrimFan/GZ-Mobile-001/compare/b342f0bd656753b3692b741489438c6790d14d8b...27406f4aed8efa42a6078e1108c53304d4a0043e).
+
+PR #50 remains open in draft. The exact candidate has no qualified merged APK. Hold the next handset recommendation and preserve the recorded PR #46 result. [GPT-6 Pro review handoff](coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_HANDOFF_2026-11-26.md).
+
+### Independent review and next diagnostic
+
+[Independent U1 correction review and finite Codex continuation](coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_2026-11-26.md) credits U1R-01, U1R-02 and reproduced U1R-V1 from exact source and raw red/green evidence. Three independent source scopes found no additional blocking defect in those corrections. PR #50's three instrumentation changes retain the inherited assertions and limits. Root verified both 313-identity XML inventories against the prior 303 cases, all ten additions, both separate real new-process lanes and the exact timing failure. The prior GIF/scheduler/tile-notice failure receipts remain credited only at their observed scope.
+
+**Disposition: corrected APK remains held; PR #50 remains draft.** The 551.746 ms concurrent GC is not 551.746 ms of demonstrated app pause. Reported pauses total 21.335 ms; process-wide allocation data and temporal overlap do not establish a cause. The 717.745435 ms sample is not waived or adjusted.
+
+**Original diagnostic dispatch, now executed:** one traced execution of the unchanged complete API35 R1.1 method at candidate `27406f4aed8efa42a6078e1108c53304d4a0043e`, with the same twelve dense recipes, 192 MiB heap, selection order, assertions and 650 ms/300 ms limits. Collect scheduler/ART evidence and thread running time against wall time before choosing a repair. A fresh-process targeted pass is diagnostic only. One original-suite-position trace is permitted only if preceding suite state remains the specific unresolved hypothesis; no retry-until-green loop. The review defines evidence branches, file ownership and final exact candidate/merge qualification. Retain still-applicable exact-head passes and original failures. Remaining R1.2 follows that qualification disposition; no new intake or roadmap rewrite.
+
+This review updates documentation only. It does not execute application tests, rebuild an APK, change application/test/build/CI inputs, close a capability family, or claim handset acceptance.
+
+### Executed API35 diagnostic and qualification hold
+
+November 26, 2026 (America/Denver). Live `main` at intake was `3e605d29852855c62e797f7d33fe137d8affc80f` (PR #52). Its delta from PR #51 comprises the independent review and this ledger only. PR #50 remained draft at `27406f4aed8efa42a6078e1108c53304d4a0043e` with tree `2c0f8ffab9a8321f8f9f823c9354c26b5a2fb6c8`. The PR #49 production merge remains `b342f0bd656753b3692b741489438c6790d14d8b`.
+
+The [targeted run 45926598413](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45926598413) used disposable diagnostic head `77af73ece1e21e22d671fb18eaad6b5bb80d0f90`, tree `0365e73c3a55fc034c54145f39e7f883017b69f4`. The harness checked out and built the exact held candidate separately. Only the disposable workflow, external capture script and analysis script differ. The app, test method, fixture, clock, order, GC setup and assertions were unchanged. The guest was Android 15 Google APIs x86_64 Pixel 3a with 2,048 MiB RAM and a verified **192 MiB managed heap**. The actual fixture reported 12 projects and 23,881,171 raw XML bytes. The selected order was #12, #01, #06, #12.
+
+Executed once on the disposable emulator:
+
+```sh
+adb shell am instrument -w -r -e class 'com.greenezone.gzphotoeditor.AndroidRegularProjectListAcceptanceTest#twelveLegacyRecipesMigrateAndTheReadyIndexDoesNoListDecodes' com.greenezone.gzphotoeditor.phonetest.v27.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+Perfetto v46 started before the method and captured ftrace scheduling, process/thread identity, ART slices and filtered Android phase logs. The exact capture configuration is in the archive and [diagnostic source](https://github.com/MrSkyrimFan/GZ-Mobile-001/blob/77af73ece1e21e22d671fb18eaad6b5bb80d0f90/.github/scripts/r11-api35-trace.sh). `GzR11Acceptance` phase markers matched PID 2567/TID 2784. The trace log brackets surround the unmodified stopwatch. Scheduler ranges use the interval guaranteed inside that stopwatch for the lower bound and the full log bracket for the upper bound. Trace Processor reported continuous selected-thread coverage across all nine brackets and no nonzero ftrace loss/overrun counter. Its informational interned-data tokenizer counter was 87,584. ART slices provide context and do not establish complete ART attribution. Guest scheduled-running time may include host vCPU descheduling.
+
+| Phase | Wall ms | Observed managed growth MiB | Guest running ms | Guest runnable off-CPU ms | Other wait ms | Log bracket slack ms | ART allocation delta as reported, bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `initial_migration` | 5878.227 | 75.77 | 3478.069–3479.181 | 1975.555–1975.555 | 424.047–424.047 | 0.556 | 677069568 |
+| `existing_index_first` | 16.328 | 0.32 | 3.018–3.387 | 12.089–14.161 | 0.000–0.000 | 1.220 | 335920 |
+| `existing_index_warm_1` | 3.540 | 0.33 | 0.000–3.009 | 0.000–11.684 | 0.000–0.000 | 11.154 | 344112 |
+| `existing_index_warm_2` | 8.176 | 0.34 | 2.238–3.217 | 5.115–5.780 | 0.000–0.000 | 0.822 | 352304 |
+| `existing_index_warm_3` | 14.663 | 0.34 | 3.027–3.478 | 11.112–11.708 | 0.000–0.000 | 0.524 | 352304 |
+| `selected_first` | 920.415 | 32.83 | 211.502–215.066 | 687.812–693.568 | 16.441–16.441 | 4.660 | 56635440 |
+| `selected_warm_1` | 857.696 | 11.97 | 231.989–234.163 | 540.598–543.405 | 82.619–82.619 | 2.490 | 56401968 |
+| `selected_warm_2` | 373.395 | 36.21 | 201.712–201.974 | 159.513–159.513 | 12.039–12.039 | 0.131 | 56254512 |
+| `selected_warm_3` | 532.515 | 28.12 | 194.027–194.342 | 270.669–270.669 | 67.661–67.661 | 0.158 | 0 |
+
+The single method **failed** at selected_first (920.414908 ms versus 650 ms). Its complete measurements also show selected_warm_1 at 857.696254 ms. All four selected phases logged the expected project name, one decode and a successful Open. The first selected phase passed the exact identity, source and marker assertions before failing latency. The later selected assertions were not reached. Each list logged zero recipe decodes and zero legacy preference accesses. Migration logged 12 rows/12 decodes. The arithmetic warm median was 532.514765 ms. The failure interrupted the assertions before the test itself reported or asserted that median. Growth values are observations, with later assertions short-circuited by the first latency failure. The zero allocation delta reported for warm_3 is a process counter observation.
+
+The first Open spent at least **687.812 ms** runnable off guest CPU, compared with **211.502–215.066 ms** scheduled running. In the first warm Open those ranges were **540.598–543.405 ms** and **231.989–234.163 ms**. ART GC and `FullSuspendCheck` overlapped portions of the logged intervals. The same saved trace was reanalyzed without running any app or emulator. Both guest CPUs have complete occupancy for the first Open's guaranteed runnable interval. Google Play services' `highpool[0]` ran 253.019 ms on guest CPU 1 while the test thread was runnable. The keyboard had several concurrent workers, including 94.868 ms on CPU 1 during the first warm Open. The test app's `HeapTaskDaemon` ran 30.965 ms on CPU 1 during the first Open's guaranteed runnable interval. These are CPU occupancy overlaps. They do not apportion the wait or establish the cause of the original untraced 717.745435 ms sample.
+
+- [Raw trace, instrumentation, configuration and analysis archive 15167106304](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45926598413/artifacts/15167106304) · `sha256:d14e235612df3e72c95f16a80718197b267776429bc7b25a1585b6d6f5712a2c`. Raw Perfetto file 33,512,355 bytes, SHA-256 `c22fd144f6edfb0e545b387cfc7a0a2352fbd23bdf46296980e796ec107c2388`. The downloaded ZIP and each file matched the recorded checksums.
+- [Existing-trace occupancy analysis run 45928121708](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45928121708) at `7f4ac905ffdfd8d2f0d604ac27bba8eb06fcd7f9` · [raw occupancy JSON archive 15167108427](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45928121708/artifacts/15167108427) · `sha256:569c0128ee5180a70838415e3244ff46758b39c435d57388e108120fa18a65c0`. JSON SHA-256 `2ecf71513dfd627e61ea8bd984ae1697d0cdd5c25c3ee9170ea74b98240b08cf`.
+
+**Disposition:** The unchanged method exceeded the limit in a fresh process, without the original suite's 197 preceding tests. The permitted original-suite-position trace depends on a specific preceding-suite hypothesis. The current evidence does not establish one, so the second execution was not used. Neither a production change nor an emulator change was justified for the original gate by this evidence. PR #50 stays draft and the corrected APK remains held. Prior exact-head JVM/build/signing, API29 ordinary pass and separate recovery evidence stay credited. No new full qualification or APK delivery was attempted.
+
+**Open technical question:** the original failing sample lacks concurrent scheduler attribution, and this guest trace has no host vCPU scheduling evidence. A future matched capture should correlate the guest runnable intervals with host QEMU vCPU runnable/deschedule intervals and record the same-interval Google services and keyboard load. That would distinguish guest background contention, host descheduling and diagnostic overhead without adjusting the 650 ms and 300 ms gates. Any environment correction needs evidence that it addresses the measured condition while retaining the fixture and device tier. Remaining R1.2 follows qualification disposition and focused review.
+
+### Independent trace review and final paired check
+
+The [independent trace review and finite continuation](coordination/R11_PAIRED_SCHEDULING_CHECK_2026-11-26.md) validates the PR #53 receipt and its conservative bounds. Raw protobuf reconstruction independently matches all nine phase state totals and all four selected-phase per-CPU occupancy totals. The diagnostic executed the unchanged method once and correctly remained failed. No source repair or numerical-receipt correction is substantiated by this review.
+
+**Original bounded action, now executed:** one paired guest/runner-host scheduling capture, after a no-app capability/identity/clock/coverage preflight. Keep the exact candidate, fixture, heap, CPU tier, stopwatch and every gate. If essential observability fails, execute zero new app tests. This is the final authorized diagnostic batch, not another unused original-suite retry. The committed instruction defines clock uncertainty, source/file ownership, evidence branches and unprofiled candidate/merge exits.
+
+**Forward-path clarification:** the historical 717.745435 ms cause remains unresolved; retroactive proof is not an impossible permanent delivery gate. A prospectively supported correction or environment disposition plus the unchanged complete qualification can resolve the hold. A lone later pass cannot. PR #50 and the corrected APK remain held until those exits. Remaining R1.2 and all 77 families/roadmap children are preserved.
+
+This independent review changes documentation only and performs no app build, emulator execution or Android test. The prior raw failures and successful exact-head receipts remain intact.
+
+### Final paired API35 diagnostic disposition
+
+November 27, 2026 (America/Denver). Intake main at `06184c909649a9a52344eb045329ef85af922488` matches PR #55 and contains the PR #54 execution contract at `07578107c15e6df3f08ea30427ea55b9da5ba8e2`. The held PR #50 candidate is `27406f4aed8efa42a6078e1108c53304d4a0043e`, tree `2c0f8ffab9a8321f8f9f823c9354c26b5a2fb6c8`. Production U1 correction merge remains `b342f0bd656753b3692b741489438c6790d14d8b`. The [scope addendum](coordination/OWNER_PRO_SCOPE_ADDENDUM_2026-11-27.md) and the 77-family roadmap/matrix remain in force.
+
+The [initial bootstrap run 46090706087](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46090706087) at `68613d7fe86deee504bb6d4719bd3de672520f29` built the exact candidate then stopped before emulator launch. The runner rejected `udevadm trigger --match-name=kvm`. Its [boot failure archive 15240774262](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46090706087/artifacts/15240774262) `sha256:f837492697790243a307933a04067c403445b5d3933e4810a075f2676a892397` proves zero instrumentation invocations. The follow-up changed only the disposable KVM setup command to its supported device selector, settled udev and checked access to `/dev/kvm`. This resumed the original batch before any emulator preflight or app test had occurred.
+
+The [paired run 46091040023](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46091040023) at `1d4a3fa78eed3a8c97f9963c8d5318aa97d428d4`, tree `6c84c808d7f5dde822b7ef7e8a16e079c5d8c5e2`, passed the no-app preflight and postflight around **one** invocation. Its only delta from the held candidate is the disposable workflow and capture script. The exact checkout built `app-debug.apk` (34407148 bytes, SHA-256 `78af59c4ba9cb71d1f8d329c132581c1b78a3440690bcfbfa779e005901dda93`) and `app-debug-androidTest.apk` (5294178 bytes, SHA-256 `9ee22448c0e13e10a14268cd3a0e0c257d83546bf2bcd96861801a18fab450f0`). These binary identifiers are diagnostic evidence.
+
+```sh
+adb -s emulator-5554 shell am instrument -w -r -e class 'com.greenezone.gzphotoeditor.AndroidRegularProjectListAcceptanceTest#twelveLegacyRecipesMigrateAndTheReadyIndexDoesNoListDecodes' com.greenezone.gzphotoeditor.phonetest.v27.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The runner used the same `ubuntu-latest` tier on Ubuntu image `20261122.9.1` and kernel `7.0.0-1020-azure`, with four runner-vCPU scheduling lanes. QEMU PID 3847 used KVM. Actual KVM entry events and guest APIC IDs map guest CPUs 0/1 to host TIDs 3910/3911, stable in preflight and postflight. The guest remained Android 15 Google APIs x86_64 Pixel 3a with 2,048 MiB RAM. The actual fixture logged 12 dense projects, 23,881,171 XML bytes and **201,326,592 bytes (192 MiB)** for maximum managed heap. It retained migration, four lists and selected order #12/#01/#06/#12, the original stopwatch and GC placement, and all assertions.
+
+No-app preflight took **8.165 seconds**, including trace readback. Guest uptime was 35.98 s before that capture and 55.40 s before the paired capture setup. Host tracefs used the `mono` clock, scheduler events and observed KVM entry IDs. Perfetto v46 collected guest scheduling, ART and phase logs. Ten guest trace-marker writes, five on each side, each have an external host monotonic bracket. The paired before offset intersection was `238717483929 to 238748082931 ns`, after `238707741737 to 238748342030 ns`. The observed uncertainty envelope was **40.602 ms** wide. Those brackets permit a constant offset and bound the reported overlaps conditional on the observed envelope. They do not independently rule out unobserved interior clock deviations.
+
+Both guest CPUs have 37.765 s of complete paired schedule coverage and each mapped runner host TID has 37.805 s of mapped host coverage. The preflight and paired captures report zero ftrace overruns, commit overruns and dropped events on all four runner CPUs. The guest had no nonzero ftrace loss counter. Its informational tokenizer count was 132,613, so individual ART annotations are treated as context. The guest test thread snapshot identified PID 3004/TID 3175, policy 0, priority 112, CPU affinity 0–1 and foreground cgroups at collection. The four ADB metadata reads during fixture setup may have perturbed timing. The underlying cloud hypervisor is outside the runner-host trace.
+
+| Phase | Wall ms | Observed managed growth MiB | Guest scheduled ms | Guest ready/off-CPU ms | ART allocated bytes as reported |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `initial_migration` | 9863.770 | 101.66 | 4508.842–4515.219 | 4662.461–4664.636 | 676647728 |
+| `existing_index_first` | 10.574 | 0.32 | 7.449–8.521 | 2.426–2.752 | 335920 |
+| `existing_index_warm_1` | 22.121 | 0.33 | 6.804–7.113 | 15.162–15.162 | 344112 |
+| `existing_index_warm_2` | 20.550 | 0.34 | 4.203–5.053 | 14.670–17.173 | 352304 |
+| `existing_index_warm_3` | 26.673 | 0.34 | 4.692–5.725 | 17.542–25.387 | 352304 |
+| `selected_first` | 597.460 | 22.85 | 290.813–292.460 | 279.908–281.256 | 56479792 |
+| `selected_warm_1` | 438.302 | 40.24 | 266.560–268.674 | 164.380–165.521 | 14483456 |
+| `selected_warm_2` | 468.741 | 53.59 | 279.385–279.779 | 189.151–189.168 | 97968224 |
+| `selected_warm_3` | 704.840 | 1.48 | 292.808–295.264 | 360.994–363.053 | 56328240 |
+
+**The unchanged method failed.** The fourth selected Open took **704.840334 ms**, exceeding **650 ms** by **54.840334 ms**. All four Opens logged success and one decode. Every list logged zero recipe decodes and zero legacy preference accesses. Migration logged 12 rows/12 decodes. The arithmetic warm median was **468.741368 ms** versus **300 ms**. The per-Open failure occurred before the median assertion. The last selected heap result was observed before the latency assertion and was not credited as a subsequently executed heap assertion.
+
+During that fourth Open, TID 3175 was runnable but unscheduled in the guest for at least **360.994399 ms**. Under the observed clock envelope the ready interval overlaps both mapped host vCPUs off CPU by at most **0.121 ms**. When the guest test thread was scheduled, the possible overlaps with the corresponding host vCPU runnable but off CPU were at most **0.351 ms on CPU 0** and **0.219 ms on CPU 1**. Exact cross-domain running-overlap lower bounds are zero with this clock envelope. The trace therefore does not support a large simultaneous runner-host vCPU availability gap in this capture. Android Messaging workers occupied CPU 1 for **153.658 ms** and CPU 0 for **44.614 ms** during portions of the guest ready interval. System and ART work also overlapped it. Occupancy is measured separately per CPU and cannot be added as elapsed causal delay.
+
+- [Raw paired and no-app preflight evidence 15241238298](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/46091040023/artifacts/15241238298) · `sha256:f6254becb8f571b88954c8c6939371639f87d13513183b5fe3c906f63905cadb`. The archive SHA-256 and all 55 file-manifest entries were checked.
+- Paired guest trace SHA-256 `3e674d0b31b713f5ded3d94e8bb7d694377dcfa79e9ac667056159c5398fe7df`, paired runner-host trace SHA-256 `6f3593ec1b872fa08dc1ea22bdd2484980718865da8266997a7af12981e54c5f`, paired phase JSON SHA-256 `c369c16590f588749e7b7a044b7af404bf27cbadd54f9082eb70d2251468cce6`. Preflight trace hashes and all configuration, clock snapshots, trace counters and binary/tool hashes are in the same archive.
+
+**Qualification disposition:** the capture establishes substantial guest runnable delay in this measured miss. The trace identifies neither a reproducible same-tier configuration correction that preserves ordinary services nor a specific selected-Open implementation cost that justifies a patch. A no-code move to unprofiled qualification is unsupported by this evidence. The historical 717.745435 ms cause remains unresolved and is not a permanent proof requirement. The one authorized paired execution is consumed. PR #50 stays draft, the corrected handset APK stays held, and the exact prior JVM/build/signing, API29 and separate recovery receipts retain their scope.
+
+**Next finite engineering decision:** whether to open a bounded selected-Open latency/headroom repair scoped to a source-proven cost, or keep corrected delivery on hold until a reproducible same-tier correction is established. The existing selected-only source route is `PhotoProjectFiles.readRecord` → `ProjectStore.decodeRecord` → `EditDocumentCodec.decode`; the trace did not identify any one of these as the cause. Any repair must retain the workload, 650 ms/300 ms wall limits, 64 MiB cap, one decode and identity/content checks, then pass the existing unprofiled exact-candidate and exact-merge qualification. This record authorizes no further diagnostic execution. Remaining R1.2 follows the qualification disposition. Current Pro remains unaccepted as a finished professional editor. P01–P16 are seven PARTIAL and nine OPEN, with full R2/R3/R4 and overall pre-release obligations retained. Earlier repairs and phone passes retain their stated scope.
+
+The actual project route in `For Codex/START_HERE.md` is the cache of this repository dispatch. Its previous pointer was the completed PR #53 trace. The current governing references are the PR #54 contract, PR #55 owner scope, and this final paired receipt. Original intake and handset artifacts remain protected.
+
+### Independent review and autonomous selected-Open repair
+
+November 27, 2026 (America/Denver). [Reviewed evidence and complete Codex engineering handoff](coordination/R11_SELECTED_OPEN_ENGINEERING_HANDOFF_2026-11-27.md). Documentation intake is `6f1dde78c33782900805ead609d001b37730ed85`; the held behavioral/test baseline remains `27406f4aed8efa42a6078e1108c53304d4a0043e`. The PR #56 finite engineering decision above is now resolved: **open the scoped selected-record Open performance repair and carry it through qualification.**
+
+Read-only review verified both ZIP hashes/CRCs and all 55 paired-manifest entries, source/workflow input equivalence and the bootstrap/one-invocation boundary. Independent raw guest-protobuf and host-ftrace reconstruction reproduced all nine phase state bounds, marker times, vCPU states/mapping and four selected overlap calculations. The slow Open and arithmetic warm median remain failed observations; subsequent median/last heap assertions were not reached.
+
+PR #56's 0.121 ms simultaneous host-vCPU off-CPU value is exact at saved timestamp precision. A conservative ±1 microsecond allowance at each saved host-state endpoint gives **0.129 ms** over the possible entire slow-phase host bracket, still conditional on the observed clock envelope. This precision clarification does not change the hold or reopen the capture. The original native TraceProcessor executable hash was not recorded; disclose that provenance gap. Independent raw reconstruction supports the scheduling numbers without inventing the missing historical identity or rerunning the app.
+
+The paired trace alone identifies no source repair. Separate source inspection supplies a concrete starting hypothesis: `EditDocumentCodec.inkCoordinate` falls back to a coordinate substring/general Float conversion for forms outside its narrow decimal fast path; the dense fixture and writer make actual emitted-token/fallback counts a decisive next observation. The read route also creates full-record/recipe/field strings. Measure attributable cost, implement the smallest compatible improvement and verify it. Do not claim that either source observation explains the historical wall-time failures before evidence. The existing reader hashes while reading; SHA/version/recovery checks remain required.
+
+**Latest owner instruction:** Codex is to act as the engineer and keep solving authorized problems, rather than stopping for owner-mediated relays after routine technical steps. AGENTS and the handoff now authorize diagnosis, targeted profiling, supported implementation iterations, testing, independent review and qualified merge as one package. No arbitrary one-attempt cap applies to useful repair/verification. No blind unchanged retries, weakened gates, invented attribution or repeated general scheduling loop. Escalate only a genuine owner decision or irreducible access/scope/technical blocker; keep independent work moving.
+
+Preserve the exact acceptance workload, timing/memory limits, 303 inherited plus ten correction identities, separate force-stop/new-PID proof, source bytes, compatibility and prior successful repairs. Keep PR #50/the corrected APK held until the unprofiled final candidate and exact merged application qualify. Then continue remaining R1.2 and the next authorized roadmap work. All 77 families/children, Pro non-acceptance and later owner/release gates remain intact.
+
+This review changes documentation only; it executes no application/build/emulator/Android test and produces no replacement APK.
+
+### Earlier qualification attempts
+
+The original PR #49 candidate passed 313/313 on both APIs. Its exact merge passed Verify, API35 and both force-stop lanes. The two API29 readiness failures and the later isolated harness failures below were retained. The test-only follow-up retains the MediaStore input, time limits, exact visible pixels and Save/Open checks, actual new-process behavior and current-data preservation.
+
+| Exact attempt | Observation | Raw archive and SHA-256 |
+| --- | --- | --- |
+| PR #49 exact merge API29, first attempt | Initial photo GIF preview wait expired before Save, Open or pixel sampling | [raw 15160912621](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45911322736/artifacts/15160912621) `sha256:59bb1395b601d58e70c77c86266f149ce29a2c2415a40ae1f60db31500950e91` |
+| Same merge API29, single diagnostic rerun | Same inherited GIF readiness timeout | [raw 15161928024](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45911322736/artifacts/15161928024) `sha256:ba7178ce0ee65067e1cff082d9f30d3fa614b2a3661d7c75ef7601a87c089db0` |
+| First PR #50 candidate API29 | 313/313 ordinary including GIF. Separate real reopen failed in the legacy Compose dialog scheduler | [raw 15162803788](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45916129628/artifacts/15162803788) `sha256:cab7cf2107bcdf3eb60f2fee5acca8f050e869c8125ab801890afdb0dd7b71e4` |
+| Next PR #50 candidate API29 | Actual separate reopen passed. The tile-save test reached disk publication before observing the visible save notice | [raw 15164431420](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45918405664/artifacts/15164431420) `sha256:5f236ac6c67ba077dc065bec942001b1baf1cb55a0a20c6f319083feb2e0dbce` |
+
+The fixture verifies MediaStore publication and actual photo readback, the separate recovery harness uses the queued Compose rule, and the tile-save test waits for both named data and the visible acknowledgement. The latter preserves Discard and unchanged-parent checks. Production files and the measured R1.1 workload are unchanged. [Compose v2 testing guidance](https://developer.android.com/develop/ui/compose/testing/migrate-v2).
+
+### Focused handset script after a qualified APK and independent review
+
+Bring a two-color Pro composition into Regular, edit it and Bring it back. Use Layers **Select / mask** to apply a real selection and **Clone / repair** to apply a held source at a destination. Check the selected layer, linked appearance, Undo/Redo, Save and editable reopen. Make one landscape/large-text pass over Options, Tools and Undo/Redo. Engineers own injected failures and force-stop verification. Earlier phone passes retain their scope.
+
+## Retained November 26 U1 review findings
 
 November 26, 2026. The owner's review-to-repository-to-Codex workflow authorizes this documentation-only follow-up. Review intake main exactly matched PR #47 e6f5a7b8cd499547c014e45124d1c26be7277661; its ten-path delta from app merge e6321322526521ace13a45c231b25bb08f91c565 is Markdown only.
 
@@ -19,11 +186,11 @@ The root review and three independent source scopes preserve positive blend, com
 
 These are existing-run/artifact inspections, not new app test executions. The two defects are source-confirmed, not claimed newly executed handset reproductions or observed data loss/OOM. Full-workspace large-text/landscape/TalkBack, B2/F03 and RV5 retain their stated gaps. Detailed exact code/receipt references and limits are in the review.
 
-**Dispatch:** complete U1R-01/U1R-02 and dispose of U1R-V1, independently review and qualify one coherent candidate/merge, then resume remaining R1.2. Do not recommend v26 as a clean corrected U1 build while those paths remain open. No app source, tests, build configuration or CI is changed by this documentation update; no APK is rebuilt and no suite rerun. All 77 rows and full child scope remain.
+**Original PR #48 dispatch:** complete U1R-01/U1R-02 and dispose of U1R-V1, independently review and qualify one coherent candidate/merge, then resume remaining R1.2. Do not recommend v26 as a clean corrected U1 build while those paths remain open. No app source, tests, build configuration or CI is changed by this documentation update; no APK is rebuilt and no suite rerun. All 77 rows and full child scope remain.
 
-### Owner relay and execution alignment
+### Historical owner relay and execution alignment
 
-Lance relayed the bounded review correction on November 26. Live main is `b2ecc80481d10ee47097037d6616199e50bf4be7` (PR #48), tree `90a0e96f00c6a054706a47fc4fb40e54f0ea3cd6`. The qualified PR #46 app `e6321322526521ace13a45c231b25bb08f91c565`, tree `e15ba826d15cfb42449461f2528718e9efca5819`, differs by twelve Markdown paths. The app, test, Gradle and CI inputs still match v26. The repository has one applicable root `AGENTS.md`. The actual Windows project directory and its ancestors contain no AGENTS file. The existing project routing cache `For Codex/START_HERE.md` now pins the follow-up at PR #48 and the live ledger. Its historical section is byte-preserved. Original intake, archives, and APKs stay outside the engineering workspace.
+Lance relayed the bounded review correction on November 26. At intake, main was `b2ecc80481d10ee47097037d6616199e50bf4be7` (PR #48), tree `90a0e96f00c6a054706a47fc4fb40e54f0ea3cd6`. The qualified PR #46 app `e6321322526521ace13a45c231b25bb08f91c565`, tree `e15ba826d15cfb42449461f2528718e9efca5819`, differs by twelve Markdown paths. The app, test, Gradle and CI inputs matched v26 at intake. The repository has one applicable root `AGENTS.md`. The actual Windows project directory and its ancestors contain no AGENTS file. The existing project routing cache `For Codex/START_HERE.md` was aligned to pin the follow-up at PR #48 and the live ledger. Its historical section is byte-preserved. Original intake, archives, and APKs stay outside the engineering workspace.
 
 Both pinned review and follow-up were read in full, along with the current project instructions, product specification, blueprint, ledger, roadmap, 77-row inventory, release gates, continuity and active owner phone report. The first bounded check runs new reproduction tests with the qualified v26 production behavior. Preserve the actual shortcut taps and mask/retouch mutation, failed and canceled Open lease counts, and held inline Save outcome before landing behavior changes.
 
@@ -34,7 +201,7 @@ Both pinned review and follow-up were read in full, along with the current proje
 | Custody reviewer/writer | `NativeWorkStore.kt` for the acquisition boundary and inspection seam, and new `AndroidU1ReviewLeaseTest.kt`. |
 | Held Save test writer | New `AndroidU1ReviewProSaveTest.kt`. Coordinate the controlled publication seam with the host writer. |
 
-The optional Collage wording item is deferred to keep the delivery focused. The next decisive result is the red baseline on API29/API35. The existing 303 case identities, numerical limits, inherited assertions, and process qualification remain required.
+The optional Collage wording item is deferred to keep the delivery focused. The first check was the red baseline on API29/API35. The existing 303 case identities, numerical limits, inherited assertions, and process qualification remain required.
 
 Root also owns the narrow `RegularProSwitch.kt` prepared-photo lifetime dependency discovered during review. Its decode and privacy-preview bitmaps cross explicit dispatcher return boundaries before the host receives the prepared photo, so the Open cleanup must account for cancellation there as well. The bridge and rendering rules remain unchanged.
 
@@ -226,7 +393,7 @@ B2 measured targets, F03 workload evidence, RV5, remaining R1.2/R1 and all later
 
 The [0.12.13 owner report](coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md) protects unmentioned supplied phone instructions 1–5. O25-01–O25-06 authorize specific blend/input, Pro tool-ownership, shared-control, Delete/Reset and bidirectional transfer corrections. [PRODUCT_SPEC](PRODUCT_SPEC.md) and [WORKSPACE_UX_BLUEPRINT](WORKSPACE_UX_BLUEPRINT.md) replace conflicting old interaction rules. PR #45 recorded this alignment. PR #46 implements the scoped correction.
 
-**Recorded PR #46 status: U1 engineering-qualified for its exercised paths.** Candidate and exact app merge passed all required JVM, build, signing, full Android and genuine new-process checks. The November 26 independent review above requires a bounded follow-up before a clean handset recommendation; handset confirmation remains open. The earlier independent contract review and exact preflight are preserved above. This wave retains all 77 capability IDs and every remaining roadmap child.
+**Recorded PR #46 status: U1 engineering-qualified for its exercised paths.** Candidate and exact app merge passed all required JVM, build, signing, full Android and genuine new-process checks. The November 26 independent review above required the corrections recorded above; handset confirmation remains open. The earlier independent contract review and exact preflight are preserved above. This wave retains all 77 capability IDs and every remaining roadmap child.
 
 | Slice | Observable exit and owner boundary | Dependency / disposition |
 | --- | --- | --- |
@@ -480,7 +647,7 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 | Order | Package / completion target | Prerequisite and current disposition |
 | --- | --- | --- |
-| U1 | Named owner workspace corrections: blend, tool roles, common controls, Delete/Reset and four-choice live exchange | PR #46 qualification credited. U1R-01/U1R-02 and U1R-V1 disposition are the immediate bounded follow-up; clean handset recommendation held. Minimum Regular/Pro R1.2/S03/S06 custody credited. |
+| U1 | Named owner workspace corrections: blend, tool roles, common controls, Delete/Reset and four-choice live exchange | PR #46 qualification credited. U1R-01/02/V1 implemented and focused-verified. Candidate qualification is held on the API35 R1.1 measurement. Minimum Regular/Pro R1.2/S03/S06 custody credited. |
 | R1 | Durable documents, lazy project metadata loading, process-loss recovery, source/provider custody, Back/history, live/saved repeated exchange and portable bundles | R1.1 qualified; next finish remaining R1.2/all-workspace recovery and other R1 children, including RV5. B2/F03 stays independent; S01–S08 remain open/partial |
 | R2 | Pro layer tree/groups/clipping and memory-bounded reference compositor | R1 contracts; preserve legacy pixels |
 | R3 | Full Pro selection, paint, retouch, shapes, transforms, effects and declared interchange | R2 foundation |
@@ -495,9 +662,9 @@ The finite evidence set is twelve independently identifiable near-budget recipes
 
 Subdivide a selected package into bounded deliverables with affected files and observable exits before implementation. Do not treat these family rows as single giant commits, invent completion percentages, silently remove difficult capabilities, or create another master backlog.
 
-## Next engineering action — U1 review follow-up
+## Next engineering action — resolve exact qualification hold
 
-Execute [CODEX_U1_FOLLOWUP_2026-11-26.md](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) against current authorized main. Assign one writer per host/Pro/storage/test file, reproduce the two named source-confirmed paths, correct their tool-transition/resource ownership, and dispose of the one held-save validation item. Preserve all 303 case identities and meaningful assertions, pinned budgets and actual new-process verification. Independently review the correction, qualify final candidate and exact application merge, and deliver one corrected APK plus a focused owner script. No new full audit, question cycle or architecture rewrite.
+Execute the [autonomous selected-Open performance package](coordination/R11_SELECTED_OPEN_ENGINEERING_HANDOFF_2026-11-27.md) through attributable-cost evidence, the smallest compatible repair, necessary targeted tests, independent review and unprofiled exact-candidate/exact-merge qualification. The preceding scheduling diagnostic is complete. Useful evidence-driven implementation/verification iterations do not require another owner relay; unchanged blind retries and softened gates remain prohibited. Preserve every failure, workload/limit, inherited case and actual process-recovery obligation. PR #50/the corrected APK remain held until those exits. Continue remaining R1.2 and the full professional roadmap under the same authority.
 
 ## Following engineering action — remaining R1.2
 

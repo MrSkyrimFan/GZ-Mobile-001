@@ -1,17 +1,17 @@
 # GZ Editor Pro engineering and release gates
 
-> **Current work — November 26, 2026.** PR #46 / **0.12.14 Test, code 26** remains the recorded engineering checkpoint at **e6321322526521ace13a45c231b25bb08f91c565**: candidate and merge passed JVM/build/signing, **303/303 on API29 and API35**, and separate new-process recovery. The [independent U1 review](coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) found two medium-severity defects in linked Pro tool activation and failed-Open staging cleanup. **Next: bounded U1 review follow-up, then remaining R1.2.** Hold a clean U1 handset recommendation until the follow-up qualifies. Prior passes remain credited; B2/F03, RV5 and all device/owner/release gates remain open. [Active dispatch](WORK_LEDGER.md#next-engineering-action--u1-review-follow-up).
+> **Current work — November 26, 2026.** [PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49) contains the U1 review corrections. Exact [PR #50](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/50) candidate is held at **717.745 ms** against the **650 ms** API35 R1.1 per-Open limit. [Current disposition](WORK_LEDGER.md#u1-review-correction-and-qualification-hold). PR #46 / **0.12.14 Test, code 26** retains its recorded 303/303 engineering qualification. Focused review and a qualified replacement APK precede the next handset recommendation. Remaining R1.2 and later gates stay in scope.
 
-## U1 independent review — bounded corrections required
+## U1 independent review — corrections implemented, qualification held
 
-The [November 26 review](coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) verified the final raw qualification and APK but found two source-confirmed medium-severity defects. Prior PR #46 checks below remain recorded evidence; their checked status does not close these newly identified paths or full handset accessibility.
+The November 26 review identified two source-confirmed defects. PR #49 implements those corrections and the reproduced held-Save acknowledgement repair. Focused engineering checks passed. Full exact qualification and handset confirmation remain open.
 
-- [ ] U1R-01: Layers → Select / mask and Clone / repair activate real native editing after linked return/named Open, preserving target, finish, history and busy guards.
-- [ ] U1R-02: failed/canceled/stale native named/draft Opens release their exact preparation leases, including acquisition/result delivery; current work and named/draft/retry assets remain safe.
-- [ ] U1R-V1: held inline Pro Save then Cancel has a deterministic pass or qualified correction disposition; no unsupported corruption claim.
+- [x] U1R-01: Layers → Select / mask and Clone / repair activate real native editing after linked return/named Open, preserving target, finish, history and busy guards.
+- [x] U1R-02: failed/canceled/stale native named/draft Opens release their exact preparation leases, including acquisition/result delivery; current work and named/draft/retry assets remain safe.
+- [x] U1R-V1: held inline Pro Save then Cancel has a deterministic pass or qualified correction disposition; no unsupported corruption claim.
 - [ ] Corrected candidate and exact merge retain all 303 inherited cases/meaningful assertions, full JVM/API29/API35/build/signing and the separate new-process lane, with independent review and one exact APK.
 
-This finite gate holds the clean U1 handset recommendation and immediate R1.2 dispatch. It does not reopen credited unrelated phone checks, waive B2/F03/RV5, or impose a new product-approval cycle. See [the Codex follow-up](coordination/CODEX_U1_FOLLOWUP_2026-11-26.md).
+The API35 R1.1 per-Open result holds the next clean handset recommendation. Earlier credited phone checks retain their scope. B2/F03, RV5 and broader release obligations remain open. [Exact receipt](WORK_LEDGER.md#u1-review-correction-and-qualification-hold).
 
 ## Latest owner evidence and U1 correction gate
 
@@ -51,7 +51,7 @@ The amended [canonical contract](PRODUCT_SPEC.md#agreed-interaction-contract--st
 
 Historical tests using removed File/More/Histogram, old Yes/No/Resume or reset-as-Delete routes must migrate only to the specifically authorized contract with a traceable assertion mapping; preserve numerical/output and unrelated safety regression checks. Do not delete failing coverage, weaken 6s/15s gates or retry unchanged application failures.
 
-A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. After the owner relays the U1 handoff, engineering continues independent authorized work. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
+A missing owner clip/settings/physical observation holds only that F03 reproduction or closure. The active ledger records the U1 qualification dependency. Do not infer F03 fixed from the small fixture or issue a 'fully fixed' claim with a known reproduced high-impact regression. If a candidate is needed to collect the outstanding phone evidence, state F03's open status and its focused purpose. One coherent wave is the delivery unit; no serial partial APKs or repeated historical phone scripts.
 
 
 ## Current engineering qualification — PR #46 / 0.12.14 Test
@@ -68,7 +68,7 @@ Regular saved-project migration, metadata listing, selected Open and Pro unreada
 
 Common Options/header/history, Collage single tap, captured Save/Discard/Cancel, selected-tile/parent transactions, stable named-save identity, gesture cancellation and native/export recovery received bounded source and runtime verification. These results do not lock a workspace or complete its full capability family. B2's two measured reader optimizations preserve tested output; the prospective 10-second /50% preparation targets remain unmet, and the earlier acknowledgement miss and individual-sample limits remain recorded. F03's actual phone workload, matched cold/warm measurement and owner confirmation remain open. See the receipt for every observation, including the misses.
 
-**Next is the bounded U1 review follow-up, then the remainder of R1.2.** U1 qualifies its minimum Regular/Pro acknowledged draft custody and linked native save, alongside the named workspace controls. Remaining R1.2/R1 and all R2–R11 children are required. Four owner locks precede Video, all five editing acceptances precede final bilingual onboarding, and the qualified app plus finished website precede Play Console setup.
+**Next is exact U1 qualification, followed by remaining R1.2.** Four owner locks precede Video. All five workspace acceptances precede final bilingual onboarding. The qualified app and finished website precede Play Console setup.
 
 The detailed B1 checklist above retains its complete product/owner scope. Executed fixture results support the bounded engineering claims in the receipt. In particular, 320dp/200% font and touch tests do not replace real TalkBack/keyboard or broader device acceptance. B2 numerical misses are not waived by B1 delivery.
 

@@ -1,14 +1,14 @@
 # GZ Editor Pro
 
-> **Current work — November 26, 2026.** PR #46 / **0.12.14 Test, code 26** remains the recorded engineering checkpoint at **e6321322526521ace13a45c231b25bb08f91c565**: candidate and merge passed JVM/build/signing, **303/303 on API29 and API35**, and separate new-process recovery. The [independent U1 review](docs/coordination/GPT_6_PRO_U1_REVIEW_2026-11-26.md) found two medium-severity defects in linked Pro tool activation and failed-Open staging cleanup. **Next: bounded U1 review follow-up, then remaining R1.2.** Hold a clean U1 handset recommendation until the follow-up qualifies. Prior passes remain credited; B2/F03, RV5 and all device/owner/release gates remain open. [Active dispatch](docs/WORK_LEDGER.md#next-engineering-action--u1-review-follow-up).
+> **Current work — November 26, 2026.** [PR #49](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/49) contains the U1 review corrections. Exact [PR #50](https://github.com/MrSkyrimFan/GZ-Mobile-001/pull/50) candidate is held at **717.745 ms** against the **650 ms** API35 R1.1 per-Open limit. [Current disposition](docs/WORK_LEDGER.md#u1-review-correction-and-qualification-hold). PR #46 / **0.12.14 Test, code 26** retains its recorded 303/303 engineering qualification. Focused review and a qualified replacement APK precede the next handset recommendation. Remaining R1.2 and later gates stay in scope.
 
 **Greenezone Software LLC** · Android photo editing · Target **$2.99 one-time** purchase
 
-**Current engineering and phone status:** PR #46's actual qualification is retained, but the independent review requires the two bounded U1 corrections before a clean focused handset recommendation. The earlier owner-reported passes retain their scope, and the 0.12.13 report documents the original exceptions. [Owner report](docs/coordination/OWNER_PHONE_FEEDBACK_2026-11-25_V25.md).
+**Current engineering and phone status** — The U1 corrections have focused runtime evidence. The exact qualification and handset recommendation await the API35 R1.1 disposition. Earlier owner passes retain their recorded scope.
 
-**Next engineering package is the bounded [U1 review follow-up](docs/coordination/CODEX_U1_FOLLOWUP_2026-11-26.md).** Correct U1R-01/U1R-02 and dispose of U1R-V1, then continue remaining R1.2. All R1–R11 obligations remain in the single roadmap.
+**Next engineering action** — Reconcile the [exact qualification hold](docs/WORK_LEDGER.md#u1-review-correction-and-qualification-hold). Remaining R1.2 follows under the single roadmap.
 
-[Product requirements](docs/PRODUCT_SPEC.md) · [Workspace blueprint](docs/WORKSPACE_UX_BLUEPRINT.md) · [Codex follow-up](docs/coordination/CODEX_U1_FOLLOWUP_2026-11-26.md) · [Single roadmap](docs/GZ_ENGINEERING_ROADMAP.md) · [77-family inventory](docs/CAPABILITY_MATRIX.md) · [Work ledger](docs/WORK_LEDGER.md) · [Release gates](docs/RELEASE_GATE.md).
+[Product requirements](docs/PRODUCT_SPEC.md) · [Workspace blueprint](docs/WORKSPACE_UX_BLUEPRINT.md) · [GPT-6 Pro review handoff](docs/coordination/GPT_6_PRO_U1_FOLLOWUP_REVIEW_HANDOFF_2026-11-26.md) · [Single roadmap](docs/GZ_ENGINEERING_ROADMAP.md) · [77-family inventory](docs/CAPABILITY_MATRIX.md) · [Work ledger](docs/WORK_LEDGER.md) · [Release gates](docs/RELEASE_GATE.md).
 
 ## Core contract
 - Fully offline. No runtime AI, subscriptions, ads, account, telemetry, in-app purchases, watermarks or network permission.
@@ -16,7 +16,7 @@
 - All edits are parameters in saved local project snapshots; previous projects remain decodable.
 - Compact image-first interface with a consistent shared header, Undo/Redo arrow icons and one top-right Options dropdown for major file/help commands. The agreed common-chrome contract has bounded B1 engineering qualification; historical UI descriptions below describe earlier builds. Keep tool-specific controls, tap-to-hide behavior and the company footer without duplicate major command locations.
 - Preserve the existing Regular photo adjustments, Looks, color, curves, Text, Blur & cover, crop and export. Regular and Collage tile editing have no Masks authoring. Older saved masks must continue to render and round-trip. Pro owns selection and masking, and preserves legacy Text layers without Text authoring.
-- Regular↔Pro uses one Discard / Save current work / Bring current work / Cancel surface. Bring carries current edits and editable native lineage without a named Save; Save succeeds then opens blank, Discard opens blank, Cancel changes nothing. PR #46 supplies bounded workflow evidence; the linked native-edit and failed-Open review findings remain open.
+- Regular↔Pro uses one Discard / Save current work / Bring current work / Cancel surface. Bring carries current edits and editable native lineage without a named Save; Save succeeds then opens blank, Discard opens blank, Cancel changes nothing. PR #49 implements the linked native-edit, failed-Open ownership and held-Save acknowledgement repairs. The current engineering hold applies to full candidate qualification.
 
 > **Historical version notes below:** descriptions of File/More, earlier tool placement, old transfer rules, limits and prior next actions are dated evidence. Current PRODUCT_SPEC/WORKSPACE_UX_BLUEPRINT and the ledger supersede conflicting directions. The completed historical stages are not new dispatch gates.
 
@@ -90,7 +90,7 @@ The emulator job produces `gz-editor-pro-phone-test`. This versioned debug insta
 
 The [qualified application commit e6321322](https://github.com/MrSkyrimFan/GZ-Mobile-001/commit/e6321322526521ace13a45c231b25bb08f91c565) matches the PR #46 candidate tree. [Merged verification](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847) passed JVM/build/signing and 303/303 on each Android API. See the [U1 qualification receipt](docs/WORK_LEDGER.md#completed-u1--coherent-workspace-workflow).
 
-[Retained 0.12.14 APK evidence ZIP](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847/artifacts/15085954966). This contains **GZ Editor Pro 0.12.14 Test**, code 26, `com.greenezone.gzphotoeditor.phonetest.v26`, Android 10+. Its versioned package keeps separate local project storage. The clean next handset recommendation is held for the bounded corrections above.
+[Retained 0.12.14 APK evidence ZIP](https://github.com/MrSkyrimFan/GZ-Mobile-001/actions/runs/45751851847/artifacts/15085954966). This contains **GZ Editor Pro 0.12.14 Test**, code 26, `com.greenezone.gzphotoeditor.phonetest.v26`, Android 10+. Its versioned package keeps separate local project storage. The next handset recommendation is held on the exact R1.1 qualification result above.
 
 See `docs/CONTINUITY.md`, `docs/PRODUCT_SPEC.md`, `docs/RELEASE_GATE.md`.
 
