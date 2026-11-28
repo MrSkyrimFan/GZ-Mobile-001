@@ -442,6 +442,7 @@ class AndroidGifWorkspacePlaybackTest {
         val trial = if (failOlderRead) "older-read-fails" else "older-read-completes"
         var finalAccepted: Boolean? = null
         var finalDisplayed = false
+        var testFailure: Throwable? = null
         try {
             val doc = VideoGifSource.document(context, uri)
             val count = GifVideoMath.frameCount(requireNotNull(doc.video))
@@ -534,12 +535,20 @@ class AndroidGifWorkspacePlaybackTest {
             assertTrue("The final request must be bound, consumed, decoded, then assigned",
                 bound.timestampNanos <= consumed.timestampNanos &&
                     consumed.timestampNanos <= decoded.timestampNanos && decoded.timestampNanos <= shown.timestampNanos)
+        } catch (failure: Throwable) {
+            testFailure = failure
+            throw failure
         } finally {
             try { reportGifSeekProbe(trial, probeStart, finalAccepted, finalDisplayed) }
             finally {
                 GifSeekProbe.pausedReadBarrier = null
                 release.complete(false)
-                resolver.delete(uri, null, null)
+                try {
+                    resolver.delete(uri, null, null)
+                } catch (cleanup: Exception) {
+                    val primary = testFailure ?: throw cleanup
+                    if (primary !== cleanup) primary.addSuppressed(cleanup)
+                }
             }
         }
     }

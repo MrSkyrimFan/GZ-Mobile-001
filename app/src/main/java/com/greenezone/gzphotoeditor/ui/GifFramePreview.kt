@@ -28,14 +28,13 @@ import com.greenezone.gzphotoeditor.editor.GifSeekProbe
 import com.greenezone.gzphotoeditor.editor.GifVideoMath
 import com.greenezone.gzphotoeditor.editor.VideoGifSource
 import com.greenezone.gzphotoeditor.editor.afterBitmapCodecFailure
+import com.greenezone.gzphotoeditor.editor.collectPausedGifFrameRequests
 import com.greenezone.gzphotoeditor.editor.previewRoute
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -294,40 +293,59 @@ internal fun GifFramePreview(
                             return PreviewFrame(index, result)
                         }
                         if (!playing) {
-                            snapshotFlow { requested }.distinctUntilChangedBy { it.frame }.conflate().collect { request ->
-                                val index = request.frame.coerceIn(times.indices)
-                                GifSeekProbe.record(operationId, generation, GifDiagnosticKind.REQUEST_CONSUMED,
-                                    request.serial, index, playing = false, route = bitmapRoute)
-                                val frame = try {
-                                    GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_STARTED,
-                                        request.serial, index, playing = false, route = bitmapRoute)
-                                    GifSeekProbe.pausedReadBarrier?.invoke(operationId, generation, request.serial, index)
-                                    decode(index, tracedRequest = request)
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (error: Exception) {
-                                    GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_FAILED,
-                                        request.serial, index, playing = false, failure = error, route = bitmapRoute)
-                                    throw error
-                                }
-                                GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_FINISHED,
-                                    request.serial, frame.index, playing = false, route = bitmapRoute)
-                                withContext(Dispatchers.Main.immediate) {
-                                    if (requested.frame == request.frame &&
-                                        activeGeneration.get() == generation) {
-                                        shown = frame
-                                        GifSeekProbe.record(operationId, generation, GifDiagnosticKind.SHOWN_ASSIGNED,
+                            snapshotFlow { requested }.distinctUntilChangedBy { it.frame }
+                                .collectPausedGifFrameRequests(
+                                    decode = { request ->
+                                        val index = request.frame.coerceIn(times.indices)
+                                        GifSeekProbe.record(operationId, generation, GifDiagnosticKind.REQUEST_CONSUMED,
+                                            request.serial, index, playing = false, route = bitmapRoute)
+                                        val frame = try {
+                                            GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_STARTED,
+                                                request.serial, index, playing = false, route = bitmapRoute)
+                                            GifSeekProbe.pausedReadBarrier?.invoke(
+                                                operationId, generation, request.serial, index)
+                                            decode(index, tracedRequest = request)
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (error: Exception) {
+                                            GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_FAILED,
+                                                request.serial, index, playing = false, failure = error, route = bitmapRoute)
+                                            throw error
+                                        }
+                                        GifSeekProbe.record(operationId, generation, GifDiagnosticKind.READ_FINISHED,
                                             request.serial, frame.index, playing = false, route = bitmapRoute)
-                                    } else {
-                                        GifSeekProbe.record(operationId, generation, GifDiagnosticKind.SHOWN_REJECTED,
-                                            request.serial, frame.index, playing = false, route = bitmapRoute)
-                                        GifPreviewDiagnostics.record(operationId, generation,
-                                            GifDiagnosticStage.G4_SEEK,
-                                            GifDiagnosticKind.STALE_FRAME_DISCARDED, bitmapRoute,
-                                            frameIndex = frame.index, frameCount = times.size)
+                                        frame
+                                    },
+                                    closeReader = ::closeReader,
+                                    onFailure = { request, error ->
+                                        withContext(Dispatchers.Main.immediate) {
+                                            if (requested.frame == request.frame && activeGeneration.get() == generation) {
+                                                GifPreviewDiagnostics.record(operationId, generation,
+                                                    GifDiagnosticStage.G4_SEEK, GifDiagnosticKind.PREVIEW_FAILED,
+                                                    bitmapRoute, failure = error)
+                                                shown = null
+                                                reportError(error.message ?: "Cannot decode the selected frame")
+                                            }
+                                        }
+                                    },
+                                    onFrame = { request, frame ->
+                                        withContext(Dispatchers.Main.immediate) {
+                                            if (requested.frame == request.frame &&
+                                                activeGeneration.get() == generation) {
+                                                shown = frame
+                                                GifSeekProbe.record(operationId, generation, GifDiagnosticKind.SHOWN_ASSIGNED,
+                                                    request.serial, frame.index, playing = false, route = bitmapRoute)
+                                            } else {
+                                                GifSeekProbe.record(operationId, generation, GifDiagnosticKind.SHOWN_REJECTED,
+                                                    request.serial, frame.index, playing = false, route = bitmapRoute)
+                                                GifPreviewDiagnostics.record(operationId, generation,
+                                                    GifDiagnosticStage.G4_SEEK,
+                                                    GifDiagnosticKind.STALE_FRAME_DISCARDED, bitmapRoute,
+                                                    frameIndex = frame.index, frameCount = times.size)
+                                            }
+                                        }
                                     }
-                                }
-                            }
+                                )
                         } else {
                             suspend fun present(frame: PreviewFrame) = withContext(Dispatchers.Main.immediate) {
                                 if (activeGeneration.get() == generation) {
