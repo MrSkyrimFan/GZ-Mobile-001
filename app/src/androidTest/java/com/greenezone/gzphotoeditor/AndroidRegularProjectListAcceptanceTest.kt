@@ -171,6 +171,15 @@ class AndroidRegularProjectListAcceptanceTest {
             " fast=" + probe.fastCount + " bounded=" + probe.boundedCount + " fallback=" + probe.fallbackCount +
             " fallbackSamples=" + probe.firstFallbacks + " wholeProcessAllocated=" + processAllocated)
         val loaded = sample.data
+        val coordinates = 2 * (loaded?.content?.document?.creative?.strokes?.sumOf { it.points.size } ?: 0)
+        assertTrue("Diagnostic selected document has no coordinates", coordinates > 0)
+        if (probe.baselineParser) {
+            assertEquals("Held parser uses the held fallback for every dense coordinate", coordinates, probe.fallbackCount)
+            assertEquals(0, probe.fastCount + probe.boundedCount)
+        } else {
+            assertEquals("Repaired parser handles every dense coordinate in the bounded path", coordinates, probe.boundedCount)
+            assertEquals(0, probe.fastCount + probe.fallbackCount)
+        }
         Log.i(TAG, "phase=" + phase + " name=" + entry.project.name + " decodes=" + decodes +
             " opened=" + (loaded != null))
         // Keep the identity and exact fixture markers, not the selected graph.

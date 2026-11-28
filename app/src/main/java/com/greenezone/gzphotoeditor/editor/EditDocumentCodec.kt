@@ -243,7 +243,7 @@ object EditDocumentCodec {
 
     private fun heldInkCoordinate(value: String, start: Int, end: Int): Float {
         val digits = end - start - 2
-        if (digits !in 1..inkDecimalDivisors.lastIndex || value[start] != '0' || value[start + 1] != '.')
+        if (digits !in 1..9 || value[start] != '0' || value[start + 1] != '.')
             return inkFallback(value, start, end)
         var numerator = 0
         for (index in start + 2 until end) {
