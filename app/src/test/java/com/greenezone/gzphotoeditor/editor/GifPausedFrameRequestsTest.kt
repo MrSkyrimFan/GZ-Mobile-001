@@ -7,8 +7,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
-import org.junit.Assert.fail
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
@@ -59,15 +58,23 @@ class GifPausedFrameRequestsTest {
     @Test fun cancellationAndErrorsDoNotBecomePausedReadFailures() = runBlocking {
         val failures = listOf(CancellationException("Preview was superseded"), AssertionError("Decoder invariant"))
         for (expected in failures) {
+            val callbacks = mutableListOf<String>()
             val escaped = runCatching {
                 flowOf(3).collectPausedGifFrameRequests<Int, Int>(
                     decode = { throw expected },
-                    closeReader = { fail("Unexpected reader reset") },
-                    onFailure = { _, _ -> fail("Failure must escape the paused request collector") },
-                    onFrame = { _, _ -> fail("No decoded frame can be presented") }
+                    closeReader = { callbacks.add("closeReader") },
+                    onFailure = { _, _ -> callbacks.add("onFailure") },
+                    onFrame = { _, _ -> callbacks.add("onFrame") }
                 )
             }.exceptionOrNull()
-            assertSame(expected, escaped)
+
+            assertTrue("Unexpected callbacks for ${expected.javaClass.simpleName}: $callbacks", callbacks.isEmpty())
+            val propagated = requireNotNull(escaped) { "The decode failure was swallowed" }
+            assertEquals(expected.javaClass, propagated.javaClass)
+            // Coroutine stack-trace recovery may create a same-type copy with the original cause.
+            assertTrue("The propagated failure should identify the decode failure",
+                propagated.message == expected.message ||
+                    generateSequence(propagated.cause) { it.cause }.take(8).any { it === expected })
         }
     }
 }
