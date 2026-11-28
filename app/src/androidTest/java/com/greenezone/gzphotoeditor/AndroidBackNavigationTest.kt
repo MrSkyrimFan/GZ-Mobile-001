@@ -1125,8 +1125,12 @@ class AndroidBackNavigationTest {
                     command("Save photo project")
                     rule.onNode(hasSetTextAction()).performTextInput(projectName)
                     rule.onNodeWithText("Save").performClick()
-                    rule.waitUntil(15_000) { ProjectStore.loadNamed(instrumentation.targetContext, projectName) != null }
-                    rule.onNodeWithText("Project saved on your phone").assertIsDisplayed()
+                    val savedNotice = rule.onNodeWithText("Project saved on your phone")
+                    rule.waitUntil(15_000) {
+                        savedNotice.isDisplayed() &&
+                            ProjectStore.loadNamed(instrumentation.targetContext, projectName) != null
+                    }
+                    savedNotice.assertIsDisplayed()
 
                     // Project naming can leave the system IME owning the first Back.
                     // Wait for the application prompt before deciding the IME consumed it.

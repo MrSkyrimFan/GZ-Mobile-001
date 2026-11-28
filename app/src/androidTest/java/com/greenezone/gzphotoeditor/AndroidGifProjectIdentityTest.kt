@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import android.provider.MediaStore
@@ -315,16 +316,32 @@ class AndroidGifProjectIdentityTest {
         MediaStore.Video.Media.EXTERNAL_CONTENT_URI, asset, "video/mp4"
     ) { out -> instrumentation.context.assets.open(asset).use { it.copyTo(out) } }
 
-    private fun photo(name: String, marker: Int): Uri = publish(
-        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, name, "image/png"
-    ) { out ->
-        val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
-        try {
-            bitmap.eraseColor(marker)
-            assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, out))
-        } finally {
-            bitmap.recycle()
+    private fun photo(name: String, marker: Int): Uri {
+        val uri = publish(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, name, "image/png") { out ->
+            val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
+            try {
+                bitmap.eraseColor(marker)
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, out))
+            } finally {
+                bitmap.recycle()
+            }
         }
+        val pending = MediaStore.MediaColumns.IS_PENDING
+        requireNotNull(resolver.query(uri, arrayOf(pending), null, null, null)).use { row ->
+            assertTrue("The photo fixture must be queryable after publication", row.moveToFirst())
+            assertEquals("The photo fixture must be published before mounting GIF", 0, row.getInt(0))
+        }
+        val source = requireNotNull(resolver.openInputStream(uri)) { "Cannot reopen photo fixture $name" }.use { input ->
+            requireNotNull(BitmapFactory.decodeStream(input)) { "Cannot decode photo fixture $name" }
+        }
+        try {
+            assertEquals(32, source.width)
+            assertEquals(32, source.height)
+            assertEquals("The published photo fixture must contain its source marker", marker, source.getPixel(16, 16))
+        } finally {
+            source.recycle()
+        }
+        return uri
     }
 
     private fun publish(collection: Uri, name: String, mime: String, write: (OutputStream) -> Unit): Uri {
@@ -336,7 +353,10 @@ class AndroidGifProjectIdentityTest {
         val uri = requireNotNull(resolver.insert(collection, metadata))
         media.add(uri)
         requireNotNull(resolver.openOutputStream(uri)).use(write)
-        resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+        val published = resolver.update(
+            uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null
+        )
+        assertEquals("MediaStore must publish the one fixture row", 1, published)
         return uri
     }
 
@@ -393,15 +413,24 @@ class AndroidGifProjectIdentityTest {
 
     private fun waitPhotoColor(expected: Int) {
         val description = "Animated GIF frame preview"
-        var observation = "preview node did not appear"
+        var observation = "no preview observation"
+        var sawUnavailablePhoto = false
         try {
             rule.waitUntil(15_000) {
-                val frame = rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes()
-                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
-                val header = rule.onAllNodesWithTag("workspace-header").fetchSemanticsNodes()
-                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
-                val playback = rule.onAllNodes(hasText("▶ Play") and hasClickAction()).fetchSemanticsNodes()
-                    .singleOrNull()?.boundsInRoot ?: return@waitUntil false
+                val frames = rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes()
+                val headers = rule.onAllNodesWithTag("workspace-header").fetchSemanticsNodes()
+                val playbackControls = rule.onAllNodes(hasText("▶ Play") and hasClickAction()).fetchSemanticsNodes()
+                if (frames.size != 1 || headers.size != 1 || playbackControls.size != 1) {
+                    sawUnavailablePhoto = sawUnavailablePhoto || rule.onAllNodesWithText(
+                        "unavailable. Remove or replace it.", substring = true
+                    ).fetchSemanticsNodes().isNotEmpty()
+                    observation = "preview=${frames.size}, header=${headers.size}, " +
+                        "Play=${playbackControls.size}, photoUnavailable=$sawUnavailablePhoto"
+                    return@waitUntil false
+                }
+                val frame = frames.single().boundsInRoot
+                val header = headers.single().boundsInRoot
+                val playback = playbackControls.single().boundsInRoot
 
                 // The square photo is fitted in a full-window node. Its screenshot also
                 // includes the header and the lower controls drawn over that window.
