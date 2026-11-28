@@ -395,6 +395,11 @@ class AndroidGifWorkspacePlaybackTest {
         val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "gz-editor-preview.mp4", "video/mp4") { out ->
             instrument.context.assets.open("gif_sample_2sec_h264.mp4").use { it.copyTo(out) }
         }
+        val diagnosticsStart = GifPreviewDiagnostics.snapshot().lastOrNull()?.sequence ?: 0
+        var pauseAtWall = 0L
+        var seekAtWall = 0L
+        var expectedFrame = 0
+        var semanticsAccepted: Boolean? = null
         try {
             val doc = VideoGifSource.document(context, uri)
             show(doc)
@@ -410,12 +415,34 @@ class AndroidGifWorkspacePlaybackTest {
             }
             Log.i("GzGifTiming", "2 s, 8 fps MP4: Play to frame 5 or later = ${SystemClock.elapsedRealtime() - startedAt} ms")
             rule.onNodeWithText("Pause").performClick()
+            pauseAtWall = SystemClock.elapsedRealtime()
             rule.onNodeWithText("Play").assertIsDisplayed()
+            expectedFrame = GifVideoMath.frameCount(doc.video!!)
             rule.onNodeWithContentDescription("Scrub GIF frames").performSemanticsAction(
                 androidx.compose.ui.semantics.SemanticsActions.SetProgress
-            ) { it((GifVideoMath.frameCount(doc.video!!) - 1).toFloat()) }
-            waitFrame(GifVideoMath.frameCount(doc.video!!))
-        } finally { resolver.delete(uri, null, null) }
+            ) {
+                seekAtWall = SystemClock.elapsedRealtime()
+                semanticsAccepted = it((expectedFrame - 1).toFloat())
+            }
+            waitFrame(expectedFrame)
+        } finally {
+            Log.i("GzGifSeekProbe", "pausedWallMs=" + pauseAtWall + " seekWallMs=" + seekAtWall +
+                " accepted=" + semanticsAccepted + " expected=" + expectedFrame)
+            val shown = runCatching { taggedFrame("gif-frame") }.getOrNull()
+            val slider = runCatching {
+                rule.onNodeWithContentDescription("Scrub GIF frames").fetchSemanticsNode()
+                    .config[SemanticsProperties.ProgressBarRangeInfo].current
+            }.getOrNull()
+            Log.i("GzGifSeekProbe", "shown=" + shown + " sliderZeroBased=" + slider)
+            GifPreviewDiagnostics.snapshot().filter { it.sequence > diagnosticsStart }.forEach { event ->
+                Log.i("GzGifSeekProbe", "event=" + event.sequence + " op=" + event.operationId +
+                    " generation=" + event.generation + " stage=" + event.stage +
+                    " kind=" + event.kind + " route=" + event.route +
+                    " frame=" + event.frameIndex + " frames=" + event.frameCount +
+                    " timeNs=" + event.timestampNanos + " failure=" + event.failureClass)
+            }
+            resolver.delete(uri, null, null)
+        }
     }
     @Test fun portraitVideoPlaysAgainAfterTrimAndRapidScrub() {
         val uri = publish(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
